@@ -86,6 +86,7 @@ class MessageHandler(Thread):
         self._subscriber.subscribe('dtable_activities')
 
     def run(self):
+        logger.info('Starting handle message...')
         while not self.finished.is_set():
             try:
                 message = self._subscriber.get_message()
@@ -106,6 +107,7 @@ class EventHandler(Thread):
         self._db_session_class = init_db_session_class(config)
 
     def run(self):
+        logger.info('Starting handle event...')
         while not self.finished.is_set():
             try:
                 event_tuple = self._redis_connection.blpop('table_event_queue', 1)

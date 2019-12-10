@@ -14,3 +14,13 @@ def get_config(config_file):
         raise RuntimeError("Failed to read config file %s: %s" % (config_file, e))
 
     return config
+
+
+def is_syslog_enabled(config):
+    if config.has_option('Syslog', 'enabled'):
+        try:
+            return config.getboolean('Syslog', 'enabled')
+        except ValueError:
+            return False
+
+    return False
