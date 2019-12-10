@@ -58,6 +58,10 @@ def _save_user_activities(session, event):
         raise RuntimeError('dtable_web_dir %s does not exist' % dtable_web_dir)
 
     sys.path.insert(0, dtable_web_dir)
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "seahub.settings")
+    import django
+    django.setup()
+
     try:
         from seahub.dtable.utils import list_dtable_related_users
         from seahub.dtable.models import DTables
@@ -72,7 +76,7 @@ def _save_user_activities(session, event):
         user_list = user_list + [op_user]
 
     for user in user_list:
-        user_activity = UserActivities(user, activity.id, activity.op_time)
+        user_activity = UserActivities(activity.id, user, activity.op_time)
         session.add(user_activity)
     session.commit()
 
