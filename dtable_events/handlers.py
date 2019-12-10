@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-import os
-import sys
 import logging
 import time
 import json
 from threading import Thread, Event
+
+from seaserv import ccnet_api
 
 from dtable_events.event_redis import event_redis
 from dtable_events.models import Activities, UserActivities
@@ -48,32 +48,20 @@ def _save_user_activities(session, event):
     session.add(activity)
     session.commit()
 
-    dtable_web_dir = os.environ.get('DTABLE_WEB_DIR', '')
-    if not dtable_web_dir:
-        logger.critical('dtable_web_dir is not set')
-        raise RuntimeError('dtable_web_dir is not set')
+    cmd = "SELECT to_user FROM dtable_share WHERE dtable_id=(SELECT id FROM dtables WHERE uuid=:dtable_uuid)"
+    user_list = [res[r'to_user'] for res in session.execute(cmd, {"dtable_uuid": dtable_uuid})]
 
-    if not os.path.exists(dtable_web_dir):
-        logger.critical('dtable_web_dir %s does not exist' % dtable_web_dir)
-        raise RuntimeError('dtable_web_dir %s does not exist' % dtable_web_dir)
+    cmd = "SELECT owner FROM workspaces WHERE id=(SELECT workspace_id FROM dtables WHERE uuid=:dtable_uuid)"
+    owner = [res[r'owner'] for res in session.execute(cmd, {"dtable_uuid": dtable_uuid})][0]
 
-    sys.path.insert(0, dtable_web_dir)
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "seahub.settings")
-    import django
-    django.setup()
-
-    try:
-        from seahub.dtable.utils import list_dtable_related_users
-        from seahub.dtable.models import DTables
-    except ImportError:
-        logger.critical('Can not import dtable_web\'s module')
-        raise RuntimeError('Can not import dtable_web\'s module')
-
-    dtable = DTables.objects.get_dtable_by_uuid(dtable_uuid)
-    user_list = list_dtable_related_users(dtable.workspace, dtable)
-
-    if op_user not in user_list:
-        user_list = user_list + [op_user]
+    if '@seafile_group' not in owner:
+        user_list.append(op_user)
+    else:
+        group_id = int(owner.split('@')[0])
+        members = ccnet_api.get_group_members(group_id)
+        for member in members:
+            if member.user_name not in user_list:
+                user_list.append(member.user_name)
 
     for user in user_list:
         user_activity = UserActivities(activity.id, user, activity.op_time)
@@ -84,14 +72,14 @@ def _save_user_activities(session, event):
 class MessageHandler(Thread):
     def __init__(self, config):
         Thread.__init__(self)
-        self.finished = Event()
+        self._finished = Event()
         self._redis_connection = _redis_connection(config)
         self._subscriber = self._redis_connection.pubsub(ignore_subscribe_messages=True)
         self._subscriber.subscribe('dtable_activities')
 
     def run(self):
         logger.info('Starting handle message...')
-        while not self.finished.is_set():
+        while not self._finished.is_set():
             try:
                 message = self._subscriber.get_message()
                 if message is not None:
@@ -106,13 +94,13 @@ class MessageHandler(Thread):
 class EventHandler(Thread):
     def __init__(self, config):
         Thread.__init__(self)
-        self.finished = Event()
+        self._finished = Event()
         self._redis_connection = _redis_connection(config)
         self._db_session_class = init_db_session_class(config)
 
     def run(self):
         logger.info('Starting handle event...')
-        while not self.finished.is_set():
+        while not self._finished.is_set():
             try:
                 event_tuple = self._redis_connection.blpop('table_event_queue', 1)
                 if event_tuple is not None:
