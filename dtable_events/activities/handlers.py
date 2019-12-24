@@ -31,7 +31,7 @@ class MessageHandler(Thread):
                     try:
                         save_or_update_or_delete(session, event)
                     except Exception as e:
-                        logger.error(e)
+                        logger.error('Handle activities message failed:', e)
                     finally:
                         session.close()
                 else:

@@ -97,7 +97,7 @@ def get_user_activities(session, username, start, limit):
         q = q.filter(UserActivities.activity_id == Activities.id)
         activities = q.order_by(desc(UserActivities.timestamp)).slice(start, start + limit).all()
     except Exception as e:
-        logger.error(e)
+        logger.error('Get activities failed:', e)
 
     return [UserActivityDetail(activity) for activity in activities]
 
