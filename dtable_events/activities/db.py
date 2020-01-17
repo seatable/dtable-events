@@ -129,12 +129,14 @@ def save_user_activities(session, event):
     table_name = event['table_name']
     row_name = event['row_name']
     row_data = event['row_data']
+    dtable_collaborators = event['dtable_collaborators']
 
     detail_dict = dict()
     detail_dict["table_id"] = table_id
     detail_dict["table_name"] = table_name
     detail_dict["row_name"] = row_name
     detail_dict["row_data"] = row_data
+    detail_dict["dtable_collaborators"] = dtable_collaborators
     detail = json.dumps(detail_dict)
 
     activity = Activities(dtable_uuid, row_id, op_user, op_type, op_time, detail)
