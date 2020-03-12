@@ -1,12 +1,14 @@
 from http.server import HTTPServer
+from threading import Thread
 
 from dtable_events.dtable_io.request_handler import DTableIORequestHandler
 from dtable_events.dtable_io.task_manager import task_manager
 
 
-class DTableIOServer(object):
+class DTableIOServer(Thread):
 
     def __init__(self, config, dtable_server_config):
+        Thread.__init__(self)
         self._parse_config(config, dtable_server_config)
         task_manager.init(
             self._workers, self._dtable_private_key, self._dtable_web_service_url, self._file_server_port,
@@ -43,6 +45,6 @@ class DTableIOServer(object):
         self._dtable_private_key = dtable_server_config['private_key']
         self._dtable_web_service_url = dtable_server_config['dtable_web_service_url']
 
-    def start(self):
+    def run(self):
         self._server.serve_forever()
 
