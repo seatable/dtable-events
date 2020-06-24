@@ -28,6 +28,8 @@ def count_rows_by_uuids(session, dtable_uuids):
             if '@seafile_group' not in owner:
                 usernames.add(owner)
     # count user and org
+    # update rows_count with data from dtable_rows_count
+    # and set 0 when user/org only has deleted dtables
     if usernames:
         user_sql = '''
         INSERT INTO user_rows_count(username, rows_count, rows_count_update_at)
@@ -36,6 +38,12 @@ def count_rows_by_uuids(session, dtable_uuids):
         JOIN workspaces w ON d.workspace_id=w.id
         WHERE w.owner IN :usernames AND d.deleted=0
         GROUP BY w.owner
+        UNION
+        SELECT w.owner AS username, 0 AS rows_count, :update_at FROM dtables d
+        JOIN workspaces w ON d.workspace_id=w.id
+        WHERE w.owner IN :usernames
+        GROUP BY w.owner
+        HAVING COUNT(1)=SUM(d.deleted)
         ON DUPLICATE KEY UPDATE username=VALUES(username), rows_count=VALUES(rows_count), rows_count_update_at=VALUES(rows_count_update_at);
         '''
         session.execute(user_sql, {'update_at': datetime.utcnow(), 'usernames': usernames})
@@ -48,6 +56,12 @@ def count_rows_by_uuids(session, dtable_uuids):
         JOIN workspaces w ON d.workspace_id=w.id
         WHERE w.org_id IN :org_ids AND d.deleted=0
         GROUP BY w.org_id
+        UNION
+        SELECT w.org_id AS org_id, 0 AS rows_count, :update_at FROM dtables d
+        JOIN workspaces w ON d.workspace_id=w.id
+        WHERE w.org_id IN :org_ids
+        GROUP BY w.org_id
+        HAVING COUNT(1)=SUM(d.deleted)
         ON DUPLICATE KEY UPDATE org_id=VALUES(org_id), rows_count=VALUES(rows_count), rows_count_update_at=VALUES(rows_count_update_at);
         '''
         session.execute(org_sql, {'update_at': datetime.utcnow(), 'org_ids': org_ids})
