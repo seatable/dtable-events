@@ -141,6 +141,9 @@ def get_dtable_export_asset_files(username, repo_id, dtable_uuid, files, task_id
     else:
         dtable_io_logger.info('export files from dtable: %s success!', dtable_uuid)
 
+    # delete local tmp files
+    if os.path.exists(tmp_file_path):
+        shutil.rmtree(tmp_file_path)
 
 def _get_upload_link_to_seafile(seafile_server_url, access_token, parent_dir="/"):
     upload_link_api_url = "%s%s" % (seafile_server_url.rstrip('/'),  '/api/v2.1/via-repo-token/upload-link/')
