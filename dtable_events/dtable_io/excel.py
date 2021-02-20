@@ -87,6 +87,8 @@ def parse_excel_rows(sheet_rows, columns, head_index, max_column):
                 column_type = columns[index]['type']
                 if cell_value is None:
                     continue
+                elif isinstance(cell_value, datetime):  # JSON serializable
+                    row_data[column_name] = str(cell_value)
                 elif column_type == 'number':
                     row_data[column_name] = cell_value
                 elif column_type == 'date':
@@ -228,7 +230,8 @@ def parse_excel_to_json(repo_id, dtable_name, custom=False):
     wb.close()
 
     # upload json to file server
-    upload_excel_json_file(repo_id, dtable_name, json.dumps(tables))
+    content = json.dumps(tables)
+    upload_excel_json_file(repo_id, dtable_name, content)
 
 
 def import_excel_by_dtable_server(username, repo_id, dtable_uuid, dtable_name):
