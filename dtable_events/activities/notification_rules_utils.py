@@ -160,7 +160,8 @@ def list_rows_near_deadline(dtable_uuid, table_id, view_id, date_column_name, al
     headers = {'Authorization': 'Token ' + dtable_server_access_token.decode('utf-8')}
     query_params = {
         'table_id': table_id,
-        'view_id': view_id
+        'view_id': view_id,
+        'convert_link_id': True
     }
     try:
         res = requests.get(url, headers=headers, params=query_params)
@@ -232,26 +233,30 @@ def _fill_msg_blanks(msg, column_blanks, col_name_dict, row, related_users_dict=
             ColumnTypes.NUMBER,
             ColumnTypes.EMAIL,
             ColumnTypes.FORMULA,
+            ColumnTypes.LINK_FORMULA,
             ColumnTypes.AUTO_NUMBER,
             ColumnTypes.CTIME,
             ColumnTypes.MTIME
         ]:
             value = row.get(blank, '')
-            msg = msg.replace('{' + blank + '}', str(value))
+            msg = msg.replace('{' + blank + '}', str(value) if value else '')  # maybe value is None and str(None) is 'None'
 
         elif col_name_dict[blank]['type'] in [
             ColumnTypes.IMAGE,
             ColumnTypes.MULTIPLE_SELECT,
+            ColumnTypes.LINK,
         ]:
             value = row.get(blank, [])
-            msg = msg.replace('{' + blank + '}', '[' + ', '.join(value) + ']')
+            msg = msg.replace('{' + blank + '}', ('[' + ', '.join(value) + ']') if value else '[]')  # maybe value is None
 
         elif col_name_dict[blank]['type'] in [ColumnTypes.FILE]:
             value = row.get(blank, [])
-            msg = msg.replace('{' + blank + '}', '[' + ', '.join([f['name'] for f in value]) + ']')
+            msg = msg.replace('{' + blank + '}', ('[' + ', '.join([f['name'] for f in value]) + ']') if value else '[]')
 
         elif col_name_dict[blank]['type'] in [ColumnTypes.COLLABORATOR]:
             users = row.get(blank, [])
+            if users is None:
+                users = []
             if not related_users_dict:
                 msg = msg.replace('{' + blank + '}', '[' + ', '.join(users) + ']')
             else:
@@ -264,6 +269,8 @@ def _fill_msg_blanks(msg, column_blanks, col_name_dict, row, related_users_dict=
 
         elif col_name_dict[blank]['type'] in [ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
             value = row.get(blank, '')
+            if value is None:
+                value = ''
             if not related_users_dict:
                 msg = msg.replace('{' + blank + '}', value)
             else:
@@ -316,7 +323,7 @@ def gen_notification_msg_with_row_id(dtable_uuid, table_id, view_id, row_id, msg
     # get row of table-view-row
     row_url = DTABLE_SERVER_URL.rstrip('/') + '/api/v1/dtables/{dtable_uuid}/rows/{row_id}/'.format(dtable_uuid=dtable_uuid, row_id=row_id)
     headers = {'Authorization': 'Token ' + dtable_server_access_token.decode('utf-8')}
-    params = {'table_id': table_id}
+    params = {'table_id': table_id, 'convert_link_id': True}
     try:
         response = requests.get(row_url, params=params, headers=headers)
         row = response.json()

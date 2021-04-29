@@ -1,6 +1,3 @@
-from enum import Enum
-
-
 class ColumnTypes:
     TEXT = 'text'
     IMAGE = 'image'
@@ -22,3 +19,4 @@ class ColumnTypes:
     LINK = 'link'
     CTIME = 'ctime'
     MTIME = 'mtime'
+    LINK_FORMULA = 'link-formula'
