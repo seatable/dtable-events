@@ -19,7 +19,8 @@ class RedisClient(object):
         """
         self.connection = redis.Redis(
             host=self._host, port=self._port, password=self._password,
-            socket_timeout=socket_timeout, socket_connect_timeout=socket_connect_timeout
+            socket_timeout=socket_timeout, socket_connect_timeout=socket_connect_timeout,
+            decode_responses=True
             )
 
 

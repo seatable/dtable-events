@@ -8,6 +8,7 @@ from dtable_events.app.event_redis import RedisClient
 from dtable_events.activities.db import save_or_update_or_delete
 from dtable_events.db import init_db_session_class
 from dtable_events.activities.notification_rules_utils import scan_notifications_rules_per_update
+from dtable_events.cache.clients import RedisCacheClient
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ class MessageHandler(Thread):
         self._finished = Event()
         self._db_session_class = init_db_session_class(config)
         self._redis_client = RedisClient(config)
+        self._cache = RedisCacheClient(self._redis_client)
 
     def run(self):
         logger.info('Starting handle table activities...')
@@ -32,7 +34,7 @@ class MessageHandler(Thread):
                     try:
                         save_or_update_or_delete(session, event)
                         if event.get('op_type') == 'modify_row':
-                            scan_notifications_rules_per_update(event, db_session=session)
+                            scan_notifications_rules_per_update(event, db_session=session, cache=self._cache)
                     except Exception as e:
                         logger.error('Handle activities message failed: %s' % e)
                     finally:
