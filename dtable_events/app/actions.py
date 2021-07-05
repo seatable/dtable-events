@@ -365,25 +365,26 @@ class AutomationRule:
             logger.error('rule: %s request rows error status code: %s', self.rule_id, response.status_code)
             return []
         rows = response.json().get('rows', [])
-        rows_near_deadline = []
-        date_column_name = self.trigger.get('date_column_name', '')
-        trigger_days = self.trigger.get('trigger_days', 0)
-        for row in rows:
-            deadline_date_date_str = row.get(date_column_name, '')
-            if not deadline_date_date_str:
-                continue
-            if ' ' in deadline_date_date_str:
-                deadline_date_date_str = deadline_date_date_str.split(' ')[0]
-            try:
-                deadline_date = datetime.strptime(deadline_date_date_str, '%Y-%m-%d').date()
-            except Exception as e:
-                # perhaps result-type of fomular column has been changed to non-date
-                logger.warning('date_column_name: %s value: %s, transfer to date error: %s', date_column_name, deadline_date_date_str, e)
-                continue
-            now_plus_alarm_date = date.today() + timedelta(days=int(trigger_days))
-            if date.today() <= deadline_date <= now_plus_alarm_date:
-                rows_near_deadline.append(row)
-        return rows_near_deadline
+        return rows
+        # rows_near_deadline = []
+        # date_column_name = self.trigger.get('date_column_name', '')
+        # trigger_days = self.trigger.get('trigger_days', 0)
+        # for row in rows:
+        #     deadline_date_date_str = row.get(date_column_name, '')
+        #     if not deadline_date_date_str:
+        #         continue
+        #     if ' ' in deadline_date_date_str:
+        #         deadline_date_date_str = deadline_date_date_str.split(' ')[0]
+        #     try:
+        #         deadline_date = datetime.strptime(deadline_date_date_str, '%Y-%m-%d').date()
+        #     except Exception as e:
+        #         # perhaps result-type of fomular column has been changed to non-date
+        #         logger.warning('date_column_name: %s value: %s, transfer to date error: %s', date_column_name, deadline_date_date_str, e)
+        #         continue
+        #     now_plus_alarm_date = date.today() + timedelta(days=int(trigger_days))
+        #     if date.today() <= deadline_date <= now_plus_alarm_date:
+        #         rows_near_deadline.append(row)
+        # return rows_near_deadline
 
     def can_do_actions(self):
         """
