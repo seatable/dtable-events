@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from dtable_events.activities.handlers import MessageHandler
+from dtable_events.common_dataset.common_dataset_syncer import CommonDatasetSyncer
 from dtable_events.statistics.counter import UserActivityCounter
 from dtable_events.dtable_io.dtable_io_server import DTableIOServer
 from dtable_events.tasks.instant_notices_sender import InstantNoticeSender
@@ -39,6 +40,7 @@ class App(object):
             self._dtable_notification_rules_scanner = DTableNofiticationRulesScanner(config)
             self._dtable_automation_rules_scanner = DTableAutomationRulesScanner(config)
             self._ldap_syncer = LDAPSyncer(config)
+            self._common_dataset_syncer = CommonDatasetSyncer(config)
 
     def serve_forever(self):
         if self._enable_foreground_tasks:
@@ -60,3 +62,4 @@ class App(object):
             self._dtable_notification_rules_scanner.start()  # default True
             self._dtable_automation_rules_scanner.start()    # default True
             self._ldap_syncer.start()                        # default False
+            self._common_dataset_syncer.start()              # default True
