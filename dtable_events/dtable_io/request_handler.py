@@ -232,6 +232,109 @@ class DTableIORequestHandler(SimpleHTTPRequestHandler):
             resp['task_id'] = task_id
             self.wfile.write(json.dumps(resp).encode('utf-8'))
 
+        elif path == '/add-update-excel-upload-excel-task':
+
+            if task_manager.tasks_queue.full():
+                dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s' \
+                        % (task_manager.tasks_queue.qsize(), task_manager.current_task_info, task_manager.threads_is_alive()))
+                self.send_error(400, 'dtable io server busy.')
+                return
+
+            username = arguments['username'][0]
+            repo_id = arguments['repo_id'][0]
+            file_name = arguments['file_name'][0]
+            dtable_uuid = arguments['dtable_uuid'][0]
+            table_name = arguments['table_name'][0]
+
+            try:
+                task_id = task_manager.add_update_excel_upload_excel_task(
+                    username,
+                    repo_id,
+                    file_name,
+                    dtable_uuid,
+                    table_name,
+                )
+            except Exception as e:
+                logger.error(e)
+                self.send_error(500)
+                return
+
+            self.send_response(200)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            resp = {}
+            resp['task_id'] = task_id
+            self.wfile.write(json.dumps(resp).encode('utf-8'))
+
+        elif path == '/add-update-excel-csv-update-parsed-file-task':
+            if task_manager.tasks_queue.full():
+                dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s' \
+                        % (task_manager.tasks_queue.qsize(), task_manager.current_task_info, task_manager.threads_is_alive()))
+                self.send_error(400, 'dtable io server busy.')
+                return
+
+            username = arguments['username'][0]
+            repo_id = arguments['repo_id'][0]
+            dtable_uuid = arguments['dtable_uuid'][0]
+            file_name = arguments['file_name'][0]
+            table_name = arguments['table_name'][0]
+            selected_columns = arguments['selected_columns'][0]
+
+            try:
+                task_id = task_manager.add_update_excel_csv_update_parsed_file_task(
+                    username,
+                    repo_id,
+                    dtable_uuid,
+                    file_name,
+                    table_name,
+                    selected_columns,
+                )
+            except Exception as e:
+                logger.error(e)
+                self.send_error(500)
+                return
+
+            self.send_response(200)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            resp = {}
+            resp['task_id'] = task_id
+            self.wfile.write(json.dumps(resp).encode('utf-8'))
+
+        elif path == '/add-update-csv-upload-csv-task':
+
+            if task_manager.tasks_queue.full():
+                dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s' \
+                        % (task_manager.tasks_queue.qsize(), task_manager.current_task_info, task_manager.threads_is_alive()))
+                self.send_error(400, 'dtable io server busy.')
+                return
+
+            username = arguments['username'][0]
+            repo_id = arguments['repo_id'][0]
+            file_name = arguments['file_name'][0]
+            dtable_uuid = arguments['dtable_uuid'][0]
+            table_name = arguments['table_name'][0]
+
+            try:
+                task_id = task_manager.add_update_csv_upload_csv_task(
+                    username,
+                    repo_id,
+                    file_name,
+                    dtable_uuid,
+                    table_name,
+                )
+            except Exception as e:
+                logger.error(e)
+                self.send_error(500)
+                return
+
+            self.send_response(200)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            resp = {}
+            resp['task_id'] = task_id
+            self.wfile.write(json.dumps(resp).encode('utf-8'))
+
         elif path == '/query-status':
             task_id = arguments['task_id'][0]
             if not task_manager.is_valid_task_id(task_id):

@@ -431,6 +431,21 @@ def get_excel_file(repo_id, file_name):
     dtable_io_logger.info('excel file size: %d KB' % (file_size >> 10))
     return BytesIO(content)
 
+def get_csv_file(repo_id, file_name):
+    from dtable_events.dtable_io import dtable_io_logger
+
+    file_path = EXCEL_DIR_PATH + file_name + '.csv'
+    obj_id = seafile_api.get_file_id_by_path(repo_id, file_path)
+    token = seafile_api.get_fileserver_access_token(
+        repo_id, obj_id, 'download', '', use_onetime=True
+    )
+    url = gen_inner_file_get_url(token, file_name + '.csv')
+    content = requests.get(url).content
+
+    file_size = sys.getsizeof(content)
+    dtable_io_logger.info('csv file size: %d KB' % (file_size >> 10))
+    return BytesIO(content)
+
 def upload_excel_json_file(repo_id, file_name, content):
     from dtable_events.dtable_io import dtable_io_logger
 
@@ -519,3 +534,75 @@ def get_columns_from_dtable_server(username, dtable_uuid, table_name):
     if res.status_code != 200:
         raise ConnectionError('failed to get columns %s %s' % (dtable_uuid, res.text))
     return json.loads(res.content.decode()).get('columns', [])
+
+
+def get_rows_from_dtable_server(username, dtable_uuid, table_name):
+    DTABLE_SERVER_URL = task_manager.conf['dtable_server_url']
+    ENABLE_DTABLE_SERVER_CLUSTER = task_manager.conf['enable_dtable_server_cluster']
+    DTABLE_PROXY_SERVER_URL = task_manager.conf['dtable_proxy_server_url']
+    api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/rows/?' + 'table_name=' + table_name
+    dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
+    headers = {'Authorization': 'Token ' + dtable_server_access_token.decode('utf-8')}
+
+    res = requests.get(url, headers=headers)
+    if res.status_code != 200:
+        raise ConnectionError('failed to get rows %s %s' % (dtable_uuid, res.text))
+    return json.loads(res.content.decode()).get('rows', [])
+
+def update_rows_by_dtable_server(username, dtable_uuid, update_rows, table_name):
+    DTABLE_SERVER_URL = task_manager.conf['dtable_server_url']
+    ENABLE_DTABLE_SERVER_CLUSTER = task_manager.conf['enable_dtable_server_cluster']
+    DTABLE_PROXY_SERVER_URL = task_manager.conf['dtable_proxy_server_url']
+    api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/batch-update-rows/'
+    dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
+    headers = {'Authorization': 'Token ' + dtable_server_access_token.decode('utf-8')}
+    offset = 0
+    while True:
+        rows = update_rows[offset: offset + 1000]
+        offset = offset + 1000
+        if not rows:
+            break
+        json_data = {
+            'table_name': table_name,
+            'updates': rows,
+        }
+        res = requests.put(url, headers=headers, json=json_data)
+        if res.status_code != 200:
+            raise ConnectionError('failed to update excel json %s %s' % (dtable_uuid, res.text))
+        time.sleep(0.5)
+
+def update_append_excel_json_to_dtable_server(username, dtable_uuid, rows_data, table_name):
+    DTABLE_SERVER_URL = task_manager.conf['dtable_server_url']
+    ENABLE_DTABLE_SERVER_CLUSTER = task_manager.conf['enable_dtable_server_cluster']
+    DTABLE_PROXY_SERVER_URL = task_manager.conf['dtable_proxy_server_url']
+    api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/batch-append-rows/'
+    dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
+    headers = {'Authorization': 'Token ' + dtable_server_access_token.decode('utf-8')}
+    offset = 0
+    while True:
+        rows = rows_data[offset: offset + 1000]
+        offset = offset + 1000
+        if not rows:
+            break
+        json_data = {
+            'table_name': table_name,
+            'rows': rows,
+        }
+        res = requests.post(url, headers=headers, json=json_data)
+        if res.status_code != 200:
+            raise ConnectionError('failed to append excel json %s %s' % (dtable_uuid, res.text))
+        time.sleep(0.5)
+
+def delete_file(username, repo_id, file_name):
+    filename = file_name + '.xlsx\t' + file_name + '.json\t' + file_name + '.csv\t'
+    m = seafile_api.del_file(repo_id, EXCEL_DIR_PATH, filename, username)
+
+def guess_CSV_delimiter(text):
+    import re
+    lines = text.split('\n')
+    comma_count = len(re.compile(r',').findall(lines[0]))
+    semicolon_count = len(re.compile(r';').findall(lines[0]))
+    return ';' if comma_count < semicolon_count else ','

@@ -13,7 +13,9 @@ from dtable_events.dtable_io.utils import setup_logger, prepare_dtable_json, \
     prepare_asset_file_folder, post_dtable_json, post_asset_files, \
     download_files_to_path, create_forms_from_src_dtable, copy_src_forms_to_json, prepare_dtable_json_from_memory
 from dtable_events.db import init_db_session_class
-from dtable_events.dtable_io.excel import parse_excel_to_json, import_excel_by_dtable_server, append_parsed_file_by_dtable_server, parse_append_excel_upload_excel_to_json
+from dtable_events.dtable_io.excel import parse_excel_to_json, import_excel_by_dtable_server,\
+    append_parsed_file_by_dtable_server, parse_append_excel_upload_excel_to_json,\
+    update_parsed_file_by_dtable_server, parse_update_excel_upload_excel_to_json, parse_update_csv_upload_csv_to_json
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.statistics.db import save_email_sending_records
 
@@ -200,6 +202,42 @@ def append_excel_upload_excel(username, repo_id, file_name, dtable_uuid, table_n
         dtable_io_logger.exception('parse append excel failed. ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('parse append excel %s.xlsx success!' % file_name)
+
+def update_excel_csv_update_parsed_file(username, repo_id, dtable_uuid, file_name, table_name, selected_columns):
+    """
+    upload excel/csv json file to dtable-server
+    """
+    dtable_io_logger.info('Start import file: {}.'.format(dtable_uuid))
+    try:
+        update_parsed_file_by_dtable_server(username, repo_id, dtable_uuid, file_name, table_name, selected_columns)
+    except Exception as e:
+        dtable_io_logger.error('update excel,csv failed. ERROR: {}'.format(e))
+    else:
+        dtable_io_logger.info('update excel,csv %s success!' % file_name)
+
+def update_excel_upload_excel(username, repo_id, file_name, dtable_uuid, table_name):
+    """
+    parse excel to json file, then upload json file to file server
+    """
+    dtable_io_logger.info('Start parse update excel: %s.xlsx.' % file_name)
+    try:
+        parse_update_excel_upload_excel_to_json(repo_id, file_name, username, dtable_uuid, table_name)
+    except Exception as e:
+        dtable_io_logger.exception('parse update excel failed. ERROR: {}'.format(e))
+    else:
+        dtable_io_logger.info('parse update excel %s.xlsx success!' % file_name)
+
+def update_csv_upload_csv(username, repo_id, file_name, dtable_uuid, table_name):
+    """
+    parse csv to json file, then upload json file to file server
+    """
+    dtable_io_logger.info('Start parse update csv: %s.csv.' % file_name)
+    try:
+        parse_update_csv_upload_csv_to_json(repo_id, file_name, username, dtable_uuid, table_name)
+    except Exception as e:
+        dtable_io_logger.exception('parse update csv failed. ERROR: {}'.format(e))
+    else:
+        dtable_io_logger.info('parse update csv %s.csv success!' % file_name)
 
 def _get_upload_link_to_seafile(seafile_server_url, access_token, parent_dir="/"):
     upload_link_api_url = "%s%s" % (seafile_server_url.rstrip('/'),  '/api/v2.1/via-repo-token/upload-link/')

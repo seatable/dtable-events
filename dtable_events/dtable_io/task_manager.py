@@ -128,6 +128,37 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    def add_update_excel_csv_update_parsed_file_task(self, username, repo_id, dtable_uuid, file_name, table_name, selected_columns):
+        from dtable_events.dtable_io import update_excel_csv_update_parsed_file
+
+        task_id = str(int(time.time()*1000))
+        task = (update_excel_csv_update_parsed_file,
+                (username, repo_id, dtable_uuid, file_name, table_name, selected_columns))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+        return task_id
+
+
+    def add_update_excel_upload_excel_task(self, username, repo_id, file_name, dtable_uuid, table_name):
+        from dtable_events.dtable_io import update_excel_upload_excel
+
+        task_id = str(int(time.time()*1000))
+        task = (update_excel_upload_excel,
+                (username, repo_id, file_name, dtable_uuid, table_name))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+        return task_id
+
+    def add_update_csv_upload_csv_task(self, username, repo_id, file_name, dtable_uuid, table_name):
+        from dtable_events.dtable_io import update_csv_upload_csv
+
+        task_id = str(int(time.time()*1000))
+        task = (update_csv_upload_csv,
+                (username, repo_id, file_name, dtable_uuid, table_name))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+        return task_id
+
     def query_status(self, task_id):
         task = self.tasks_map[task_id]
         if task == 'success':
