@@ -357,44 +357,30 @@ def parse_append_excel_rows(sheet_rows, columns, max_column):
                 column_type = columns[index]['type']
                 if cell_value is None:
                     continue
-                if isinstance(cell_value, datetime):  # JSON serializable
-                    cell_value = str(cell_value)
-                if column_type in ('number', 'duration', 'rating'):
-                    row_data[column_name] = parse_number(cell_value)
-                elif column_type == 'date':
-                    row_data[column_name] = str(cell_value)
-                elif column_type == 'long-text':
-                    row_data[column_name] = parse_long_text(cell_value)
-                elif column_type == 'checkbox':
-                    row_data[column_name] = parse_checkbox(cell_value)
-                elif column_type == 'multi-select':
-                    row_data[column_name] = parse_multiple_select(cell_value)
-                elif column_type in ('URL', 'email'):
-                    row_data[column_name] = str(cell_value)
-                elif column_type == 'text':
-                    row_data[column_name] = str(cell_value)
-                elif column_type == 'file':
-                    row_data[column_name] = None
-                elif column_type == 'image':
-                    row_data[column_name] = str(cell_value)
-                elif column_type == 'single_select':
-                    row_data[column_name] = str(cell_value)
-                elif column_type == 'link':
-                    row_data[column_name] = None
-                elif column_type == 'button':
-                    row_data[column_name] = None
-                elif column_type == 'geolocation':
-                    row_data[column_name] = None
-                elif column_type in ('collaborator', 'creator', 'last_modifier', 'ctime', 'mtime', 'formula',
-                                     'link_formula', 'auto_number'):
-                    row_data[column_name] = None
-                else:
-                    row_data[column_name] = str(cell_value)
+                row_data[column_name] = parse_row(column_type, cell_value)
             except Exception as e:
                 dtable_io_logger.exception(e)
                 row_data[column_name] = None
         rows.append(row_data)
     return rows
+
+
+def get_insert_update_result(excel_row, dtable_rows, selected_column_list):
+    update_row_list = []
+    for dtable_row in dtable_rows:
+        is_update = True
+        for selected_column in selected_column_list:
+            dtable_cell_value = dtable_row.get(selected_column)
+            excel_cell_value = excel_row.get(selected_column)
+            if dtable_cell_value != excel_cell_value:
+                is_update = False
+                break
+        if is_update:
+            update_row = {'row_id': dtable_row.get('_id'), 'row': excel_row}
+            update_row_list.append(update_row)
+    if update_row_list:
+        return update_row_list, 'update'
+    return excel_row, 'insert'
 
 
 def update_parsed_file_by_dtable_server(username, repo_id, dtable_uuid, file_name, table_name, selected_columns):
@@ -411,21 +397,11 @@ def update_parsed_file_by_dtable_server(username, repo_id, dtable_uuid, file_nam
     selected_column_list = selected_columns.split(',')
     insert_rows = []
     for excel_row in excel_rows:
-        is_insert = 1
-        for dtable_row in dtable_rows:
-            is_update = 1
-            for selected_column in selected_column_list:
-                dtable_cell_value = dtable_row.get(selected_column)
-                excel_cell_value = excel_row.get(selected_column)
-                if not dtable_cell_value or not excel_cell_value or dtable_cell_value != excel_cell_value:
-                    is_update = 0
-                    break
-            if is_update == 1:
-                is_insert = 0
-                update_dict = {'row_id': dtable_row.get('_id'), 'row': excel_row}
-                update_rows.append(update_dict)
-        if is_insert:
-            insert_rows.append(excel_row)
+        rows, operateType = get_insert_update_result(excel_row, dtable_rows, selected_column_list)
+        if operateType == 'insert':
+            insert_rows.append(rows)
+        else:
+            update_rows += rows
 
     # delete excel,json,csv file
     delete_file(username, repo_id, file_name)
@@ -512,39 +488,7 @@ def parse_update_excel_rows(sheet_rows, columns, max_column):
                 column_type = columns[index]['type']
                 if cell_value is None:
                     continue
-                if isinstance(cell_value, datetime):  # JSON serializable
-                    cell_value = str(cell_value)
-                if column_type in ('number', 'duration', 'rating'):
-                    row_data[column_name] = parse_number(cell_value)
-                elif column_type == 'date':
-                    row_data[column_name] = str(cell_value)
-                elif column_type == 'long-text':
-                    row_data[column_name] = parse_long_text(cell_value)
-                elif column_type == 'checkbox':
-                    row_data[column_name] = parse_checkbox(cell_value)
-                elif column_type == 'multi-select':
-                    row_data[column_name] = parse_multiple_select(cell_value)
-                elif column_type in ('URL', 'email'):
-                    row_data[column_name] = str(cell_value)
-                elif column_type == 'text':
-                    row_data[column_name] = str(cell_value)
-                elif column_type == 'file':
-                    row_data[column_name] = None
-                elif column_type == 'image':
-                    row_data[column_name] = str(cell_value)
-                elif column_type == 'single_select':
-                    row_data[column_name] = str(cell_value)
-                elif column_type == 'link':
-                    row_data[column_name] = None
-                elif column_type == 'button':
-                    row_data[column_name] = None
-                elif column_type == 'geolocation':
-                    row_data[column_name] = None
-                elif column_type in ('collaborator', 'creator', 'last_modifier', 'ctime', 'mtime', 'formula',
-                                     'link_formula', 'auto_number'):
-                    row_data[column_name] = None
-                else:
-                    row_data[column_name] = str(cell_value)
+                row_data[column_name] = parse_row(column_type, cell_value)
             except Exception as e:
                 dtable_io_logger.exception(e)
                 row_data[column_name] = None
@@ -619,42 +563,46 @@ def parse_update_csv_rows(csv_file, columns, max_column):
                 column_type = columns[index]['type']
                 if cell_value is None:
                     continue
-                if isinstance(cell_value, datetime):  # JSON serializable
-                    cell_value = str(cell_value)
-                if column_type in ('number', 'duration', 'rating'):
-                    row_data[column_name] = parse_number(cell_value)
-                elif column_type == 'date':
-                    row_data[column_name] = str(cell_value)
-                elif column_type == 'long-text':
-                    row_data[column_name] = parse_long_text(cell_value)
-                elif column_type == 'checkbox':
-                    row_data[column_name] = parse_checkbox(cell_value)
-                elif column_type == 'multi-select':
-                    row_data[column_name] = parse_multiple_select(cell_value)
-                elif column_type in ('URL', 'email'):
-                    row_data[column_name] = str(cell_value)
-                elif column_type == 'text':
-                    row_data[column_name] = str(cell_value)
-                elif column_type == 'file':
-                    row_data[column_name] = None
-                elif column_type == 'image':
-                    row_data[column_name] = str(cell_value)
-                elif column_type == 'single_select':
-                    row_data[column_name] = str(cell_value)
-                elif column_type == 'link':
-                    row_data[column_name] = None
-                elif column_type == 'button':
-                    row_data[column_name] = None
-                elif column_type == 'geolocation':
-                    row_data[column_name] = None
-                elif column_type in ('collaborator', 'creator', 'last_modifier', 'ctime', 'mtime', 'formula',
-                                     'link_formula', 'auto_number'):
-                    row_data[column_name] = None
-                else:
-                    row_data[column_name] = str(cell_value)
+                row_data[column_name] = parse_row(column_type, cell_value)
             except Exception as e:
                 dtable_io_logger.exception(e)
                 row_data[column_name] = None
         rows.append(row_data)
         row = csv_file.readline().decode()
     return rows, max_column, csv_row_num, csv_column_num
+
+
+def parse_row(column_type, cell_value):
+    if isinstance(cell_value, datetime):  # JSON serializable
+        cell_value = str(cell_value)
+    if column_type in ('number', 'duration', 'rating'):
+        return parse_number(cell_value)
+    elif column_type == 'date':
+        return str(cell_value)
+    elif column_type == 'long-text':
+        return parse_long_text(cell_value)
+    elif column_type == 'checkbox':
+        return parse_checkbox(cell_value)
+    elif column_type == 'multi-select':
+        return parse_multiple_select(cell_value)
+    elif column_type in ('URL', 'email'):
+        return str(cell_value)
+    elif column_type == 'text':
+        return str(cell_value)
+    elif column_type == 'file':
+        return None
+    elif column_type == 'image':
+        return str(cell_value)
+    elif column_type == 'single_select':
+        return str(cell_value)
+    elif column_type == 'link':
+        return None
+    elif column_type == 'button':
+        return None
+    elif column_type == 'geolocation':
+        return None
+    elif column_type in ('collaborator', 'creator', 'last_modifier', 'ctime', 'mtime', 'formula',
+                         'link_formula', 'auto_number'):
+        return None
+    else:
+        return str(cell_value)
