@@ -3,6 +3,7 @@ import json
 from datetime import datetime
 
 from openpyxl import load_workbook
+import csv
 
 CHECKBOX_TUPLE = (
     ('√', 'x'),
@@ -393,8 +394,8 @@ def update_parsed_file_by_dtable_server(username, repo_id, dtable_uuid, file_nam
     excel_rows = json.loads(sheet_content)
     excel_rows = excel_rows[0].get('rows', [])
     dtable_rows = get_rows_from_dtable_server(username, dtable_uuid, table_name)
-    update_rows = []
     selected_column_list = selected_columns.split(',')
+    update_rows = []
     insert_rows = []
     for excel_row in excel_rows:
         rows, operateType = get_insert_update_result(excel_row, dtable_rows, selected_column_list)
@@ -533,12 +534,13 @@ def parse_update_csv_upload_csv_to_json(repo_id, file_name, username, dtable_uui
 
 def parse_update_csv_rows(csv_file, columns, max_column):
     from dtable_events.dtable_io import dtable_io_logger
-    from dtable_events.dtable_io.utils import guess_CSV_delimiter
 
     rows = []
-    csv_head = csv_file.readline().decode()
-    delimiter = guess_CSV_delimiter(csv_head)
-    csv_head = csv_head.split(delimiter)
+    csv_rows = [row for row in csv.reader(csv_file)]
+    if not csv_rows:
+        return rows, 0, 0, 0
+
+    csv_head = csv_rows[0]
     csv_column_num = len(csv_head)
     table_column_num = len(columns)
     if csv_column_num < max_column:
@@ -547,11 +549,9 @@ def parse_update_csv_rows(csv_file, columns, max_column):
         max_column = table_column_num
 
     csv_head_dict = {csv_head[index].strip(): index for index in range(csv_column_num)}
-    row = csv_file.readline().decode()
     csv_row_num = 0
-    while row:
+    for csv_row in csv_rows[1:]:
         csv_row_num += 1
-        csv_row = row.split(delimiter)
         row_data = {}
         for index in range(max_column):
             column_name = columns[index]['name']
@@ -568,7 +568,6 @@ def parse_update_csv_rows(csv_file, columns, max_column):
                 dtable_io_logger.exception(e)
                 row_data[column_name] = None
         rows.append(row_data)
-        row = csv_file.readline().decode()
     return rows, max_column, csv_row_num, csv_column_num
 
 
