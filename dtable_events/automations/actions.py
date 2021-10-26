@@ -1008,6 +1008,7 @@ class AutomationRule:
         self.scripts_running_limit = None
 
         self.cache_key = 'AUTOMATION_RULE:%s' % self.rule_id
+        self.task_run_seccess = True
 
         self.done_actions = False
         self._load_trigger_and_actions(raw_trigger, raw_actions)
@@ -1216,17 +1217,37 @@ class AutomationRule:
 
             except RuleInvalidException as e:
                 logger.error('auto rule: %s, invalid error: %s', self.rule_id, e)
+                self.task_run_seccess = False
                 self.set_invalid()
                 break
             except Exception as e:
                 logger.exception(e)
+                self.task_run_seccess = False
                 logger.error('rule: %s, do actions error: %s', self.rule_id, e)
 
         if self.done_actions and not with_test:
             self.update_last_trigger_time()
 
+        self.set_task_log()
+
     def set_done_actions(self, done=True):
         self.done_actions = done
+
+    def set_task_log(self):
+        try:
+            set_task_log_sql = """
+                INSERT INTO auto_rules_task_log (trigger_time, success, rule_id) VALUES
+                (:trigger_time, :success, :rule_id)
+            """
+            if self.run_condition in (PER_DAY, PER_WEEK, PER_MONTH):
+                self.db_session.execute(set_task_log_sql, {
+                    'trigger_time': datetime.utcnow(),
+                    'success': self.task_run_seccess,
+                    'rule_id': self.rule_id
+                })
+                self.db_session.commit()
+        except Exception as e:
+            logger.error('set rule task log: %s invalid error: %s', self.rule_id, e)
 
     def update_last_trigger_time(self):
         try:
