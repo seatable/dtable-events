@@ -1228,7 +1228,8 @@ class AutomationRule:
         if self.done_actions and not with_test:
             self.update_last_trigger_time()
 
-        self.set_task_log()
+        if not with_test:
+            self.set_task_log()
 
     def set_done_actions(self, done=True):
         self.done_actions = done
