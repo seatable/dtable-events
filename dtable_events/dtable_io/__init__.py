@@ -3,8 +3,9 @@ import json
 import os
 import shutil
 import time
-
+import logging
 import requests
+from seatable_api import SeaTableAPI
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
@@ -425,3 +426,35 @@ def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token, session_id):
             dtable_io_logger.error('execute printToPDF error: {}'.format(e))
 
         driver.quit()
+
+def insert_page_to_row(dtable_uuid, page_id, row_id, access_token, session_id, target_table_name, target_row, target_column_name, file_name, server_url):
+    convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token, session_id)
+    # check pdf file
+    tmp_pdf_path = os.path.join('/tmp/dtable-io/convert-page-to-pdf',
+                                '%s_%s_%s.pdf' % (dtable_uuid, page_id, row_id))
+    if not os.path.isfile(tmp_pdf_path):
+        dtable_io_logger.error("can't find tmp pdf, uuid: %s, page_id: %s, row_id: %s", dtable_uuid, page_id, row_id)
+    # upload file and update table
+    file_name = file_name if file_name.endswith('.pdf') else file_name + '.pdf'
+    try:
+        seatable = SeaTableAPI(access_token, server_url)
+        seatable.auth()
+        info_dict = seatable.upload_local_file(tmp_pdf_path, name=file_name, file_type='file', replace=True)
+        files = target_row.get(target_column_name)
+        if not files or not isinstance(files, list):  # cell value is None(null) or other invalid values, str...
+            update_row = {target_column_name: [info_dict]}
+        else:
+            flag = False
+            for file in files:
+                if file['name'] == file_name:
+                    file.update(info_dict)
+                    flag = True
+                    break
+            if flag:
+                update_row = {target_column_name: files}
+            else:
+                update_row = {target_column_name: files + [info_dict]}
+        seatable.update_row(target_table_name, target_row.get('_id'), update_row)
+    except Exception as e:
+        dtable_io_logger.error('upload file or update table error: %s', e)
+

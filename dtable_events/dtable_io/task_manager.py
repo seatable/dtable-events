@@ -171,6 +171,17 @@ class TaskManager(object):
 
         return task_id
 
+    def insert_page_to_row(self,dtable_uuid, page_id, row_id, access_token, session_id, target_table_name, target_row, target_column_name, file_name, server_url):
+        from dtable_events.dtable_io import insert_page_to_row
+
+        task_id = str(int(time.time() * 1000))
+        task = (insert_page_to_row,
+                (dtable_uuid, page_id, row_id, access_token, session_id, target_table_name, target_row, target_column_name, file_name, server_url))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+
+        return task_id
+
     def threads_is_alive(self):
         info = {}
         for t in self.threads:

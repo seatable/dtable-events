@@ -338,6 +338,46 @@ def convert_page_to_pdf():
 
     return make_response(({'task_id': task_id}, 200))
 
+@app.route('/insert-page-to-row', methods=['GET'])
+def insert_page_to_row():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    if task_manager.tasks_queue.full():
+        from dtable_events.dtable_io import dtable_io_logger
+        dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
+                                 % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
+                                    task_manager.threads_is_alive()))
+        return make_response(('dtable io server busy.', 400))
+
+    dtable_uuid = request.args.get('dtable_uuid')
+    page_id = request.args.get('page_id')
+    row_id = request.args.get('row_id')
+    access_token = request.args.get('access_token')
+    session_id = request.args.get('session_id')
+    target_table_name = request.args.get('target_table_name')
+
+    target_row = request.args.get('target_row')
+
+    target_column_name = request.args.get('target_column_name')
+    file_name = request.args.get('file_name')
+    server_url = request.args.get('server_url')
+    print(type(target_row), 'hhhhhhhhhhh')
+    if not isinstance(target_row, dict):
+        target_row = json.loads(target_row)
+
+    print(type(target_row), 'cccccccccc')
+
+    try:
+        task_id = task_manager.insert_page_to_row(
+            dtable_uuid, page_id, row_id, access_token, session_id, target_table_name, target_row, target_column_name, file_name, server_url)
+    except Exception as e:
+        logger.error(e)
+        return make_response((e, 500))
+
+    return make_response(({'task_id': task_id}, 200))
+
 
 @app.route('/dtable-asset-files', methods=['POST'])
 def dtable_asset_files():
