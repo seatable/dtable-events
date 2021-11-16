@@ -358,18 +358,17 @@ def insert_page_to_row():
     session_id = request.args.get('session_id')
     target_table_name = request.args.get('target_table_name')
 
-    target_row = request.args.get('target_row')
+    target_row_id = request.args.get('target_row_id')
 
     target_column_name = request.args.get('target_column_name')
     file_name = request.args.get('file_name')
     server_url = request.args.get('server_url')
-    if not isinstance(target_row, dict):
-        target_row = json.loads(target_row)
+
 
 
     try:
         task_id = task_manager.insert_page_to_row(
-            dtable_uuid, page_id, row_id, access_token, session_id, target_table_name, target_row, target_column_name, file_name, server_url)
+            dtable_uuid, page_id, row_id, access_token, session_id, target_table_name, target_row_id, target_column_name, file_name, server_url)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))

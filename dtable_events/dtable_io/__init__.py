@@ -427,7 +427,7 @@ def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token, session_id):
 
         driver.quit()
 
-def insert_page_to_row(dtable_uuid, page_id, row_id, access_token, session_id, target_table_name, target_row, target_column_name, file_name, server_url):
+def insert_page_to_row(dtable_uuid, page_id, row_id, access_token, session_id, target_table_name, target_row_id, target_column_name, file_name, server_url):
     convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token, session_id)
     # check pdf file
     tmp_pdf_path = os.path.join('/tmp/dtable-io/convert-page-to-pdf',
@@ -439,6 +439,7 @@ def insert_page_to_row(dtable_uuid, page_id, row_id, access_token, session_id, t
     try:
         seatable = SeaTableAPI(access_token, server_url)
         seatable.auth()
+        target_row = seatable.get_row(target_table_name, target_row_id)
         info_dict = seatable.upload_local_file(tmp_pdf_path, name=file_name, file_type='file', replace=True)
         files = target_row.get(target_column_name)
         if not files or not isinstance(files, list):  # cell value is None(null) or other invalid values, str...
