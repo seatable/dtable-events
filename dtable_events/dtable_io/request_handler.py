@@ -363,11 +363,9 @@ def insert_page_to_row():
     target_column_name = request.args.get('target_column_name')
     file_name = request.args.get('file_name')
     server_url = request.args.get('server_url')
-    print(type(target_row), 'hhhhhhhhhhh')
     if not isinstance(target_row, dict):
         target_row = json.loads(target_row)
 
-    print(type(target_row), 'cccccccccc')
 
     try:
         task_id = task_manager.insert_page_to_row(
