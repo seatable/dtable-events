@@ -3,7 +3,6 @@ import json
 import os
 import shutil
 import time
-import logging
 import requests
 from seatable_api import SeaTableAPI
 from selenium import webdriver
