@@ -18,7 +18,8 @@ class DTableIOServer(Thread):
         task_manager.init(
             self._workers, self._dtable_private_key, self._dtable_web_service_url,
             self._file_server_port, self._dtable_server_url, self._enable_dtable_server_cluster,
-            self._dtable_proxy_server_url, self._io_task_timeout, self._session_cookie_name, config
+            self._dtable_proxy_server_url, self._io_task_timeout, self._session_cookie_name,
+            self._dtable_baidu_map_key, self._dtable_google_map_key, config
         )
         message_task_manager.init(
             self._workers, self._dtable_private_key, self._dtable_web_service_url,
@@ -69,12 +70,17 @@ class DTableIOServer(Thread):
                     ENABLE_DTABLE_SERVER_CLUSTER = getattr(seahub_settings, 'ENABLE_DTABLE_SERVER_CLUSTER', False)
                     DTABLE_PROXY_SERVER_URL = getattr(seahub_settings, 'DTABLE_PROXY_SERVER_URL', '')
                     SESSION_COOKIE_NAME = getattr(seahub_settings, 'SESSION_COOKIE_NAME', 'sessionid')
+                    DTABLE_BAIDU_MAP_KEY = getattr(seahub_settings, 'DTABLE_BAIDU_MAP_KEY')
+                    DTABLE_GOOGLE_MAP_KEY = getattr(seahub_settings, 'DTABLE_GOOGLE_MAP_KEY')
+
                     self._dtable_web_service_url = DTABLE_WEB_SERVICE_URL
                     self._dtable_private_key = DTABLE_PRIVATE_KEY
                     self._dtable_server_url = DTABLE_SERVER_URL
                     self._enable_dtable_server_cluster = ENABLE_DTABLE_SERVER_CLUSTER
                     self._dtable_proxy_server_url = DTABLE_PROXY_SERVER_URL
                     self._session_cookie_name = SESSION_COOKIE_NAME
+                    self._dtable_baidu_map_key = DTABLE_BAIDU_MAP_KEY
+                    self._dtable_google_map_key = DTABLE_GOOGLE_MAP_KEY
             except ImportError:
                 dtable_web_seahub_dir = os.path.join(os.environ.get('DTABLE_WEB_DIR', ''), 'seahub')
                 if os.path.exists(dtable_web_seahub_dir):
@@ -86,12 +92,17 @@ class DTableIOServer(Thread):
                     ENABLE_DTABLE_SERVER_CLUSTER = getattr(seahub_settings, 'ENABLE_DTABLE_SERVER_CLUSTER', False)
                     DTABLE_PROXY_SERVER_URL = getattr(seahub_settings, 'DTABLE_PROXY_SERVER_URL', '')
                     SESSION_COOKIE_NAME = getattr(seahub_settings, 'SESSION_COOKIE_NAME', 'sessionid')
+                    DTABLE_BAIDU_MAP_KEY = getattr(seahub_settings, 'DTABLE_BAIDU_MAP_KEY')
+                    DTABLE_GOOGLE_MAP_KEY = getattr(seahub_settings, 'DTABLE_GOOGLE_MAP_KEY')
+
                     self._dtable_web_service_url = DTABLE_WEB_SERVICE_URL
                     self._dtable_private_key = DTABLE_PRIVATE_KEY 
                     self._dtable_server_url = DTABLE_SERVER_URL
                     self._enable_dtable_server_cluster = ENABLE_DTABLE_SERVER_CLUSTER
                     self._dtable_proxy_server_url = DTABLE_PROXY_SERVER_URL
                     self._session_cookie_name = SESSION_COOKIE_NAME
+                    self._dtable_baidu_map_key = DTABLE_BAIDU_MAP_KEY
+                    self._dtable_google_map_key = DTABLE_GOOGLE_MAP_KEY
             except Exception as e:
                 logging.error(f'import settings from SEAFILE_CENTRAL_CONF_DIR/dtable_web_settings.py failed {e}')
 
