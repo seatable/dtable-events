@@ -622,3 +622,47 @@ def update_append_excel_json_to_dtable_server(username, dtable_uuid, rows_data, 
 def delete_file(username, repo_id, file_name):
     filename = file_name + '.xlsx\t' + file_name + '.json\t' + file_name + '.csv\t'
     seafile_api.del_file(repo_id, EXCEL_DIR_PATH, filename, username)
+
+
+def addr_to_longitude_latitude(addr_list):
+    from dtable_events.dtable_io import dtable_io_logger
+    baidu_map_url = 'https://api.map.baidu.com/geocoding/v3/'
+    google_map_url = 'https://maps.googleapis.com/maps/api/geocode/json'
+
+    DTABLE_GOOGLE_MAP_KEY = task_manager.conf['dtable_google_map_key']
+    DTABLE_BAIDU_MAP_KEY = task_manager.conf['dtable_baidu_map_key']
+    ak = DTABLE_GOOGLE_MAP_KEY or DTABLE_BAIDU_MAP_KEY
+
+    result_info = {}
+    if DTABLE_BAIDU_MAP_KEY:
+        for addr in addr_list:
+            params = {
+                'output': 'json',
+                'ak': ak,
+                'address': addr
+            }
+            res = requests.get(baidu_map_url, params=params)
+            if res.status_code != 200:
+                raise ConnectionError('failed to get longitude and latitude %s' % res.text)
+            if res.json().get('status') != 0:
+                result_info[addr] = {}
+                dtable_io_logger.warning('get %s longitude and latitude error: %s' % (addr, res.json().get('status')))
+            else:
+                result = res.json().get('result', {})
+                result_info[addr] = result.get('location', {})
+    elif DTABLE_GOOGLE_MAP_KEY:
+        for addr in addr_list:
+            params = {
+                'key': ak,
+                'address': addr
+            }
+            res = requests.get(google_map_url, params=params)
+            if res.status_code != 200:
+                raise ConnectionError('failed to get longitude and latitude %s' % res.text)
+            if res.json().get('status') != 'ok':
+                result_info[addr] = {}
+                dtable_io_logger.warning('get %s longitude and latitude error: %s' % (addr, res.json().get('status')))
+            else:
+                result = res.json().get('results', {})
+                result_info[addr] = result[0].get('geometry', {}).get('location', {})
+    return result_info

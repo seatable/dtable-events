@@ -6,6 +6,7 @@ from flask import Flask, request, make_response
 
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.dtable_io.task_message_manager import message_task_manager
+import os
 
 app = Flask(__name__)
 logger = logging.getLogger(__name__)
@@ -610,3 +611,61 @@ def add_update_csv_upload_csv_task():
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
+
+
+@app.route('/convert-addr-to-longitude-latitude', methods=['POST'])
+def convert_addr_to_longitude_latitude():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    try:
+        data = json.loads(request.data)
+    except:
+        return {'error_msg': 'Bad request.'}, 400
+
+    if not isinstance(data, dict):
+        return make_response(('Bad request', 400))
+
+    if task_manager.tasks_queue.full():
+        from dtable_events.dtable_io import dtable_io_logger
+        dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
+                                 % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
+                                    task_manager.threads_is_alive()))
+        return make_response(('dtable io server busy.', 400))
+
+    addr_list = data.get('addr_list')
+    try:
+        task_id = task_manager.convert_addr_to_longitude_latitude(addr_list)
+    except Exception as e:
+        logger.error(e)
+        return make_response((e, 500))
+
+    return make_response(({'task_id': task_id}, 200))
+
+
+@app.route('/get-longitude-latitude', methods=['GET'])
+def get_longitude_latitude():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    task_id = request.args.get('task_id')
+    if not task_id:
+        return make_response(('task_id invalid.', 400))
+    target_dir = '/tmp/dtable-io/convert-addr-to-lng-lat'
+    target_path = os.path.join(target_dir, '%s.json' % task_id)
+    resp = {}
+    try:
+        with open(target_path, 'r') as f:
+            lat_lng_info = f.read()
+    except Exception as e:
+        logger.debug(e)
+        return make_response((e, 500))
+    try:
+        os.remove(target_path)
+    except Exception as e:
+        logger.warning('remove file error: %s', e)
+    lat_lng_info = json.loads(lat_lng_info)
+    resp['result'] = lat_lng_info if lat_lng_info else {}
+    return make_response((resp, 200))

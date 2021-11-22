@@ -11,7 +11,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 from dtable_events.dtable_io.utils import setup_logger, prepare_dtable_json, \
     prepare_asset_file_folder, post_dtable_json, post_asset_files, \
-    download_files_to_path, create_forms_from_src_dtable, copy_src_forms_to_json, prepare_dtable_json_from_memory
+    download_files_to_path, create_forms_from_src_dtable, copy_src_forms_to_json, prepare_dtable_json_from_memory, \
+    addr_to_longitude_latitude
 from dtable_events.db import init_db_session_class
 from dtable_events.dtable_io.excel import parse_excel_to_json, import_excel_by_dtable_server, \
     append_parsed_file_by_dtable_server, parse_append_excel_upload_excel_to_json, \
@@ -472,3 +473,19 @@ def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token, session_id):
             dtable_io_logger.error('execute printToPDF error: {}'.format(e))
 
         driver.quit()
+
+
+def convert_addr_to_longitude_latitude(addr_list, task_id):
+    target_dir = '/tmp/dtable-io/convert-addr-to-lng-lat'
+    if not os.path.isdir(target_dir):
+        os.makedirs(target_dir)
+    target_path = os.path.join(target_dir, '%s.json' % task_id)
+
+    result_info = {}
+    try:
+        result_info = addr_to_longitude_latitude(addr_list)
+    except Exception as e:
+        dtable_io_logger.error('get longitude latitude error: {}'.format(e))
+
+    with open(target_path, 'w') as f:
+        f.write(json.dumps(result_info))

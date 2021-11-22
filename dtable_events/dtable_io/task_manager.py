@@ -17,7 +17,9 @@ class TaskManager(object):
         self.current_task_info = {}
         self.threads = []
 
-    def init(self, workers, dtable_private_key, dtable_web_service_url, file_server_port, dtable_server_url, enable_dtable_server_cluster, dtable_proxy_server_url, io_task_timeout, session_cookie_name, config):
+    def init(self, workers, dtable_private_key, dtable_web_service_url, file_server_port, dtable_server_url,
+             enable_dtable_server_cluster, dtable_proxy_server_url, io_task_timeout, session_cookie_name,
+             dtable_baidu_map_key, dtable_google_map_key, config):
         self.conf = {
             'dtable_private_key': dtable_private_key,
             'dtable_web_service_url': dtable_web_service_url,
@@ -27,7 +29,9 @@ class TaskManager(object):
             'dtable_proxy_server_url': dtable_proxy_server_url,
             'io_task_timeout': io_task_timeout,
             'workers': workers,
-            'session_cookie_name': session_cookie_name
+            'session_cookie_name': session_cookie_name,
+            'dtable_baidu_map_key': dtable_baidu_map_key,
+            'dtable_google_map_key': dtable_google_map_key
         }
         self.config = config
 
@@ -197,6 +201,16 @@ class TaskManager(object):
         task_id = str(int(time.time()*1000))
         task = (convert_page_to_pdf,
                 (dtable_uuid, page_id, row_id, access_token, session_id))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+
+        return task_id
+
+    def convert_addr_to_longitude_latitude(self, addr_list):
+        from dtable_events.dtable_io import convert_addr_to_longitude_latitude
+
+        task_id = str(int(time.time()*1000))
+        task = (convert_addr_to_longitude_latitude, (addr_list, task_id))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
 
