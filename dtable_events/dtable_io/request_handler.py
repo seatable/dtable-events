@@ -364,8 +364,6 @@ def insert_page_to_row():
     file_name = request.args.get('file_name')
     server_url = request.args.get('server_url')
 
-
-
     try:
         task_id = task_manager.insert_page_to_row(
             dtable_uuid, page_id, row_id, access_token, session_id, target_table_name, target_row_id, target_column_name, file_name, server_url)
