@@ -433,6 +433,7 @@ def insert_page_to_row(dtable_uuid, page_id, row_id, access_token, session_id, t
                                 '%s_%s_%s.pdf' % (dtable_uuid, page_id, row_id))
     if not os.path.isfile(tmp_pdf_path):
         dtable_io_logger.error("can't find tmp pdf, uuid: %s, page_id: %s, row_id: %s", dtable_uuid, page_id, row_id)
+        return
     # upload file and update table
     file_name = file_name if file_name.endswith('.pdf') else file_name + '.pdf'
     try:
