@@ -17,7 +17,7 @@ from dtable_events.notification_rules.notification_rules_utils import _fill_msg_
     send_notification
 from dtable_events.utils import utc_to_tz, uuid_str_to_36_chars, is_valid_email
 from dtable_events.utils.constants import ColumnTypes
-
+from dtable_events.utils.sql_generator import filter2sql, db_query
 
 logger = logging.getLogger(__name__)
 
@@ -257,16 +257,33 @@ class LockRowAction(BaseAction):
             },
             'limit': 500
         }
+        filter_conditions = {
+            'filter_groups': filter_groups,
+            'group_conjunction': 'And',
+            'sorts': [
+                    {"column_key": "_mtime", "sort_type": "down"}
+            ],
+
+        }
+
         try:
-            response = requests.post(client_url, headers=self.auto_rule.headers, json=json_data)
-            rows_data = response.json().get('rows')
+            sql = filter2sql(self.auto_rule.dtable_uuid, self.auto_rule.table_name, filter_conditions, by_group=True)
+            print(sql, 'sss111111')
+            rows_data = db_query(self.auto_rule.dtable_uuid, sql)
+            # response = requests.post(client_url, headers=self.auto_rule.headers, json=json_data)
+            # rows_data = response.json().get('rows')
             logger.debug('Number of locking dtable row by auto-rules: %s, dtable_uuid: %s, details: %s' % (
                 len(rows_data),
                 self.auto_rule.dtable_uuid,
                 json.dumps(json_data)
             ))
+            print(sql, 'ssssssss')
+            # print(rows_data)
             return rows_data or []
         except Exception as e:
+            print(e)
+            raise
+
             logger.error('lock dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return []
 
