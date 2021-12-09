@@ -127,45 +127,6 @@ class Operator(object):
             'column_name': self.column_name
         })
 
-    def op_is_exactly(self):
-        pass
-
-    def op_is_any_of(self):
-        pass
-
-    def op_is_none_of(self):
-        pass
-
-    def op_is_on_or_after(self):
-        pass
-
-    def op_is_on_or_before(self):
-        pass
-
-    def op_has_all_of(self):
-        pass
-
-    def op_has_any_of(self):
-        pass
-
-    def op_has_none_of(self):
-        pass
-
-    def op_is_before(self):
-        pass
-
-    def op_is_after(self):
-        pass
-
-    def op_is_within(self):
-        pass
-
-    def op_default(self):
-        return ''
-
-    def get_related_operator(self):
-        pass
-
 
 class TextOperator(Operator):
     SUPPORT_FILTER_PREDICATE = [
@@ -773,13 +734,12 @@ def _get_operator_by_type(column_type):
 
 class BaseSQLGenerator(object):
 
-    def __init__(self, dtable_uuid, table_name, filter_conditions=None, filter_condition_groups=None, columns=None, username=None):
+    def __init__(self, dtable_uuid, table_name, filter_conditions=None, filter_condition_groups=None, columns=None):
         self.dtable_uuid = dtable_uuid
         self.table_name = table_name
         self.filter_conditions = filter_conditions
         self.filter_condition_groups = filter_condition_groups
         self.columns = columns
-        self.username = username
         self._access_token = None
 
         self._init_columns()
@@ -968,11 +928,11 @@ class BaseSQLGenerator(object):
         return sql
 
 
-def filter2sql(dtable_uuid, table_name, filter_conditions, by_group=False, columns=None, username=None):
+def filter2sql(dtable_uuid, table_name, filter_conditions, by_group=False, columns=None):
     if by_group:
-        sql_generator = BaseSQLGenerator(dtable_uuid, table_name, filter_condition_groups=filter_conditions, columns=columns, username=username)
+        sql_generator = BaseSQLGenerator(dtable_uuid, table_name, filter_condition_groups=filter_conditions, columns=columns)
     else:
-        sql_generator = BaseSQLGenerator(dtable_uuid, table_name, filter_conditions=filter_conditions, columns=columns, username=username)
+        sql_generator = BaseSQLGenerator(dtable_uuid, table_name, filter_conditions=filter_conditions, columns=columns)
     return sql_generator.to_sql(by_group=by_group)
 
 def db_query(dtable_uuid, sql):
