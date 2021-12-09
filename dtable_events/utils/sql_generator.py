@@ -3,12 +3,13 @@ import time
 import logging
 import os
 import requests
+import re
 from datetime import datetime, timedelta
 
 from dateutil.relativedelta import relativedelta
 
 from dtable_events.utils import uuid_str_to_36_chars
-from dtable_events.utils.constants import FilterPredicateTypes, FormulaResultType, FilterTermModifier, ColumnTypes
+from dtable_events.utils.constants import FilterPredicateTypes, FormulaResultType, FilterTermModifier, ColumnTypes, DurationFormatsType
 
 logger = logging.getLogger(__name__)
 #DTABLE_WEB_DIR
@@ -67,7 +68,6 @@ class Operator(object):
         )
 
     def op_contains(self):
-        print('fwohfwfwhfowfwohwfoh')
         return "%s %s '%%%s%%'" % (
             self.column_name,
             'like',
@@ -195,6 +195,68 @@ class NumberOperator(Operator):
 
     def __init__(self, column, filter_item):
         super(NumberOperator, self).__init__(column, filter_item)
+        if self.column_type == ColumnTypes.DURATION:
+            self.filter_term = self._duration2number()
+
+    def _duration2number(self):
+        filter_term = self.filter_term
+        column_data = self.column.get('data', {})
+        if filter_term == 0 or filter_term == '0':
+            return 0
+        if not filter_term:
+            return ''
+
+        duration_format = column_data.get('duration_format')
+        if not duration_format in [
+            DurationFormatsType.H_MM,
+            DurationFormatsType.H_MM_SS,
+            DurationFormatsType.H_MM_SS_S,
+            DurationFormatsType.H_MM_SS_SS,
+            DurationFormatsType.H_MM_SS_SSS
+        ]:
+            return ''
+        try:
+            return int(filter_term)
+        except:
+            duration_str = filter_term
+
+        is_negtive = duration_str[0] == '-'
+        duration_time = duration_str
+        if is_negtive:
+            duration_time = duration_str[1:]
+
+        duration_time_split_list = re.split('[:：]', duration_time)
+        hours, minutes, seconds = 0, 0, 0
+        if duration_format == DurationFormatsType.H_MM:
+            try:
+                hours = int(duration_time_split_list[0])
+            except:
+                hours = 0
+            try:
+                minutes = int(duration_time_split_list[1])
+            except:
+                minutes = 0
+
+        else:
+            try:
+                hours = int(duration_time_split_list[0])
+            except:
+                hours = 0
+            try:
+                minutes = int(duration_time_split_list[1])
+            except:
+                minutes = 0
+            try:
+                seconds = int(duration_time_split_list[2])
+            except:
+                seconds = 0
+
+        if (not hours) and (not minutes) and (not seconds):
+            return ''
+
+        total_time = 3600 * hours + 60 * minutes + seconds
+        return -total_time if is_negtive else total_time
+
 
 
 class SingleSelectOperator(Operator):
@@ -378,7 +440,8 @@ class DateOperator(Operator):
             try:
                 filter_term = int(filter_term)
             except:
-                raise ValueError("filter_term is invalid, please assign an integer value of days to filter_term")
+                logger.debug("filter_term is invalid, please assign an integer value of days to filter_term")
+                return
             days_ago = today - timedelta(days=filter_term)
             return days_ago, None
 
@@ -386,7 +449,8 @@ class DateOperator(Operator):
             try:
                 filter_term = int(filter_term)
             except:
-                raise ValueError("filter_term is invalid, please assign an integer value of days to filter_term")
+                logger.debug("filter_term is invalid, please assign an integer value of days to filter_term")
+                return
             days_after = today + timedelta(days=filter_term)
             return days_after, None
 
@@ -394,7 +458,8 @@ class DateOperator(Operator):
             try:
                 return datetime.strptime(filter_term, "%Y-%m-%d").date(), None
             except:
-                raise ValueError("filter_term is invalid, please assign an date value to filter_term, such as YYYY-MM-DD")
+                logger.debug("filter_term is invalid, please assign an date value to filter_term, such as YYYY-MM-DD")
+                return
 
         if filter_term_modifier == FilterTermModifier.THE_PAST_WEEK:
             week_day = today.isoweekday()  # 1-7
@@ -461,7 +526,8 @@ class DateOperator(Operator):
             try:
                 filter_term = int(filter_term)
             except:
-                raise ValueError("filter_term is invalid, please assign an integer value of days to filter_term")
+                logger.debug("filter_term is invalid, please assign an integer value of days to filter_term")
+                return
             end_date = today + timedelta(days=filter_term)
             return today, end_date
 
@@ -469,11 +535,12 @@ class DateOperator(Operator):
             try:
                 filter_term = int(filter_term)
             except:
-                raise ValueError("filter_term is invalid, please assign an integer value of days to filter_term")
+                logger.debug("filter_term is invalid, please assign an integer value of days to filter_term")
+                return
             start_date = today - timedelta(days=filter_term)
             return start_date, today
 
-        raise ValueError('fitler_term_modifier %s is invalid' % filter_term_modifier)
+        return None, None
 
     def op_is(self):
         date, _ = self._other_date()
@@ -599,8 +666,8 @@ class FormularOperator(Operator):
 
 def _filter2sqlslice(operator):
     support_fitler_predicates = operator.SUPPORT_FILTER_PREDICATE
+    filter_predicate = operator.filter_predicate
     if not operator.filter_predicate in support_fitler_predicates:
-        print('fwoofwojfowjfowjfowjfwofjo')
         raise ValueError(
             "%(column_type)s type column '%(column_name)s' does not support '%(value)s', available predicates are %(available_predicates)s" % (
             {
@@ -610,76 +677,109 @@ def _filter2sqlslice(operator):
                 'available_predicates': support_fitler_predicates,
             })
         )
-    fun_dict = {
-        FilterPredicateTypes.IS: operator.op_is,
-        FilterPredicateTypes.IS_NOT: operator.op_is_not,
-        FilterPredicateTypes.CONTAINS: operator.op_contains,
-        FilterPredicateTypes.NOT_CONTAIN: operator.op_does_not_contain,
-        FilterPredicateTypes.NOT_EMPTY: operator.op_is_not_empty,
-        FilterPredicateTypes.IS_EXACTLY: operator.op_is_exactly,
-        FilterPredicateTypes.EMPTY: operator.op_is_empty,
-        FilterPredicateTypes.EQUAL: operator.op_equal,
-        FilterPredicateTypes.NOT_EQUAL: operator.op_not_equal,
-        FilterPredicateTypes.GREATER: operator.op_greater,
-        FilterPredicateTypes.GREATER_OR_EQUAL: operator.op_greater_or_equal,
-        FilterPredicateTypes.LESS: operator.op_less,
-        FilterPredicateTypes.LESS_OR_EQUAL: operator.op_less_or_equal,
-        FilterPredicateTypes.IS_ANY_OF: operator.op_is_any_of,
-        FilterPredicateTypes.IS_NONE_OF: operator.op_is_none_of,
-        FilterPredicateTypes.IS_ON_OR_AFTER: operator.op_is_on_or_after,
-        FilterPredicateTypes.IS_ON_OR_BEFORE: operator.op_is_on_or_before,
-        FilterPredicateTypes.HAS_ALL_OF: operator.op_has_all_of,
-        FilterPredicateTypes.HAS_ANY_OF: operator.op_has_any_of,
-        FilterPredicateTypes.HAS_NONE_OF: operator.op_has_none_of,
-        FilterPredicateTypes.IS_BEFORE: operator.op_is_before,
-        FilterPredicateTypes.IS_AFTER: operator.op_is_after,
-        FilterPredicateTypes.IS_WITHIN: operator.op_is_within,
-    }
-    operator_func = fun_dict.get(operator.filter_predicate, operator.op_default)
-    return operator_func()
+
+    if filter_predicate == FilterPredicateTypes.IS:
+        return operator.op_is()
+    if filter_predicate == FilterPredicateTypes.IS_NOT:
+        return operator.op_is_not()
+    if filter_predicate == FilterPredicateTypes.CONTAINS:
+        return operator.op_contains()
+    if filter_predicate == FilterPredicateTypes.NOT_CONTAIN:
+        return operator.op_does_not_contain()
+    if filter_predicate == FilterPredicateTypes.EMPTY:
+        return operator.op_is_empty()
+    if filter_predicate == FilterPredicateTypes.NOT_EMPTY:
+        return operator.op_is_not_empty()
+    if filter_predicate == FilterPredicateTypes.EQUAL:
+        return operator.op_equal()
+    if filter_predicate == FilterPredicateTypes.NOT_EQUAL:
+        return operator.op_not_equal()
+    if filter_predicate == FilterPredicateTypes.GREATER:
+        return operator.op_greater()
+    if filter_predicate == FilterPredicateTypes.GREATER_OR_EQUAL:
+        return operator.op_greater_or_equal()
+    if filter_predicate == FilterPredicateTypes.LESS:
+        return operator.op_less()
+    if filter_predicate == FilterPredicateTypes.LESS_OR_EQUAL:
+        return operator.op_less_or_equal()
+    if filter_predicate == FilterPredicateTypes.IS_EXACTLY:
+        return operator.op_is_exactly()
+    if filter_predicate == FilterPredicateTypes.IS_ANY_OF:
+        return operator.op_is_any_of()
+    if filter_predicate == FilterPredicateTypes.IS_NONE_OF:
+        return operator.op_is_none_of()
+    if filter_predicate == FilterPredicateTypes.IS_ON_OR_AFTER:
+        return operator.op_is_on_or_after()
+    if filter_predicate == FilterPredicateTypes.IS_AFTER:
+        return operator.op_is_after()
+    if filter_predicate == FilterPredicateTypes.IS_ON_OR_BEFORE:
+        return operator.op_is_on_or_before()
+    if filter_predicate == FilterPredicateTypes.IS_BEFORE:
+        return operator.op_is_before()
+    if filter_predicate == FilterPredicateTypes.IS_WITHIN:
+        return operator.op_is_within()
+    if filter_predicate == FilterPredicateTypes.HAS_ALL_OF:
+        return operator.op_has_all_of()
+    if filter_predicate == FilterPredicateTypes.HAS_ANY_OF:
+        return operator.op_has_any_of()
+    if filter_predicate == FilterPredicateTypes.HAS_NONE_OF:
+        return operator.op_has_none_of()
+    return ''
 
 def _get_operator_by_type(column_type):
 
-    return {
-        ColumnTypes.TEXT: TextOperator,
-        ColumnTypes.URL: TextOperator,
-        ColumnTypes.AUTO_NUMBER: TextOperator,
-        ColumnTypes.EMAIL: TextOperator,
+    if column_type in [
+        ColumnTypes.TEXT,
+        ColumnTypes.URL,
+        ColumnTypes.AUTO_NUMBER,
+        ColumnTypes.EMAIL
+    ]:
+        return TextOperator
 
-        ColumnTypes.DURATION: NumberOperator,
-        ColumnTypes.NUMBER: NumberOperator,
-        ColumnTypes.RATE: NumberOperator,
+    if column_type in [
+        ColumnTypes.DURATION,
+        ColumnTypes.NUMBER,
+        ColumnTypes.RATE
+    ]:
+        return NumberOperator
 
-        ColumnTypes.CHECKBOX: CheckBoxOperator,
+    if column_type == ColumnTypes.CHECKBOX:
+        return CheckBoxOperator
 
-        ColumnTypes.DATE: DateOperator,
-        ColumnTypes.CTIME: DateOperator,
-        ColumnTypes.MTIME: DateOperator,
+    if column_type in [
+        ColumnTypes.DATE,
+        ColumnTypes.CTIME,
+        ColumnTypes.MTIME
+    ]:
+        return DateOperator
 
-        ColumnTypes.SINGLE_SELECT: SingleSelectOperator,
+    if column_type == ColumnTypes.SINGLE_SELECT:
+        return SingleSelectOperator
 
-        ColumnTypes.MULTIPLE_SELECT: MultipleSelectOperator,
-        ColumnTypes.COLLABORATOR: MultipleSelectOperator,
-        ColumnTypes.LINK: MultipleSelectOperator,
+    if column_type in [
+        ColumnTypes.MULTIPLE_SELECT,
+        ColumnTypes.COLLABORATOR,
+    ]:
+        return MultipleSelectOperator
 
-        ColumnTypes.CREATOR: CreatorOperator,
-        ColumnTypes.LAST_MODIFIER: CreatorOperator,
+    if column_type in [
+        ColumnTypes.CREATOR,
+        ColumnTypes.LAST_MODIFIER,
+    ]:
+        return CreatorOperator
 
-        ColumnTypes.FORMULA: FormularOperator,
-        ColumnTypes.LINK_FORMULA: FormularOperator
-
-    }.get(column_type, None)
+    return None
 
 
 class BaseSQLGenerator(object):
 
-    def __init__(self, dtable_uuid, table_name, filter_conditions=None, filter_condition_groups=None):
+    def __init__(self, dtable_uuid, table_name, filter_conditions=None, filter_condition_groups=None, columns=None, username=None):
         self.dtable_uuid = dtable_uuid
         self.table_name = table_name
         self.filter_conditions = filter_conditions
         self.filter_condition_groups = filter_condition_groups
-        self.columns = []
-
+        self.columns = columns
+        self.username = username
         self._access_token = None
 
         self._init_columns()
@@ -772,36 +872,22 @@ class BaseSQLGenerator(object):
         group_conjunction = filter_condition_groups.get('group_conjunction', 'And')
         if not filter_groups:
             return ''
-        print('hahaahahahah')
         filter_header = 'WHERE '
         group_string_list = []
         group_conjunction_split = ' %s ' % group_conjunction
         for filter_group in filter_groups:
             filters = filter_group.get('filters')
-            print(filters, 'llllllllllll')
             filter_conjunction = filter_group.get('filter_conjunction', 'And')
             filter_conjunction_split = " %s " % filter_conjunction
             filter_string_list = []
             for filter_item in filters:
                 column_key = filter_item.get('column_key')
-                print(column_key, 'kkkkkkkk')
                 column_name = filter_item.get('column_name')
                 column = column_key and self._get_column_by_key(column_key)
                 if not column:
-                    print('nnnnnnnnnnnnn')
                     column = column_name and self._get_column_by_name(column_name)
-                    if not column:
-                        raise ValueError("column '%s' does not exist" % column_name)
-
                 column_type = column.get('type')
-                print(column_type, 'ttttttt')
-                print(filter_item, 'ititititit')
                 operator = _get_operator_by_type(column_type)(column, filter_item)
-                print(operator, 'opipipipipipip')
-                if column_type in [ColumnTypes.LINK_FORMULA, ColumnTypes.FORMULA]:
-                    operator = operator.get_related_operator()
-                if not operator:
-                    raise ValueError('%s type column does not surpport transfering filter to sql' % column_type)
                 sql_condition = _filter2sqlslice(operator)
                 filter_string_list.append(sql_condition)
             if filter_string_list:
@@ -832,14 +918,8 @@ class BaseSQLGenerator(object):
             column = column_key and self._get_column_by_key(column_key)
             if not column:
                 column = column_name and self._get_column_by_name(column_name)
-                if not column:
-                    raise ValueError("column '%s' does not exist" % column_name)
             column_type = column.get('type')
             operator = _get_operator_by_type(column_type)(column, filter_item)
-            if column_type in [ColumnTypes.LINK_FORMULA, ColumnTypes.FORMULA]:
-                operator = operator.get_related_operator()
-            if not operator:
-                raise ValueError('%s type column does not surpport transfering filter to sql' % column_type)
             sql_condition = _filter2sqlslice(operator)
             filter_string_list.append(sql_condition)
         if filter_string_list:
@@ -851,7 +931,21 @@ class BaseSQLGenerator(object):
             filter_content
         )
 
-    def to_sql(self, start=0, limit=500, by_group=False):
+    def _limit2sql(self, by_group=False):
+        if by_group:
+            filter_conditions = self.filter_condition_groups
+        else:
+            filter_conditions = self.filter_conditions
+        start = filter_conditions.get('start')
+        limit = filter_conditions.get('limit')
+        limit_clause = '%s %s, %s' % (
+            "LIMIT",
+            start or 0,
+            limit or 100
+        )
+        return limit_clause
+
+    def to_sql(self, by_group=False):
         sql = "%s %s" % (
             "SELECT * FROM",
             self.table_name
@@ -859,34 +953,27 @@ class BaseSQLGenerator(object):
         if not by_group:
             filter_clause = self._filter2sql()
             sort_clause = self._sort2sql()
+            limit_clause = self._limit2sql()
         else:
             filter_clause = self._groupfilter2sql()
             sort_clause = self._sort2sql(by_group=True)
-        limit_clause = '%s %s, %s' % (
-            "LIMIT",
-            start,
-            limit
-        )
+            limit_clause = self._limit2sql(by_group=True)
+
         if filter_clause:
             sql = "%s %s" % (sql, filter_clause)
         if sort_clause:
             sql = "%s %s" % (sql, sort_clause)
         if limit_clause:
             sql = "%s %s" % (sql, limit_clause)
-        print(filter_clause, 'ffffffffffile')
-        print(sort_clause, 'ssssssaorgit')
-        print("[SQL]: %s" % sql)
         return sql
 
 
-def filter2sql(dtable_uuid, table_name, filter_conditions, start=0, limit=500, by_group=False):
-    print(filter_conditions, 'aaaaaaaaa')
+def filter2sql(dtable_uuid, table_name, filter_conditions, by_group=False, columns=None, username=None):
     if by_group:
-        sql_generator = BaseSQLGenerator(dtable_uuid, table_name, filter_condition_groups=filter_conditions)
+        sql_generator = BaseSQLGenerator(dtable_uuid, table_name, filter_condition_groups=filter_conditions, columns=columns, username=username)
     else:
-        sql_generator = BaseSQLGenerator(dtable_uuid, table_name, filter_conditions=filter_conditions)
-    print('enenenenenenene')
-    return sql_generator.to_sql(start=start, limit=limit, by_group=by_group)
+        sql_generator = BaseSQLGenerator(dtable_uuid, table_name, filter_conditions=filter_conditions, columns=columns, username=username)
+    return sql_generator.to_sql(by_group=by_group)
 
 def db_query(dtable_uuid, sql):
     dtable_uuid = uuid_str_to_36_chars(dtable_uuid)

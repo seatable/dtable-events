@@ -24,30 +24,31 @@ class ColumnTypes:
     GEOLOCATION = 'geolocation'
     BUTTON = 'button'
 
+
 class FilterPredicateTypes(object):
-    CONTAINS= 'contains'
-    NOT_CONTAIN= 'does_not_contain'
-    IS= 'is'
-    IS_NOT= 'is_not'
-    EQUAL= 'equal'
-    NOT_EQUAL= 'not_equal'
-    LESS= 'less'
-    GREATER= 'greater'
-    LESS_OR_EQUAL= 'less_or_equal'
-    GREATER_OR_EQUAL= 'greater_or_equal'
-    EMPTY= 'is_empty'
-    NOT_EMPTY= 'is_not_empty'
-    IS_WITHIN= 'is_within'
-    IS_BEFORE= 'is_before'
-    IS_AFTER= 'is_after'
-    IS_ON_OR_BEFORE= 'is_on_or_before'
-    IS_ON_OR_AFTER= 'is_on_or_after'
-    HAS_ANY_OF= 'has_any_of'
-    HAS_ALL_OF= 'has_all_of'
-    HAS_NONE_OF= 'has_none_of'
-    IS_EXACTLY= 'is_exactly'
-    IS_ANY_OF= 'is_any_of'
-    IS_NONE_OF= 'is_none_of'
+    CONTAINS = 'contains'
+    NOT_CONTAIN = 'does_not_contain'
+    IS = 'is'
+    IS_NOT = 'is_not'
+    EQUAL = 'equal'
+    NOT_EQUAL = 'not_equal'
+    LESS = 'less'
+    GREATER = 'greater'
+    LESS_OR_EQUAL = 'less_or_equal'
+    GREATER_OR_EQUAL = 'greater_or_equal'
+    EMPTY = 'is_empty'
+    NOT_EMPTY = 'is_not_empty'
+    IS_WITHIN = 'is_within'
+    IS_BEFORE = 'is_before'
+    IS_AFTER = 'is_after'
+    IS_ON_OR_BEFORE = 'is_on_or_before'
+    IS_ON_OR_AFTER = 'is_on_or_after'
+    HAS_ANY_OF = 'has_any_of'
+    HAS_ALL_OF = 'has_all_of'
+    HAS_NONE_OF = 'has_none_of'
+    IS_EXACTLY = 'is_exactly'
+    IS_ANY_OF = 'is_any_of'
+    IS_NONE_OF = 'is_none_of'
 
 
 class FilterTermModifier(object):
@@ -73,9 +74,18 @@ class FilterTermModifier(object):
     THIS_MONTH = 'this_month'
     THIS_YEAR = 'this_year'
 
+
 class FormulaResultType(object):
     NUMBER = 'number'
     STRING = 'string'
     DATE = 'date'
     BOOL = 'bool'
     ARRAY = 'array'
+
+
+class DurationFormatsType(object):
+    H_MM = 'h:mm'
+    H_MM_SS = 'h:mm:ss'
+    H_MM_SS_S = 'h:mm:ss.s'
+    H_MM_SS_SS = 'h:mm:ss.ss'
+    H_MM_SS_SSS = 'h:mm:ss.sss'
