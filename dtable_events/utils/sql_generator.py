@@ -605,26 +605,6 @@ class CreatorOperator(Operator):
             }))
         return ' and '.join(sql_slice)
 
-
-class FormularOperator(Operator):
-
-    def __init__(self, column, filter_item):
-        super(FormularOperator, self).__init__(column, filter_item)
-
-    def get_related_operator(self):
-        result_type = self.column.get('data', {}).get('result_type')
-        if result_type == FormulaResultType.NUMBER:
-            return NumberOperator(self.column, self.filter_item)
-        if result_type == FormulaResultType.DATE:
-            return DateOperator(self.column, self.filter_item)
-        if result_type == FormulaResultType.BOOL:
-            return CheckBoxOperator(self.column, self.filter_item)
-        if result_type == FormulaResultType.ARRAY:
-            return MultipleSelectOperator(self.column, self.filter_item)
-
-        return TextOperator(self.column, self.filter_item)
-
-
 def _filter2sqlslice(operator):
     support_fitler_predicates = operator.SUPPORT_FILTER_PREDICATE
     filter_predicate = operator.filter_predicate
