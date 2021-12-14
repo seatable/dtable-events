@@ -294,10 +294,12 @@ class MultipleSelectOperator(Operator):
 
     def _get_option_name_by_id(self, option_id):
         options = self.column.get('data', {}).get('options', [])
+        if not options:
+            return option_id
         for op in options:
             if op.get('id') == option_id:
                 return op.get('name')
-        return ''
+        return option_id
 
     def op_has_any_of(self):
         filter_term = [self._get_option_name_by_id(f) for f in self.filter_term]
@@ -597,13 +599,11 @@ class CreatorOperator(Operator):
         if not isinstance(select_collaborators, list):
             select_collaborators = [select_collaborators, ]
         creator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
-        sql_slice = []
-        for creator in creator_list:
-            sql_slice.append("%(column_name)s != %(creator)s" % ({
-                "column_name": self.column_name,
-                "creator": creator
-            }))
-        return ' and '.join(sql_slice)
+        return "%(column_name)s not in (%(filter_term_str)s)" % ({
+            "column_name": self.column_name,
+            "filter_term_str": ', '.join(creator_list)
+        })
+
 
 def _filter2sqlslice(operator):
     support_fitler_predicates = operator.SUPPORT_FILTER_PREDICATE
@@ -714,49 +714,11 @@ def _get_operator_by_type(column_type):
 
 class BaseSQLGenerator(object):
 
-    def __init__(self, dtable_uuid, table_name, filter_conditions=None, filter_condition_groups=None, columns=None):
-        self.dtable_uuid = dtable_uuid
+    def __init__(self, table_name, columns, filter_conditions=None, filter_condition_groups=None):
         self.table_name = table_name
         self.filter_conditions = filter_conditions
         self.filter_condition_groups = filter_condition_groups
         self.columns = columns
-        self._access_token = None
-
-        self._init_columns()
-
-    def _init_columns(self):
-        if not self.columns:
-            api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
-            url = api_url.rstrip('/') + '/api/v1/dtables/' + self.dtable_uuid + '/columns/'
-            params = {
-                'table_name': self.table_name,
-            }
-            response = requests.get(url, params=params, headers=self.headers)
-            data = response.json()
-            self.columns = data.get('columns')
-            return self.columns
-
-    @property
-    def access_token(self):
-        if not self._access_token:
-            token = jwt.encode(
-                payload={
-                    'exp': int(time.time()) + 300,
-                    'dtable_uuid': uuid_str_to_36_chars(self.dtable_uuid),
-                    'username': 'Automation Rule',
-                    'permission': 'rw',
-                },
-                key=DTABLE_PRIVATE_KEY
-            )
-            if isinstance(token, bytes):
-                token = token.decode()
-            self._access_token = token
-        return self._access_token
-
-    @property
-    def headers(self):
-        return {'Authorization': 'Token ' + self.access_token}
-
 
     def _get_column_by_key(self, col_key):
         for col in self.columns:
@@ -908,11 +870,11 @@ class BaseSQLGenerator(object):
         return sql
 
 
-def filter2sql(dtable_uuid, table_name, filter_conditions, by_group=False, columns=None):
+def filter2sql(table_name, columns, filter_conditions, by_group=False):
     if by_group:
-        sql_generator = BaseSQLGenerator(dtable_uuid, table_name, filter_condition_groups=filter_conditions, columns=columns)
+        sql_generator = BaseSQLGenerator(table_name, columns, filter_condition_groups=filter_conditions)
     else:
-        sql_generator = BaseSQLGenerator(dtable_uuid, table_name, filter_conditions=filter_conditions, columns=columns)
+        sql_generator = BaseSQLGenerator(table_name, columns, filter_conditions=filter_conditions)
     return sql_generator.to_sql(by_group=by_group)
 
 def db_query(dtable_uuid, sql):

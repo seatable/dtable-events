@@ -254,7 +254,7 @@ class LockRowAction(BaseAction):
         }
 
         try:
-            sql = filter2sql(self.auto_rule.dtable_uuid, self.auto_rule.table_name, filter_conditions, by_group=True, columns=self.auto_rule.view_columns)
+            sql = filter2sql(self.auto_rule.table_name, self.auto_rule.view_columns, filter_conditions, by_group=True)
             rows_data = db_query(self.auto_rule.dtable_uuid, sql)
 
             logger.debug('Number of locking dtable row by auto-rules: %s, dtable_uuid: %s, details: %s' % (
@@ -903,6 +903,13 @@ class LinkRecordsAction(BaseAction):
                         return col
         return None
 
+    def get_columns(self, table_id):
+        dtable_metadata = self.auto_rule.dtable_metadata
+        for table in dtable_metadata.get('tables', []):
+            if table.get('_id') == table_id:
+                return table.get('columns')
+        return None
+
     def _get_linked_table_rows(self):
         filter_groups = self._format_filter_groups()
         if not filter_groups:
@@ -918,7 +925,8 @@ class LinkRecordsAction(BaseAction):
             }
         try:
             other_table_name = self.get_table_name(self.linked_table_id)
-            sql = filter2sql(self.auto_rule.dtable_uuid, other_table_name, filter_conditions, by_group=True)
+            other_columns = self.get_columns(self.linked_table_id)
+            sql = filter2sql(other_table_name, other_columns, filter_conditions, by_group=True)
             rows_data = db_query(self.auto_rule.dtable_uuid, sql)
             logger.debug('Number of linking dtable rows by auto-rules: %s, dtable_uuid: %s, details: %s' % (
                 rows_data and len(rows_data) or 0,
