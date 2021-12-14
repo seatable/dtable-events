@@ -23,7 +23,6 @@ class SqlTest(unittest.TestCase):
             expected_sql = conditions.get('expected_sql')
             by_group = conditions.get('by_group')
             sql = self._toSql(filter_conditions, by_group=by_group)
-            print(sql == expected_sql, "%s" % sql)
             self.assertEqual(sql, expected_sql)
 
 if __name__ == '__main__':
