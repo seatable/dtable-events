@@ -23,9 +23,6 @@ if not os.path.exists(dtable_web_dir):
 try:
     import seahub.settings as seahub_settings
     DTABLE_PRIVATE_KEY = getattr(seahub_settings, 'DTABLE_PRIVATE_KEY')
-    DTABLE_PROXY_SERVER_URL = getattr(seahub_settings, 'DTABLE_PROXY_SERVER_URL', '')
-    ENABLE_DTABLE_SERVER_CLUSTER = getattr(seahub_settings, 'ENABLE_DTABLE_SERVER_CLUSTER', False)
-    DTABLE_SERVER_URL = getattr(seahub_settings, 'DTABLE_SERVER_URL')
     DTABLE_DB_URL = getattr(seahub_settings, 'DTABLE_DB_URL')
 except ImportError as e:
     logger.critical("Can not import dtable_web settings: %s." % e)
