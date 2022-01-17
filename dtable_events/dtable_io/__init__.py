@@ -582,15 +582,19 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
         result_rows, grouped_row_num_map = response_rows, {}
 
     data_list = []
+    max_export_row_num = 50000
+    row_num = 0
     for row_from_server in result_rows:
         row = []
         for col in cols_without_hidden:
             cell_data = row_from_server.get(col['name'], '')
             row.append(cell_data)
         data_list.append(row)
+        row_num += 1
+        if row_num == max_export_row_num:
+            break
 
     excel_name = name + '_' + table_name + ('_' + view_name if view_name else '') + '.xlsx'
-
     try:
         wb = write_xls_with_type(table_name + ('_' + view_name if view_name else ''), head_list, data_list,
                                  grouped_row_num_map, email2nickname)
