@@ -691,7 +691,7 @@ def convert_view_to_excel():
     name = request.args.get('name')
 
     try:
-        task_id = task_manager.add_convert_view_to_execl_task(dtable_uuid, table_id, view_id, username, id_in_org, permission, name)
+        task_id = message_task_manager.add_convert_view_to_execl_task(dtable_uuid, table_id, view_id, username, id_in_org, permission, name)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))

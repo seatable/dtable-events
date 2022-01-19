@@ -509,18 +509,19 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
     if not os.path.isdir(target_dir):
         os.makedirs(target_dir)
 
+    result = {}
     try:
         nicknames = get_nicknames_from_dtable(dtable_uuid, username, permission)
     except Exception as e:
         dtable_io_logger.error('get nicknames. ERROR: {}'.format(e))
-        return
+        return result
     email2nickname = {nickname['email']: nickname['name'] for nickname in nicknames}
 
     try:
         metadata = get_metadata_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission)
     except Exception as e:
         dtable_io_logger.error('get metadata. ERROR: {}'.format(e))
-        return
+        return result
 
     target_table = {}
     target_view = {}
@@ -531,7 +532,8 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
 
     if not target_table:
         dtable_io_logger.error('Table %s not found.' % table_id)
-        return
+        result['err_msg'] = 'Table %s not found.'
+        return result
 
     for view in target_table.get('views', []):
         if view.get('_id', '') == view_id:
@@ -539,7 +541,8 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
             break
     if not target_view:
         dtable_io_logger.error('View %s not found.' % view_id)
-        return
+        result['err_msg'] = 'View %s not found.'
+        return result
 
     table_name = target_table.get('name', '')
     view_name = target_view.get('name', '')
@@ -566,7 +569,11 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
                                                     table_name, view_name)
     except Exception as e:
         dtable_io_logger.error('get view rows. ERROR: {}'.format(e))
-        return
+        return result
+
+    if res_json.get('error_msg'):
+        result['err_msg'] = res_json.get('error_msg')
+        return result
 
     if is_archive:
         archive_rows = res_json.get('rows', [])
@@ -596,6 +603,8 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
                                  grouped_row_num_map, email2nickname)
     except Exception as e:
         dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
-        return
+        return result
     target_path = os.path.join(target_dir, excel_name)
     wb.save(target_path)
+    return result
+
