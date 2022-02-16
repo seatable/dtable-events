@@ -4,19 +4,14 @@ import logging
 from urllib.parse import quote_plus
 
 from sqlalchemy import create_engine
-from sqlalchemy.event import contains, listen
-from sqlalchemy.exc import DisconnectionError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import Pool
 
 logger = logging.getLogger(__name__)
 Base = declarative_base()  # base class of model classes in events.models
 
 
 def create_engine_from_conf(config):
-    need_connection_pool_fix = True
-
     backend = config.get('DATABASE', 'type')
 
     if backend == 'mysql':

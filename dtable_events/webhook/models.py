@@ -4,17 +4,13 @@ from datetime import datetime
 from hashlib import sha1
 
 from sqlalchemy import Column, Integer, String, DateTime, Text, text
-
 from sqlalchemy.dialects.mysql import INTEGER, TINYINT
 
 from dtable_events.db import Base
 
 logger = logging.getLogger(__name__)
 
-
 PENDING = 0
-SENDING = 1
-SUCCESS = 2
 FAILURE = 3
 
 
@@ -33,10 +29,9 @@ class Webhooks(Base):
 
     @property
     def hook_settings(self):
-        hook_settings = self.settings
         try:
             hook_settings = json.loads(self.settings)
-        except Exception as e:
+        except (Exception, ):
             return {}
         return hook_settings
 
@@ -73,6 +68,7 @@ class Webhooks(Base):
             'X-SeaTable-Signature': sha1(secret.encode('utf-8')).hexdigest()
         }
 
+
 class WebhookJobs(Base):
     """
     webhook_jobs model
@@ -96,22 +92,7 @@ class WebhookJobs(Base):
         self.request_body = json.dumps(request_body) if isinstance(request_body, dict) else str(request_body)
         self.created_at = datetime.now()
         if request_headers:
-            self.request_headers = json.dumps(request_headers) if isinstance(request_headers, dict) else str(request_headers)
+            self.request_headers = json.dumps(request_headers) if isinstance(request_headers, dict) \
+                else str(request_headers)
         if status:
             self.status = status
-
-
-class DB:
-    def __init__(self, session):
-        self.session = session
-
-    def __enter__(self):
-        return self.session
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        try:
-            self.session.commit()
-        except Exception as e:
-            logger.error(e)
-        finally:
-            self.session.close()
