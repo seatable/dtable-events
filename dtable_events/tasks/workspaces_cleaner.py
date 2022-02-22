@@ -26,14 +26,10 @@ class WorkspacesCleaner(object):
         self._logfile = None
         self._interval = 60 * 60 * 24
         self._prepare_logfile()
-        self._parse_config()
 
     def _prepare_logfile(self):
         logdir = os.path.join(os.environ.get('LOG_DIR', ''))
         self._logfile = os.path.join(logdir, 'workspaces_cleaner.log')
-
-    def _parse_config(self):
-        self._expire_seconds = 60 * 60 * 24 * 60
 
     def start(self):
         if not self.is_enabled():
@@ -41,7 +37,7 @@ class WorkspacesCleaner(object):
             return
 
         logging.info('Start workspaces cleaner, interval = %s sec', self._interval)
-        WorkspacesCleanerTimer(self._interval, self._logfile, self._expire_seconds).start()
+        WorkspacesCleanerTimer(self._interval, self._logfile).start()
 
     def is_enabled(self):
         return self._enabled
@@ -49,11 +45,10 @@ class WorkspacesCleaner(object):
 
 class WorkspacesCleanerTimer(Thread):
 
-    def __init__(self, interval, logfile, expire_seconds):
+    def __init__(self, interval, logfile):
         super(WorkspacesCleanerTimer, self).__init__()
         self._interval = interval
         self._logfile = logfile
-        self._expire_seconds = expire_seconds
 
         self.finished = Event()
 
@@ -67,7 +62,6 @@ class WorkspacesCleanerTimer(Thread):
                     python_exec,
                     manage_py,
                     'clean_deleted_workspaces',
-                    self._expire_seconds,
                 ]
                 with open(self._logfile, 'a') as fp:
                     run(cmd, cwd=dtable_web_dir, output=fp)
