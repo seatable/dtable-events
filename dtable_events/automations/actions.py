@@ -1237,15 +1237,18 @@ class AutomationRule:
     def set_task_log(self):
         try:
             set_task_log_sql = """
-                INSERT INTO auto_rules_task_log (trigger_time, success, rule_id, run_condition) VALUES
-                (:trigger_time, :success, :rule_id, :run_condition)
+                INSERT INTO auto_rules_task_log (trigger_time, success, rule_id, run_condition, dtable_uuid, org_id, owner) VALUES
+                (:trigger_time, :success, :rule_id, :run_condition, :dtable_uuid, :org_id, :owner)
             """
-            if self.run_condition in (PER_DAY, PER_WEEK, PER_MONTH):
+            if self.run_condition in (PER_DAY, PER_WEEK, PER_MONTH, PER_UPDATE):
                 self.db_session.execute(set_task_log_sql, {
                     'trigger_time': datetime.utcnow(),
                     'success': self.task_run_seccess,
                     'rule_id': self.rule_id,
                     'run_condition': self.run_condition,
+                    'dtable_uuid': self.dtable_uuid,
+                    'org_id': self.org_id,
+                    'owner': self.creator,
                 })
                 self.db_session.commit()
         except Exception as e:
