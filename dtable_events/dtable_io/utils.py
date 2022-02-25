@@ -268,26 +268,29 @@ def convert_dtable_import_file_url(dtable_content, workspace_id, dtable_uuid):
                     for idx, item in enumerate(v):
                         # case1: image
                         if isinstance(item, str) and item.startswith(IMG_URL_PREFIX):
-                            img_name = '/'.join(item.split('/')[-2:])  # e.g. "2020-01/WeWork%20gg.png"
+                            # e.g. images/2020-01/WeWork%20gg.png or public/form_image/WeWork%20gg.png
+                            img_name = '/'.join(item.split('/')[-3:])
                             new_url = '/'.join([dtable_web_service_url, 'workspace', workspace_id, 'asset',
-                                               dtable_uuid, 'images', img_name])
+                                                dtable_uuid, img_name])
                             v[idx] = new_url
                         # case2: file
                         if isinstance(item, dict):
                             for k, v in item.items():
                                 if k == 'url' and v.startswith(FILE_URL_PREFIX):
-                                    file_name = '/'.join(v.split('/')[-2:]) # e.g. 2020-01/README.md
+                                    # e.g. files/2020-01/README.md or public/form_file/WeWork%20gg.png
+                                    file_name = '/'.join(v.split('/')[-3:])
                                     new_url = '/'.join([dtable_web_service_url, 'workspace', workspace_id, 'asset',
-                                                       dtable_uuid, 'files', file_name])
+                                                        dtable_uuid, file_name])
 
                                     item[k] = new_url
                 # long-text with images
                 if k in long_text_cols and isinstance(v, dict) and v.get('text') and v.get('images'):
                     for idx, item in enumerate(v['images']):
                         if isinstance(item, str) and item.startswith(IMG_URL_PREFIX):
-                            img_name = '/'.join(item.split('/')[-2:])
+                            # e.g. files/2020-01/README.md or public/form_public_long_text_image/WeWork%20gg.png
+                            img_name = '/'.join(item.split('/')[-3:])
                             new_url = '/'.join([dtable_web_service_url, 'workspace', workspace_id, 'asset',
-                                               dtable_uuid, 'images', img_name])
+                                                dtable_uuid, img_name])
                             v['images'][idx] = new_url
                             v['text'] = v['text'].replace(item, v['images'][idx])
     
