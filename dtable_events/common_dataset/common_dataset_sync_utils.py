@@ -689,3 +689,21 @@ def import_or_sync(import_sync_context):
             return None, 'sync dataset append rows dst dtable: %s dst table: %s error: %s' % (dst_dtable_uuid, dst_table_name, e)
 
     return dst_table_id, None
+
+
+def set_common_dataset_state(dataset_id, db_session, state):
+    sql = "UPDATE dtable_common_dataset SET is_valid=:state WHERE id=:dataset_id"
+    try:
+        db_session.execute(sql, {'state': state, 'dataset_id': dataset_id})
+        db_session.commit()
+    except Exception as e:
+        logger.error('set state of common dataset: %s error: %s', dataset_id, e)
+
+
+def set_common_dataset_sync_state(dataset_sync_id, db_session, state):
+    sql = "UPDATE dtable_common_dataset_sync SET is_valid=:state WHERE id=:dataset_sync_id"
+    try:
+        db_session.execute(sql, {'state': state, 'dataset_sync_id': dataset_sync_id})
+        db_session.commit()
+    except Exception as e:
+        logger.error('set state of common dataset sync: %s error: %s', dataset_sync_id, e)
