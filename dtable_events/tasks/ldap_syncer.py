@@ -74,12 +74,25 @@ class LDAPSyncerTimer(Thread):
                     cmd = [
                         python_exec,
                         manage_py,
-                        'ldap_sync'
+                        'ldap_user_sync'
                     ]
                     with open(self._logfile, 'a') as fp:
                         run(cmd, cwd=dtable_web_dir, output=fp)
                 except Exception as e:
-                    logging.exception('error when sync ldap: %s', e)
+                    logging.exception('error when sync ldap user: %s', e)
+
+                try:
+                    python_exec = get_python_executable()
+                    manage_py = os.path.join(dtable_web_dir, 'manage.py')
+                    cmd = [
+                        python_exec,
+                        manage_py,
+                        'ldap_group_sync'
+                    ]
+                    with open(self._logfile, 'a') as fp:
+                        run(cmd, cwd=dtable_web_dir, output=fp)
+                except Exception as e:
+                    logging.exception('error when sync ldap group: %s', e)
 
     def cancel(self):
         self.finished.set()
