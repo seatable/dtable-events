@@ -215,11 +215,14 @@ def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id):
         time.sleep(0.5)   # sleep 0.5 second
         try:
             progress = json.loads(seafile_api.query_zip_progress(token))
-        except Exception:
-            raise Exception
+        except Exception as e:
+            raise e
 
     asset_url = gen_dir_zip_download_url(token)
-    resp = requests.get(asset_url)
+    try:
+        resp = requests.get(asset_url)
+    except Exception as e:
+        raise e
     file_obj = io.BytesIO(resp.content)
     if is_zipfile(file_obj):
         with ZipFile(file_obj) as zp:
@@ -820,7 +823,7 @@ def convert_db_rows(metadata, results):
     return converted_results
 
 
-def get_nicknames_from_dtable(dtable_uuid, username, permission):
+def get_related_nicknames_from_dtable(dtable_uuid, username, permission):
     DTABLE_PRIVATE_KEY = str(task_manager.conf['dtable_private_key'])
     url = task_manager.conf['dtable_web_service_url'].strip('/') + '/api/v2.1/dtables/%s/related-users/' % dtable_uuid
 
@@ -837,4 +840,25 @@ def get_nicknames_from_dtable(dtable_uuid, username, permission):
 
     if res.status_code != 200:
         raise ConnectionError('failed to get related users %s %s' % (dtable_uuid, res.text))
+    return res.json().get('user_list')
+
+
+def get_nicknames_from_dtable(user_id_list):
+    DTABLE_PRIVATE_KEY = str(task_manager.conf['dtable_private_key'])
+    url = task_manager.conf['dtable_web_service_url'].strip('/') + '/api/v2.1/users-common-info/'
+
+    payload = {
+        'exp': int(time.time()) + 60
+    }
+    access_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
+    headers = {'Authorization': 'Token ' + access_token}
+
+    json_data = {
+                'user_id_list': user_id_list,
+            }
+    res = requests.post(url, headers=headers, json=json_data)
+
+    if res.status_code != 200:
+        raise ConnectionError('failed to get users %s' % res.text)
+
     return res.json().get('user_list')

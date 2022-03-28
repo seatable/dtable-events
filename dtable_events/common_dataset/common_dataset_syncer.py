@@ -240,7 +240,7 @@ def check_common_dataset(db_session):
             continue
 
         try:
-            dst_table_id, error_msg = import_or_sync({
+            result = import_or_sync({
                 'dst_dtable_uuid': dst_dtable_uuid,
                 'src_dtable_uuid': src_dtable_uuid,
                 'src_rows': src_table.get('rows', []),
@@ -255,12 +255,13 @@ def check_common_dataset(db_session):
                 'dst_rows': dst_rows,
                 'lang': 'en'  # TODO: lang
             })
-            if error_msg:
-                logger.error(error_msg)
-                continue
         except Exception as e:
             logger.error('sync common dataset error: %s', e)
-            return
+            continue
+        else:
+            if result.get('error_msg'):
+                logger.error(result['error_msg'])
+                continue
 
         dataset_update_map[dataset_sync_id] = dtable_src_version
         sync_count += 1

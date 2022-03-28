@@ -510,14 +510,14 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
     from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_view_rows_from_dtable_server, \
         convert_db_rows
     from dtable_events.dtable_io.excel import parse_grouped_rows, write_xls_with_type
-    from dtable_events.dtable_io.utils import get_nicknames_from_dtable
+    from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
 
     target_dir = '/tmp/dtable-io/export-view-to-excel/' + dtable_uuid
     if not os.path.isdir(target_dir):
         os.makedirs(target_dir)
 
     try:
-        nicknames = get_nicknames_from_dtable(dtable_uuid, username, permission)
+        nicknames = get_related_nicknames_from_dtable(dtable_uuid, username, permission)
     except Exception as e:
         dtable_io_logger.error('get nicknames. ERROR: {}'.format(e))
         return

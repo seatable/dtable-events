@@ -233,6 +233,37 @@ def _get_dtable_metadata(dtable_uuid):
     return response.json().get('metadata')
 
 
+def _get_geolocation_infos(cell_value_dict):
+    if not isinstance(cell_value_dict, dict):
+        return ''
+    info_list = []
+    province = cell_value_dict.get('province', '')
+    city = cell_value_dict.get('city', '')
+    district = cell_value_dict.get('district', '')
+    detail = cell_value_dict.get('detail', '')
+    country_region = cell_value_dict.get('country_region', '')
+
+    lng = cell_value_dict.get('lng', '')
+    lat = cell_value_dict.get('lat', '')
+
+    if country_region:
+        info_list.append(country_region)
+    if province:
+        info_list.append(province)
+    if city:
+        info_list.append(city)
+    if district:
+        info_list.append(district)
+    if detail:
+        info_list.append(detail)
+
+    if lng:
+        info_list.append("lng: %s" % lng)
+    if lat:
+        info_list.append("lat: %s" % lat)
+
+    return info_list and " ".join(info_list) or ''
+
 def _fill_msg_blanks(dtable_uuid, msg, column_blanks, col_name_dict, row, db_session, dtable_metadata=None):
     for blank in column_blanks:
         if col_name_dict[blank]['type'] in [
@@ -339,6 +370,12 @@ def _fill_msg_blanks(dtable_uuid, msg, column_blanks, col_name_dict, row, db_ses
                 else:
                     msg = msg.replace('{' + blank + '}', str(value))
 
+        elif col_name_dict[blank]['type'] in [ColumnTypes.GEOLOCATION]:
+            value = row.get(blank, '')
+            value = value and _get_geolocation_infos(value) or ''
+            msg = msg.replace('{' + blank + '}', str(value) if value else '')
+
+
     return msg
 
 
@@ -425,13 +462,16 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
         if users_column_key:
             dtable_metadata = _get_dtable_metadata(dtable_uuid)
             user_column = _get_column_by_key(dtable_metadata, table_id, users_column_key)
-            users_column_name = user_column.get('name')
-            users_from_column = converted_row.get(users_column_name, [])
-            if not users_from_column:
-                users_from_column = []
-            if not isinstance(users_from_column, list):
-                users_from_column = [users_from_column, ]
-            users = list(set(users + users_from_column))
+            if user_column:
+                users_column_name = user_column.get('name')
+                users_from_column = converted_row.get(users_column_name, [])
+                if not users_from_column:
+                    users_from_column = []
+                if not isinstance(users_from_column, list):
+                    users_from_column = [users_from_column, ]
+                users = list(set(users + users_from_column))
+            else:
+                logger.warning('notification rule: %s notify user column: %s invalid', rule_id, users_column_key)
 
         for user in users:
             if not is_valid_email(user):

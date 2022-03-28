@@ -1,7 +1,8 @@
+import json
 from copy import deepcopy
 from datetime import datetime
-import requests
 
+import requests
 from dtable_events.common_dataset.common_dataset_sync_utils import import_or_sync
 from dtable_events.db import init_db_session_class
 from dtable_events.dtable_io import dtable_io_logger
@@ -91,7 +92,7 @@ def sync_common_dataset(context, config):
     dst_rows = dst_table.get('rows')
 
     try:
-        dst_table_id, error_msg = import_or_sync({
+        result = import_or_sync({
             'dst_dtable_uuid': dst_dtable_uuid,
             'src_dtable_uuid': src_dtable_uuid,
             'src_rows': src_table.get('rows', []),
@@ -105,13 +106,15 @@ def sync_common_dataset(context, config):
             'dst_rows': dst_rows,
             'dst_columns': dst_columns
         })
-        if error_msg:
-            dtable_io_logger.error(error_msg)
-            return
     except Exception as e:
         dtable_io_logger.exception(e)
         dtable_io_logger.error('sync common dataset error: %s', e)
-        return
+        raise Exception(str(e))
+    else:
+        if result and 'task_status_code' in result and result['task_status_code'] != 200:
+            dtable_io_logger.error(result)
+            error_msg = 'import_sync_common_dataset:%s' % json.dumps(result)
+            raise Exception(error_msg)
 
     # get base's metadata
     src_url = dtable_server_url.rstrip('/') + '/api/v1/dtables/' + str(src_dtable_uuid) + '/metadata/?from=dtable_events'
@@ -163,7 +166,7 @@ def import_common_dataset(context, config):
     creator = context.get('creator')
 
     try:
-        dst_table_id, error_msg = import_or_sync({
+        result = import_or_sync({
             'dst_dtable_uuid': dst_dtable_uuid,
             'src_dtable_uuid': src_dtable_uuid,
             'src_rows': src_table.get('rows', []),
@@ -175,13 +178,16 @@ def import_common_dataset(context, config):
             'dst_headers': dst_headers,
             'lang': lang
         })
-        if error_msg:
-            dtable_io_logger.error(error_msg)
-            return
     except Exception as e:
         dtable_io_logger.exception(e)
         dtable_io_logger.error('import common dataset error: %s', e)
-        return
+        raise Exception(e)
+    else:
+        if result and 'task_status_code' in result and result['task_status_code'] != 200:
+            dtable_io_logger.error(result['error_msg'])
+            error_msg = 'import_sync_common_dataset:%s' % json.dumps(result)
+            raise Exception(error_msg)
+        dst_table_id = result.get('dst_table_id')
 
     try:
         db_session = init_db_session_class(config)()

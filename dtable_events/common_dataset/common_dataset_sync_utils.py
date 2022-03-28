@@ -89,6 +89,45 @@ def fix_column_data(column):
     return column
 
 
+def transfer_link_formula_array_column(column, array_type, array_data):
+    if not array_type:
+        column['type'] = ColumnTypes.TEXT
+        column['data'] = None
+    elif array_type in [
+        ColumnTypes.NUMBER,
+        ColumnTypes.DATE,
+        ColumnTypes.SINGLE_SELECT,
+        ColumnTypes.MULTIPLE_SELECT,
+        ColumnTypes.DURATION,
+        ColumnTypes.GEOLOCATION,
+        ColumnTypes.RATE,
+    ]:
+        column['type'] = array_type
+        column['data'] = array_data
+        if column['type'] not in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT] and array_data is not None:
+            column = fix_column_data(column)
+    elif array_type in [
+        ColumnTypes.TEXT,
+        ColumnTypes.LONG_TEXT,
+        ColumnTypes.COLLABORATOR,
+        ColumnTypes.IMAGE,
+        ColumnTypes.FILE,
+        ColumnTypes.EMAIL,
+        ColumnTypes.URL,
+        ColumnTypes.CHECKBOX,
+        ColumnTypes.CREATOR,
+        ColumnTypes.CTIME,
+        ColumnTypes.LAST_MODIFIER,
+        ColumnTypes.MTIME,
+    ]:
+        column['type'] = array_type
+        column['data'] = None
+    else:
+        column['type'] = ColumnTypes.TEXT
+        column['data'] = None
+    return column
+
+
 def transfer_column(src_column):
     """
     transfer origin column to new target column
@@ -138,10 +177,12 @@ def transfer_column(src_column):
             column['type'] = ColumnTypes.TEXT
             column['data'] = None
     elif src_column.get('type') == ColumnTypes.LINK:
-        column['type'] = ColumnTypes.TEXT
-        column['data'] = None
+        data = src_column.get('data') or {}
+        array_type = data.get('array_type')
+        array_data = data.get('array_data')
+        column = transfer_link_formula_array_column(column, array_type, array_data)
     elif src_column.get('type') == ColumnTypes.LINK_FORMULA:
-        data = src_column.get('data', {})
+        data = src_column.get('data') or {}
         result_type = data.get('result_type', 'string')
         if result_type == 'number':
             column['type'] = ColumnTypes.NUMBER
@@ -168,41 +209,7 @@ def transfer_column(src_column):
         elif result_type == 'array':
             array_type = data.get('array_type')
             array_data = data.get('array_data')
-            if not array_type:
-                column['type'] = ColumnTypes.TEXT
-                column['data'] = None
-            elif array_type in [
-                ColumnTypes.NUMBER,
-                ColumnTypes.DATE,
-                ColumnTypes.SINGLE_SELECT,
-                ColumnTypes.MULTIPLE_SELECT,
-                ColumnTypes.DURATION,
-                ColumnTypes.GEOLOCATION,
-                ColumnTypes.RATE,
-            ]:
-                column['type'] = array_type
-                column['data'] = array_data
-                if column['type'] not in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT] and array_data is not None:
-                    column = fix_column_data(column)
-            elif array_type in [
-                ColumnTypes.TEXT,
-                ColumnTypes.LONG_TEXT,
-                ColumnTypes.COLLABORATOR,
-                ColumnTypes.IMAGE,
-                ColumnTypes.FILE,
-                ColumnTypes.EMAIL,
-                ColumnTypes.URL,
-                ColumnTypes.CHECKBOX,
-                ColumnTypes.CREATOR,
-                ColumnTypes.CTIME,
-                ColumnTypes.LAST_MODIFIER,
-                ColumnTypes.MTIME,
-            ]:
-                column['type'] = array_type
-                column['data'] = None
-            else:
-                column['type'] = ColumnTypes.TEXT
-                column['data'] = None
+            column = transfer_link_formula_array_column(column, array_type, array_data)
         else:
             column['type'] = ColumnTypes.TEXT
             column['data'] = None
@@ -241,7 +248,7 @@ def generate_synced_columns(src_columns, dst_columns=None):
 def generate_synced_rows(converted_rows, src_rows, src_columns, synced_columns, dst_rows=None):
     """
     generate synced rows divided into `rows to be updated`, `rows to be appended` and `rows to be deleted`
-    return to_be_updated_rows, to_be_appended_rows, to_be_deleted_row_ids
+    return: to_be_updated_rows, to_be_appended_rows, to_be_deleted_row_ids
     """
 
     converted_rows_dict = {row.get('_id'): row for row in converted_rows}
@@ -280,6 +287,70 @@ def generate_synced_rows(converted_rows, src_rows, src_columns, synced_columns, 
     return to_be_updated_rows, to_be_appended_rows, to_be_deleted_row_ids
 
 
+def get_link_formula_converted_cell_value(transfered_column, converted_cell_value, src_col_type):
+    transfered_type = transfered_column.get('type')
+    if not isinstance(converted_cell_value, list):
+        return
+    if src_col_type == ColumnTypes.LINK:
+        converted_cell_value = [v['display_value'] for v in converted_cell_value]
+    if transfered_type in [
+        ColumnTypes.TEXT,
+        ColumnTypes.RATE,
+        ColumnTypes.NUMBER,
+        ColumnTypes.DURATION,
+        ColumnTypes.EMAIL,
+        ColumnTypes.CHECKBOX,
+        ColumnTypes.AUTO_NUMBER,
+        ColumnTypes.CREATOR,
+        ColumnTypes.CTIME,
+        ColumnTypes.LAST_MODIFIER,
+        ColumnTypes.MTIME,
+        ColumnTypes.URL,
+        ColumnTypes.GEOLOCATION,
+        ColumnTypes.SINGLE_SELECT
+    ]:
+        if converted_cell_value:
+            return converted_cell_value[0]
+    elif transfered_type == ColumnTypes.COLLABORATOR:
+        if converted_cell_value:
+            if isinstance(converted_cell_value[0], list):
+                return list(set(converted_cell_value[0]))
+            else:
+                return list(set(converted_cell_value))
+    elif transfered_type in [
+        ColumnTypes.IMAGE,
+        ColumnTypes.FILE
+    ]:
+        if converted_cell_value:
+            if isinstance(converted_cell_value[0], list):
+                return converted_cell_value[0]
+            else:
+                return converted_cell_value
+    elif transfered_type == ColumnTypes.LONG_TEXT:
+        if converted_cell_value:
+            return converted_cell_value[0]
+    elif transfered_type == ColumnTypes.MULTIPLE_SELECT:
+        if converted_cell_value:
+            if isinstance(converted_cell_value[0], list):
+                return sorted(list(set(converted_cell_value[0])))
+            else:
+                return sorted(list(set(converted_cell_value)))
+    elif transfered_type == ColumnTypes.DATE:
+        if converted_cell_value:
+            try:
+                value = parser.isoparse(converted_cell_value[0])
+            except:
+                pass
+            else:
+                data_format = transfered_column.get('data', {}).get('format')
+                if data_format == 'YYYY-MM-DD':
+                    return value.strftime('%Y-%m-%d')
+                elif data_format == 'YYYY-MM-DD HH:mm':
+                    return value.strftime('%Y-%m-%d %H:%M')
+                else:
+                    return value.strftime('%Y-%m-%d')
+
+
 def get_converted_cell_value(converted_cell_value, src_row, transfered_column, col):
     col_key = col.get('key')
     col_type = col.get('type')
@@ -316,10 +387,7 @@ def get_converted_cell_value(converted_cell_value, src_row, transfered_column, c
         return converted_cell_value
 
     elif col_type == ColumnTypes.LINK:
-        if not isinstance(converted_cell_value, list):
-            return
-        return ', '.join([str(v.get('display_value', '')) for v in converted_cell_value])
-
+        return get_link_formula_converted_cell_value(transfered_column, converted_cell_value, col_type)
     elif col_type == ColumnTypes.FORMULA:
         result_type = col.get('data', {}).get('result_type')
         if result_type == 'number':
@@ -385,69 +453,75 @@ def get_converted_cell_value(converted_cell_value, src_row, transfered_column, c
                 return converted_cell_value
             return str(converted_cell_value).upper() == 'TRUE'
         elif result_type == 'array':
-            transfered_type = transfered_column.get('type')
-            if not isinstance(converted_cell_value, list):
-                return
-            if transfered_type in [
-                ColumnTypes.TEXT,
-                ColumnTypes.RATE,
-                ColumnTypes.NUMBER,
-                ColumnTypes.DURATION,
-                ColumnTypes.EMAIL,
-                ColumnTypes.CHECKBOX,
-                ColumnTypes.AUTO_NUMBER,
-                ColumnTypes.CREATOR,
-                ColumnTypes.CTIME,
-                ColumnTypes.LAST_MODIFIER,
-                ColumnTypes.MTIME,
-                ColumnTypes.URL,
-                ColumnTypes.GEOLOCATION,
-                ColumnTypes.SINGLE_SELECT
-            ]:
-                if converted_cell_value:
-                    return converted_cell_value[0]
-            elif transfered_type == ColumnTypes.COLLABORATOR:
-                if converted_cell_value:
-                    if isinstance(converted_cell_value[0], list):
-                        return list(set(converted_cell_value[0]))
-                    else:
-                        return list(set(converted_cell_value))
-            elif transfered_type in [
-                ColumnTypes.IMAGE,
-                ColumnTypes.FILE
-            ]:
-                if converted_cell_value:
-                    if isinstance(converted_cell_value[0], list):
-                        return converted_cell_value[0]
-                    else:
-                        return converted_cell_value
-            elif transfered_type == ColumnTypes.LONG_TEXT:
-                if converted_cell_value:
-                    return converted_cell_value[0]
-            elif transfered_type == ColumnTypes.MULTIPLE_SELECT:
-                if converted_cell_value:
-                    if isinstance(converted_cell_value[0], list):
-                        return sorted(list(set(converted_cell_value[0])))
-                    else:
-                        return sorted(list(set(converted_cell_value)))
-            elif transfered_type == ColumnTypes.DATE:
-                if converted_cell_value:
-                    try:
-                        value = parser.isoparse(converted_cell_value[0])
-                    except:
-                        pass
-                    else:
-                        data_format = transfered_column.get('data', {}).get('format')
-                        if data_format == 'YYYY-MM-DD':
-                            return value.strftime('%Y-%m-%d')
-                        elif data_format == 'YYYY-MM-DD HH:mm':
-                            return value.strftime('%Y-%m-%d %H:%M')
-                        else:
-                            return value.strftime('%Y-%m-%d')
+            return get_link_formula_converted_cell_value(transfered_column, converted_cell_value, col_type)
         elif result_type == 'string':
             if converted_cell_value:
                 return str(converted_cell_value)
     return src_row.get(col_key)
+
+
+def is_equal(v1, v2, column_type):
+    """
+    judge two values equal or not
+    different column types -- different judge method
+    """
+    try:
+        if column_type in [
+            ColumnTypes.TEXT,
+            ColumnTypes.DATE,
+            ColumnTypes.SINGLE_SELECT,
+            ColumnTypes.URL,
+            ColumnTypes.CREATOR,
+            ColumnTypes.LAST_MODIFIER,
+            ColumnTypes.CTIME,
+            ColumnTypes.MTIME,
+            ColumnTypes.EMAIL
+        ]:
+            v1 = v1 if v1 else ''
+            v2 = v2 if v2 else ''
+            return v1 == v2
+        elif column_type == ColumnTypes.CHECKBOX:
+            v1 = True if v1 else False
+            v2 = True if v2 else False
+            return v1 == v2
+        elif column_type == ColumnTypes.DURATION:
+            return v1 == v2
+        elif column_type == ColumnTypes.NUMBER:
+            return v1 == v2
+        elif column_type == ColumnTypes.RATE:
+            return v1 == v2
+        elif column_type == ColumnTypes.COLLABORATOR:
+            return v1 == v2
+        elif column_type == ColumnTypes.IMAGE:
+            return v1 == v2
+        elif column_type == ColumnTypes.FILE:
+            files1 = [file['url'] for file in v1] if v1 else []
+            files2 = [file['url'] for file in v2] if v2 else []
+            return files1 == files2
+        elif column_type == ColumnTypes.LONG_TEXT:
+            if v1 is not None:
+                if isinstance(v1, dict):
+                    v1 = v1['text']
+                else:
+                    v1 = str(v1)
+            if v2 is not None:
+                if isinstance(v2, dict):
+                    v2 = v2['text']
+                else:
+                    v2 = str(v2)
+            return v1 == v2
+        elif column_type == ColumnTypes.MULTIPLE_SELECT:
+            if v1 is not None and isinstance(v1, list):
+                v1 = sorted(v1)
+            if v2 is not None and isinstance(v2, list):
+                v2 = sorted(v2)
+            return v1 == v2
+        else:
+            return v1 == v2
+    except Exception as e:
+        logger.exception(e)
+        logger.error('sync common dataset value v1: %s, v2: %s type: %s error: %s', v1, v2, column_type, e)
+        return False
 
 
 def generate_single_row(converted_row, src_row, src_columns, transfered_columns_dict, dst_row=None):
@@ -465,30 +539,16 @@ def generate_single_row(converted_row, src_row, src_columns, transfered_columns_
     dst_row = deepcopy(dst_row) if dst_row else {'_id': src_row.get('_id')}
     for col in src_columns:
         col_key = col.get('key')
-        col_name = col.get('name')
-        col_type = col.get('type')
 
         converted_cell_value = converted_row.get(col_key)
         transfered_column = transfered_columns_dict.get(col_key)
+        if not transfered_column:
+            continue
 
         if op_type == 'update':
-            if col_type == ColumnTypes.MULTIPLE_SELECT:
-                src_cell_value = src_row.get(col_key)
-                dst_cell_value = dst_row.get(col_key)
-                if not src_cell_value:
-                    src_cell_value = []
-                if not dst_cell_value:
-                    dst_cell_value = []
-                src_cell_value = sorted(src_cell_value)
-                dst_cell_value = sorted(dst_cell_value)
-            elif col_type == ColumnTypes.SINGLE_SELECT:
-                src_cell_value = src_row.get(col_key, '')
-                dst_cell_value = dst_row.get(col_key, '')
-            else:
-                src_cell_value = get_converted_cell_value(converted_cell_value, src_row, transfered_column, col)
-                dst_cell_value = dst_row.get(col_key)
-
-            dataset_row[col_key] = src_cell_value
+            converted_cell_value = get_converted_cell_value(converted_cell_value, src_row, transfered_column, col)
+            if not is_equal(dst_row.get(col_key), converted_cell_value, transfered_column['type']):
+                dataset_row[col_key] = converted_cell_value
         else:
             dataset_row[col_key] = get_converted_cell_value(converted_cell_value, src_row, transfered_column, col)
 
@@ -498,7 +558,11 @@ def generate_single_row(converted_row, src_row, src_columns, transfered_columns_
 def import_or_sync(import_sync_context):
     """
     import or sync common dataset
-    return: dst_table_id, error_msg -> str or None
+    return: {
+        dst_table_id: destination table id,
+        error_msg: error msg,
+        task_status_code: return frontend status code, 40x 50x...
+    }
     """
     # extract necessary assets
     dst_dtable_uuid = import_sync_context.get('dst_dtable_uuid')
@@ -544,18 +608,42 @@ def import_or_sync(import_sync_context):
         }
         try:
             resp = requests.get(url, headers=src_headers, params=query_params)
+            if resp.status_code == 400:
+                try:
+                    res_json = resp.json()
+                except:
+                    return {
+                        'dst_table_id': None,
+                        'error_msg': 'fetch src view rows error',
+                        'task_status_code': 500
+                    }
+                else:
+                    return {
+                        'dst_table_id': None,
+                        'error_msg': 'fetch src view rows error',
+                        'error_type': res_json.get('error_type'),
+                        'task_status_code': 400
+                    }
             res_json = resp.json()
             archive_rows = res_json.get('rows', [])
             archive_metadata = res_json.get('metadata')
         except Exception as e:
             logger.error('request src_dtable: %s params: %s view-rows error: %s', src_dtable_uuid, query_params, e)
-            return None, 'request src_dtable: %s params: %s view-rows error: %s' % (src_dtable_uuid, query_params, e)
+            return {
+                'dst_table_id': None,
+                'error_msg': 'fetch view rows error',
+                'task_status_code': 500
+            }
         if start == 0:
             ## generate columns from the columns(archive_metadata) returned from SQL query
             sync_columns = [col for col in archive_metadata if col['key'] in src_column_keys_set]
             to_be_updated_columns, to_be_appended_columns, error = generate_synced_columns(sync_columns, dst_columns=dst_columns)
             if error:
-                return None, error
+                return {
+                    'dst_table_id': None,
+                    'error_msg': str(error),  # generally, this error is caused by client
+                    'task_status_code': 400
+                }
         result_rows.extend(archive_rows)
         if not archive_rows or len(archive_rows) < limit or (start + limit) >= SRC_ROWS_LIMIT:
             break
@@ -583,11 +671,28 @@ def import_or_sync(import_sync_context):
             resp = requests.post(url, headers=dst_headers, json=data)
             if resp.status_code != 200:
                 logger.error('create new table error status code: %s, resp text: %s', resp.status_code, resp.text)
-                return None, 'create new table error status code: %s, resp text: %s' % (resp.status_code, resp.text)
+                error_msg = 'create table error'
+                status_code = 500
+                try:
+                    resp_json = resp.json()
+                    if resp_json.get('error_message'):
+                        error_msg = resp_json['error_message']
+                    status_code = resp.status_code
+                except:
+                    pass
+                return {
+                    'dst_table_id': None,
+                    'error_msg': error_msg,
+                    'task_status_code': status_code
+                }
             dst_table_id = resp.json().get('_id')
         except Exception as e:
             logger.error(e)
-            return None, str(e)
+            return {
+                'dst_table_id': None,
+                'error_msg': 'create table error',
+                'task_status_code': 500
+            }
     ## or maybe append/update columns
     else:
         ### batch append columns
@@ -606,10 +711,18 @@ def import_or_sync(import_sync_context):
                 resp = requests.post(url, headers=dst_headers, json=data)
                 if resp.status_code != 200:
                     logger.error('batch append columns to dst dtable: %s, table: %s error status code: %s text: %s', dst_dtable_uuid, dst_table_id, resp.status_code, resp.text)
-                    return None, 'batch append columns to dst dtable: %s, table: %s error status code: %s text: %s' % (dst_dtable_uuid, dst_table_id, resp.status_code, resp.text)
+                    return {
+                        'dst_table_id': None,
+                        'error_msg': 'append columns error',
+                        'task_status_code': 500
+                    }
             except Exception as e:
                 logger.error('batch append columns to dst dtable: %s, table: %s error: %s', dst_dtable_uuid, dst_table_id, e)
-                return None, 'batch append columns to dst dtable: %s, table: %s error: %s' % (dst_dtable_uuid, dst_table_id, e)
+                return {
+                    'dst_table_id': None,
+                    'error_msg': 'append columns error',
+                    'task_status_code': 500
+                }
         ### batch update columns
         if to_be_updated_columns:
             url = dtable_server_url.strip('/') + '/api/v1/dtables/' + str(dst_dtable_uuid) + '/batch-update-columns/?from=dtable_events'
@@ -625,10 +738,18 @@ def import_or_sync(import_sync_context):
                 resp = requests.put(url, headers=dst_headers, json=data)
                 if resp.status_code != 200:
                     logger.error('batch update columns to dst dtable: %s, table: %s error status code: %s text: %s', dst_dtable_uuid, dst_table_id, resp.status_code, resp.text)
-                    return None, 'batch update columns to dst dtable: %s, table: %s error status code: %s text: %s' % (dst_dtable_uuid, dst_table_id, resp.status_code, resp.text)
+                    return {
+                        'dst_table_id': None,
+                        'error_msg': 'update columns error',
+                        'task_status_code': 500
+                    }
             except Exception as e:
                 logger.error('batch update columns to dst dtable: %s, table: %s error: %s', dst_dtable_uuid, dst_table_id, e)
-                return None, 'batch update columns to dst dtable: %s, table: %s error: %s' % (dst_dtable_uuid, dst_table_id, e)
+                return {
+                    'dst_table_id': None,
+                    'error_msg': 'update columns error',
+                    'task_status_code': 500
+                }
 
     ## update delete append rows step by step
     step = 1000
@@ -650,10 +771,18 @@ def import_or_sync(import_sync_context):
             resp = requests.put(url, headers=dst_headers, json=data)
             if resp.status_code != 200:
                 logger.error('sync dataset update rows dst dtable: %s dst table: %s error status code: %s content: %s', dst_dtable_uuid, dst_table_name, resp.status_code, resp.text)
-                return None, 'sync dataset update rows dst dtable: %s dst table: %s error status code: %s content: %s' % (dst_dtable_uuid, dst_table_name, resp.status_code, resp.text)
+                return {
+                    'dst_table_id': None,
+                    'error_msg': 'update rows error',
+                    'task_status_code': 500
+                }
         except Exception as e:
             logger.error('sync dataset update rows dst dtable: %s dst table: %s error: %s', dst_dtable_uuid, dst_table_name, e)
-            return None, 'sync dataset update rows dst dtable: %s dst table: %s error: %s' % (dst_dtable_uuid, dst_table_name, e)
+            return {
+                'dst_table_id': None,
+                'error_msg': 'update rows error',
+                'task_status_code': 500
+            }
 
     ### delete rows
     url = dtable_server_url.strip('/') + '/api/v1/dtables/%s/batch-delete-rows/?from=dtable_events' % (str(dst_dtable_uuid),)
@@ -666,10 +795,18 @@ def import_or_sync(import_sync_context):
             resp = requests.delete(url, headers=dst_headers, json=data)
             if resp.status_code != 200:
                 logger.error('sync dataset delete rows dst dtable: %s dst table: %s error status code: %s, content: %s', dst_dtable_uuid, dst_table_name, resp.status_code, resp.text)
-                return None, 'sync dataset delete rows dst dtable: %s dst table: %s error status code: %s, content: %s' % (dst_dtable_uuid, dst_table_name, resp.status_code, resp.text)
+                return {
+                    'dst_table_id': None,
+                    'error_msg': 'delete rows error',
+                    'task_status_code': 500
+                }
         except Exception as e:
             logger.error('sync dataset delete rows dst dtable: %s dst table: %s error: %s', dst_dtable_uuid, dst_table_name, e)
-            return None, 'sync dataset delete rows dst dtable: %s dst table: %s error: %s' % (dst_dtable_uuid, dst_table_name, e)
+            return {
+                'dst_table_id': None,
+                'error_msg': 'delete rows error',
+                'task_status_code': 500
+            }
 
     ### append rows
     url = dtable_server_url.strip('/') + '/api/v1/dtables/%s/batch-append-rows/' % (str(dst_dtable_uuid),)
@@ -683,12 +820,24 @@ def import_or_sync(import_sync_context):
             resp = requests.post(url, headers=dst_headers, json=data)
             if resp.status_code != 200:
                 logger.error('sync dataset append rows dst dtable: %s dst table: %s error status code: %s', dst_dtable_uuid, dst_table_name, resp.status_code)
-                return None, 'sync dataset append rows dst dtable: %s dst table: %s error status code: %s' % (dst_dtable_uuid, dst_table_name, resp.status_code)
+                return {
+                    'dst_table_id': None,
+                    'error_msg': 'append rows error',
+                    'task_status_code': 500
+                }
         except Exception as e:
             logger.error('sync dataset append rows dst dtable: %s dst table: %s error: %s', dst_dtable_uuid, dst_table_name, e)
-            return None, 'sync dataset append rows dst dtable: %s dst table: %s error: %s' % (dst_dtable_uuid, dst_table_name, e)
+            return {
+                'dst_table_id': None,
+                'error_msg': 'append rows error',
+                'task_status_code': 500
+            }
 
-    return dst_table_id, None
+    return {
+        'dst_table_id': dst_table_id,
+        'error_msg': None,
+        'task_status_code': 200
+    }
 
 
 def set_common_dataset_state(dataset_id, db_session, state):
@@ -707,3 +856,4 @@ def set_common_dataset_sync_state(dataset_sync_id, db_session, state):
         db_session.commit()
     except Exception as e:
         logger.error('set state of common dataset sync: %s error: %s', dataset_sync_id, e)
+

@@ -271,10 +271,10 @@ def parse_excel_to_json(repo_id, dtable_name, custom=False):
     tables = []
     wb = load_workbook(excel_file, read_only=True)
     for sheet in wb:
-        dtable_io_logger.info(
-            'parse sheet: %s, rows: %d, columns: %d' % (sheet.title, sheet.max_row, sheet.max_column))
         if sheet.max_row is None or sheet.max_column is None:
             continue
+        dtable_io_logger.info(
+            'parse sheet: %s, rows: %d, columns: %d' % (sheet.title, sheet.max_row, sheet.max_column))
         try:
             sheet_rows = list(sheet.rows)
         except Exception as e:
@@ -789,13 +789,13 @@ def parse_geolocation(cell_data):
     elif 'lng' in cell_data:
         return str(cell_data['lng']) + ', ' + str(cell_data['lat'])
     elif 'province' in cell_data:
-        value = cell_data['province']
+        value = str(cell_data['province'])
         if 'city' in cell_data:
-            value = value + ' ' + cell_data['city']
+            value = '%s %s' % (value, cell_data['city'])
         if 'district' in cell_data:
-            value = value + ' ' + cell_data['district']
+            value = '%s %s' % (value, cell_data['district'])
         if 'detail' in cell_data:
-            value = value + ' ' + cell_data['detail']
+            value = '%s %s' % (value, cell_data['detail'])
         return value
     else:
         return str(cell_data)
@@ -846,20 +846,20 @@ def parse_formula_number(cell_data, src_format):
     number_format = '0'
     if src_format == 'number':
         number_format = gen_decimal_format(cell_data)
-    elif src_format == 'percent':
+    elif src_format == 'percent' and isinstance(cell_data, str):
         value = cell_data[:-1]
         try:
             value = float(value) / 100
         except Exception as e:
             pass
         number_format = gen_decimal_format(value) + '%'
-    elif src_format == 'euro':
+    elif src_format == 'euro' and isinstance(cell_data, str):
         value = cell_data[1:]
-        number_format = '[$EUR ]#,##' + gen_decimal_format(value)+'_-'
-    elif src_format == 'dollar':
+        number_format = '"€"#,##' + gen_decimal_format(value)+'_-'
+    elif src_format == 'dollar' and isinstance(cell_data, str):
         value = cell_data[1:]
         number_format = '"$"#,##' + gen_decimal_format(value)+'_-'
-    elif src_format == 'yuan':
+    elif src_format == 'yuan' and isinstance(cell_data, str):
         value = cell_data[1:]
         number_format = '"¥"#,##' + gen_decimal_format(value)+'_-'
     try:
@@ -913,7 +913,29 @@ def check_and_replace_sheet_name(sheet_name):
     return sheet_name
 
 
-def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname):
+def add_nickname_to_cell(unknown_user_set, unknown_cell_list):
+    from dtable_events.dtable_io.utils import get_nicknames_from_dtable
+
+    unknown_user_id_list = list(unknown_user_set)
+    step = 1000
+    start = 0
+    user_list = []
+    for i in range(0, len(unknown_user_id_list), step):
+        user_list += get_nicknames_from_dtable(unknown_user_id_list[start: start+step])
+        start += step
+
+    email2nickname = {nickname['email']: nickname['name'] for nickname in user_list}
+    for c in unknown_cell_list:
+        if c[2] == ColumnTypes.COLLABORATOR:
+            nickname_list, collaborator_email_list = c[1]
+            for email in collaborator_email_list:
+                nickname_list.append(email2nickname.get(email, ''))
+            c[0].value = ', '.join(nickname_list)
+        else:
+            c[0].value = email2nickname.get(c[1], '')
+
+
+def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list):
     for col_num in range(len(row)):
         c = ws.cell(row = row_num + 1, column = col_num + 1)
         if row_num in grouped_row_num_map:
@@ -954,12 +976,25 @@ def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname):
             c.value = parse_geolocation(row[col_num])
         elif head[col_num][1] == ColumnTypes.COLLABORATOR:
             nickname_list = []
+            collaborator_email_list = []
             for user in row[col_num]:
-                nickname_list.append(email2nickname.get(user, ''))
+                if not email2nickname.get(user, ''):
+                    unknown_user_set.add(user)
+                    collaborator_email_list.append(user)
+                else:
+                    nickname_list.append(email2nickname.get(user, ''))
+            if collaborator_email_list:
+                unknown_cell_list.append((c, (nickname_list, collaborator_email_list), head[col_num][1]))
             c.value = ', '.join(nickname_list)
         elif head[col_num][1] == ColumnTypes.CREATOR:
+            if not email2nickname.get(cell_data2str(row[col_num]), ''):
+                unknown_user_set.add(cell_data2str(row[col_num]))
+                unknown_cell_list.append((c, cell_data2str(row[col_num]), head[col_num][1]))
             c.value = email2nickname.get(cell_data2str(row[col_num]), '')
         elif head[col_num][1] == ColumnTypes.LAST_MODIFIER:
+            if not email2nickname.get(cell_data2str(row[col_num]), ''):
+                unknown_user_set.add(cell_data2str(row[col_num]))
+                unknown_cell_list.append((c, cell_data2str(row[col_num]), head[col_num][1]))
             c.value = email2nickname.get(cell_data2str(row[col_num]), '')
         elif head[col_num][1] == ColumnTypes.LINK_FORMULA:
             c.value = parse_link_formula(row[col_num], email2nickname)
@@ -991,20 +1026,34 @@ def write_xls_with_type(sheet_name, head, data_list, grouped_row_num_map, email2
     row_num = 0
 
     # write table head
+    column_error_log_exists = False
     for col_num in range(len(head)):
         c = ws.cell(row = row_num + 1, column = col_num + 1)
         try:
             c.value = head[col_num][0]
         except Exception as e:
-            dtable_io_logger.error('Error column in exporting excel: {}'.format(e))
+            if not column_error_log_exists:
+                dtable_io_logger.error('Error column in exporting excel: {}'.format(e))
+                column_error_log_exists = True
             c.value = EXPORT2EXCEL_DEFAULT_STRING
 
     # write table data
+    row_error_log_exists = False
+    unknown_user_set = set()
+    unknown_cell_list = []
     for row in data_list:
         row_num += 1
         try:
-            handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname)
+            handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list)
         except Exception as e:
-            dtable_io_logger.error('Error row in exporting excel: {}'.format(e))
+            if not row_error_log_exists:
+                dtable_io_logger.error('Error row in exporting excel: {}'.format(e))
+                row_error_log_exists = True
             continue
+    if unknown_cell_list:
+        try:
+            add_nickname_to_cell(unknown_user_set, unknown_cell_list)
+        except Exception as e:
+            dtable_io_logger.error('add nickname to cell error: {}'.format(e))
+
     return wb
