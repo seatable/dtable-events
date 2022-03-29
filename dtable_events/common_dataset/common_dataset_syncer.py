@@ -110,6 +110,7 @@ def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_
     is_common_dataset_valid = False
     if not src_table:
         set_common_dataset_state(dataset_id, db_session, is_common_dataset_valid)
+        set_common_dataset_sync_state(dataset_sync_id, db_session, is_common_dataset_valid)
         logging.error('Source table not found.')
         return
 
@@ -121,12 +122,14 @@ def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_
                 break
         if not src_view:
             set_common_dataset_state(dataset_id, db_session, is_common_dataset_valid)
+            set_common_dataset_sync_state(dataset_sync_id, db_session, is_common_dataset_valid)
             logging.error('Source view not found.')
             return
     else:
         views = src_table.get('views', [])
         if not views or not isinstance(views, list):
             set_common_dataset_state(dataset_id, db_session, is_common_dataset_valid)
+            set_common_dataset_sync_state(dataset_sync_id, db_session, is_common_dataset_valid)
             logging.error('No views found.')
             return
         src_view = views[0]
