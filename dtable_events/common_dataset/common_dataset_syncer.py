@@ -10,7 +10,7 @@ import requests
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from dtable_events import init_db_session_class
-from dtable_events.common_dataset.common_dataset_sync_utils import import_or_sync, set_common_dataset_state, set_common_dataset_sync_state
+from dtable_events.common_dataset.common_dataset_sync_utils import import_or_sync, set_common_dataset_invalid, set_common_dataset_sync_invalid
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars
 
 
@@ -107,10 +107,9 @@ def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_
         if table.get('_id') == src_table_id:
             src_table = table
             break
-    is_common_dataset_valid = False
     if not src_table:
-        set_common_dataset_state(dataset_id, db_session, is_common_dataset_valid)
-        set_common_dataset_sync_state(dataset_sync_id, db_session, is_common_dataset_valid)
+        set_common_dataset_invalid(dataset_id, db_session)
+        set_common_dataset_sync_invalid(dataset_sync_id, db_session)
         logging.error('Source table not found.')
         return
 
@@ -121,15 +120,15 @@ def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_
                 src_view = view
                 break
         if not src_view:
-            set_common_dataset_state(dataset_id, db_session, is_common_dataset_valid)
-            set_common_dataset_sync_state(dataset_sync_id, db_session, is_common_dataset_valid)
+            set_common_dataset_invalid(dataset_id, db_session)
+            set_common_dataset_sync_invalid(dataset_sync_id, db_session)
             logging.error('Source view not found.')
             return
     else:
         views = src_table.get('views', [])
         if not views or not isinstance(views, list):
-            set_common_dataset_state(dataset_id, db_session, is_common_dataset_valid)
-            set_common_dataset_sync_state(dataset_sync_id, db_session, is_common_dataset_valid)
+            set_common_dataset_invalid(dataset_id, db_session)
+            set_common_dataset_sync_invalid(dataset_sync_id, db_session)
             logging.error('No views found.')
             return
         src_view = views[0]
@@ -157,7 +156,7 @@ def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_
             dst_table = table
             break
     if not dst_table:
-        set_common_dataset_sync_state(dataset_sync_id, db_session, is_common_dataset_valid)
+        set_common_dataset_sync_invalid(dataset_sync_id, db_session)
         logging.error('Destination table: %s not found.' % dst_table_id)
         return
 
