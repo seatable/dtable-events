@@ -1229,12 +1229,12 @@ class AutomationRule:
             self.update_last_trigger_time()
 
         if not with_test:
-            self.set_task_log()
+            self.add_task_log()
 
     def set_done_actions(self, done=True):
         self.done_actions = done
 
-    def set_task_log(self):
+    def add_task_log(self):
         try:
             set_task_log_sql = """
                 INSERT INTO auto_rules_task_log (trigger_time, success, rule_id, run_condition, dtable_uuid, org_id, owner) VALUES
