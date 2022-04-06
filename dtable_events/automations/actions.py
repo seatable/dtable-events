@@ -1286,7 +1286,7 @@ class AutomationRule:
             trigger_date = date(year=cur_year, month=cur_month, day=1)
             self.db_session.execute(sql, {
                 'rule_id': self.rule_id,
-                'trigger_time': datetime.now(),
+                'trigger_time': datetime.utcnow(),
                 'trigger_date': trigger_date,
                 'trigger_count': self.trigger_count + 1,
                 'username': self.creator,
