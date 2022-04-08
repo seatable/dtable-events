@@ -352,7 +352,7 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
     file_download_urls = send_info.get('file_download_urls', None)
 
     msg_obj = MIMEMultipart()
-    content_body = MIMEText(msg)
+    content_body = MIMEText(msg, 'html', 'utf-8')
     msg_obj['Subject'] = subject
     msg_obj['From'] = source or host_user
     msg_obj['To'] = ",".join(send_to)
