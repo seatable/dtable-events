@@ -111,7 +111,7 @@ def match_columns(authed_base, table_name, target_columns):
         if col_type in AUTO_GENERATED_COLUMNS:
             continue
         col_name = col.get('name')
-        if col_name not in table_columns:
+        if col_name not in target_columns:
             return False, col_name
 
     return True, None
@@ -128,6 +128,7 @@ def import_excel_to_db(
         data_binary,
         db_session,
         task_id,
+        tasks_map,
 
 ):
     from seatable_api import Base
@@ -198,10 +199,13 @@ def import_excel_to_db(
         try:
             slice.append(d.to_dict())
             if total_count + 1 == total_rows or len(slice) == entity:
+                if not tasks_map.get(task_id):
+                    status = 'cancelled'
+                    break
                 db_handler.insert_row(slice)
                 insert_count += len(slice)
                 slice = []
-                time.sleep(0.5)
+                time.sleep(1)
             total_count += 1
         except Exception as err:
             detail['err_msg'] = str(err)
