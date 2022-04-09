@@ -73,7 +73,11 @@ class DBHandler(object):
             "rows": rows
         }
         resp = requests.post(api_url, json=params, headers=self.headers)
-        return resp.json()
+
+        try:
+            return resp.json(), False
+        except Exception as e:
+            return resp.text, True
 
 
 def record_start_point(db_session, task_id, dtable_uuid, status, type):
@@ -173,14 +177,14 @@ def import_excel_to_db(
         column_matched, column_name = match_columns(base, table_name, excel_columns)
         if not column_matched:
             detail['err_msg'] = 'Column %s does not match in excel' % column_name
-            status = 'failed'
+            status = 'terminated'
             record_end_point(db_session, task_id, status, detail)
             return status, detail, task_type
 
         db_handler = DBHandler(base, table_name)
     except Exception as err:
         detail['err_msg'] = str(err)
-        status = 'failed'
+        status = 'terminated'
         record_end_point(db_session, task_id, status, detail)
         return status, detail, task_type
 
@@ -190,7 +194,7 @@ def import_excel_to_db(
     total_rows = df.shape[0]
     if total_rows > 100000:
         detail['err_msg'] = 'Number of rows exceeds 100,000 limit'
-        status = 'failed'
+        status = 'terminated'
         record_end_point(db_session, task_id, status, detail)
         return status, detail, task_type
 
@@ -202,14 +206,17 @@ def import_excel_to_db(
                 if not tasks_map.get(task_id):
                     status = 'cancelled'
                     break
-                db_handler.insert_row(slice)
+                resp_content, err = db_handler.insert_row(slice)
+                if err:
+                    status = 'terminated'
+                    detail['err_msg'] = str(resp_content)
+                    break
                 insert_count += len(slice)
                 slice = []
-                time.sleep(1)
             total_count += 1
         except Exception as err:
             detail['err_msg'] = str(err)
-            status = 'failed'
+            status = 'terminated'
             break
 
     detail['end_row_num'] = insert_count + int(start_row)
