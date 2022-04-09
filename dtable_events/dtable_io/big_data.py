@@ -73,11 +73,9 @@ class DBHandler(object):
             "rows": rows
         }
         resp = requests.post(api_url, json=params, headers=self.headers)
-
-        try:
-            return resp.json(), False
-        except Exception as e:
+        if not resp.status_code == 200:
             return resp.text, True
+        return resp.json(), False
 
 
 def record_start_point(db_session, task_id, dtable_uuid, status, type):
