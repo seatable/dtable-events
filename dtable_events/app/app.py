@@ -14,6 +14,7 @@ from dtable_events.automations.handler import AutomationRuleHandler
 from dtable_events.automations.dtable_automation_rules_scanner import DTableAutomationRulesScanner
 from dtable_events.webhook.webhook import Webhooker
 from dtable_events.common_dataset.common_dataset_syncer import CommonDatasetSyncer
+from dtable_events.tasks.big_data_storage_stats_worker import BigDataStorageStatsWorker
 
 
 class App(object):
@@ -41,6 +42,7 @@ class App(object):
             self._dtable_automation_rules_scanner = DTableAutomationRulesScanner(config)
             self._ldap_syncer = LDAPSyncer(config)
             self._common_dataset_syncer = CommonDatasetSyncer(config)
+            self._big_data_storage_stats_worker = BigDataStorageStatsWorker(config)
 
     def serve_forever(self):
         if self._enable_foreground_tasks:
@@ -63,3 +65,4 @@ class App(object):
             self._dtable_automation_rules_scanner.start()    # default True
             self._ldap_syncer.start()                        # default False
             self._common_dataset_syncer.start()              # default True
+            self._big_data_storage_stats_worker.start()      # always True
