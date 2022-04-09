@@ -139,7 +139,6 @@ def import_excel_to_db(
     import time
     import numpy as np
 
-
     task_type = 'big_excel_import_task'
 
     bast64_data = data_binary.encode(encoding='utf-8')

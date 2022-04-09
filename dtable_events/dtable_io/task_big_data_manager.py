@@ -12,6 +12,7 @@ class TaskBigDataManager(object):
         self.config = None
         self.current_task_info = None
         self.t = None
+        self.threads = []
 
     def init(self, workers, dtable_private_key, dtable_web_service_url, file_server_port, dtable_server_url,
              io_task_timeout, config):
@@ -36,6 +37,12 @@ class TaskBigDataManager(object):
             self.tasks_result_map.pop(task_id, None)
             return True, task_result
         return False, None
+
+    def threads_is_alive(self):
+        info = {}
+        for t in self.threads:
+            info[t.name] = t.is_alive()
+        return info
 
     def handle_task(self):
         from dtable_events.dtable_io import dtable_big_data_logger
@@ -80,10 +87,13 @@ class TaskBigDataManager(object):
         return task_id
 
     def run(self):
-        t_name = 'BigDataTaskManager Thread'
-        self.t = threading.Thread(target=self.handle_task, name=t_name)
-        self.t.setDaemon(True)
-        self.t.start()
+        thread_num = self.conf['workers']
+        for i in range(thread_num):
+            t_name = 'BigDataTaskManager Thread-' + str(i)
+            t = threading.Thread(target=self.handle_task, name=t_name)
+            self.threads.append(t)
+            t.setDaemon(True)
+            t.start()
 
     def cancel_task(self, task_id):
         self.tasks_map.pop(task_id, None)
