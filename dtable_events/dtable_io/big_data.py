@@ -143,8 +143,11 @@ def import_excel_to_db(
     data = base64.b64decode(bast64_data)
     try:
         entity = int(request_entity)
+        start_row = int(start_row)
     except:
         entity = 500
+        start_row = 0
+
 
 
     detail = {
