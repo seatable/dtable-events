@@ -1,7 +1,5 @@
-import base64
 import jwt
 import pandas as pd
-from io import BytesIO
 import logging
 import os
 import requests
@@ -127,7 +125,7 @@ def import_excel_to_db(
         file_name,
         start_row,
         request_entity,
-        data_binary,
+        file_path,
         db_session,
         task_id,
         tasks_status_map,
@@ -138,9 +136,6 @@ def import_excel_to_db(
     import numpy as np
 
     task_type = 'big_excel_import_task'
-
-    bast64_data = data_binary.encode(encoding='utf-8')
-    data = base64.b64decode(bast64_data)
     try:
         entity = int(request_entity)
         start_row = int(start_row)
@@ -159,8 +154,7 @@ def import_excel_to_db(
     }
 
     record_start_point(db_session, task_id, dtable_uuid, 'running', 'excel-import')
-    excel_file = BytesIO(data)
-    df = pd.read_excel(excel_file)
+    df = pd.read_excel(file_path)
     df.replace(np.nan, '', regex=True, inplace=True)
     if start_row:
         df = df.iloc[int(start_row):, :]
@@ -223,4 +217,5 @@ def import_excel_to_db(
     detail['end_row_num'] = insert_count + int(start_row)
     record_end_point(db_session, task_id, status, detail)
     tasks_status_map[task_id] = 'done'
+    os.remove(file_path)
     return
