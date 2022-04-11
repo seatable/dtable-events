@@ -678,7 +678,7 @@ def delete_file(username, repo_id, file_name):
     seafile_api.del_file(repo_id, EXCEL_DIR_PATH, filename, username)
 
 
-def get_metadata_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission):
+def get_metadata_from_dtable_server(dtable_uuid, username, permission):
     # generate json web token
     # internal usage exp 60 seconds, username = request.user.username
     DTABLE_SERVER_URL = task_manager.conf['dtable_server_url']
@@ -691,10 +691,7 @@ def get_metadata_from_dtable_server(dtable_uuid, table_id, view_id, username, id
     payload = {
         'exp': int(time.time()) + 60,
         'dtable_uuid': dtable_uuid,
-        'table_id': table_id,
-        'view_id': view_id,
         'username': username,
-        'id_in_org': id_in_org,
         'permission': permission,
     }
     access_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')

@@ -511,6 +511,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
         convert_db_rows
     from dtable_events.dtable_io.excel import parse_grouped_rows, write_xls_with_type
     from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
+    import openpyxl
 
     target_dir = '/tmp/dtable-io/export-view-to-excel/' + dtable_uuid
     if not os.path.isdir(target_dir):
@@ -524,13 +525,12 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
     email2nickname = {nickname['email']: nickname['name'] for nickname in nicknames}
 
     try:
-        metadata = get_metadata_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission)
+        metadata = get_metadata_from_dtable_server(dtable_uuid, username, permission)
     except Exception as e:
         dtable_io_logger.error('get metadata. ERROR: {}'.format(e))
         return
 
     target_table = {}
-    target_view = {}
     for table in metadata.get('tables', []):
         if table.get('_id', '') == table_id:
             target_table = table
@@ -540,65 +540,79 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
         dtable_io_logger.error('Table %s not found.' % table_id)
         return
 
-    for view in target_table.get('views', []):
-        if view.get('_id', '') == view_id:
-            target_view = view
-            break
-    if not target_view:
-        dtable_io_logger.error('View %s not found.' % view_id)
-        return
-
+    views = target_table.get('views', [])
     table_name = target_table.get('name', '')
-    view_name = target_view.get('name', '')
-    view_type = target_view.get('type', '')
-    if view_type == 'archive':
-        is_archive = True
-    else:
-        is_archive = False
-    cols = target_table.get('columns', [])
-    hidden_cols_key = target_view.get('hidden_columns', [])
-    summary_configs = target_table.get('summary_configs', {})
-    cols_without_hidden = []
-    summary_col_info = {}
-    head_list = []
-    for col in cols:
-        if col.get('key', '') not in hidden_cols_key:
-            cols_without_hidden.append(col)
-            head_list.append((col.get('name', ''), col.get('type', ''), col.get('data', '')))
-        if summary_configs.get(col.get('key')):
-            summary_col_info.update({col.get('name'): summary_configs.get(col.get('key'))})
+    excel_name = name + '_' + table_name + '.xlsx'
 
-    res_json = get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission,
-                                                table_name, view_name)
-
-    if is_archive:
-        archive_rows = res_json.get('rows', [])
-        archive_metadata = res_json.get('metadata')
-        response_rows = convert_db_rows(archive_metadata, archive_rows)
-    else:
-        response_rows = res_json.get('rows', [])
-
-    if response_rows and ('rows' in response_rows[0] or 'subgroups' in response_rows[0]):
-        first_col_name = head_list[0][0]
-        result_rows, grouped_row_num_map = parse_grouped_rows(response_rows, first_col_name, summary_col_info)
-    else:
-        result_rows, grouped_row_num_map = response_rows, {}
-
-    data_list = []
-    for row_from_server in result_rows:
-        row = []
-        for col in cols_without_hidden:
-            cell_data = row_from_server.get(col['name'], '')
-            row.append(cell_data)
-        data_list.append(row)
-
-    excel_name = name + '_' + table_name + ('_' + view_name if view_name else '') + '.xlsx'
+    if view_id:
+        target_view = {}
+        for view in views:
+            if view.get('_id', '') == view_id:
+                target_view = view
+                break
+        if not target_view:
+            dtable_io_logger.error('View %s not found.' % view_id)
+            return
+        view_name = target_view.get('name')
+        excel_name = name + '_' + table_name + ('_' + view_name if view_name else '') + '.xlsx'
+        views = [target_view]
 
     try:
-        wb = write_xls_with_type(table_name + ('_' + view_name if view_name else ''), head_list, data_list,
-                                 grouped_row_num_map, email2nickname)
+        wb = openpyxl.Workbook()
+        # remove default sheet
+        ws = wb.active
+        wb.remove_sheet(ws)
     except Exception as e:
-        dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
+        dtable_io_logger.error(e)
         return
+
+    for target_view in views:
+        view_name = target_view.get('name', '')
+        view_type = target_view.get('type', '')
+        if view_type == 'archive':
+            is_archive = True
+        else:
+            is_archive = False
+        cols = target_table.get('columns', [])
+        hidden_cols_key = target_view.get('hidden_columns', [])
+        summary_configs = target_table.get('summary_configs', {})
+        cols_without_hidden = []
+        summary_col_info = {}
+        head_list = []
+        for col in cols:
+            if col.get('key', '') not in hidden_cols_key:
+                cols_without_hidden.append(col)
+                head_list.append((col.get('name', ''), col.get('type', ''), col.get('data', '')))
+            if summary_configs.get(col.get('key')):
+                summary_col_info.update({col.get('name'): summary_configs.get(col.get('key'))})
+
+        res_json = get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission, table_name, view_name)
+
+        if is_archive:
+            archive_rows = res_json.get('rows', [])
+            archive_metadata = res_json.get('metadata')
+            response_rows = convert_db_rows(archive_metadata, archive_rows)
+        else:
+            response_rows = res_json.get('rows', [])
+
+        if response_rows and ('rows' in response_rows[0] or 'subgroups' in response_rows[0]):
+            first_col_name = head_list[0][0]
+            result_rows, grouped_row_num_map = parse_grouped_rows(response_rows, first_col_name, summary_col_info)
+        else:
+            result_rows, grouped_row_num_map = response_rows, {}
+
+        data_list = []
+        for row_from_server in result_rows:
+            row = []
+            for col in cols_without_hidden:
+                cell_data = row_from_server.get(col['name'], '')
+                row.append(cell_data)
+            data_list.append(row)
+
+        try:
+            write_xls_with_type(wb, table_name + ('_' + view_name if view_name else ''), head_list, data_list, grouped_row_num_map, email2nickname)
+        except Exception as e:
+            dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
+            return
     target_path = os.path.join(target_dir, excel_name)
     wb.save(target_path)

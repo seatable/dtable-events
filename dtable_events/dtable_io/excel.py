@@ -1008,27 +1008,22 @@ def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unkn
             c.value = cell_data2str(row[col_num])
 
 
-def write_xls_with_type(sheet_name, head, data_list, grouped_row_num_map, email2nickname):
+def write_xls_with_type(wb, sheet_name, head, data_list, grouped_row_num_map, email2nickname):
     """ write listed data into excel
         head is a list of tuples,
         e.g. head = [(col_name, col_type, col_date), (...), ...]
     """
     from dtable_events.dtable_io import dtable_io_logger
     try:
-        wb = openpyxl.Workbook()
-        ws = wb.active
+        ws = wb.create_sheet(check_and_replace_sheet_name(sheet_name))
     except Exception as e:
         dtable_io_logger.error(e)
         return None
 
-    ws.title = check_and_replace_sheet_name(sheet_name)
-
     row_num = 0
-
-    # write table head
     column_error_log_exists = False
     for col_num in range(len(head)):
-        c = ws.cell(row = row_num + 1, column = col_num + 1)
+        c = ws.cell(row=row_num + 1, column=col_num + 1)
         try:
             c.value = head[col_num][0]
         except Exception as e:
