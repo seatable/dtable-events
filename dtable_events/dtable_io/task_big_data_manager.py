@@ -6,7 +6,7 @@ class TaskBigDataManager(object):
 
     def __init__(self):
         self.tasks_map = {}
-        self.tasks_result_map = {}
+        self.tasks_status_map = {}
         self.tasks_queue = queue.Queue(10)
         self.conf = None
         self.config = None
@@ -29,14 +29,16 @@ class TaskBigDataManager(object):
     def is_valid_task_id(self, task_id):
         return task_id in self.tasks_map.keys()
 
+    def is_valid_task_id_for_status(self, task_id):
+        return task_id in self.tasks_status_map.keys()
+
     def query_status(self, task_id):
-        task = self.tasks_map[task_id]
-        if task == 'success':
-            task_result = self.tasks_result_map.get(task_id)
-            self.tasks_map.pop(task_id, None)
-            self.tasks_result_map.pop(task_id, None)
-            return True, task_result
-        return False, None
+        task_status_result = self.tasks_status_map.get(task_id)
+        if task_status_result == 'done':
+            self.tasks_status_map.pop(task_id)
+            return True
+
+        return False
 
     def threads_is_alive(self):
         info = {}
@@ -63,9 +65,8 @@ class TaskBigDataManager(object):
                 start_time = time.time()
 
                 # run
-                result = task[0](*task[1])
+                task[0](*task[1])
                 self.tasks_map[task_id] = 'success'
-                self.tasks_result_map[task_id] = result
 
                 finish_time = time.time()
                 dtable_big_data_logger.info(
@@ -81,7 +82,7 @@ class TaskBigDataManager(object):
         from dtable_events.dtable_io import import_big_excel
         task_id = str(int(time.time()*1000))
         task = (import_big_excel,
-                (username, dtable_uuid, table_name, file_name, start_row, request_entity, data_binary, self.config, task_id, self.tasks_map))
+                (username, dtable_uuid, table_name, file_name, start_row, request_entity, data_binary, self.config, task_id, self.tasks_status_map))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         return task_id
@@ -96,7 +97,6 @@ class TaskBigDataManager(object):
             t.start()
 
     def cancel_task(self, task_id):
-        self.tasks_map.pop(task_id, None)
-
+        self.tasks_status_map[task_id] = 'cancelled'
 
 big_data_task_manager = TaskBigDataManager()

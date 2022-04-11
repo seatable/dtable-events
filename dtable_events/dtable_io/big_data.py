@@ -130,7 +130,7 @@ def import_excel_to_db(
         data_binary,
         db_session,
         task_id,
-        tasks_map,
+        tasks_status_map,
 
 ):
     from seatable_api import Base
@@ -179,14 +179,14 @@ def import_excel_to_db(
             detail['err_msg'] = 'Column %s does not match in excel' % column_name
             status = 'terminated'
             record_end_point(db_session, task_id, status, detail)
-            return status, detail, task_type
+            return
 
         db_handler = DBHandler(base, table_name)
     except Exception as err:
         detail['err_msg'] = str(err)
         status = 'terminated'
         record_end_point(db_session, task_id, status, detail)
-        return status, detail, task_type
+        return
 
     total_count = 0
     insert_count = 0
@@ -196,14 +196,14 @@ def import_excel_to_db(
         detail['err_msg'] = 'Number of rows exceeds 100,000 limit'
         status = 'terminated'
         record_end_point(db_session, task_id, status, detail)
-        return status, detail, task_type
+        return
 
     status = 'success'
     for index, d in df.iterrows():
         try:
             slice.append(d.to_dict())
             if total_count + 1 == total_rows or len(slice) == entity:
-                if not tasks_map.get(task_id):
+                if tasks_status_map.get(task_id) == 'cancelled':
                     status = 'cancelled'
                     break
                 resp_content, err = db_handler.insert_row(slice)
@@ -221,5 +221,5 @@ def import_excel_to_db(
 
     detail['end_row_num'] = insert_count + int(start_row)
     record_end_point(db_session, task_id, status, detail)
-    return status, detail, task_type
-
+    tasks_status_map[task_id] = 'done'
+    return
