@@ -213,6 +213,7 @@ def import_excel_to_db(
                     break
                 insert_count += len(slice)
                 slice = []
+                time.sleep(0.5)
             total_count += 1
         except Exception as err:
             detail['err_msg'] = str(err)
