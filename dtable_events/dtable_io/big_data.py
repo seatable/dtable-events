@@ -90,6 +90,17 @@ def record_start_point(db_session, task_id, dtable_uuid, status, type):
     })
     db_session.commit()
 
+def record_running_point(db_session, task_id, status):
+    sql = '''
+          UPDATE big_data_task_log SET status=:status WHERE task_id=:task_id;
+        '''
+
+    db_session.execute(sql, {
+        'task_id': task_id,
+        'status': status,
+    })
+    db_session.commit()
+
 def record_end_point(db_session, task_id, status, detail):
     sql = '''
       UPDATE big_data_task_log SET finished_at=:finished_at, status=:status, detail=:detail WHERE task_id=:task_id;
@@ -118,6 +129,11 @@ def match_columns(authed_base, table_name, target_columns):
 
 
 
+def handle_status_and_tmp_file(status_map, task_id, file_path):
+    if status_map.get(task_id):
+        status_map[task_id] = 'done'
+    os.remove(file_path)
+
 def import_excel_to_db(
         username,
         dtable_uuid,
@@ -134,7 +150,6 @@ def import_excel_to_db(
     from seatable_api import Base
     import time
     import numpy as np
-
     task_type = 'big_excel_import_task'
     try:
         entity = int(request_entity)
@@ -152,8 +167,7 @@ def import_excel_to_db(
         'entity_size':entity,
         'file_name': file_name,
     }
-
-    record_start_point(db_session, task_id, dtable_uuid, 'running', 'excel-import')
+    record_start_point(db_session, task_id, dtable_uuid, 'initializing', 'excel-import')
     df = pd.read_excel(file_path)
     df.replace(np.nan, '', regex=True, inplace=True)
     if start_row:
@@ -173,6 +187,7 @@ def import_excel_to_db(
             detail['err_msg'] = 'Column %s does not match in excel' % column_name
             status = 'terminated'
             record_end_point(db_session, task_id, status, detail)
+            handle_status_and_tmp_file(tasks_status_map, task_id, file_path)
             return
 
         db_handler = DBHandler(base, table_name)
@@ -180,6 +195,7 @@ def import_excel_to_db(
         detail['err_msg'] = str(err)
         status = 'terminated'
         record_end_point(db_session, task_id, status, detail)
+        handle_status_and_tmp_file(tasks_status_map, task_id, file_path)
         return
 
     total_count = 0
@@ -187,12 +203,14 @@ def import_excel_to_db(
     slice = []
     total_rows = df.shape[0]
     if total_rows > 100000:
-        detail['err_msg'] = 'Number of rows exceeds 100,000 limit'
+        detail['err_msg'] = 'Number of rows (%s) exceeds 100,000 limit' % total_rows
         status = 'terminated'
         record_end_point(db_session, task_id, status, detail)
+        handle_status_and_tmp_file(tasks_status_map, task_id, file_path)
         return
 
     status = 'success'
+    record_running_point(db_session, task_id, 'running')
     for index, d in df.iterrows():
         try:
             slice.append(d.to_dict())
@@ -216,6 +234,5 @@ def import_excel_to_db(
 
     detail['end_row_num'] = insert_count + int(start_row)
     record_end_point(db_session, task_id, status, detail)
-    tasks_status_map[task_id] = 'done'
-    os.remove(file_path)
+    handle_status_and_tmp_file(tasks_status_map, task_id, file_path)
     return
