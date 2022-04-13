@@ -568,7 +568,8 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
         if summary_configs.get(col.get('key')):
             summary_col_info.update({col.get('name'): summary_configs.get(col.get('key'))})
 
-    res_json = get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission, table_name, view_name)
+    res_json = get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission,
+                                                table_name, view_name)
 
     if is_archive:
         archive_rows = res_json.get('rows', [])
@@ -594,7 +595,8 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
     excel_name = name + '_' + table_name + ('_' + view_name if view_name else '') + '.xlsx'
 
     try:
-        wb = write_xls_with_type(table_name + ('_' + view_name if view_name else ''), head_list, data_list, grouped_row_num_map, email2nickname)
+        wb = write_xls_with_type(table_name + ('_' + view_name if view_name else ''), head_list, data_list,
+                                 grouped_row_num_map, email2nickname)
     except Exception as e:
         dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
         return
