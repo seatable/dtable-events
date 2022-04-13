@@ -702,3 +702,31 @@ def convert_view_to_excel():
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
+
+
+@app.route('/convert-table-to-excel', methods=['GET'])
+def convert_table_to_excel():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    if task_manager.tasks_queue.full():
+        from dtable_events.dtable_io import dtable_io_logger
+        dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
+                                 % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
+                                    task_manager.threads_is_alive()))
+        return make_response(('dtable io server busy.', 400))
+
+    dtable_uuid = request.args.get('dtable_uuid')
+    table_id = request.args.get('table_id')
+    username = request.args.get('username')
+    permission = request.args.get('permission')
+    name = request.args.get('name')
+
+    try:
+        task_id = task_manager.add_convert_table_to_execl_task(dtable_uuid, table_id, username, permission, name)
+    except Exception as e:
+        logger.error(e)
+        return make_response((e, 500))
+
+    return make_response(({'task_id': task_id}, 200))

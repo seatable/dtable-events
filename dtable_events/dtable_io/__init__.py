@@ -524,7 +524,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
     email2nickname = {nickname['email']: nickname['name'] for nickname in nicknames}
 
     try:
-        metadata = get_metadata_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission)
+        metadata = get_metadata_from_dtable_server(dtable_uuid, username, permission)
     except Exception as e:
         dtable_io_logger.error('get metadata. ERROR: {}'.format(e))
         return
@@ -568,8 +568,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
         if summary_configs.get(col.get('key')):
             summary_col_info.update({col.get('name'): summary_configs.get(col.get('key'))})
 
-    res_json = get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission,
-                                                table_name, view_name)
+    res_json = get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission, table_name, view_name)
 
     if is_archive:
         archive_rows = res_json.get('rows', [])
@@ -595,8 +594,66 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
     excel_name = name + '_' + table_name + ('_' + view_name if view_name else '') + '.xlsx'
 
     try:
-        wb = write_xls_with_type(table_name + ('_' + view_name if view_name else ''), head_list, data_list,
-                                 grouped_row_num_map, email2nickname)
+        wb = write_xls_with_type(table_name + ('_' + view_name if view_name else ''), head_list, data_list, grouped_row_num_map, email2nickname)
+    except Exception as e:
+        dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
+        return
+    target_path = os.path.join(target_dir, excel_name)
+    wb.save(target_path)
+
+
+def convert_table_to_execl(dtable_uuid, table_id, username, permission, name):
+    from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_rows_from_dtable_server, \
+        convert_db_rows
+    from dtable_events.dtable_io.excel import parse_grouped_rows, write_xls_with_type
+    from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
+
+    target_dir = '/tmp/dtable-io/export-table-to-excel/' + dtable_uuid
+    if not os.path.isdir(target_dir):
+        os.makedirs(target_dir)
+
+    try:
+        nicknames = get_related_nicknames_from_dtable(dtable_uuid, username, permission)
+    except Exception as e:
+        dtable_io_logger.error('get nicknames. ERROR: {}'.format(e))
+        return
+    email2nickname = {nickname['email']: nickname['name'] for nickname in nicknames}
+
+    try:
+        metadata = get_metadata_from_dtable_server(dtable_uuid, username, permission)
+    except Exception as e:
+        dtable_io_logger.error('get metadata. ERROR: {}'.format(e))
+        return
+
+    target_table = {}
+    for table in metadata.get('tables', []):
+        if table.get('_id', '') == table_id:
+            target_table = table
+            break
+
+    if not target_table:
+        dtable_io_logger.error('Table %s not found.' % table_id)
+        return
+
+    table_name = target_table.get('name', '')
+    cols = target_table.get('columns', [])
+    head_list = []
+    for col in cols:
+        head_list.append((col.get('name', ''), col.get('type', ''), col.get('data', '')))
+
+    result_rows = get_rows_from_dtable_server(username, dtable_uuid, table_name)
+
+    data_list = []
+    for row_from_server in result_rows:
+        row = []
+        for col in cols:
+            cell_data = row_from_server.get(col['name'], '')
+            row.append(cell_data)
+        data_list.append(row)
+
+    excel_name = name + '_' + table_name + '.xlsx'
+    try:
+        wb = write_xls_with_type(table_name, head_list, data_list, {}, email2nickname)
     except Exception as e:
         dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
         return
