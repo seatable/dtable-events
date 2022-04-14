@@ -1,6 +1,6 @@
 import json
+import hmac
 import logging
-from hashlib import sha1
 
 from sqlalchemy import Column, Integer, String, DateTime, Text, text
 from sqlalchemy.dialects.mysql import INTEGER, TINYINT
@@ -50,7 +50,7 @@ class Webhooks(Base):
             return {'event': 'update', 'data': event.get('data')}
         return {}
 
-    def gen_request_headers(self):
+    def gen_request_headers(self, request_body):
         """
         must return dict
         """
@@ -60,7 +60,11 @@ class Webhooks(Base):
         secret = hook_settings.get('secret')
         if not secret:
             return {}
-        return {'X-SeaTable-Signature': sha1(secret.encode('utf-8')).hexdigest()}
+
+        msg = json.dumps(request_body)
+        signature = 'sha256=' + hmac.new(
+            secret.encode('utf8'), msg.encode('utf8'), digestmod='sha256').hexdigest()
+        return {'X-SeaTable-Signature': signature}
 
 
 class WebhookJobs(Base):

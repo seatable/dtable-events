@@ -50,8 +50,8 @@ class Webhooker(object):
                         dtable_uuid = data.get('dtable_uuid')
                         hooks = session.query(Webhooks).filter(Webhooks.dtable_uuid == dtable_uuid).all()
                         for hook in hooks:
-                            request_headers = hook.gen_request_headers()
                             request_body = hook.gen_request_body(event)
+                            request_headers = hook.gen_request_headers(request_body)
                             job = {'webhook_id': hook.id, 'created_at': datetime.now(), 'status': PENDING,
                                    'url': hook.url, 'request_headers': request_headers, 'request_body': request_body}
                             self.job_queue.put(job)
