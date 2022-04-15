@@ -172,6 +172,16 @@ def import_excel_to_db(
     df.replace(np.nan, '', regex=True, inplace=True)
     if start_row:
         df = df.iloc[int(start_row):, :]
+
+    total_rows = df.shape[0]
+    if total_rows > 100000:
+        detail['err_msg'] = 'Number of rows (%s) exceeds 100,000 limit' % total_rows
+        status = 'terminated'
+        record_end_point(db_session, task_id, status, detail)
+        handle_status_and_tmp_file(tasks_status_map, task_id, file_path)
+        return
+
+
     try:
         api_token = jwt.encode({
             'username': username,
@@ -201,13 +211,7 @@ def import_excel_to_db(
     total_count = 0
     insert_count = 0
     slice = []
-    total_rows = df.shape[0]
-    if total_rows > 100000:
-        detail['err_msg'] = 'Number of rows (%s) exceeds 100,000 limit' % total_rows
-        status = 'terminated'
-        record_end_point(db_session, task_id, status, detail)
-        handle_status_and_tmp_file(tasks_status_map, task_id, file_path)
-        return
+
 
     status = 'success'
     record_running_point(db_session, task_id, 'running')
