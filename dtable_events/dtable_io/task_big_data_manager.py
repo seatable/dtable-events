@@ -78,11 +78,11 @@ class TaskBigDataManager(object):
                 self.tasks_map.pop(task_id, None)
                 self.current_task_info = None
 
-    def add_import_big_excel_task(self, username, dtable_uuid, table_name, file_name, start_row, request_entity, file_path):
+    def add_import_big_excel_task(self, username, dtable_uuid, table_name, file_name, file_path):
         from dtable_events.dtable_io import import_big_excel
         task_id = str(int(time.time()*1000))
         task = (import_big_excel,
-                (username, dtable_uuid, table_name, file_name, start_row, request_entity, file_path, self.config, task_id, self.tasks_status_map))
+                (username, dtable_uuid, table_name, file_name, file_path, self.config, task_id, self.tasks_status_map))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         return task_id

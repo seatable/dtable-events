@@ -76,7 +76,7 @@ class DBHandler(object):
         return resp.json(), False
 
 
-def record_start_point(db_session, task_id, dtable_uuid, status, type):
+def record_start_point(db_session, task_id, dtable_uuid, type):
     sql = '''
         INSERT INTO big_data_task_log (task_id, dtable_uuid, started_at, status, type) VALUES 
         (:task_id, :dtable_uuid, :started_at, :status, :type)
@@ -85,19 +85,19 @@ def record_start_point(db_session, task_id, dtable_uuid, status, type):
         'task_id': task_id,
         'dtable_uuid': dtable_uuid,
         'started_at': datetime.datetime.now(),
-        'status': status,
+        'status': "initializing",
         'type': type,
     })
     db_session.commit()
 
-def record_running_point(db_session, task_id, status):
+def record_running_point(db_session, task_id):
     sql = '''
           UPDATE big_data_task_log SET status=:status WHERE task_id=:task_id;
         '''
 
     db_session.execute(sql, {
         'task_id': task_id,
-        'status': status,
+        'status': "running",
     })
     db_session.commit()
 
@@ -139,8 +139,6 @@ def import_excel_to_db(
         dtable_uuid,
         table_name,
         file_name,
-        start_row,
-        request_entity,
         file_path,
         db_session,
         task_id,
@@ -151,36 +149,29 @@ def import_excel_to_db(
     import time
     import numpy as np
     task_type = 'big_excel_import_task'
-    try:
-        entity = int(request_entity)
-        start_row = int(start_row)
-    except:
-        entity = 500
-        start_row = 0
-
-
 
     detail = {
         'err_msg': None,
-        'start_row_num': start_row,
-        'end_row_num': 0,
-        'entity_size':entity,
+        'rows_imported': 0,
         'file_name': file_name,
     }
-    record_start_point(db_session, task_id, dtable_uuid, 'initializing', 'excel-import')
-    df = pd.read_excel(file_path)
-    df.replace(np.nan, '', regex=True, inplace=True)
-    if start_row:
-        df = df.iloc[int(start_row):, :]
-
-    total_rows = df.shape[0]
-    if total_rows > 100000:
-        detail['err_msg'] = 'Number of rows (%s) exceeds 100,000 limit' % total_rows
+    record_start_point(db_session, task_id, dtable_uuid, 'excel-import')
+    try:
+        df = pd.read_excel(file_path)
+        df.replace(np.nan, '', regex=True, inplace=True)
+        total_rows = df.shape[0]
+        if total_rows > 100000:
+            detail['err_msg'] = 'Number of rows (%s) exceeds 100,000 limit' % total_rows
+            status = 'terminated'
+            record_end_point(db_session, task_id, status, detail)
+            handle_status_and_tmp_file(tasks_status_map, task_id, file_path)
+            return
+    except Exception as err:
+        detail['err_msg'] = "file reading error: %s" % str(err)
         status = 'terminated'
         record_end_point(db_session, task_id, status, detail)
         handle_status_and_tmp_file(tasks_status_map, task_id, file_path)
         return
-
 
     try:
         api_token = jwt.encode({
@@ -214,11 +205,11 @@ def import_excel_to_db(
 
 
     status = 'success'
-    record_running_point(db_session, task_id, 'running')
+    record_running_point(db_session, task_id)
     for index, d in df.iterrows():
         try:
             slice.append(d.to_dict())
-            if total_count + 1 == total_rows or len(slice) == entity:
+            if total_count + 1 == total_rows or len(slice) == 100:
                 if tasks_status_map.get(task_id) == 'cancelled':
                     status = 'cancelled'
                     break
@@ -229,14 +220,13 @@ def import_excel_to_db(
                     break
                 insert_count += len(slice)
                 slice = []
-                time.sleep(0.5)
             total_count += 1
         except Exception as err:
             detail['err_msg'] = str(err)
             status = 'terminated'
             break
 
-    detail['end_row_num'] = insert_count + int(start_row)
+    detail['rows_imported'] = insert_count
     record_end_point(db_session, task_id, status, detail)
     handle_status_and_tmp_file(tasks_status_map, task_id, file_path)
     return
