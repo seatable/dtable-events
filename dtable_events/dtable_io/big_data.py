@@ -155,7 +155,6 @@ def import_excel_to_db(
         'rows_imported': 0,
         'file_name': file_name,
     }
-    record_start_point(db_session, task_id, dtable_uuid, 'excel-import')
     try:
         df = pd.read_excel(file_path)
         df.replace(np.nan, '', regex=True, inplace=True)
