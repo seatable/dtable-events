@@ -127,18 +127,10 @@ def match_columns(authed_base, table_name, target_columns):
 
     return True, None
 
-
-
-def handle_status_and_tmp_file(status_map, task_id, file_path):
-    if status_map.get(task_id):
-        status_map[task_id] = 'done'
-    os.remove(file_path)
-
 def import_excel_to_db(
         username,
         dtable_uuid,
         table_name,
-        file_name,
         file_path,
         db_session,
         task_id,
@@ -148,28 +140,26 @@ def import_excel_to_db(
     from seatable_api import Base
     import time
     import numpy as np
-    task_type = 'big_excel_import_task'
 
-    detail = {
-        'err_msg': None,
+    tasks_status_map[task_id] = {
+        'status': 'initializing',
+        'err_msg': '',
         'rows_imported': 0,
-        'file_name': file_name,
+        'total_rows': 0,
     }
     try:
         df = pd.read_excel(file_path)
         df.replace(np.nan, '', regex=True, inplace=True)
         total_rows = df.shape[0]
         if total_rows > 100000:
-            detail['err_msg'] = 'Number of rows (%s) exceeds 100,000 limit' % total_rows
-            status = 'terminated'
-            record_end_point(db_session, task_id, status, detail)
-            handle_status_and_tmp_file(tasks_status_map, task_id, file_path)
+            tasks_status_map[task_id]['err_msg'] = 'Number of rows (%s) exceeds 100,000 limit' % total_rows
+            tasks_status_map[task_id]['status'] = 'terminated'
+            os.remove(file_path)
             return
     except Exception as err:
-        detail['err_msg'] = "file reading error: %s" % str(err)
-        status = 'terminated'
-        record_end_point(db_session, task_id, status, detail)
-        handle_status_and_tmp_file(tasks_status_map, task_id, file_path)
+        tasks_status_map[task_id]['err_msg'] = "file reading error: %s" % str(err)
+        tasks_status_map[task_id]['status'] = 'terminated'
+        os.remove(file_path)
         return
 
     try:
@@ -184,18 +174,16 @@ def import_excel_to_db(
         base.auth()
         column_matched, column_name = match_columns(base, table_name, excel_columns)
         if not column_matched:
-            detail['err_msg'] = 'Column %s does not match in excel' % column_name
-            status = 'terminated'
-            record_end_point(db_session, task_id, status, detail)
-            handle_status_and_tmp_file(tasks_status_map, task_id, file_path)
+            tasks_status_map[task_id]['err_msg'] = 'Column %s does not match in excel' % column_name
+            tasks_status_map[task_id]['status'] = 'terminated'
+            os.remove(file_path)
             return
 
         db_handler = DBHandler(base, table_name)
     except Exception as err:
-        detail['err_msg'] = str(err)
-        status = 'terminated'
-        record_end_point(db_session, task_id, status, detail)
-        handle_status_and_tmp_file(tasks_status_map, task_id, file_path)
+        tasks_status_map[task_id]['err_msg'] = str(err)
+        tasks_status_map[task_id]['status'] = 'terminated'
+        os.remove(file_path)
         return
 
     total_count = 0
@@ -205,27 +193,30 @@ def import_excel_to_db(
 
     status = 'success'
     record_running_point(db_session, task_id)
+    tasks_status_map[task_id]['status'] = 'running'
+    tasks_status_map[task_id]['total_rows'] = total_rows
     for index, d in df.iterrows():
         try:
             slice.append(d.to_dict())
             if total_count + 1 == total_rows or len(slice) == 100:
-                if tasks_status_map.get(task_id) == 'cancelled':
-                    status = 'cancelled'
+                if tasks_status_map.get(task_id, {}).get('status') == 'cancelled':
                     break
+
+                tasks_status_map[task_id]['rows_imported'] = insert_count
                 resp_content, err = db_handler.insert_row(slice)
                 if err:
                     status = 'terminated'
-                    detail['err_msg'] = str(resp_content)
+                    tasks_status_map[task_id]['err_msg'] = 'row inserted error: %s' % str(err)
                     break
                 insert_count += len(slice)
                 slice = []
             total_count += 1
         except Exception as err:
-            detail['err_msg'] = str(err)
             status = 'terminated'
+            tasks_status_map[task_id]['err_msg'] = str(err)
             break
 
-    detail['rows_imported'] = insert_count
-    record_end_point(db_session, task_id, status, detail)
-    handle_status_and_tmp_file(tasks_status_map, task_id, file_path)
+    tasks_status_map[task_id]['status'] = status
+    tasks_status_map[task_id]['rows_imported'] = insert_count
+    os.remove(file_path)
     return

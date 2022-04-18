@@ -34,11 +34,11 @@ class TaskBigDataManager(object):
 
     def query_status(self, task_id):
         task_status_result = self.tasks_status_map.get(task_id)
-        if task_status_result == 'done':
+        if task_status_result.get('status') in ('success', 'terminated'):
             self.tasks_status_map.pop(task_id)
-            return True
+            return True, task_status_result
 
-        return False
+        return False, task_status_result
 
     def threads_is_alive(self):
         info = {}
@@ -78,11 +78,11 @@ class TaskBigDataManager(object):
                 self.tasks_map.pop(task_id, None)
                 self.current_task_info = None
 
-    def add_import_big_excel_task(self, username, dtable_uuid, table_name, file_name, file_path):
+    def add_import_big_excel_task(self, username, dtable_uuid, table_name, file_path):
         from dtable_events.dtable_io import import_big_excel
         task_id = str(int(time.time()*1000))
         task = (import_big_excel,
-                (username, dtable_uuid, table_name, file_name, file_path, self.config, task_id, self.tasks_status_map))
+                (username, dtable_uuid, table_name, file_path, self.config, task_id, self.tasks_status_map))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         return task_id
@@ -97,6 +97,6 @@ class TaskBigDataManager(object):
             t.start()
 
     def cancel_task(self, task_id):
-        self.tasks_status_map[task_id] = 'cancelled'
+        self.tasks_status_map[task_id]['status'] = 'cancelled'
 
 big_data_task_manager = TaskBigDataManager()
