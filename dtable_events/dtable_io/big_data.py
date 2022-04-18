@@ -199,9 +199,6 @@ def import_excel_to_db(
         try:
             slice.append(d.to_dict())
             if total_count + 1 == total_rows or len(slice) == 100:
-                if tasks_status_map.get(task_id, {}).get('status') == 'cancelled':
-                    break
-
                 tasks_status_map[task_id]['rows_imported'] = insert_count
                 resp_content, err = db_handler.insert_rows(slice)
                 if err:

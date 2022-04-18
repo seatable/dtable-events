@@ -96,7 +96,4 @@ class TaskBigDataManager(object):
             t.setDaemon(True)
             t.start()
 
-    def cancel_task(self, task_id):
-        self.tasks_status_map[task_id]['status'] = 'cancelled'
-
 big_data_task_manager = TaskBigDataManager()
