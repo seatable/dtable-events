@@ -1,5 +1,5 @@
 import jwt
-import pandas as pd
+import openpyxl
 import logging
 import os
 import requests
@@ -139,7 +139,6 @@ def import_excel_to_db(
 ):
     from seatable_api import Base
     import time
-    import numpy as np
 
     tasks_status_map[task_id] = {
         'status': 'initializing',
@@ -148,9 +147,10 @@ def import_excel_to_db(
         'total_rows': 0,
     }
     try:
-        df = pd.read_excel(file_path)
-        df.replace(np.nan, '', regex=True, inplace=True)
-        total_rows = df.shape[0]
+        wb = openpyxl.load_workbook(file_path)
+        sheets = wb.get_sheet_names()
+        ws = wb[sheets[0]]
+        total_rows = ws.max_row and ws.max_row - 1 or 0
         if total_rows > 100000:
             tasks_status_map[task_id]['err_msg'] = 'Number of rows (%s) exceeds 100,000 limit' % total_rows
             tasks_status_map[task_id]['status'] = 'terminated'
@@ -169,7 +169,7 @@ def import_excel_to_db(
             'exp': time.time() + 60 * 10
         }, DTABLE_PRIVATE_KEY, algorithm='HS256')
 
-        excel_columns = df.columns.tolist()
+        excel_columns = [cell.value for cell in ws[1]]
         base = Base(api_token, DTABLE_WEB_SERVICE_URL)
         base.auth()
         column_matched, column_name = match_columns(base, table_name, excel_columns)
@@ -195,9 +195,13 @@ def import_excel_to_db(
     record_running_point(db_session, task_id)
     tasks_status_map[task_id]['status'] = 'running'
     tasks_status_map[task_id]['total_rows'] = total_rows
-    for index, d in df.iterrows():
+
+    index = 0
+    for row in ws.rows:
         try:
-            slice.append(d.to_dict())
+            if index > 0:
+                row_list = [r.value for r in row]
+                slice.append(dict(zip(excel_columns, row_list)))
             if total_count + 1 == total_rows or len(slice) == 100:
                 tasks_status_map[task_id]['rows_imported'] = insert_count
                 resp_content, err = db_handler.insert_rows(slice)
@@ -208,6 +212,7 @@ def import_excel_to_db(
                 insert_count += len(slice)
                 slice = []
             total_count += 1
+            index += 1
         except Exception as err:
             status = 'terminated'
             tasks_status_map[task_id]['err_msg'] = str(err)
