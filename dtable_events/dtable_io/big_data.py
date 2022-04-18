@@ -203,7 +203,7 @@ def import_excel_to_db(
                 resp_content, err = db_handler.insert_rows(slice)
                 if err:
                     status = 'terminated'
-                    tasks_status_map[task_id]['err_msg'] = 'row inserted error: %s' % str(err)
+                    tasks_status_map[task_id]['err_msg'] = 'row inserted error: %s' % str(resp_content)
                     break
                 insert_count += len(slice)
                 slice = []
