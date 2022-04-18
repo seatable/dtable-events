@@ -884,7 +884,8 @@ class LinkRecordsAction(BaseAction):
             filter_item = {
                 "column_key": other_column_key,
                 "filter_predicate": self.COLUMN_FILTER_PREDICATE_MAPPING.get(other_column.get('type', ''), 'is'),
-                "filter_term": parsed_row_value
+                "filter_term": parsed_row_value,
+                "filter_term_modifier":"exact_date"
             }
             filters.append(filter_item)
         return filters and [{"filters": filters, "filter_conjunction": "And"}] or []
