@@ -82,7 +82,7 @@ class TaskBigDataManager(object):
         from dtable_events.dtable_io import import_big_excel
         task_id = str(int(time.time()*1000))
         task = (import_big_excel,
-                (username, dtable_uuid, table_name, file_path, self.config, task_id, self.tasks_status_map))
+                (username, dtable_uuid, table_name, file_path, task_id, self.tasks_status_map))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         return task_id

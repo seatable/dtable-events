@@ -75,46 +75,6 @@ class DBHandler(object):
             return resp.text, True
         return resp.json(), False
 
-
-def record_start_point(db_session, task_id, dtable_uuid, type):
-    sql = '''
-        INSERT INTO big_data_task_log (task_id, dtable_uuid, started_at, status, type) VALUES 
-        (:task_id, :dtable_uuid, :started_at, :status, :type)
-    '''
-    db_session.execute(sql, {
-        'task_id': task_id,
-        'dtable_uuid': dtable_uuid,
-        'started_at': datetime.datetime.now(),
-        'status': "initializing",
-        'type': type,
-    })
-    db_session.commit()
-
-def record_running_point(db_session, task_id):
-    sql = '''
-          UPDATE big_data_task_log SET status=:status WHERE task_id=:task_id;
-        '''
-
-    db_session.execute(sql, {
-        'task_id': task_id,
-        'status': "running",
-    })
-    db_session.commit()
-
-def record_end_point(db_session, task_id, status, detail):
-    sql = '''
-      UPDATE big_data_task_log SET finished_at=:finished_at, status=:status, detail=:detail WHERE task_id=:task_id;
-    '''
-
-    db_session.execute(sql, {
-        'task_id': task_id,
-        'finished_at': datetime.datetime.now(),
-        'status': status,
-        'detail': json.dumps(detail)
-    })
-    db_session.commit()
-
-
 def match_columns(authed_base, table_name, target_columns):
     table_columns = authed_base.list_columns(table_name)
     for col in table_columns:
@@ -132,7 +92,6 @@ def import_excel_to_db(
         dtable_uuid,
         table_name,
         file_path,
-        db_session,
         task_id,
         tasks_status_map,
 
@@ -192,7 +151,6 @@ def import_excel_to_db(
 
 
     status = 'success'
-    record_running_point(db_session, task_id)
     tasks_status_map[task_id]['status'] = 'running'
     tasks_status_map[task_id]['total_rows'] = total_rows
 
@@ -202,16 +160,16 @@ def import_excel_to_db(
             if index > 0:
                 row_list = [r.value for r in row]
                 slice.append(dict(zip(excel_columns, row_list)))
-            if total_count + 1 == total_rows or len(slice) == 100:
-                tasks_status_map[task_id]['rows_imported'] = insert_count
-                resp_content, err = db_handler.insert_rows(slice)
-                if err:
-                    status = 'terminated'
-                    tasks_status_map[task_id]['err_msg'] = 'row inserted error: %s' % str(resp_content)
-                    break
-                insert_count += len(slice)
-                slice = []
-            total_count += 1
+                if total_count + 1 == total_rows or len(slice) == 100:
+                    tasks_status_map[task_id]['rows_imported'] = insert_count
+                    resp_content, err = db_handler.insert_rows(slice)
+                    if err:
+                        status = 'terminated'
+                        tasks_status_map[task_id]['err_msg'] = 'row inserted error: %s' % str(resp_content)
+                        break
+                    insert_count += len(slice)
+                    slice = []
+                total_count += 1
             index += 1
         except Exception as err:
             status = 'terminated'
