@@ -47,7 +47,7 @@ class TaskBigDataManager(object):
         return info
 
     def handle_task(self):
-        from dtable_events.dtable_io import dtable_big_data_logger
+        from dtable_events.dtable_io import dtable_io_logger
 
         while True:
             try:
@@ -55,13 +55,13 @@ class TaskBigDataManager(object):
             except queue.Empty:
                 continue
             except Exception as e:
-                dtable_big_data_logger.error(e)
+                dtable_io_logger.error(e)
                 continue
 
             try:
                 task = self.tasks_map[task_id]
                 self.current_task_info = task_id + ' ' + str(task[0])
-                dtable_big_data_logger.info('Run task: %s' % self.current_task_info)
+                dtable_io_logger.info('Run task: %s' % self.current_task_info)
                 start_time = time.time()
 
                 # run
@@ -69,12 +69,12 @@ class TaskBigDataManager(object):
                 self.tasks_map[task_id] = 'success'
 
                 finish_time = time.time()
-                dtable_big_data_logger.info(
+                dtable_io_logger.info(
                     'Run task success: %s cost %ds \n' % (self.current_task_info, int(finish_time - start_time)))
                 self.current_task_info = None
                 self.tasks_map.pop(task_id, None)
             except Exception as e:
-                dtable_big_data_logger.error('Failed to handle task %s, error: %s \n' % (task_id, e))
+                dtable_io_logger.error('Failed to handle task %s, error: %s \n' % (task_id, e))
                 self.tasks_map.pop(task_id, None)
                 self.current_task_info = None
 

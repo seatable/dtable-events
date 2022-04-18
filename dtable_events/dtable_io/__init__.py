@@ -41,6 +41,7 @@ dtable_message_logger = setup_logger('dtable_events_message.log')
 dtable_data_sync_logger = setup_logger('dtable_events_data_sync.log')
 dtable_plugin_email_logger = setup_logger('dtable_events_plugin_email.log')
 
+
 def clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path):
     # delete tmp files/dirs
     if os.path.exists(tmp_file_path):

@@ -60,7 +60,7 @@ class DBHandler(object):
         self.headers = self.base.headers
         self.dtable_uuid = self.base.dtable_uuid
 
-    def insert_row(self, rows):
+    def insert_rows(self, rows):
         api_url = "%s/api/v1/insert-rows/%s" % (
             self.db_url.rstrip('/'),
             self.dtable_uuid
@@ -203,7 +203,7 @@ def import_excel_to_db(
                     break
 
                 tasks_status_map[task_id]['rows_imported'] = insert_count
-                resp_content, err = db_handler.insert_row(slice)
+                resp_content, err = db_handler.insert_rows(slice)
                 if err:
                     status = 'terminated'
                     tasks_status_map[task_id]['err_msg'] = 'row inserted error: %s' % str(err)
