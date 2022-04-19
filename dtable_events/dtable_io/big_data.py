@@ -106,7 +106,7 @@ def import_excel_to_db(
         'total_rows': 0,
     }
     try:
-        wb = openpyxl.load_workbook(file_path)
+        wb = openpyxl.load_workbook(file_path, read_only=True)
         sheets = wb.get_sheet_names()
         ws = wb[sheets[0]]
         total_rows = ws.max_row and ws.max_row - 1 or 0
