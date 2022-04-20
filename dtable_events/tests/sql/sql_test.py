@@ -1,8 +1,10 @@
 import unittest
-
-from dtable_events.tests.column_reference import TEST_COLUMNS
-from dtable_events.tests.test_reference import TEST_CONDITIONS
-from dtable_events.utils.sql_generator import filter2sql
+import os
+import sys
+sys.path.append(sys.path.append(os.path.join(os.path.dirname(__file__), '../')))
+from sql.column_reference import TEST_COLUMNS
+from sql.test_reference import TEST_CONDITIONS
+from sql.sql_generator import filter2sql
 
 class SqlTest(unittest.TestCase):
 
@@ -23,7 +25,9 @@ class SqlTest(unittest.TestCase):
             expected_sql = conditions.get('expected_sql')
             by_group = conditions.get('by_group')
             sql = self._toSql(filter_conditions, by_group=by_group)
+            print(sql)
             self.assertEqual(sql, expected_sql)
+
 
 if __name__ == '__main__':
     unittest.main()
