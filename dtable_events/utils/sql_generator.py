@@ -893,7 +893,7 @@ def db_query(dtable_uuid, sql):
     params = {
         'sql':sql
     }
-    response = requests.get(api_url, json=params, headers=headers)
+    response = requests.post(api_url, json=params, headers=headers)
     try:
         resp_data = response.json()
         success = resp_data.get('success', False)
