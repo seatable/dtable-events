@@ -29,13 +29,11 @@ class TaskBigDataManager(object):
     def is_valid_task_id(self, task_id):
         return task_id in self.tasks_map.keys()
 
-    def is_valid_task_id_for_status(self, task_id):
-        return task_id in self.tasks_status_map.keys()
-
     def query_status(self, task_id):
-        task_status_result = self.tasks_status_map.get(task_id)
+        task_status_result = self.tasks_status_map.get(task_id, {})
         if task_status_result.get('status') in ('success', 'terminated'):
-            self.tasks_status_map.pop(task_id)
+            self.tasks_map.pop(task_id, None)
+            self.tasks_status_map.pop(task_id, None)
             return True, task_status_result
 
         return False, task_status_result
@@ -72,7 +70,6 @@ class TaskBigDataManager(object):
                 dtable_io_logger.info(
                     'Run task success: %s cost %ds \n' % (self.current_task_info, int(finish_time - start_time)))
                 self.current_task_info = None
-                self.tasks_map.pop(task_id, None)
             except Exception as e:
                 dtable_io_logger.error('Failed to handle task %s, error: %s \n' % (task_id, e))
                 self.tasks_map.pop(task_id, None)
