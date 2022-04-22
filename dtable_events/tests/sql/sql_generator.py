@@ -379,7 +379,6 @@ class DateOperator(Operator):
             try:
                 filter_term = int(filter_term)
             except:
-                logger.debug("filter_term is invalid, please assign an integer value of days to filter_term")
                 return
             days_ago = today - timedelta(days=filter_term)
             return days_ago, None
@@ -388,7 +387,6 @@ class DateOperator(Operator):
             try:
                 filter_term = int(filter_term)
             except:
-                logger.debug("filter_term is invalid, please assign an integer value of days to filter_term")
                 return
             days_after = today + timedelta(days=filter_term)
             return days_after, None
@@ -397,7 +395,6 @@ class DateOperator(Operator):
             try:
                 return datetime.strptime(filter_term, "%Y-%m-%d").date(), None
             except:
-                logger.debug("filter_term is invalid, please assign an date value to filter_term, such as YYYY-MM-DD")
                 return
 
         if filter_term_modifier == FilterTermModifier.THE_PAST_WEEK:
@@ -465,7 +462,6 @@ class DateOperator(Operator):
             try:
                 filter_term = int(filter_term)
             except:
-                logger.debug("filter_term is invalid, please assign an integer value of days to filter_term")
                 return
             end_date = today + timedelta(days=filter_term)
             return today, end_date
@@ -474,7 +470,6 @@ class DateOperator(Operator):
             try:
                 filter_term = int(filter_term)
             except:
-                logger.debug("filter_term is invalid, please assign an integer value of days to filter_term")
                 return
             start_date = today - timedelta(days=filter_term)
             return start_date, today
