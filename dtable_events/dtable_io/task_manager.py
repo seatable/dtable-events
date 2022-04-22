@@ -292,6 +292,16 @@ class TaskManager(object):
 
         return task_id
 
+    def add_sync_email_task(self, context):
+        from dtable_events.dtable_io.sync_email import sync_email
+
+        task_id = str(int(time.time()*1000))
+        task = (sync_email, (context,))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+
+        return task_id
+
     def threads_is_alive(self):
         info = {}
         for t in self.threads:
