@@ -1,16 +1,8 @@
 import time
 import socket
 from dtable_events.dtable_io import dtable_io_logger
-from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.dtable_io.utils import get_emails, str_2_datetime, update_email_thread_ids, upload_attachments, \
     update_emails, update_threads, get_seatable_api
-
-
-DTABLE_SERVER_URL = task_manager.conf['dtable_server_url']
-DTABLE_PRIVATE_KEY = task_manager.conf['dtable_private_key']
-DTABLE_PROXY_SERVER_URL = task_manager.conf['dtable_proxy_server_url']
-ENABLE_DTABLE_SERVER_CLUSTER = task_manager.conf['dtable_proxy_server_url']
-dtable_server_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
 
 
 def sync_email(context):
