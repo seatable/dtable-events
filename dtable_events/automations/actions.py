@@ -17,7 +17,7 @@ from dtable_events.notification_rules.notification_rules_utils import _fill_msg_
     send_notification
 from dtable_events.utils import utc_to_tz, uuid_str_to_36_chars, is_valid_email
 from dtable_events.utils.constants import ColumnTypes
-from dtable_events.utils.sql_generator import filter2sql, db_query
+
 
 logger = logging.getLogger(__name__)
 
@@ -244,23 +244,26 @@ class LockRowAction(BaseAction):
             if trigger_filters:
                 filter_groups.append({'filters': trigger_filters, 'filter_conjunction': filter_conjunction})
 
-        filter_conditions = {
-            'filter_groups': filter_groups,
-            'group_conjunction': 'And',
-            'sorts': [
+        api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+        client_url = api_url.rstrip('/') + '/api/v1/internal/dtables/' + uuid_str_to_36_chars(self.auto_rule.dtable_uuid) + '/filter-rows/'
+        json_data = {
+            'table_id': table_id,
+            'filter_conditions': {
+                'filter_groups':filter_groups,
+                'group_conjunction': 'And',
+                'sorts': [
                     {"column_key": "_mtime", "sort_type": "down"}
-            ],
-            'limit':500
+                ],
+            },
+            'limit': 500
         }
-
         try:
-            sql = filter2sql(self.auto_rule.table_name, self.auto_rule.view_columns, filter_conditions, by_group=True)
-            rows_data = db_query(self.auto_rule.dtable_uuid, sql)
-
+            response = requests.post(client_url, headers=self.auto_rule.headers, json=json_data)
+            rows_data = response.json().get('rows')
             logger.debug('Number of locking dtable row by auto-rules: %s, dtable_uuid: %s, details: %s' % (
                 len(rows_data),
                 self.auto_rule.dtable_uuid,
-                json.dumps(filter_conditions)
+                json.dumps(json_data)
             ))
             return rows_data or []
         except Exception as e:
@@ -903,35 +906,30 @@ class LinkRecordsAction(BaseAction):
                         return col
         return None
 
-    def get_columns(self, table_id):
-        dtable_metadata = self.auto_rule.dtable_metadata
-        for table in dtable_metadata.get('tables', []):
-            if table.get('_id') == table_id:
-                return table.get('columns')
-        return None
-
     def _get_linked_table_rows(self):
         filter_groups = self._format_filter_groups()
         if not filter_groups:
             return []
-        filter_conditions ={
-            'filter_groups': filter_groups,
-            'group_conjunction': 'And',
-            'sorts': [
-                {"column_key": "_mtime", "sort_type": "down"}
-            ],
+        json_data = {
+            'table_id': self.linked_table_id,
+            'filter_conditions': {
+                'filter_groups': filter_groups,
+                'group_conjunction': 'And',
+                'sorts': [
+                    {"column_key": "_mtime", "sort_type": "down"}
+                ],
+            },
             'limit': 500
-
-            }
+        }
+        api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+        client_url = api_url.rstrip('/') + '/api/v1/internal/dtables/' + uuid_str_to_36_chars(self.auto_rule.dtable_uuid) + '/filter-rows/'
         try:
-            other_table_name = self.get_table_name(self.linked_table_id)
-            other_columns = self.get_columns(self.linked_table_id)
-            sql = filter2sql(other_table_name, other_columns, filter_conditions, by_group=True)
-            rows_data = db_query(self.auto_rule.dtable_uuid, sql)
+            response = requests.post(client_url, headers=self.auto_rule.headers, json=json_data)
+            rows_data = response.json().get('rows')
             logger.debug('Number of linking dtable rows by auto-rules: %s, dtable_uuid: %s, details: %s' % (
                 rows_data and len(rows_data) or 0,
                 self.auto_rule.dtable_uuid,
-                json.dumps(rows_data)
+                json.dumps(json_data)
             ))
             return rows_data or []
         except Exception as e:
