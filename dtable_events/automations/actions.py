@@ -1236,6 +1236,8 @@ class AutomationRule:
         self.done_actions = done
 
     def add_task_log(self):
+        if not self.org_id:
+            return
         try:
             set_task_log_sql = """
                 INSERT INTO auto_rules_task_log (trigger_time, success, rule_id, run_condition, dtable_uuid, org_id, owner) VALUES
