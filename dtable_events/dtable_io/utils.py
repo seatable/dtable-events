@@ -615,8 +615,7 @@ def get_rows_from_dtable_server(username, dtable_uuid, table_name):
     ENABLE_DTABLE_SERVER_CLUSTER = task_manager.conf['enable_dtable_server_cluster']
     DTABLE_PROXY_SERVER_URL = task_manager.conf['dtable_proxy_server_url']
     api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
-    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/rows/?' \
-          + 'table_name=' + table_name + '&convert_link_id=true'
+    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/rows/?' + 'table_name=' + table_name + '&convert_link_id=true'
     dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
     headers = {'Authorization': 'Token ' + dtable_server_access_token}
 
