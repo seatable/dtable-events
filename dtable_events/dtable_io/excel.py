@@ -873,6 +873,30 @@ def parse_formula_number(cell_data, src_format):
     return value, number_format
 
 
+def convert_time_to_utc_str(time_str):
+    if 'Z' in time_str:
+        utc_time = datetime.strptime(time_str, '%Y-%m-%dT%H:%M:%S.%fZ')
+    else:
+        utc_time = datetime.strptime(time_str, '%Y-%m-%dT%H:%M:%S.%f+00:00')
+    return utc_to_tz(utc_time, timezone).strftime('%Y-%m-%d %H:%M:%S')
+
+
+def parse_link(col_head, cell_data, email2nickname):
+    if isinstance(cell_data, list):
+        if col_head[2].get('array_type') == ColumnTypes.SINGLE_SELECT:
+            options = col_head[2].get('array_data', {}).get('options')
+            id2name = {op.get('id'): op.get('name') for op in options}
+            return ', '.join([id2name.get(cell.get('display_value')) if cell.get('display_value') else '' for cell in cell_data])
+        elif col_head[2].get('array_type') in (ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER):
+            return ', '.join([email2nickname.get(cell.get('display_value')) if cell.get('display_value') else '' for cell in cell_data])
+        elif col_head[2].get('array_type') in (ColumnTypes.CTIME, ColumnTypes.MTIME):
+            return ', '.join([convert_time_to_utc_str(cell.get('display_value')) if cell.get('display_value') else '' for cell in cell_data])
+        # display_value may be array
+        return ', '.join([cell_data2str(cell.get('display_value')) if cell.get('display_value') else '' for cell in cell_data])
+    else:
+        return str(cell_data)
+
+
 def is_int_str(num):
     return '.' not in str(num)
 
@@ -1004,6 +1028,8 @@ def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unkn
                 and isinstance(head[col_num][2], dict) and head[col_num][2].get('result_type') == 'number':
             c.value, c.number_format = parse_formula_number(
                 row[col_num], head[col_num][2].get('format'))
+        elif head[col_num][1] == ColumnTypes.LINK:
+            c.value = parse_link(head[col_num], row[col_num], email2nickname)
         else:
             c.value = cell_data2str(row[col_num])
 
