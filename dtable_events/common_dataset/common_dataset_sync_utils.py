@@ -501,12 +501,12 @@ def is_equal(v1, v2, column_type):
         elif column_type == ColumnTypes.LONG_TEXT:
             if v1 is not None:
                 if isinstance(v1, dict):
-                    v1 = v1['text']
+                    v1 = v1.get('text', '')
                 else:
                     v1 = str(v1)
             if v2 is not None:
                 if isinstance(v2, dict):
-                    v2 = v2['text']
+                    v2 = v2.get('text', '')
                 else:
                     v2 = str(v2)
             return v1 == v2
