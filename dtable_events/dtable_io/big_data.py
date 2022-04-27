@@ -7,6 +7,7 @@ import datetime
 import json
 
 # DTABLE_WEB_DIR
+from dtable_events.dtable_io.excel import parse_row
 from dtable_events.utils.constants import ColumnTypes
 
 dtable_web_dir = os.environ.get('DTABLE_WEB_DIR', '')
@@ -24,12 +25,6 @@ try:
     import seahub.settings as seahub_settings
     DTABLE_WEB_SERVICE_URL = getattr(seahub_settings, 'DTABLE_WEB_SERVICE_URL')
     DTABLE_PRIVATE_KEY = getattr(seahub_settings, 'DTABLE_PRIVATE_KEY')
-    DTABLE_SERVER_URL = getattr(seahub_settings, 'DTABLE_SERVER_URL')
-    ENABLE_DTABLE_SERVER_CLUSTER = getattr(seahub_settings, 'ENABLE_DTABLE_SERVER_CLUSTER', False)
-    DTABLE_PROXY_SERVER_URL = getattr(seahub_settings, 'DTABLE_PROXY_SERVER_URL', '')
-    FILE_SERVER_ROOT = getattr(seahub_settings, 'FILE_SERVER_ROOT', 'http://127.0.0.1:8082')
-    SEATABLE_FAAS_AUTH_TOKEN = getattr(seahub_settings, 'SEATABLE_FAAS_AUTH_TOKEN')
-    SEATABLE_FAAS_URL = getattr(seahub_settings, 'SEATABLE_FAAS_URL')
 except ImportError as e:
     logger.critical("Can not import dtable_web settings: %s." % e)
     raise RuntimeError("Can not import dtable_web settings: %s" % e)
@@ -83,9 +78,9 @@ def match_columns(authed_base, table_name, target_columns):
             continue
         col_name = col.get('name')
         if col_name not in target_columns:
-            return False, col_name
+            return False, col_name, table_columns
 
-    return True, None
+    return True, None, table_columns
 
 def import_excel_to_db(
         username,
@@ -97,6 +92,7 @@ def import_excel_to_db(
 
 ):
     from seatable_api import Base
+    from dtable_events.dtable_io import dtable_io_logger
     import time
 
     tasks_status_map[task_id] = {
@@ -131,7 +127,7 @@ def import_excel_to_db(
         excel_columns = [cell.value for cell in ws[1]]
         base = Base(api_token, DTABLE_WEB_SERVICE_URL)
         base.auth()
-        column_matched, column_name = match_columns(base, table_name, excel_columns)
+        column_matched, column_name, base_columns = match_columns(base, table_name, excel_columns)
         if not column_matched:
             tasks_status_map[task_id]['err_msg'] = 'Column %s does not match in excel' % column_name
             tasks_status_map[task_id]['status'] = 'terminated'
@@ -154,27 +150,36 @@ def import_excel_to_db(
     tasks_status_map[task_id]['status'] = 'running'
     tasks_status_map[task_id]['total_rows'] = total_rows
 
+    column_name_type_map = {col.get('name'): col.get('type') for col in base_columns}
     index = 0
     for row in ws.rows:
+        err_flag = False
         try:
             if index > 0:
                 row_list = [r.value for r in row]
-                slice.append(dict(zip(excel_columns, row_list)))
+                row_data = dict(zip(excel_columns, row_list))
+                parsed_row_data = {}
+                for col_name, value in row_data.items():
+                    col_type = column_name_type_map.get(col_name)
+                    parsed_row_data[col_name] = parse_row(col_type, value)
+                slice.append(parsed_row_data)
                 if total_count + 1 == total_rows or len(slice) == 100:
                     tasks_status_map[task_id]['rows_imported'] = insert_count
                     resp_content, err = db_handler.insert_rows(slice)
                     if err:
-                        status = 'terminated'
-                        tasks_status_map[task_id]['err_msg'] = 'row inserted error: %s' % str(resp_content)
-                        break
+                        err_flag = True
+                        dtable_io_logger.error('row insterted error: %s' % (resp_content))
                     insert_count += len(slice)
                     slice = []
                 total_count += 1
             index += 1
         except Exception as err:
-            status = 'terminated'
-            tasks_status_map[task_id]['err_msg'] = str(err)
-            break
+            err_flag = True
+            dtable_io_logger.error(str(err))
+
+        if err_flag:
+            continue
+
 
     tasks_status_map[task_id]['status'] = status
     tasks_status_map[task_id]['rows_imported'] = insert_count
