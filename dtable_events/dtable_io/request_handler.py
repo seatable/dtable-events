@@ -451,6 +451,30 @@ def add_wechat_sending_task():
     return make_response(({'task_id': task_id}, 200))
 
 
+@app.route('/add-dingtalk-sending-task', methods=['POST'])
+def add_dingtalk_sending_task():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    if message_task_manager.tasks_queue.full():
+        return make_response(('dtable io server busy.', 400))
+
+    data = request.form
+    if not isinstance(data, dict):
+        return make_response(('Bad request', 400))
+
+    webhook_url = data.get('webhook_url')
+    msg = data.get('msg')
+
+    try:
+        task_id = message_task_manager.add_dingtalk_sending_task(webhook_url, msg)
+    except Exception as e:
+        logger.error(e)
+        return make_response((e, 500))
+
+    return make_response(({'task_id': task_id}, 200))
+
 @app.route('/add-email-sending-task', methods=['POST'])
 def add_email_sending_task():
     is_valid, error = check_auth_token(request)

@@ -43,6 +43,14 @@ class TaskMessageManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    def add_dingtalk_sending_task(self, webhook_url, msg ):
+        from dtable_events.dtable_io import send_dingtalk_msg
+        task_id = str(int(time.time() * 1000))
+        task = (send_dingtalk_msg, (webhook_url, msg))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+        return task_id
+
     def query_status(self, task_id):
         task = self.tasks_map[task_id]
         if task == 'success':

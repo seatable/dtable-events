@@ -330,6 +330,18 @@ def send_wechat_msg(webhook_url, msg, msg_type="text"):
         dtable_message_logger.info('Wechat sending success!')
     return result
 
+def send_dingtalk_msg(webhook_url, msg):
+    msg_format = {"msgtype": "text", "text": {"content": msg}}
+    result = {}
+    try:
+        requests.post(webhook_url, json=msg_format, headers={"Content-Type": "application/json"})
+    except Exception as e:
+        dtable_message_logger.error('Wechat sending failed. ERROR: {}'.format(e))
+        result['err_msg'] = 'Webhook URL invalid'
+    else:
+        dtable_message_logger.info('Wechat sending success!')
+    return result
+
 def send_email_msg(auth_info, send_info, username, config=None, db_session=None):
     import smtplib
     from email.mime.multipart import MIMEMultipart
