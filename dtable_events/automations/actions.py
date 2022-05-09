@@ -197,7 +197,7 @@ class UpdateAction(BaseAction):
         if not self._can_do_action():
             return
         api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
-        row_update_url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/rows/?from=dtable-events'
+        row_update_url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/rows/?from=dtable_events'
         try:
             response = requests.put(row_update_url, headers=self.auto_rule.headers, json=self.update_data)
         except Exception as e:
@@ -245,7 +245,8 @@ class LockRowAction(BaseAction):
                 filter_groups.append({'filters': trigger_filters, 'filter_conjunction': filter_conjunction})
 
         api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
-        client_url = api_url.rstrip('/') + '/api/v1/internal/dtables/' + uuid_str_to_36_chars(self.auto_rule.dtable_uuid) + '/filter-rows/'
+        client_url = api_url.rstrip('/') + '/api/v1/internal/dtables/' + \
+                     uuid_str_to_36_chars(self.auto_rule.dtable_uuid) + '/filter-rows/?from=dtable_events'
         json_data = {
             'table_id': table_id,
             'filter_conditions': {
@@ -292,7 +293,7 @@ class LockRowAction(BaseAction):
             return
 
         api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
-        row_update_url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/lock-rows/?from=dtable-events'
+        row_update_url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/lock-rows/?from=dtable_events'
         try:
             response = requests.put(row_update_url, headers=self.auto_rule.headers, json=self.update_data)
         except Exception as e:
@@ -381,7 +382,7 @@ class AddRowAction(BaseAction):
         if not self._can_do_action():
             return
         api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
-        row_add_url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/rows/?from=dtable-events'
+        row_add_url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/rows/?from=dtable_events'
         try:
             response = requests.post(row_add_url, headers=self.auto_rule.headers, json=self.row_data)
         except Exception as e:
@@ -922,7 +923,8 @@ class LinkRecordsAction(BaseAction):
             'limit': 500
         }
         api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
-        client_url = api_url.rstrip('/') + '/api/v1/internal/dtables/' + uuid_str_to_36_chars(self.auto_rule.dtable_uuid) + '/filter-rows/'
+        client_url = api_url.rstrip('/') + '/api/v1/internal/dtables/' + \
+                     uuid_str_to_36_chars(self.auto_rule.dtable_uuid) + '/filter-rows/?from=dtable_events'
         try:
             response = requests.post(client_url, headers=self.auto_rule.headers, json=json_data)
             rows_data = response.json().get('rows')
@@ -951,7 +953,7 @@ class LinkRecordsAction(BaseAction):
 
     def do_action(self):
         api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
-        rows_link_url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/links/?from=dtable-events'
+        rows_link_url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/links/?from=dtable_events'
         if not self._can_do_action():
             return
         json_data = {
@@ -1050,7 +1052,7 @@ class AutomationRule:
     def dtable_metadata(self):
         if not self._dtable_metadata:
             api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
-            url = api_url.rstrip('/') + '/api/v1/dtables/' + self.dtable_uuid + '/metadata/'
+            url = api_url.rstrip('/') + '/api/v1/dtables/' + self.dtable_uuid + '/metadata/?from=dtable_events'
             response = requests.get(url, headers=self.headers)
             if response.status_code == 404:
                 raise RuleInvalidException('request metadata 404')
@@ -1065,7 +1067,7 @@ class AutomationRule:
         if not self._view_columns:
             table_id, view_id = self.table_id, self.view_id
             api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
-            url = api_url.rstrip('/') + '/api/v1/dtables/' + self.dtable_uuid + '/columns/'
+            url = api_url.rstrip('/') + '/api/v1/dtables/' + self.dtable_uuid + '/columns/?from=dtable_events'
             response = requests.get(url, params={'table_id': table_id, 'view_id': view_id}, headers=self.headers)
             if response.status_code == 404:
                 raise RuleInvalidException('request view columns 404')

@@ -656,7 +656,7 @@ def import_or_sync(import_sync_context):
     # sync table
     ## maybe create table
     if not dst_table_id:
-        url = dtable_server_url.strip('/') + '/api/v1/dtables/%s/tables/' % (str(dst_dtable_uuid),)
+        url = dtable_server_url.strip('/') + '/api/v1/dtables/%s/tables/?from=dtable_events' % (str(dst_dtable_uuid),)
         data = {
             'table_name': dst_table_name,
             'lang': lang,
@@ -809,7 +809,7 @@ def import_or_sync(import_sync_context):
             }
 
     ### append rows
-    url = dtable_server_url.strip('/') + '/api/v1/dtables/%s/batch-append-rows/' % (str(dst_dtable_uuid),)
+    url = dtable_server_url.strip('/') + '/api/v1/dtables/%s/batch-append-rows/?from=dtable_events' % (str(dst_dtable_uuid),)
     for i in range(0, len(to_be_appended_rows), step):
         data = {
             'table_name': dst_table_name,

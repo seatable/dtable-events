@@ -101,7 +101,7 @@ def scan_triggered_notification_rules(event_data, db_session):
 
 def list_users_by_column_name(dtable_uuid, table_id, view_id, row_id, column_name, dtable_server_access_token):
     api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
-    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/rows/' + row_id + '/'
+    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/rows/' + row_id + '/?from=dtable-events'
     headers = {'Authorization': 'Token ' + dtable_server_access_token}
     params = {
         'table_id': table_id,
@@ -124,7 +124,7 @@ def list_users_by_column_name(dtable_uuid, table_id, view_id, row_id, column_nam
 
 def send_notification(dtable_uuid, user_msg_list, dtable_server_access_token):
     api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
-    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/notifications-batch/'
+    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/notifications-batch/?from=dtable-events'
     headers = {'Authorization': 'Token ' + dtable_server_access_token}
     body = {
         'user_messages': user_msg_list,
@@ -145,7 +145,7 @@ def deal_invalid_rule(rule_id, db_session):
 
 def list_rows_near_deadline(dtable_uuid, table_id, view_id, date_column_name, alarm_days, dtable_server_access_token, rule_id=None, db_session=None):
     api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
-    url = api_url.rstrip('/') + '/api/v1/internal/dtables/' + uuid_str_to_36_chars(dtable_uuid) + '/list-rows-near-deadline/'
+    url = api_url.rstrip('/') + '/api/v1/internal/dtables/' + uuid_str_to_36_chars(dtable_uuid) + '/list-rows-near-deadline/?from=dtable-events'
     headers = {'Authorization': 'Token ' + dtable_server_access_token}
     now_date = date.today()
     now_plus_alarm_date = now_date + timedelta(days=int(alarm_days))
@@ -175,7 +175,7 @@ def list_rows_near_deadline(dtable_uuid, table_id, view_id, date_column_name, al
 
 def get_table_view_columns(dtable_uuid, table_id, view_id, dtable_server_access_token):
     api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
-    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/columns/'
+    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/columns/?from=dtable-events'
     headers = {'Authorization': 'Token ' + dtable_server_access_token}
     query_params = {
         'table_id': table_id,
@@ -227,7 +227,7 @@ def get_nickname_by_usernames(usernames, db_session):
 def _get_dtable_metadata(dtable_uuid):
     api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
     access_token = get_dtable_server_token(dtable_uuid)
-    metadata_url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/metadata/'
+    metadata_url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/metadata/?from=dtable-events'
     headers = {'Authorization': 'Token ' + access_token}
     response = requests.get(metadata_url, headers=headers)
     return response.json().get('metadata')
