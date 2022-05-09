@@ -40,12 +40,14 @@ class Operator(object):
         self.filter_predicate = ''
         self.filter_term_modifier = ''
         self.column_type = ''
+        self.column_data = {}
 
         self.init()
 
     def init(self):
         self.column_name = self.column.get('name', '')
         self.column_type = self.column.get('type', '')
+        self.column_data = self.column.get('data', {})
         self.filter_predicate = self.filter_item.get('filter_predicate', '')
         self.filter_term = self.filter_item.get('filter_term', '')
         self.filter_term_modifier = self.filter_item.get('filter_term_modifier', '')
@@ -349,8 +351,8 @@ class DateOperator(Operator):
     ]
 
 
-    def __init__(self, column, filter_items):
-        super(DateOperator, self).__init__(column, filter_items)
+    def __init__(self, column, filter_item):
+        super(DateOperator, self).__init__(column, filter_item)
 
     def _get_end_day_of_month(self, year, month):
         days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
@@ -600,7 +602,81 @@ class CreatorOperator(Operator):
             "column_name": self.column_name,
             "filter_term_str": ', '.join(creator_list)
         })
+    
+class FileOperator(Operator):
+    SUPPORT_FILTER_PREDICATE = [
+        FilterPredicateTypes.EMPTY,
+        FilterPredicateTypes.NOT_EMPTY,
+    ]
+    
+    def __init__(self, column, filter_item):
+        super(FileOperator, self).__init__(column, filter_item)
 
+
+class ArrayOperator(object):
+
+    def __new__(cls, column, filter_item):
+        column_data = column.get('data', {})
+        column_name = column.get('name', '')
+        array_type, array_data = column_data.get('array_type', ''), column_data.get('array_data')
+        linked_column = {
+            'name': column_name,
+            'type': array_type,
+            'data': array_data
+        }
+
+
+        if array_type == FormulaResultType.STRING:
+            new_column = {
+                'name': column_name,
+                'type': ColumnTypes.TEXT,
+            }
+            return TextOperator(new_column, filter_item)
+
+        if array_type == FormulaResultType.BOOL:
+            new_column = {
+                'name': column_name,
+                'type': ColumnTypes.CHECKBOX,
+            }
+            return CheckBoxOperator(new_column, filter_item)
+
+        if array_type == ColumnTypes.SINGLE_SELECT:
+            return MultipleSelectOperator(linked_column, filter_item)
+
+        if array_type in [ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
+            return CreatorOperator(linked_column, filter_item)
+
+        operator = _get_operator_by_type(array_type)
+        return operator(linked_column, filter_item)
+
+class FormularOperator(object):
+    
+    def __new__(cls, column, filter_item):
+        column_data = column.get('data', {})
+        column_name = column.get('name', '')
+        result_type = column_data.get('result_type')
+        
+        if result_type == FormulaResultType.STRING:
+            new_column = {
+                "name": column_name,
+                "type": ColumnTypes.TEXT
+            }
+            return TextOperator(new_column, filter_item)
+
+        if result_type == FormulaResultType.BOOL:
+            return CheckBoxOperator(column, filter_item)
+        
+        if result_type == FormulaResultType.DATE:
+            return DateOperator(column, filter_item)
+
+        if result_type == FormulaResultType.NUMBER:
+            return NumberOperator(column, filter_item)
+
+        if result_type == FormulaResultType.ARRAY:
+            return ArrayOperator(column,filter_item)
+
+        return None
+    
 
 def _filter2sqlslice(operator):
     support_fitler_predicates = operator.SUPPORT_FILTER_PREDICATE
@@ -670,7 +746,8 @@ def _get_operator_by_type(column_type):
         ColumnTypes.TEXT,
         ColumnTypes.URL,
         ColumnTypes.AUTO_NUMBER,
-        ColumnTypes.EMAIL
+        ColumnTypes.EMAIL,
+        ColumnTypes.GEOLOCATION,
     ]:
         return TextOperator
 
@@ -705,6 +782,22 @@ def _get_operator_by_type(column_type):
         ColumnTypes.LAST_MODIFIER,
     ]:
         return CreatorOperator
+    
+    if column_type in [
+        ColumnTypes.FILE,
+        ColumnTypes.IMAGE,
+    ]:
+        return FileOperator
+
+
+    if column_type == ColumnTypes.LINK:
+        return ArrayOperator
+
+    if column_type in [
+        ColumnTypes.FORMULA,
+        ColumnTypes.LINK_FORMULA,
+    ]:
+        return FormularOperator
 
     return None
 
