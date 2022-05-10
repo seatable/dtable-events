@@ -506,6 +506,8 @@ class DateOperator(Operator):
 
     def op_is(self):
         date, _ = self._other_date()
+        if not date:
+            return ""
         next_date = self._format_date(date + timedelta(days=1))
         target_date = self._format_date(date)
         return "%(column_name)s >= '%(target_date)s' and %(column_name)s < '%(next_date)s'" % ({
@@ -561,7 +563,6 @@ class DateOperator(Operator):
             "end_date": self._format_date(end_date)
         })
 
-
 class CheckBoxOperator(Operator):
     SUPPORT_FILTER_PREDICATE = [
         FilterPredicateTypes.IS,
@@ -571,6 +572,60 @@ class CheckBoxOperator(Operator):
         return "%(column_name)s = %(value)s" % ({
             "column_name": self.column_name,
             "value": self.filter_term
+        })
+
+class CollaboratorOperator(Operator):
+    SUPPORT_FILTER_PREDICATE = [
+        FilterPredicateTypes.HAS_ALL_OF,
+        FilterPredicateTypes.IS_EXACTLY,
+        FilterPredicateTypes.EMPTY,
+        FilterPredicateTypes.NOT_EMPTY,
+        FilterPredicateTypes.HAS_ANY_OF,
+        FilterPredicateTypes.HAS_NONE_OF,
+    ]
+
+    def op_has_any_of(self):
+        select_collaborators = self.filter_term
+        if not isinstance(select_collaborators, list):
+            select_collaborators = [select_collaborators, ]
+        collaborator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
+        filter_term_str = ", ".join(collaborator_list)
+        return "%(column_name)s in (%(filter_term_str)s)" % ({
+            "column_name": self.column_name,
+            "filter_term_str": filter_term_str
+        })
+
+    def op_has_all_of(self):
+        select_collaborators = self.filter_term
+        if not isinstance(select_collaborators, list):
+            select_collaborators = [select_collaborators, ]
+        collaborator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
+        filter_term_str = ", ".join(collaborator_list)
+        return "%(column_name)s has all of (%(filter_term_str)s)" % ({
+            "column_name": self.column_name,
+            "filter_term_str": filter_term_str
+        })
+
+    def op_has_none_of(self):
+        select_collaborators = self.filter_term
+        if not isinstance(select_collaborators, list):
+            select_collaborators = [select_collaborators, ]
+        collaborator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
+        filter_term_str = ", ".join(collaborator_list)
+        return "%(column_name)s has one of (%(filter_term_str)s)" % ({
+            "column_name": self.column_name,
+            "filter_term_str": filter_term_str
+        })
+
+    def op_is_exactly(self):
+        select_collaborators = self.filter_term
+        if not isinstance(select_collaborators, list):
+            select_collaborators = [select_collaborators, ]
+        collaborator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
+        filter_term_str = ", ".join(collaborator_list)
+        return "%(column_name)s is exactly (%(filter_term_str)s)" % ({
+            "column_name": self.column_name,
+            "filter_term_str": filter_term_str
         })
 
 
@@ -602,13 +657,13 @@ class CreatorOperator(Operator):
             "column_name": self.column_name,
             "filter_term_str": ', '.join(creator_list)
         })
-    
+
+
 class FileOperator(Operator):
     SUPPORT_FILTER_PREDICATE = [
         FilterPredicateTypes.EMPTY,
         FilterPredicateTypes.NOT_EMPTY,
     ]
-    
     def __init__(self, column, filter_item):
         super(FileOperator, self).__init__(column, filter_item)
 
@@ -644,18 +699,16 @@ class ArrayOperator(object):
             return MultipleSelectOperator(linked_column, filter_item)
 
         if array_type in [ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
-            return CreatorOperator(linked_column, filter_item)
+            return CollaboratorOperator(linked_column, filter_item)
 
         operator = _get_operator_by_type(array_type)
         return operator(linked_column, filter_item)
 
 class FormularOperator(object):
-    
     def __new__(cls, column, filter_item):
         column_data = column.get('data', {})
         column_name = column.get('name', '')
         result_type = column_data.get('result_type')
-        
         if result_type == FormulaResultType.STRING:
             new_column = {
                 "name": column_name,
@@ -665,7 +718,7 @@ class FormularOperator(object):
 
         if result_type == FormulaResultType.BOOL:
             return CheckBoxOperator(column, filter_item)
-        
+
         if result_type == FormulaResultType.DATE:
             return DateOperator(column, filter_item)
 
@@ -676,7 +729,7 @@ class FormularOperator(object):
             return ArrayOperator(column,filter_item)
 
         return None
-    
+
 
 def _filter2sqlslice(operator):
     support_fitler_predicates = operator.SUPPORT_FILTER_PREDICATE
@@ -771,18 +824,18 @@ def _get_operator_by_type(column_type):
     if column_type == ColumnTypes.SINGLE_SELECT:
         return SingleSelectOperator
 
-    if column_type in [
-        ColumnTypes.MULTIPLE_SELECT,
-        ColumnTypes.COLLABORATOR,
-    ]:
+    if column_type == ColumnTypes.MULTIPLE_SELECT:
         return MultipleSelectOperator
+
+    if column_type == ColumnTypes.COLLABORATOR:
+        return CollaboratorOperator
 
     if column_type in [
         ColumnTypes.CREATOR,
         ColumnTypes.LAST_MODIFIER,
     ]:
         return CreatorOperator
-    
+
     if column_type in [
         ColumnTypes.FILE,
         ColumnTypes.IMAGE,
