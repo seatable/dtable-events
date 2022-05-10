@@ -53,7 +53,7 @@ class FilterPredicateTypes(object):
 
 class FilterTermModifier(object):
     TODAY = 'today'
-    TOMORROW = 'tomorrow',
+    TOMORROW = 'tomorrow'
     YESTERDAY = 'yesterday'
     ONE_WEEK_AGO = 'one_week_ago'
     ONE_WEEK_FROM_NOW = 'one_week_from_now'
