@@ -64,6 +64,7 @@ def save_or_update_or_delete(session, event):
                         del cell_data['old_value']
                         detail['row_data'].append(cell_data)
                 detail['row_name'] = event['row_name']
+                detail['row_name_option'] = event.get('row_name_option', '')
             else:
                 detail = json.loads(row.detail)
                 cells_data = event['row_data']
@@ -80,6 +81,7 @@ def save_or_update_or_delete(session, event):
                     else:
                         detail['row_data'].append(cell_data)
                 detail['row_name'] = event['row_name']
+                detail['row_name_option'] = event.get('row_name_option', '')
 
             detail = json.dumps(detail)
             update_activity_timestamp(session, row.id, op_time, detail)
@@ -177,6 +179,7 @@ def save_user_activities(session, event):
     table_id = event['table_id']
     table_name = event['table_name']
     row_name = event['row_name']
+    row_name_option = event.get('row_name_option', '')
     row_data = event['row_data']
     row_count = event.get('row_count', 1)
 
@@ -184,6 +187,7 @@ def save_user_activities(session, event):
     detail_dict["table_id"] = table_id
     detail_dict["table_name"] = table_name
     detail_dict["row_name"] = row_name
+    detail_dict["row_name_option"] = row_name_option
     detail_dict["row_data"] = row_data
     detail = json.dumps(detail_dict)
 
