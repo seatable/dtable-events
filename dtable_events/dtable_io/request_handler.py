@@ -426,8 +426,8 @@ def transfer_dtable_asset_files():
     return make_response(({'task_id': task_id}, 200))
 
 
-@app.route('/add-wechat-sending-task', methods=['POST'])
-def add_wechat_sending_task():
+@app.route('/add-robot-sending-task', methods=['POST'])
+def add_robot_sending_task():
     is_valid, error = check_auth_token(request)
     if not is_valid:
         return make_response((error, 403))
@@ -441,9 +441,11 @@ def add_wechat_sending_task():
 
     webhook_url = data.get('webhook_url')
     msg = data.get('msg')
+    msg_type = data.get('message_type')
+    account_type = data.get('account_type')
 
     try:
-        task_id = message_task_manager.add_wechat_sending_task(webhook_url, msg)
+        task_id = message_task_manager.add_robot_sending_task(webhook_url, msg, account_type, msg_type)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))

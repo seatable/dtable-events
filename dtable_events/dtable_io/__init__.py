@@ -321,6 +321,7 @@ def send_wechat_msg(webhook_url, msg, msg_type="text"):
     else:
         msg_format = {"msgtype": "text", "text": {"content": msg}}
     result = {}
+
     try:
         requests.post(webhook_url, json=msg_format, headers={"Content-Type": "application/json"})
     except Exception as e:
@@ -328,6 +329,33 @@ def send_wechat_msg(webhook_url, msg, msg_type="text"):
         result['err_msg'] = 'Webhook URL invalid'
     else:
         dtable_message_logger.info('Wechat sending success!')
+    return result
+
+
+def send_robot_msg(webhook_url, msg, account_type, msg_type='text'):
+    if account_type == 'wechat_robot':
+        if msg_type == 'text':
+            msg_format = {'msgtype': 'text', 'text': {'content': msg}}
+        elif msg_type == 'markdown':
+            msg_format = {'msgtype': 'markdown', 'markdown': {'content': msg}}
+    elif account_type == 'dingtalk_robot':
+        if msg_type == 'text':
+            msg_format = {'msgtype': 'text', 'text': {'content': msg}}
+        elif msg_type == 'markdown':
+            msg_format = {'msgtype': 'markdown', 'markdown': {'text': msg, 'title': ' '}}
+    elif account_type == 'feishu_robot':
+        # feishu not support markdown
+        msg_format = {'msg_type': 'text', 'content': {'text': msg}}
+
+    result = {}
+
+    try:
+        requests.post(webhook_url, json=msg_format, headers={"Content-Type": "application/json"})
+    except Exception as e:
+        dtable_message_logger.error('Robot sending failed. ERROR: {}'.format(e))
+        result['err_msg'] = 'Webhook URL invalid'
+    else:
+        dtable_message_logger.info('Robot sending success!')
     return result
 
 def send_email_msg(auth_info, send_info, username, config=None, db_session=None):
