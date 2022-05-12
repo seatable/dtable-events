@@ -52,12 +52,13 @@ class DTableAutomationRulesScanner(object):
 
 def scan_dtable_automation_rules(db_session):
     sql = '''
-            SELECT `dar`.`id`, `run_condition`, `trigger`, `actions`, `last_trigger_time`, `dtable_uuid`, `trigger_count`, `org_id`, dar.`creator` FROM dtable_automation_rules dar
+            SELECT `dar`.`id`, `run_condition`, `trigger`, `actions`, `last_trigger_time`, `dtable_uuid`, `trigger_count`, `org_id`, dar.`creator` 
+            FROM dtable_automation_rules dar
             JOIN dtables d ON dar.dtable_uuid=d.uuid
             WHERE ((run_condition='per_day' AND (last_trigger_time<:per_day_check_time OR last_trigger_time IS NULL))
             OR (run_condition='per_week' AND (last_trigger_time<:per_week_check_time OR last_trigger_time IS NULL))
             OR (run_condition='per_month' AND (last_trigger_time<:per_month_check_time OR last_trigger_time IS NULL)))
-            AND dar.is_valid=1 AND d.deleted=0
+            AND dar.is_valid=1 AND d.deleted=0 AND is_pause=0
         '''
     per_day_check_time = datetime.utcnow() - timedelta(hours=23)
     per_week_check_time = datetime.utcnow() - timedelta(days=6)

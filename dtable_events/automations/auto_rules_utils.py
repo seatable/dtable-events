@@ -14,8 +14,9 @@ def scan_triggered_automation_rules(event_data, db_session, per_minute_trigger_l
     automation_rule_id = event_data.get('automation_rule_id')
     sql = """
         SELECT `id`, `run_condition`, `trigger`, `actions`, `last_trigger_time`, `dtable_uuid`, `trigger_count`, `org_id`, `creator` FROM `dtable_automation_rules`
-        WHERE dtable_uuid=:dtable_uuid AND run_condition='per_update' AND is_valid=1 AND id=:rule_id
+        WHERE dtable_uuid=:dtable_uuid AND run_condition='per_update' AND is_valid=1 AND id=:rule_id AND is_pause=0
     """
+
     try:
         rules = db_session.execute(sql, {'dtable_uuid': dtable_uuid, 'rule_id': automation_rule_id}).fetchall()
     except Exception as e:
