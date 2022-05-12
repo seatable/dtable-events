@@ -336,10 +336,10 @@ def send_dingtalk_msg(webhook_url, msg):
     try:
         requests.post(webhook_url, json=msg_format, headers={"Content-Type": "application/json"})
     except Exception as e:
-        dtable_message_logger.error('Wechat sending failed. ERROR: {}'.format(e))
-        result['err_msg'] = 'Webhook URL invalid'
+        dtable_message_logger.error('Dingtalk sending failed. ERROR: {}'.format(e))
+        result['err_msg'] = 'Dingtalk URL invalid'
     else:
-        dtable_message_logger.info('Wechat sending success!')
+        dtable_message_logger.info('Dingtalk sending success!')
     return result
 
 def send_email_msg(auth_info, send_info, username, config=None, db_session=None):
