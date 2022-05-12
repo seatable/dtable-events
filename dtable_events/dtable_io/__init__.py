@@ -330,9 +330,17 @@ def send_wechat_msg(webhook_url, msg, msg_type="text"):
         dtable_message_logger.info('Wechat sending success!')
     return result
 
-def send_dingtalk_msg(webhook_url, msg):
-    msg_format = {"msgtype": "text", "text": {"content": msg}}
+def send_dingtalk_msg(webhook_url, msg, msg_type="text", msg_title=None):
     result = {}
+    if msg_type == "markdown":
+        if not msg_title:
+            result['err_msg'] = 'msg_title invalid'
+            dtable_message_logger.error('Dingtalk sending failed. ERROR: msg_title invalid')
+            return result
+        msg_format = {"msgtype": "markdown", "markdown": {"text": msg, "title": msg_title}}
+    else:
+        msg_format = {"msgtype": "text", "text": {"content": msg}}
+
     try:
         requests.post(webhook_url, json=msg_format, headers={"Content-Type": "application/json"})
     except Exception as e:

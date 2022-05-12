@@ -12,7 +12,7 @@ import requests
 
 from dtable_events.automations.models import BoundThirdPartyAccounts
 from dtable_events.cache import redis_cache
-from dtable_events.dtable_io import send_wechat_msg, send_email_msg
+from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg
 from dtable_events.notification_rules.notification_rules_utils import _fill_msg_blanks as fill_msg_blanks, \
     send_notification
 from dtable_events.utils import utc_to_tz, uuid_str_to_36_chars, is_valid_email
@@ -568,6 +568,66 @@ class SendWechatAction(BaseAction):
     def cron_notify(self):
         try:
             send_wechat_msg(self.webhook_url, self.msg, self.msg_type)
+        except Exception as e:
+            logger.error('send wechat error: %s', e)
+
+    def do_action(self):
+        if not self.auto_rule.current_valid:
+            return
+        if self.auto_rule.run_condition == PER_UPDATE:
+            self.per_update_notify()
+            self.auto_rule.set_done_actions()
+        elif self.auto_rule.run_condition in [PER_DAY, PER_WEEK]:
+            self.cron_notify()
+            self.auto_rule.set_done_actions()
+
+
+class SendDingtalkAction(BaseAction):
+
+    def __init__(self, auto_rule, data, msg, account_id, msg_type, msg_title):
+
+        super().__init__(auto_rule, data)
+        self.action_type = 'send_dingtalk'
+        self.msg = msg
+        self.msg_type = msg_type
+        self.account_id = account_id
+        self.msg_title = msg_title
+
+        self.webhook_url = ''
+        self.column_blanks = []
+        self.col_name_dict = {}
+
+        self._init_notify(msg)
+
+
+    def _init_notify(self, msg):
+        account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id)
+        if not account_dict:
+            self.auto_rule.set_invalid()
+            return
+        blanks = set(re.findall(r'\{([^{]*?)\}', msg))
+        self.col_name_dict = {col.get('name'): col for col in self.auto_rule.view_columns}
+        self.column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
+        self.webhook_url = account_dict.get('detail', {}).get('webhook_url', '')
+
+    def _fill_msg_blanks(self, row):
+        msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
+        dtable_uuid, db_session, dtable_metadata = self.auto_rule.dtable_uuid, self.auto_rule.db_session, self.auto_rule.dtable_metadata
+        return fill_msg_blanks(dtable_uuid, msg, column_blanks, col_name_dict, row, db_session, dtable_metadata)
+
+    def per_update_notify(self):
+        row = self.data['converted_row']
+        msg = self.msg
+        if self.column_blanks:
+            msg = self._fill_msg_blanks(row)
+        try:
+            send_dingtalk_msg(self.webhook_url, msg, self.msg_type, self.msg_title)
+        except Exception as e:
+            logger.error('send wechat error: %s', e)
+
+    def cron_notify(self):
+        try:
+            send_dingtalk_msg(self.webhook_url, self.msg, self.msg_type, self.msg_title)
         except Exception as e:
             logger.error('send wechat error: %s', e)
 
@@ -1186,6 +1246,13 @@ class AutomationRule:
                     default_msg = action_info.get('default_msg', '')
                     msg_type = action_info.get('msg_type', 'text')
                     SendWechatAction(self, self.data, default_msg, account_id, msg_type).do_action()
+
+                elif action_info.get('type') == 'send_dingtalk':
+                    account_id = int(action_info.get('account_id'))
+                    default_msg = action_info.get('default_msg', '')
+                    default_title = action_info.get('default_title', '')
+                    msg_type = action_info.get('msg_type', 'text')
+                    SendDingtalkAction(self, self.data, default_msg, account_id, msg_type, default_title).do_action()
 
                 elif action_info.get('type') == 'send_email':
                     account_id = int(action_info.get('account_id'))
