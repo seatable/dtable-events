@@ -284,11 +284,14 @@ def _fill_msg_blanks(dtable_uuid, msg, column_blanks, col_name_dict, row, db_ses
 
         elif col_name_dict[blank]['type'] in [
             ColumnTypes.IMAGE,
-            ColumnTypes.MULTIPLE_SELECT,
-            ColumnTypes.LINK,
+            ColumnTypes.MULTIPLE_SELECT
         ]:
             value = row.get(blank, [])
             msg = msg.replace('{' + blank + '}', ('[' + ', '.join(value) + ']') if value else '[]')  # maybe value is None
+        elif col_name_dict[blank]['type'] in [ColumnTypes.LINK]:
+            value = row.get(blank, [])
+
+            msg = msg.replace('{' + blank + '}', ('[' + ', '.join([f['display_value'] for f in value]) + ']') if value else '[]')
 
         elif col_name_dict[blank]['type'] in [ColumnTypes.FILE]:
             value = row.get(blank, [])
@@ -442,8 +445,6 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
     if blanks:
         columns = get_table_view_columns(dtable_uuid, table_id, view_id, dtable_server_access_token)
         column_blanks, col_name_dict = _get_column_blanks(blanks, columns)
-
-
 
     if op_type == 'modify_row' and trigger['condition'] == CONDITION_ROWS_MODIFIED:
         if not is_trigger_time_satisfy(last_trigger_time):
