@@ -49,6 +49,7 @@ class FilterPredicateTypes(object):
     IS_EXACTLY = 'is_exactly'
     IS_ANY_OF = 'is_any_of'
     IS_NONE_OF = 'is_none_of'
+    INCLUDE_ME = 'include_me'
 
 
 class FilterTermModifier(object):

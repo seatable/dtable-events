@@ -588,6 +588,7 @@ class CollaboratorOperator(Operator):
         FilterPredicateTypes.NOT_EMPTY,
         FilterPredicateTypes.HAS_ANY_OF,
         FilterPredicateTypes.HAS_NONE_OF,
+        FilterPredicateTypes.INCLUDE_ME,
     ]
 
     def op_has_any_of(self):
@@ -634,6 +635,8 @@ class CollaboratorOperator(Operator):
             "filter_term_str": filter_term_str
         })
 
+    def op_include_me(self):
+        return self.op_has_any_of()
 
 class CreatorOperator(Operator):
     SUPPORT_FILTER_PREDICATE = [
@@ -641,6 +644,7 @@ class CreatorOperator(Operator):
         FilterPredicateTypes.NOT_CONTAIN,
         FilterPredicateTypes.IS,
         FilterPredicateTypes.IS_NOT,
+        FilterPredicateTypes.INCLUDE_ME,
     ]
 
     def op_contains(self):
@@ -664,6 +668,16 @@ class CreatorOperator(Operator):
             "filter_term_str": ', '.join(creator_list)
         })
 
+    def op_include_me(self):
+        select_collaborators = self.filter_term
+        if not isinstance(select_collaborators, list):
+            select_collaborators = [select_collaborators, ]
+        creator = select_collaborators[0] if select_collaborators else ''
+        return "%s %s '%s'" % (
+            self.column_name,
+            '=',
+            creator
+        )
 
 class FileOperator(Operator):
     SUPPORT_FILTER_PREDICATE = [
@@ -797,6 +811,8 @@ def _filter2sqlslice(operator):
         return operator.op_has_any_of()
     if filter_predicate == FilterPredicateTypes.HAS_NONE_OF:
         return operator.op_has_none_of()
+    if filter_predicate == FilterPredicateTypes.INCLUDE_ME:
+        return operator.op_include_me()
     return ''
 
 def _get_operator_by_type(column_type):
