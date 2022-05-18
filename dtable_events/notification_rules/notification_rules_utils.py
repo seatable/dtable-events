@@ -165,6 +165,8 @@ def list_rows_near_deadline(dtable_uuid, table_id, view_id, date_column_name, al
 
     if res.status_code == 404:
         deal_invalid_rule(rule_id, db_session)
+        logger.warning('dtable: %s request list-rows-near-deadline error status code: %s, response text: %s', dtable_uuid, res.status_code, res.text)
+        return []
     if res.status_code != 200:
         logger.error('dtable: %s request list-rows-near-deadline error status code: %s, response text: %s', dtable_uuid, res.status_code, res.text)
         return []
@@ -287,10 +289,13 @@ def _fill_msg_blanks(dtable_uuid, msg, column_blanks, col_name_dict, row, db_ses
             ColumnTypes.MULTIPLE_SELECT
         ]:
             value = row.get(blank, [])
-            msg = msg.replace('{' + blank + '}', ('[' + ', '.join(value) + ']') if value else '[]')  # maybe value is None
+            if value and isinstance(value[0], dict):
+                msg = msg.replace('{' + blank + '}', '[]')
+            else:
+                msg = msg.replace('{' + blank + '}', ('[' + ', '.join(value) + ']') if value else '[]')  # maybe value is None
+
         elif col_name_dict[blank]['type'] in [ColumnTypes.LINK]:
             value = row.get(blank, [])
-
             msg = msg.replace('{' + blank + '}', ('[' + ', '.join([f['display_value'] for f in value]) + ']') if value else '[]')
 
         elif col_name_dict[blank]['type'] in [ColumnTypes.FILE]:
