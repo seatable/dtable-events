@@ -290,9 +290,7 @@ def _fill_msg_blanks(dtable_uuid, msg, column_blanks, col_name_dict, row, db_ses
         ]:
             value = row.get(blank, [])
             if value and isinstance(value[0], dict):
-                pass
-            elif value is None:
-                msg = msg.replace('{' + blank + '}', 'None')
+                logger.warning('column %s value format error', blank)
             else:
                 msg = msg.replace('{' + blank + '}', ('[' + ', '.join(value) + ']') if value else '[]')  # maybe value is None
 
