@@ -53,76 +53,76 @@ class Operator(object):
         self.filter_term_modifier = self.filter_item.get('filter_term_modifier', '')
 
     def op_is(self):
-        return "%s %s '%s'" % (
+        return "`%s` %s '%s'" % (
             self.column_name,
             '=',
             self.filter_term
         )
 
     def op_is_not(self):
-        return "%s %s '%s'" % (
+        return "`%s` %s '%s'" % (
             self.column_name,
             '<>',
             self.filter_term
         )
 
     def op_contains(self):
-        return "%s %s '%%%s%%'" % (
+        return "`%s` %s '%%%s%%'" % (
             self.column_name,
             'like',
             self.filter_term
         )
 
     def op_does_not_contain(self):
-        return "%s %s '%%%s%%'" % (
+        return "`%s` %s '%%%s%%'" % (
             self.column_name,
             'not like',
             self.filter_term
         )
 
     def op_equal(self):
-        return "%(column_name)s = %(value)s" % ({
+        return "`%(column_name)s` = %(value)s" % ({
             'column_name': self.column_name,
             'value': self.filter_term
         })
 
     def op_not_equal(self):
-        return "%(column_name)s <> %(value)s" % ({
+        return "`%(column_name)s` <> %(value)s" % ({
             'column_name': self.column_name,
             'value': self.filter_term
         })
 
     def op_less(self):
-        return "%(column_name)s < %(value)s" % ({
+        return "`%(column_name)s` < %(value)s" % ({
             'column_name': self.column_name,
             'value': self.filter_term
         })
 
     def op_less_or_equal(self):
-        return "%(column_name)s <= %(value)s" % ({
+        return "`%(column_name)s` <= %(value)s" % ({
             'column_name': self.column_name,
             'value': self.filter_term
         })
 
     def op_greater(self):
-        return "%(column_name)s > %(value)s" % ({
+        return "`%(column_name)s` > %(value)s" % ({
             'column_name': self.column_name,
             'value': self.filter_term
         })
 
     def op_greater_or_equal(self):
-        return "%(column_name)s >= %(value)s" % ({
+        return "`%(column_name)s` >= %(value)s" % ({
             'column_name': self.column_name,
             'value': self.filter_term
         })
 
     def op_is_empty(self):
-        return "%(column_name)s is null" % ({
+        return "`%(column_name)s` is null" % ({
             'column_name': self.column_name
         })
 
     def op_is_not_empty(self):
-        return "%(column_name)s is not null" % ({
+        return "`%(column_name)s` is not null" % ({
             'column_name': self.column_name
         })
 
@@ -241,7 +241,7 @@ class SingleSelectOperator(Operator):
 
     def op_is(self):
         filter_term = self._get_option_name_by_id(self.filter_term)
-        return "%s %s '%s'" % (
+        return "`%s` %s '%s'" % (
             self.column_name,
             '=',
             filter_term
@@ -249,7 +249,7 @@ class SingleSelectOperator(Operator):
 
     def op_is_not(self):
         filter_term = self._get_option_name_by_id(self.filter_term)
-        return "%s %s '%s'" % (
+        return "`%s` %s '%s'" % (
             self.column_name,
             '<>',
             filter_term
@@ -261,7 +261,7 @@ class SingleSelectOperator(Operator):
             filter_term = [filter_term, ]
         filter_term = [self._get_option_name_by_id(f) for f in filter_term]
         option_names = ["'%s'" % (op_name) for op_name in filter_term]
-        return "%(column_name)s in (%(option_names)s)" % ({
+        return "`%(column_name)s` in (%(option_names)s)" % ({
             "column_name": self.column_name,
             "option_names": ", ".join(option_names)
         })
@@ -272,7 +272,7 @@ class SingleSelectOperator(Operator):
             filter_term = [filter_term, ]
         filter_term = [self._get_option_name_by_id(f) for f in filter_term]
         option_names = ["'%s'" % (op_name) for op_name in filter_term]
-        return "%(column_name)s not in (%(option_names)s)" % ({
+        return "`%(column_name)s` not in (%(option_names)s)" % ({
             "column_name": self.column_name,
             "option_names": ", ".join(option_names)
         })
@@ -304,7 +304,7 @@ class MultipleSelectOperator(Operator):
         filter_term = [self._get_option_name_by_id(f) for f in self.filter_term]
         option_names = ["'%s'" % op_name for op_name in filter_term]
         option_names_str = ', '.join(option_names)
-        return "%(column_name)s in (%(option_names_str)s)" % ({
+        return "`%(column_name)s` in (%(option_names_str)s)" % ({
             "column_name": self.column_name,
             "option_names_str": option_names_str
         })
@@ -313,7 +313,7 @@ class MultipleSelectOperator(Operator):
         filter_term = [self._get_option_name_by_id(f) for f in self.filter_term]
         option_names = ["'%s'" % op_name for op_name in filter_term]
         option_names_str = ', '.join(option_names)
-        return "%(column_name)s has none of (%(option_names_str)s)" % ({
+        return "`%(column_name)s` has none of (%(option_names_str)s)" % ({
             "column_name": self.column_name,
             "option_names_str": option_names_str
         })
@@ -322,7 +322,7 @@ class MultipleSelectOperator(Operator):
         filter_term = [self._get_option_name_by_id(f) for f in self.filter_term]
         option_names = ["'%s'" % op_name for op_name in filter_term]
         option_names_str = ', '.join(option_names)
-        return "%(column_name)s has all of (%(option_names_str)s)" % ({
+        return "`%(column_name)s` has all of (%(option_names_str)s)" % ({
             "column_name": self.column_name,
             "option_names_str": option_names_str
         })
@@ -331,7 +331,7 @@ class MultipleSelectOperator(Operator):
         filter_term = [self._get_option_name_by_id(f) for f in self.filter_term]
         option_names = ["'%s'" % op_name for op_name in filter_term]
         option_names_str = ', '.join(option_names)
-        return "%(column_name)s is exactly (%(option_names_str)s)" % ({
+        return "`%(column_name)s` is exactly (%(option_names_str)s)" % ({
             "column_name": self.column_name,
             "option_names_str": option_names_str
         })
@@ -510,7 +510,7 @@ class DateOperator(Operator):
             return ""
         next_date = self._format_date(date + timedelta(days=1))
         target_date = self._format_date(date)
-        return "%(column_name)s >= '%(target_date)s' and %(column_name)s < '%(next_date)s'" % ({
+        return "`%(column_name)s` >= '%(target_date)s' and `%(column_name)s` < '%(next_date)s'" % ({
             "column_name": self.column_name,
             "target_date": target_date,
             "next_date": next_date
@@ -518,7 +518,7 @@ class DateOperator(Operator):
 
     def op_is_within(self):
         start_date, end_date = self._other_date()
-        return "%(column_name)s >= '%(start_date)s' and %(column_name)s < '%(end_date)s'" % ({
+        return "`%(column_name)s` >= '%(start_date)s' and `%(column_name)s` < '%(end_date)s'" % ({
             "column_name": self.column_name,
             "start_date": self._format_date(start_date),
             "end_date": self._format_date(end_date)
@@ -526,28 +526,28 @@ class DateOperator(Operator):
 
     def op_is_before(self):
         target_date, _ = self._other_date()
-        return "%(column_name)s < '%(target_date)s' and %(column_name)s is not null" % ({
+        return "`%(column_name)s` < '%(target_date)s' and `%(column_name)s` is not null" % ({
             "column_name": self.column_name,
             "target_date": self._format_date(target_date)
         })
 
     def op_is_after(self):
         target_date, _ = self._other_date()
-        return "%(column_name)s > '%(target_date)s'" % ({
+        return "`%(column_name)s` > '%(target_date)s'" % ({
             "column_name": self.column_name,
             "target_date": self._format_date(target_date)
         })
 
     def op_is_on_or_before(self):
         target_date, _ = self._other_date()
-        return "%(column_name)s <= '%(target_date)s' and %(column_name)s is not null" % ({
+        return "`%(column_name)s` <= '%(target_date)s' and `%(column_name)s` is not null" % ({
             "column_name": self.column_name,
             "target_date": self._format_date(target_date)
         })
 
     def op_is_on_or_after(self):
         target_date, _ = self._other_date()
-        return "%(column_name)s >= '%(target_date)s' and %(column_name)s is not null" % ({
+        return "`%(column_name)s` >= '%(target_date)s' and `%(column_name)s` is not null" % ({
             "column_name": self.column_name,
             "target_date": self._format_date(target_date)
         })
@@ -556,7 +556,7 @@ class DateOperator(Operator):
         target_date, _ = self._other_date()
         start_date = target_date - timedelta(days=1)
         end_date = target_date + timedelta(days=1)
-        return "(%(column_name)s >= '%(end_date)s' or %(column_name)s <= '%(start_date)s') and %(column_name)s is not null" % (
+        return "(`%(column_name)s` >= '%(end_date)s' or `%(column_name)s` <= '%(start_date)s') and `%(column_name)s` is not null" % (
         {
             "column_name": self.column_name,
             "start_date": self._format_date(start_date),
@@ -570,12 +570,12 @@ class CheckBoxOperator(Operator):
 
     def op_is(self):
         if not self.filter_term:
-            return "%(column_name)s = %(value)s or %(column_name)s is null " % ({
+            return "`%(column_name)s` = %(value)s or `%(column_name)s` is null " % ({
                 "column_name": self.column_name,
                 "value": self.filter_term
         })
 
-        return "%(column_name)s = %(value)s" % ({
+        return "`%(column_name)s` = %(value)s" % ({
             "column_name": self.column_name,
             "value": self.filter_term
         })
@@ -596,7 +596,7 @@ class CollaboratorOperator(Operator):
             select_collaborators = [select_collaborators, ]
         collaborator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
         filter_term_str = ", ".join(collaborator_list)
-        return "%(column_name)s in (%(filter_term_str)s)" % ({
+        return "`%(column_name)s` in (%(filter_term_str)s)" % ({
             "column_name": self.column_name,
             "filter_term_str": filter_term_str
         })
@@ -607,7 +607,7 @@ class CollaboratorOperator(Operator):
             select_collaborators = [select_collaborators, ]
         collaborator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
         filter_term_str = ", ".join(collaborator_list)
-        return "%(column_name)s has all of (%(filter_term_str)s)" % ({
+        return "`%(column_name)s` has all of (%(filter_term_str)s)" % ({
             "column_name": self.column_name,
             "filter_term_str": filter_term_str
         })
@@ -618,7 +618,7 @@ class CollaboratorOperator(Operator):
             select_collaborators = [select_collaborators, ]
         collaborator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
         filter_term_str = ", ".join(collaborator_list)
-        return "%(column_name)s has one of (%(filter_term_str)s)" % ({
+        return "`%(column_name)s` has one of (%(filter_term_str)s)" % ({
             "column_name": self.column_name,
             "filter_term_str": filter_term_str
         })
@@ -629,7 +629,7 @@ class CollaboratorOperator(Operator):
             select_collaborators = [select_collaborators, ]
         collaborator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
         filter_term_str = ", ".join(collaborator_list)
-        return "%(column_name)s is exactly (%(filter_term_str)s)" % ({
+        return "`%(column_name)s` is exactly (%(filter_term_str)s)" % ({
             "column_name": self.column_name,
             "filter_term_str": filter_term_str
         })
@@ -649,7 +649,7 @@ class CreatorOperator(Operator):
             select_collaborators = [select_collaborators, ]
         creator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
         filter_term_str = ", ".join(creator_list)
-        return "%(column_name)s in (%(filter_term_str)s)" % ({
+        return "`%(column_name)s` in (%(filter_term_str)s)" % ({
             "column_name": self.column_name,
             "filter_term_str": filter_term_str
         })
@@ -659,7 +659,7 @@ class CreatorOperator(Operator):
         if not isinstance(select_collaborators, list):
             select_collaborators = [select_collaborators, ]
         creator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
-        return "%(column_name)s not in (%(filter_term_str)s)" % ({
+        return "`%(column_name)s` not in (%(filter_term_str)s)" % ({
             "column_name": self.column_name,
             "filter_term_str": ', '.join(creator_list)
         })
@@ -997,7 +997,7 @@ class BaseSQLGenerator(object):
         return limit_clause
 
     def to_sql(self, by_group=False):
-        sql = "%s %s" % (
+        sql = "%s `%s`" % (
             "SELECT * FROM",
             self.table_name
         )
