@@ -289,10 +289,12 @@ def _fill_msg_blanks(dtable_uuid, msg, column_blanks, col_name_dict, row, db_ses
             ColumnTypes.MULTIPLE_SELECT
         ]:
             value = row.get(blank, [])
-            if value and isinstance(value[0], dict):
-                logger.warning('column %s value format error', blank)
+            if not value:
+                msg = msg.replace('{' + blank + '}', '[]')  # maybe value is None
+            elif value and isinstance(value, list) and isinstance(value[0], str):
+                msg = msg.replace('{' + blank + '}', '[' + ', '.join(value) + ']')
             else:
-                msg = msg.replace('{' + blank + '}', ('[' + ', '.join(value) + ']') if value else '[]')  # maybe value is None
+                logger.warning('column %s value format error', blank)
 
         elif col_name_dict[blank]['type'] in [ColumnTypes.LINK]:
             value = row.get(blank, [])
