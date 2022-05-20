@@ -60,6 +60,8 @@ MESSAGE_TYPE_AUTOMATION_RULE = 'automation_rule'
 AUTO_RULE_TRIGGER_LIMIT_PER_MINUTE = 10
 AUTO_RULE_TRIGGER_TIMES_PER_MINUTE_TIMEOUT = 60
 
+AUTO_RULE_CALCULATE_TYPES = ['calculate_accumulated_value', 'calculate_delta', 'calculate_rank', 'calculate_percentage']
+
 def get_third_party_account(session, account_id):
     account_query = session.query(BoundThirdPartyAccounts).filter(
         BoundThirdPartyAccounts.id == account_id
@@ -74,6 +76,27 @@ def get_third_party_account(session, account_id):
 def email2list(email_str, split_pattern='[,，]'):
     email_list = [value.strip() for value in re.split(split_pattern, email_str) if value.strip()]
     return email_list
+
+
+def is_number_format(column):
+    calculate_col_type = column.get('type')
+    if calculate_col_type in [ColumnTypes.NUMBER, ColumnTypes.DURATION, ColumnTypes.RATE]:
+        return True
+    elif calculate_col_type == ColumnTypes.FORMULA and column.get('data').get('result_type') == 'number':
+        return True
+    elif calculate_col_type == ColumnTypes.LINK_FORMULA:
+        if column.get('data').get('result_type') == 'array' and column.get('data').get('array_type') == 'number':
+            return True
+        elif column.get('data').get('result_type') == 'number':
+            return True
+    return False
+
+
+def get_date_format(date_format):
+    if date_format == 'YYYY-MM-DD HH:mm':
+        return '%Y-%m-%d %H:%M', '2022-01-01 00:00'
+    else:
+        return '%Y-%m-%d', '2022-01-01'
 
 
 class BaseAction:
@@ -974,6 +997,298 @@ class LinkRecordsAction(BaseAction):
         else:
             self.auto_rule.set_done_actions()
 
+# 数据处理
+class AutoAddLinkAction(BaseAction):
+
+    COLUMN_FILTER_PREDICATE_MAPPING = {
+        ColumnTypes.TEXT: "is",
+        ColumnTypes.DATE: "is",
+        ColumnTypes.LONG_TEXT: "is",
+        ColumnTypes.CHECKBOX: "is",
+        ColumnTypes.SINGLE_SELECT: "is",
+        ColumnTypes.MULTIPLE_SELECT: "is_exactly",
+        ColumnTypes.URL: "is",
+        ColumnTypes.DURATION: "equal",
+        ColumnTypes.NUMBER: "equal",
+        ColumnTypes.COLLABORATOR: "is_exactly",
+        ColumnTypes.EMAIL: "is",
+        ColumnTypes.RATE: "equal",
+    }
+
+    def __init__(self, auto_rule, data, linked_table_id, link_id, match_conditions):
+        super().__init__(auto_rule, data=data)
+        self.action_type = 'link_record'
+        self.linked_table_id = linked_table_id
+        self.link_id = link_id
+        self.match_conditions = match_conditions
+
+        self.linked_row_ids = []
+
+        self._init_linked_row_ids()
+
+
+    def parse_column_value(self, column, value):
+        if column.get('type') == ColumnTypes.SINGLE_SELECT:
+            select_options = column.get('data', {}).get('options', [])
+            for option in select_options:
+                if value == option.get('name'):
+                    return option.get('id')
+
+        elif column.get('type') == ColumnTypes.MULTIPLE_SELECT:
+            m_select_options = column.get('data', {}).get('options', [])
+            if isinstance(value, list):
+                parse_value_list = []
+                for option in m_select_options:
+                    if option.get('name') in value:
+                        option_id = option.get('id')
+                        parse_value_list.append(option_id)
+                return parse_value_list
+        else:
+            return value
+
+
+    def _format_filter_groups(self):
+        filters = []
+        for match_condition in self.match_conditions:
+            column_key = match_condition.get("column_key")
+            column = self.get_column(self.auto_rule.table_id, column_key) or {}
+            row_value = self.data['converted_row'].get(column.get('name'))
+            if not row_value:
+                return []
+            other_column_key = match_condition.get("other_column_key")
+            other_column = self.get_column(self.linked_table_id, other_column_key) or {}
+            parsed_row_value = self.parse_column_value(other_column, row_value)
+            filter_item = {
+                "column_key": other_column_key,
+                "filter_predicate": self.COLUMN_FILTER_PREDICATE_MAPPING.get(other_column.get('type', ''), 'is'),
+                "filter_term": parsed_row_value,
+                "filter_term_modifier":"exact_date"
+            }
+            filters.append(filter_item)
+        return filters and [{"filters": filters, "filter_conjunction": "And"}] or []
+
+    def get_table_name(self, table_id):
+        dtable_metadata = self.auto_rule.dtable_metadata
+        tables = dtable_metadata.get('tables', [])
+        for table in tables:
+            if table.get('_id') == table_id:
+                 return table.get('name')
+
+    def get_column(self, table_id, column_key):
+        dtable_metadata = self.auto_rule.dtable_metadata
+        for table in dtable_metadata.get('tables', []):
+            if table.get('_id') == table_id:
+                for col in table.get('columns'):
+                    if col.get('key') == column_key:
+                        return col
+        return None
+
+    def _get_linked_table_rows(self):
+        filter_groups = self._format_filter_groups()
+        if not filter_groups:
+            return []
+        json_data = {
+            'table_id': self.linked_table_id,
+            'filter_conditions': {
+                'filter_groups': filter_groups,
+                'group_conjunction': 'And',
+                'sorts': [
+                    {"column_key": "_mtime", "sort_type": "down"}
+                ],
+            },
+            'limit': 500
+        }
+        api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+        client_url = api_url.rstrip('/') + '/api/v1/internal/dtables/' + \
+                     uuid_str_to_36_chars(self.auto_rule.dtable_uuid) + '/filter-rows/?from=dtable_events'
+        try:
+            response = requests.post(client_url, headers=self.auto_rule.headers, json=json_data)
+            rows_data = response.json().get('rows')
+            logger.debug('Number of linking dtable rows by auto-rules: %s, dtable_uuid: %s, details: %s' % (
+                rows_data and len(rows_data) or 0,
+                self.auto_rule.dtable_uuid,
+                json.dumps(json_data)
+            ))
+            return rows_data or []
+        except Exception as e:
+            logger.error('link dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
+            return []
+
+    def _init_linked_row_ids(self):
+        linked_rows_data = self._get_linked_table_rows()
+        self.linked_row_ids = linked_rows_data and [row.get('_id') for row in linked_rows_data] or []
+
+    def _can_do_action(self):
+        if not self.linked_row_ids:
+            return False
+
+        if not self.auto_rule.run_condition == PER_UPDATE:
+            return False
+
+        return True
+
+    def do_action(self):
+        api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+        rows_link_url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/links/?from=dtable_events'
+        if not self._can_do_action():
+            return
+        json_data = {
+            'row_id': self.data['row']['_id'],
+            'link_id': self.link_id,
+            'table_id': self.auto_rule.table_id,
+            'other_table_id': self.linked_table_id,
+            'other_rows_ids': self.linked_row_ids
+        }
+
+        try:
+            response = requests.put(rows_link_url, headers=self.auto_rule.headers, json=json_data)
+        except Exception as e:
+            logger.error('link dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
+            return
+        if response.status_code != 200:
+            logger.error('link dtable: %s error response status code: %s', self.auto_rule.dtable_uuid, response.status_code)
+        else:
+            self.auto_rule.set_done_actions()
+
+
+class CalculateAction(BaseAction):
+    def __init__(self, auto_rule, data, table_id, view_id, calculate_column_key, result_column_key, action_type):
+        super().__init__(auto_rule, data)
+        # action type contains calculate_accumulated_value, calculate_delta, calculate_rank and calculate_percentage
+        self.action_type = action_type
+        self.table_id = table_id
+        self.view_id = view_id
+        self.calculate_column_key = calculate_column_key
+        self.result_column_key = result_column_key
+        self.column_key_dict = {col.get('key'): col for col in self.auto_rule.view_columns}
+        self.update_rows = []
+        self.rank_rows = []
+        self._init_updates()
+        print('data')
+        print(data)
+
+    def parse_group_rows(self, view_rows):
+        for group in view_rows:
+            group_subgroups = group.get('subgroups')
+            group_rows = group.get('rows')
+            if group_rows is None and group_subgroups:
+                self.parse_group_rows(group.get('subgroups'))
+            else:
+                self.parse_rows(group_rows)
+
+    def parse_rows(self, rows):
+        calculate_col_name = self.column_key_dict.get(self.calculate_column_key, {}).get('name')
+        result_col_name = self.column_key_dict.get(self.result_column_key, {}).get('name')
+        result_value = 0
+        # 'calculate_accumulated_value', 'calculate_delta', 'calculate_rank', 'calculate_percentage'
+        if self.action_type == 'calculate_accumulated_value':
+            for index in range(len(rows)):
+                row_id = rows[index].get('_id')
+                result_value += rows[index].get(calculate_col_name, 0)
+                result_row = {result_col_name: result_value}
+                self.update_rows.append({'row_id': row_id, 'row': result_row})
+
+        elif self.action_type == 'calculate_delta':
+            for index in range(len(rows)):
+                row_id = rows[index].get('_id')
+                if index > 0:
+                    result_value = rows[index].get(calculate_col_name, 0) - rows[index-1].get(calculate_col_name, 0)
+                    result_row = {result_col_name: result_value}
+                    self.update_rows.append({'row_id': row_id, 'row': result_row})
+
+        elif self.action_type == 'calculate_percentage':
+            sum_calculate = sum([float(row.get(calculate_col_name, 0)) for row in rows])
+            for row in rows:
+                row_id = row.get('_id')
+                result_row = {result_col_name: float(row.get(calculate_col_name, 0)) / sum_calculate}
+                self.update_rows.append({'row_id': row_id, 'row': result_row})
+
+        elif self.action_type == 'calculate_rank':
+            self.rank_rows.extend(rows)
+
+    def _init_updates(self):
+        calculate_col = self.column_key_dict.get(self.calculate_column_key, {})
+        result_col = self.column_key_dict.get(self.result_column_key, {})
+
+        if not calculate_col or not result_col:
+            self.auto_rule.set_invalid()
+            return
+
+        calculate_col_name = calculate_col.get('name')
+        result_col_name = result_col.get('name')
+        view_rows = self.auto_rule.view_rows.get('rows', [])
+        if view_rows and ('rows' in view_rows[0] or 'subgroups' in view_rows[0]):
+            self.parse_group_rows(view_rows)
+        else:
+            self.parse_rows(view_rows)
+
+        if self.action_type == 'calculate_rank':
+            calculate_col_type = calculate_col.get('type')
+            if is_number_format(calculate_col):
+                self.rank_rows = sorted(self.rank_rows, key=lambda x: float(x.get(calculate_col_name, 0)), reverse=True)
+
+            elif calculate_col_type == ColumnTypes.DATE or \
+                    calculate_col_type == ColumnTypes.FORMULA and calculate_col.get('data').get('result_type') == 'date':
+                date_format, default_date = get_date_format(calculate_col.get('data').get('format'))
+                self.rank_rows = sorted(self.rank_rows,
+                                        key=lambda x: datetime.strptime(x.get(calculate_col_name, default_date), date_format),
+                                        reverse=True)
+            elif calculate_col_type == ColumnTypes.LINK_FORMULA and calculate_col.get('data').get('array_type') == 'date':
+                date_format, default_date = get_date_format(calculate_col.get('data').get('array_data').get('format'))
+                self.rank_rows = sorted(self.rank_rows,
+                                        key=lambda x: datetime.strptime(x.get(calculate_col_name, default_date), date_format),
+                                        reverse=True)
+            rank = 0
+            pre_value = None
+            for row in self.rank_rows:
+                cal_value = row.get(calculate_col_name)
+                row_id = row.get('_id')
+                if cal_value is None:
+                    result_row = {result_col_name: None}
+                else:
+                    if rank == 0 or cal_value != pre_value:
+                        rank += 1
+                        pre_value = cal_value
+                    result_row = {result_col_name: rank}
+
+                self.update_rows.append({'row_id': row_id, 'row': result_row})
+
+    def _can_do_action(self):
+        if self.auto_rule.run_condition == PER_UPDATE:
+            # if columns in self.updates was updated, forbidden action!!!
+            updated_column_keys = self.data.get('updated_column_keys', [])
+            to_update_keys = [self.calculate_column_key, self.result_column_key]
+            for key in updated_column_keys:
+                if key in to_update_keys:
+                    return False
+        if self.auto_rule.run_condition in (PER_DAY, PER_WEEK, PER_MONTH):
+            return False
+
+        return True
+
+    def do_action(self):
+        if not self._can_do_action():
+            return
+
+        if not self.auto_rule.current_valid:
+            return
+        api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+        row_update_url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/batch-update-rows/?from=dtable_events'
+        print('self.update_rows')
+        print(self.update_rows)
+        step = 1000
+        for i in range(0, len(self.update_rows), step):
+            batch_update_rows = {'table_name': self.auto_rule.table_name, 'updates': self.update_rows[i: i+step]}
+            try:
+                response = requests.put(row_update_url, headers=self.auto_rule.headers, json=batch_update_rows)
+            except Exception as e:
+                logger.error('batch update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
+                return
+            if response.status_code != 200:
+                logger.error('batch update dtable: %s error response status code: %s', self.auto_rule.dtable_uuid, response.status_code)
+                return
+        self.auto_rule.set_done_actions()
+
 
 
 class RuleInvalidException(Exception):
@@ -1007,6 +1322,7 @@ class AutomationRule:
         self._dtable_metadata = None
         self._access_token = None
         self._view_columns = None
+        self._view_rows = None
         self.can_run_python = None
         self.scripts_running_limit = None
 
@@ -1073,6 +1389,27 @@ class AutomationRule:
                 raise RuleInvalidException('request view columns 404')
             self._view_columns = response.json().get('columns')
         return self._view_columns
+
+    @property
+    def view_rows(self):
+        """
+        rows of the view defined in trigger
+        """
+        if not self._view_rows:
+            api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+            url = api_url.rstrip('/') + '/api/v1/internal/dtables/' + uuid_str_to_36_chars(self.dtable_uuid) + '/view-rows/?from=dtable_events'
+            query_param = {
+                'table_id': self.table_id,
+                'view_id': self.view_id,
+                'convert_link_id': True,
+            }
+
+            response = requests.get(url, headers=self.headers, params=query_param)
+            if response.status_code == 404:
+                raise RuleInvalidException('request view columns 404')
+
+            self._view_rows = response.json()
+        return self._view_rows
 
     @property
     def table_name(self):
@@ -1217,6 +1554,23 @@ class AutomationRule:
                     link_id = action_info.get('link_id')
                     match_conditions = action_info.get('match_conditions')
                     LinkRecordsAction(self, self.data, linked_table_id, link_id, match_conditions).do_action()
+
+
+                # 数据处理
+                # elif action_info.get('type') == 'auto_add_link':
+                #     linked_table_id = action_info.get('linked_table_id')
+                #     # link_id = action_info.get('link_id')
+                #     # match_conditions = action_info.get('match_conditions')
+                #     # AutoAddLinkAction(self, self.data, linked_table_id, link_id, match_conditions).do_action()
+                elif action_info.get('type') in AUTO_RULE_CALCULATE_TYPES:
+                    table_id = self.table_id
+                    view_id = self.view_id
+                    calculate_column_key = action_info.get('calculate_column')
+                    result_column_key = action_info.get('result_column')
+                    CalculateAction(self, self.data, table_id, view_id, calculate_column_key, result_column_key, action_info.get('type')).do_action()
+
+                elif action_info.get('type') == 'lookup_and_copy':
+                    pass
 
             except RuleInvalidException as e:
                 logger.error('auto rule: %s, invalid error: %s', self.rule_id, e)
