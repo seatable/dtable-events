@@ -23,10 +23,10 @@ if not os.path.exists(dtable_web_dir):
 sys.path.insert(0, dtable_web_dir)
 
 try:
-    from seahub.settings import DTABLE_DB_URL
+    from seahub.settings import INNER_DTABLE_DB_URL
     from seahub.settings import DTABLE_PRIVATE_KEY
 except ImportError as err:
-    DTABLE_DB_URL = ''
+    INNER_DTABLE_DB_URL = ''
     DTABLE_PRIVATE_KEY = ''
     logging.warning('Can not import seahub.settings: %s.' % err)
 
@@ -73,7 +73,7 @@ class BigDataStorageStatsTask(Thread):
             offset = 0
             limit = 1000
             while 1:
-                api_url = DTABLE_DB_URL.rstrip('/') + '/api/v1/bases/?offset=%s&limit=%s' % (offset, limit)
+                api_url = INNER_DTABLE_DB_URL.rstrip('/') + '/api/v1/bases/?offset=%s&limit=%s' % (offset, limit)
                 headers = {'Authorization': 'Token ' + jwt.encode({
                     'is_db_admin': True, 'exp': int(time.time()) + 60,
                 }, DTABLE_PRIVATE_KEY, 'HS256')}

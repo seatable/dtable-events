@@ -23,7 +23,7 @@ if not os.path.exists(dtable_web_dir):
 try:
     import seahub.settings as seahub_settings
     DTABLE_PRIVATE_KEY = getattr(seahub_settings, 'DTABLE_PRIVATE_KEY')
-    DTABLE_DB_URL = getattr(seahub_settings, 'DTABLE_DB_URL')
+    INNER_DTABLE_DB_URL = getattr(seahub_settings, 'INNER_DTABLE_DB_URL')
 except ImportError as e:
     logger.critical("Can not import dtable_web settings: %s." % e)
     raise RuntimeError("Can not import dtable_web settings: %s" % e)
@@ -1057,7 +1057,7 @@ def db_query(dtable_uuid, sql):
         token = token.decode()
 
     headers = {'Authorization': 'Token ' + token}
-    api_url = DTABLE_DB_URL.rstrip('/') + '/api/v1/query/' + dtable_uuid + '/'
+    api_url = INNER_DTABLE_DB_URL.rstrip('/') + '/api/v1/query/' + dtable_uuid + '/'
     params = {
         'sql':sql
     }
