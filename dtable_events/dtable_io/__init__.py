@@ -12,7 +12,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from dtable_events.dtable_io.utils import setup_logger, \
     prepare_asset_file_folder, post_dtable_json, post_asset_files, \
     download_files_to_path, create_forms_from_src_dtable, copy_src_forms_to_json, \
-    prepare_dtable_json_from_memory, update_page_design_static_image
+    prepare_dtable_json_from_memory, update_page_design_static_image, \
+    copy_src_auto_rules_to_json, create_auto_rules_from_src_dtable
 from dtable_events.db import init_db_session_class
 from dtable_events.dtable_io.excel import parse_excel_to_json, import_excel_by_dtable_server, \
     append_parsed_file_by_dtable_server, parse_append_excel_upload_excel_to_json, \
@@ -73,13 +74,22 @@ def get_dtable_export_content(username, repo_id, dtable_uuid, asset_dir_id, conf
             dtable_io_logger.error('create asset folder failed. ERROR: {}'.format(e))
             raise Exception('create asset folder failed. ERROR: {}'.format(e))
 
-
     # 3. copy forms
     try:
         copy_src_forms_to_json(dtable_uuid, tmp_file_path, db_session)
     except Exception as e:
         dtable_io_logger.error('copy forms failed. ERROR: {}'.format(e))
         raise Exception('copy forms failed. ERROR: {}'.format(e))
+    finally:
+        if db_session:
+            db_session.close()
+
+    # 4. copy automation rules
+    try:
+        copy_src_auto_rules_to_json(dtable_uuid, tmp_file_path, db_session)
+    except Exception as e:
+        dtable_io_logger.error('copy automation rules failed. ERROR: {}'.format(e))
+        raise Exception('copy automation rules failed. ERROR: {}'.format(e))
     finally:
         if db_session:
             db_session.close()
@@ -94,7 +104,7 @@ def get_dtable_export_content(username, repo_id, dtable_uuid, asset_dir_id, conf
     """
     dtable_io_logger.info('Make zip file for download...')
     try:
-        shutil.make_archive('/tmp/dtable-io/' + dtable_uuid +  '/zip_file', "zip", root_dir=tmp_file_path)
+        shutil.make_archive('/tmp/dtable-io/' + dtable_uuid + '/zip_file', "zip", root_dir=tmp_file_path)
     except Exception as e:
         dtable_io_logger.error('make zip failed. ERROR: {}'.format(e))
         raise Exception('make zip failed. ERROR: {}'.format(e))
@@ -103,7 +113,8 @@ def get_dtable_export_content(username, repo_id, dtable_uuid, asset_dir_id, conf
     # we remove '/tmp/dtable-io/<dtable_uuid>' in dtable web api
 
 
-def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage, config):
+def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage,
+                             can_use_automation_rules, config):
     """
     post files at /tmp/<dtable_uuid>/dtable_zip_extracted/ to file server
     unzip django uploaded tmp file is suppose to be done in dtable-web api.
@@ -136,6 +147,16 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
     finally:
         if db_session:
             db_session.close()
+
+    if can_use_automation_rules:
+        dtable_io_logger.info('create auto rules from src dtable.')
+        try:
+            create_auto_rules_from_src_dtable(username, workspace_id, dtable_uuid, db_session)
+        except Exception as e:
+            dtable_io_logger.error('create auto rules failed. ERROR: {}'.format(e))
+        finally:
+            if db_session:
+                db_session.close()
 
     try:
         if dtable_content:

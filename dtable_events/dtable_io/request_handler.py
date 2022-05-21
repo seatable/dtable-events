@@ -77,10 +77,11 @@ def add_import_task():
     dtable_uuid = request.args.get('dtable_uuid')
     dtable_file_name = request.args.get('dtable_file_name')
     in_storage = parse_bool(request.args.get('in_storage'))
+    can_use_automation_rules = parse_bool(request.args.get('can_use_automation_rules'))
 
     try:
         task_id = task_manager.add_import_task(
-            username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage)
+            username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage, can_use_automation_rules)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))

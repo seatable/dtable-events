@@ -218,6 +218,24 @@ def copy_src_forms_to_json(dtable_uuid, tmp_file_path, db_session):
             fp.write(json.dumps(src_forms_json))
 
 
+def copy_src_auto_rules_to_json(dtable_uuid, tmp_file_path, db_session):
+    if not db_session:
+        return
+    sql = """SELECT `run_condition`, `trigger`, `actions` FROM dtable_automation_rules WHERE dtable_uuid=:dtable_uuid"""
+    src_auto_rules = db_session.execute(sql, {'dtable_uuid': ''.join(dtable_uuid.split('-'))})
+    src_auto_rules_json = []
+    for src_auto_rule in src_auto_rules:
+        auto_rule = {
+            'run_condition': src_auto_rule[0],
+            'trigger': src_auto_rule[1],
+            'actions': src_auto_rule[2],
+        }
+        src_auto_rules_json.append(auto_rule)
+    if src_auto_rules_json:
+        with open(os.path.join(tmp_file_path, 'auto_rules.json'), 'w+') as fp:
+            fp.write(json.dumps(src_auto_rules_json))
+
+
 def convert_dtable_import_file_url(dtable_content, workspace_id, dtable_uuid):
     """ notice that this function receive a python dict and return a python dict
         json related operations are excluded
@@ -426,6 +444,27 @@ def add_a_form_to_db(form, workspace_id, dtable_uuid, db_session):
     db_session.commit()
 
 
+def add_a_auto_rule_to_db(username, auto_rule, workspace_id, dtable_uuid, db_session):
+    # get org_id
+    sql_get_org_id = """SELECT `org_id` FROM workspaces WHERE id=:id"""
+    org_id = [x[0] for x in db_session.execute(sql_get_org_id, {'id': workspace_id})][0]
+
+    sql = """INSERT INTO dtable_automation_rules (`dtable_uuid`, `run_condition`, `trigger`, `actions`,
+             `creator`, `ctime`, `org_id`, `last_trigger_time`) VALUES (:dtable_uuid, :run_condition,
+             :trigger, :actions, :creator, :ctime, :org_id, :last_trigger_time)"""
+    db_session.execute(sql, {
+        'dtable_uuid': ''.join(dtable_uuid.split('-')),
+        'run_condition': auto_rule['run_condition'],
+        'trigger': auto_rule['trigger'],
+        'actions': auto_rule['actions'],
+        'creator': username,
+        'ctime': datetime.datetime.utcnow(),
+        'org_id': org_id,
+        'last_trigger_time': None,
+        })
+    db_session.commit()
+
+
 def create_forms_from_src_dtable(workspace_id, dtable_uuid, db_session):
     if not db_session:
         return
@@ -440,6 +479,21 @@ def create_forms_from_src_dtable(workspace_id, dtable_uuid, db_session):
         if ('username' not in form) or ('form_config' not in form) or ('share_type' not in form):
             continue
         add_a_form_to_db(form, workspace_id, dtable_uuid, db_session)
+
+
+def create_auto_rules_from_src_dtable(username, workspace_id, dtable_uuid, db_session):
+    if not db_session:
+        return
+    auto_rules_json_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted/', 'auto_rules.json')
+    if not os.path.exists(auto_rules_json_path):
+        return
+    with open(auto_rules_json_path, 'r') as fp:
+        auto_rules_json = fp.read()
+    auto_rules = json.loads(auto_rules_json)
+    for auto_rule in auto_rules:
+        if ('run_condition' not in auto_rule) or ('trigger' not in auto_rule) or ('actions' not in auto_rule):
+            continue
+        add_a_auto_rule_to_db(username, auto_rule, workspace_id, dtable_uuid, db_session)
 
 
 def download_files_to_path(username, repo_id, dtable_uuid, files, path, files_map=None):
