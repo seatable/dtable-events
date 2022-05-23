@@ -604,7 +604,7 @@ def trigger_near_deadline_notification_rule(rule, db_session):
 
         user_msg_list = []
         for user in to_users:
-            if not is_valid_email(user):
+            if isinstance(user, str) and not is_valid_email(user):
                 continue
             user_msg_list.append({
                 'to_user': user,
