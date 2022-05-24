@@ -7,14 +7,14 @@ from dtable_events.common_dataset.common_dataset_sync_utils import import_or_syn
 from dtable_events.db import init_db_session_class
 from dtable_events.dtable_io import dtable_io_logger
 from dtable_events.dtable_io.task_manager import task_manager
-from dtable_events.utils import uuid_str_to_32_chars
+from dtable_events.utils import uuid_str_to_32_chars, get_inner_dtable_server_url
 
 
 DTABLE_SERVER_URL = task_manager.conf['dtable_server_url']
 DTABLE_PRIVATE_KEY = task_manager.conf['dtable_private_key']
 DTABLE_PROXY_SERVER_URL = task_manager.conf['dtable_proxy_server_url']
 ENABLE_DTABLE_SERVER_CLUSTER = task_manager.conf['dtable_proxy_server_url']
-dtable_server_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+dtable_server_url = get_inner_dtable_server_url()
 
 
 def sync_common_dataset(context, config):

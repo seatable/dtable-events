@@ -22,6 +22,7 @@ from django.utils.http import urlquote
 from seaserv import seafile_api
 
 from dtable_events.dtable_io.task_manager import task_manager
+from dtable_events.utils import get_inner_dtable_server_url
 
 # this two prefix used in exported zip file
 FILE_URL_PREFIX = 'file://dtable-bundle/asset/files/'
@@ -131,10 +132,7 @@ def prepare_dtable_json_from_memory(dtable_uuid, username):
     """
     dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
     headers = {'Authorization': 'Token ' + dtable_server_access_token}
-    DTABLE_SERVER_URL = task_manager.conf['dtable_server_url']
-    ENABLE_DTABLE_SERVER_CLUSTER = task_manager.conf['enable_dtable_server_cluster']
-    DTABLE_PROXY_SERVER_URL = task_manager.conf['dtable_proxy_server_url']
-    api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+    api_url = get_inner_dtable_server_url()
     json_url = api_url.rstrip('/') + '/dtables/' + dtable_uuid + '/?from=dtable_events'
     content_json = requests.get(json_url, headers=headers).content
     if content_json:
@@ -576,10 +574,7 @@ def delete_excel_file(username, repo_id, file_name):
     seafile_api.del_file(repo_id, EXCEL_DIR_PATH, filename, username)
 
 def upload_excel_json_to_dtable_server(username, dtable_uuid, json_file):
-    DTABLE_SERVER_URL = task_manager.conf['dtable_server_url']
-    ENABLE_DTABLE_SERVER_CLUSTER = task_manager.conf['enable_dtable_server_cluster']
-    DTABLE_PROXY_SERVER_URL = task_manager.conf['dtable_proxy_server_url']
-    api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+    api_url = get_inner_dtable_server_url()
     url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/import-excel/?from=dtable_events'
     dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
     headers = {'Authorization': 'Token ' + dtable_server_access_token}
@@ -592,10 +587,7 @@ def upload_excel_json_to_dtable_server(username, dtable_uuid, json_file):
         raise ConnectionError('failed to import excel json %s %s' % (dtable_uuid, res.text))
 
 def upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, json_file):
-    DTABLE_SERVER_URL = task_manager.conf['dtable_server_url']
-    ENABLE_DTABLE_SERVER_CLUSTER = task_manager.conf['enable_dtable_server_cluster']
-    DTABLE_PROXY_SERVER_URL = task_manager.conf['dtable_proxy_server_url']
-    api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+    api_url = get_inner_dtable_server_url()
     url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/import-excel-add-table/?from=dtable_events'
     dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
     headers = {'Authorization': 'Token ' + dtable_server_access_token}
@@ -608,10 +600,7 @@ def upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, json_fil
         raise ConnectionError('failed to import excel json %s %s' % (dtable_uuid, res.text))
 
 def append_excel_json_to_dtable_server(username, dtable_uuid, json_file, table_name):
-    DTABLE_SERVER_URL = task_manager.conf['dtable_server_url']
-    ENABLE_DTABLE_SERVER_CLUSTER = task_manager.conf['enable_dtable_server_cluster']
-    DTABLE_PROXY_SERVER_URL = task_manager.conf['dtable_proxy_server_url']
-    api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+    api_url = get_inner_dtable_server_url()
     url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/batch-append-rows/?from=dtable_events'
     dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
     headers = {'Authorization': 'Token ' + dtable_server_access_token}
@@ -633,10 +622,7 @@ def append_excel_json_to_dtable_server(username, dtable_uuid, json_file, table_n
 
 
 def get_columns_from_dtable_server(username, dtable_uuid, table_name):
-    DTABLE_SERVER_URL = task_manager.conf['dtable_server_url']
-    ENABLE_DTABLE_SERVER_CLUSTER = task_manager.conf['enable_dtable_server_cluster']
-    DTABLE_PROXY_SERVER_URL = task_manager.conf['dtable_proxy_server_url']
-    api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+    api_url = get_inner_dtable_server_url()
     url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/columns/?from=dtable_events&table_name=' + table_name
     dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
     headers = {'Authorization': 'Token ' + dtable_server_access_token}
@@ -665,10 +651,7 @@ def get_csv_file(repo_id, file_name):
 
 
 def get_rows_from_dtable_server(username, dtable_uuid, table_name):
-    DTABLE_SERVER_URL = task_manager.conf['dtable_server_url']
-    ENABLE_DTABLE_SERVER_CLUSTER = task_manager.conf['enable_dtable_server_cluster']
-    DTABLE_PROXY_SERVER_URL = task_manager.conf['dtable_proxy_server_url']
-    api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+    api_url = get_inner_dtable_server_url()
     url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/rows/?' + 'table_name=' + table_name + \
           '&convert_link_id=true&from=dtable_events'
     dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
@@ -681,10 +664,7 @@ def get_rows_from_dtable_server(username, dtable_uuid, table_name):
 
 
 def update_rows_by_dtable_server(username, dtable_uuid, update_rows, table_name):
-    DTABLE_SERVER_URL = task_manager.conf['dtable_server_url']
-    ENABLE_DTABLE_SERVER_CLUSTER = task_manager.conf['enable_dtable_server_cluster']
-    DTABLE_PROXY_SERVER_URL = task_manager.conf['dtable_proxy_server_url']
-    api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+    api_url = get_inner_dtable_server_url()
     url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/batch-update-rows/?from=dtable_events'
     dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
     headers = {'Authorization': 'Token ' + dtable_server_access_token}
@@ -705,10 +685,7 @@ def update_rows_by_dtable_server(username, dtable_uuid, update_rows, table_name)
 
 
 def update_append_excel_json_to_dtable_server(username, dtable_uuid, rows_data, table_name):
-    DTABLE_SERVER_URL = task_manager.conf['dtable_server_url']
-    ENABLE_DTABLE_SERVER_CLUSTER = task_manager.conf['enable_dtable_server_cluster']
-    DTABLE_PROXY_SERVER_URL = task_manager.conf['dtable_proxy_server_url']
-    api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+    api_url = get_inner_dtable_server_url()
     url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/batch-append-rows/?from=dtable_events'
     dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
     headers = {'Authorization': 'Token ' + dtable_server_access_token}
@@ -736,11 +713,9 @@ def delete_file(username, repo_id, file_name):
 def get_metadata_from_dtable_server(dtable_uuid, username, permission):
     # generate json web token
     # internal usage exp 60 seconds, username = request.user.username
-    DTABLE_SERVER_URL = task_manager.conf['dtable_server_url']
-    ENABLE_DTABLE_SERVER_CLUSTER = task_manager.conf['enable_dtable_server_cluster']
-    DTABLE_PROXY_SERVER_URL = task_manager.conf['dtable_proxy_server_url']
+
     DTABLE_PRIVATE_KEY = str(task_manager.conf['dtable_private_key'])
-    api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+    api_url = get_inner_dtable_server_url()
     url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/metadata/?from=dtable_events'
 
     payload = {
@@ -761,11 +736,8 @@ def get_metadata_from_dtable_server(dtable_uuid, username, permission):
 
 
 def get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission, table_name, view_name):
-    DTABLE_SERVER_URL = task_manager.conf['dtable_server_url']
-    ENABLE_DTABLE_SERVER_CLUSTER = task_manager.conf['enable_dtable_server_cluster']
-    DTABLE_PROXY_SERVER_URL = task_manager.conf['dtable_proxy_server_url']
     DTABLE_PRIVATE_KEY = str(task_manager.conf['dtable_private_key'])
-    api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+    api_url = get_inner_dtable_server_url()
     url = api_url.rstrip('/') + '/api/v1/internal/dtables/' + dtable_uuid + '/view-rows/?from=dtable_events'
 
     payload = {

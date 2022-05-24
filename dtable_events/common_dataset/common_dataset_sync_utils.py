@@ -9,6 +9,7 @@ import requests
 from dateutil import parser
 
 from dtable_events.utils.constants import ColumnTypes
+from dtable_events.utils import get_inner_dtable_server_url
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ except ImportError as e:
     logger.critical("Can not import dtable_web settings: %s." % e)
     raise RuntimeError("Can not import dtable_web settings: %s" % e)
 
-dtable_server_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+dtable_server_url = get_inner_dtable_server_url()
 
 
 SRC_ROWS_LIMIT = 50000

@@ -11,7 +11,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 
 from dtable_events import init_db_session_class
 from dtable_events.common_dataset.common_dataset_sync_utils import import_or_sync, set_common_dataset_invalid, set_common_dataset_sync_invalid
-from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars
+from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars, get_inner_dtable_server_url
 
 
 # DTABLE_WEB_DIR
@@ -91,7 +91,7 @@ def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_
     src_headers = get_dtable_server_header(src_dtable_uuid)
 
     # request src_dtable
-    dtable_server_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+    dtable_server_url = get_inner_dtable_server_url()
     url = dtable_server_url.strip('/') + '/dtables/' + src_dtable_uuid + '?from=dtable_events'
 
     try:

@@ -177,3 +177,23 @@ def uuid_str_to_32_chars(dtable_uuid):
 def is_valid_email(email):
     return True if EMAIL_RE.match(email) is not None else False
 
+def get_inner_dtable_server_url():
+    """ only for api
+    """
+    try:
+        import seahub.settings as seahub_settings
+        ENABLE_DTABLE_SERVER_CLUSTER = getattr(seahub_settings, 'ENABLE_DTABLE_SERVER_CLUSTER', False)
+        DTABLE_PROXY_SERVER_URL = getattr(seahub_settings, 'DTABLE_PROXY_SERVER_URL', '')
+        USE_INNER_DTABLE_SERVER = getattr(seahub_settings, 'USE_INNER_DTABLE_SERVER', True)
+        INNER_DTABLE_SERVER_URL = getattr(seahub_settings, 'INNER_DTABLE_SERVER_URL', 'http://127.0.0.1:5000')
+        DTABLE_SERVER_URL = getattr(seahub_settings, 'DTABLE_SERVER_URL', 'http://127.0.0.1:5000')
+    except ImportError as e:
+        logger.critical("Can not import dtable_web settings: %s." % e)
+        raise RuntimeError("Can not import dtable_web settings: %s" % e)
+
+    if ENABLE_DTABLE_SERVER_CLUSTER:
+        return DTABLE_PROXY_SERVER_URL
+    elif USE_INNER_DTABLE_SERVER:
+        return INNER_DTABLE_SERVER_URL
+    else:
+        return DTABLE_SERVER_URL
