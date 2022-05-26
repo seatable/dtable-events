@@ -21,9 +21,11 @@ sys.path.insert(0, dtable_web_dir)
 try:
     from seahub.settings import ENABLE_WEIXIN
     from seahub.settings import ENABLE_WORK_WEIXIN
+    from seahub.settings import ENABLE_DINGTALK
 except ImportError as err:
     ENABLE_WEIXIN = False
     ENABLE_WORK_WEIXIN = False
+    ENABLE_DINGTALK = False
     logging.warning('Can not import seahub.settings: %s.' % err)
 
 __all__ = [
@@ -52,7 +54,7 @@ class InstantNoticeSender(object):
         default_interval = 60  # 1min
 
         # enabled
-        enabled = ENABLE_WEIXIN or ENABLE_WORK_WEIXIN
+        enabled = ENABLE_WEIXIN or ENABLE_WORK_WEIXIN or ENABLE_DINGTALK
         enabled = parse_bool(enabled)
         if not enabled:
             return
