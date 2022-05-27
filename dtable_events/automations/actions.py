@@ -1116,7 +1116,7 @@ class AutoAddLinkAction(BaseAction):
                 }
             }
 
-            api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+            api_url = get_inner_dtable_server_url()
             url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/columns/?from=dtable_events'
             try:
                 response = requests.post(url, headers=self.auto_rule.headers, json=json_data)
@@ -1144,7 +1144,7 @@ class AutoAddLinkAction(BaseAction):
         return column_dict
 
     def query_table_rows(self, table_name, column_names):
-        api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+        api_url = get_inner_dtable_server_url()
         query_url = api_url.rstrip('/') + '/api/v1/dtables/' + uuid_str_to_36_chars(self.auto_rule.dtable_uuid) + '/query/?from=dtable_events'
 
         sql_columns = ', '.join(column_names)
@@ -1237,8 +1237,7 @@ class AutoAddLinkAction(BaseAction):
     def do_action(self):
         if not self._can_do_action():
             return
-
-        api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+        api_url = get_inner_dtable_server_url()
         rows_link_url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/batch-update-links/?from=dtable_events'
 
         json_data = {
