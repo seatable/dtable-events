@@ -76,6 +76,92 @@ def email2list(email_str, split_pattern='[,，]'):
     return email_list
 
 
+def parse_row(column, row):
+    col_key = column.get('key')
+    col_type = column.get('type')
+    cell_value = row.get(col_key)
+    if col_type in [
+        ColumnTypes.TEXT,
+        ColumnTypes.NUMBER,
+        ColumnTypes.RATE,
+        ColumnTypes.COLLABORATOR,
+        ColumnTypes.DURATION,
+        ColumnTypes.EMAIL,
+        ColumnTypes.DATE,
+        ColumnTypes.CHECKBOX,
+        ColumnTypes.CREATOR,
+        ColumnTypes.URL,
+        ColumnTypes.GEOLOCATION
+    ]:
+        return cell_value
+
+    elif col_type == ColumnTypes.SINGLE_SELECT:
+        if not isinstance(cell_value, str):
+            return
+        options = column.get('data').get('options')
+        option_dict = {option.get('id'): option.get('name') for option in options}
+        cell_value = option_dict.get(cell_value)
+        return cell_value
+
+    elif col_type == ColumnTypes.MULTIPLE_SELECT:
+        if not isinstance(cell_value, list):
+            return
+        options = column.get('data', {}).get('options', [])
+        option_dict = {option.get('id'): option.get('name') for option in options}
+        cell_value = [option_dict.get(cell) for cell in cell_value]
+        cell_value.sort()
+        return cell_value
+
+    elif col_type == ColumnTypes.FORMULA:
+        result_type = column.get('data', {}).get('result_type')
+        if result_type == 'number':
+            re_number = r'(\-|\+)?\d+(\.\d+)?'
+            try:
+                match_obj = re.search(re_number, str(cell_value))
+                if not match_obj:
+                    return
+                start, end = match_obj.span()
+                return float(str(cell_value)[start: end])
+            except Exception as e:
+                logger.error('re search: %s in: %s error: %s', re_number, cell_value, e)
+                return
+        elif result_type == 'date':
+            return cell_value
+        elif result_type == 'bool':
+            if isinstance(cell_value, bool):
+                return cell_value
+            return str(cell_value).upper() == 'TRUE'
+
+        elif result_type == 'string':
+            col_data = column.get('data', {})
+            options = col_data.get('options') if col_data else None
+            if options and isinstance(options, list):
+                options_dict = {option.get('id'): option.get('name', '') for option in options}
+                if isinstance(cell_value, list):
+                    values = [options_dict.get(item, item) for item in cell_value]
+                    values.sort()
+                    return ', '.join(values)
+                elif isinstance(cell_value, dict):
+                    # dict if column type is geolocation
+                    return cell_value
+                else:
+                    return options_dict.get(cell_value, cell_value)
+            else:
+                if isinstance(cell_value, list):
+                    cell_value.sort()
+                    return ', '.join(str(v) for v in cell_value)
+                elif isinstance(cell_value, dict):
+                    return ', '.join(str(cell_value.get(v)) for v in cell_value)
+                else:
+                    return cell_value
+        else:
+            if isinstance(cell_value, list):
+                return ', '.join(str(v) for v in cell_value)
+            else:
+                return cell_value
+    return cell_value
+
+
 class BaseAction:
 
     def __init__(self, auto_rule, data=None):
@@ -975,6 +1061,204 @@ class LinkRecordsAction(BaseAction):
             self.auto_rule.set_done_actions()
 
 
+class AutoAddLinkAction(BaseAction):
+    def __init__(self, auto_rule, data, match_table_condition, match_column_conditions, selected_link_option, action_id):
+        super().__init__(auto_rule, data=data)
+        self.action_type = 'auto_add_link'
+        self.action_id = action_id
+
+        self.match_table_condition = match_table_condition
+        self.table_names_dict = self.get_table_names_dict()
+
+        self.table_id = match_table_condition.get('table_id')
+        self.other_table_id = match_table_condition.get('other_table_id')
+
+        self.table_columns_dict = self.get_columns_dict(match_table_condition.get('table_id'))
+        self.other_table_columns_dict = self.get_columns_dict(match_table_condition.get('other_table_id'))
+        self.match_column_conditions = match_column_conditions
+
+        self.link_id = None
+        self.selected_link_option = selected_link_option
+        self.row_id_list = []
+        self.other_rows_ids_map = {}
+
+        self._init_link_id()
+        self._init_linked_row_ids()
+
+    def update_action_condition(self, link_column_key):
+        try:
+            for action in self.auto_rule.action_infos:
+                if action.get('_id') == self.action_id:
+                    action['selected_link_option'] = {'link_column_key': link_column_key}
+
+            action_condition = json.dumps(self.auto_rule.action_infos)
+            set_invalid_sql = '''
+                UPDATE dtable_automation_rules SET actions=:action_condition WHERE id=:rule_id
+            '''
+            self.auto_rule.db_session.execute(set_invalid_sql, {'rule_id': self.auto_rule.rule_id, 'action_condition': action_condition})
+            self.auto_rule.db_session.commit()
+        except Exception as e:
+            logger.error('set selected link option: %s error: %s', self.auto_rule.rule_id, e)
+
+    def _init_link_id(self):
+        # create link column if link_id does not exist
+        if self.selected_link_option and self.table_columns_dict.get(self.selected_link_option.get('link_column_key')) \
+                and self.table_columns_dict.get(self.selected_link_option.get('link_column_key')).get('type') == 'link':
+            self.link_id = self.table_columns_dict.get(self.selected_link_option.get('link_column_key')).get('data').get('link_id')
+        else:
+            json_data = {
+                'table_name': self.table_names_dict.get(self.table_id),
+                'column_name': self.table_names_dict.get(self.other_table_id),
+                'column_type': 'link',
+                'column_data': {
+                    'table': self.table_names_dict.get(self.table_id),
+                    'other_table': self.table_names_dict.get(self.other_table_id),
+                }
+            }
+
+            api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+            url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/columns/?from=dtable_events'
+            try:
+                response = requests.post(url, headers=self.auto_rule.headers, json=json_data)
+            except Exception as e:
+                logger.error('link dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
+                return
+            self.link_id = response.json().get('data').get('link_id')
+            link_column_key = response.json().get('key')
+
+            # update database
+            self.update_action_condition(link_column_key)
+
+    def get_table_names_dict(self):
+        dtable_metadata = self.auto_rule.dtable_metadata
+        tables = dtable_metadata.get('tables', [])
+        return {table.get('_id'): table.get('name') for table in tables}
+
+    def get_columns_dict(self, table_id):
+        dtable_metadata = self.auto_rule.dtable_metadata
+        column_dict = {}
+        for table in dtable_metadata.get('tables', []):
+            if table.get('_id') == table_id:
+                for col in table.get('columns'):
+                    column_dict[col.get('key')] = col
+        return column_dict
+
+    def query_table_rows(self, table_name, column_names):
+        api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+        query_url = api_url.rstrip('/') + '/api/v1/dtables/' + uuid_str_to_36_chars(self.auto_rule.dtable_uuid) + '/query/?from=dtable_events'
+
+        sql_columns = ', '.join(column_names)
+        limit = 0
+        step = 100
+        result_rows = []
+        while True:
+            sql = f"select '_id', {sql_columns} from `{table_name}` limit {limit},{step}"
+            params = {
+                'sql': sql
+            }
+            try:
+                response = requests.post(query_url, headers=self.auto_rule.headers, json=params)
+            except Exception as e:
+                logger.error('query dtable: %s, table name: %s, error: %s', self.auto_rule.dtable_uuid, table_name, e)
+                return []
+
+            if response.status_code != 200:
+                logger.error('query dtable: %s, table name %s error response status code: %s', self.auto_rule.dtable_uuid,
+                             table_name, response.status_code)
+                return []
+
+            results = response.json().get('results')
+            result_rows += results
+            limit += step
+            if len(results) < step:
+                break
+        return result_rows
+
+    def _init_linked_row_ids(self):
+        table_columns = []
+        other_table_columns = []
+        for col in self.match_column_conditions:
+            if col and col.get('column_key') and self.table_columns_dict.get(col.get('column_key')) and \
+                    col.get('other_column_key') and self.other_table_columns_dict.get(col.get('other_column_key')):
+                table_columns.append('`' + self.table_columns_dict.get(col.get('column_key')).get('name') + '`')
+                other_table_columns.append('`' + self.other_table_columns_dict.get(col.get('other_column_key')).get('name') + '`')
+                continue
+            self.auto_rule.set_invalid()
+
+        # link column maybe not exist
+        link_column_name = self.table_columns_dict.get(self.selected_link_option.get('link_column_key'), {}).get('name', '')
+        if link_column_name:
+            table_columns.append('`' + link_column_name + '`')
+
+        table_rows = self.query_table_rows(self.table_names_dict.get(self.table_id), table_columns)
+        other_table_rows = self.query_table_rows(self.table_names_dict.get(self.other_table_id), other_table_columns)
+        row_id_list = []
+        other_rows_ids_map = {}
+        for row in table_rows:
+            linked_row_dict = {}
+            if self.selected_link_option.get('link_column_key'):
+                linked_rows = row.get(self.selected_link_option.get('link_column_key'))
+                linked_row_dict = {row.get('row_id'): True for row in linked_rows}
+
+            linked_row_list = []
+            to_link_row_list = []
+            for other_row in other_table_rows:
+                is_link = True
+                for condition in self.match_column_conditions:
+                    column_key = condition.get('column_key')
+                    other_column_key = condition.get('other_column_key')
+                    table_column = self.table_columns_dict.get(column_key)
+                    other_table_column = self.other_table_columns_dict.get(other_column_key)
+                    row_value = parse_row(table_column, row)
+                    other_row_value = parse_row(other_table_column, other_row)
+
+                    if not row_value or not other_row_value or row_value != other_row_value:
+                        is_link = False
+                        break
+                if is_link:
+                    if linked_row_dict.get(other_row.get('_id')):
+                        linked_row_list.append(other_row.get('_id'))
+                    to_link_row_list.append(other_row.get('_id'))
+
+            if len(linked_row_dict) != len(linked_row_list) or len(linked_row_list) != len(to_link_row_list):
+                row_id_list.append(row.get('_id'))
+                other_rows_ids_map[row.get('_id')] = to_link_row_list
+
+        self.row_id_list = row_id_list
+        self.other_rows_ids_map = other_rows_ids_map
+
+    def _can_do_action(self):
+        if not self.auto_rule.current_valid:
+            return False
+        if not self.row_id_list or not self.other_rows_ids_map:
+            return False
+        return True
+
+    def do_action(self):
+        if not self._can_do_action():
+            return
+
+        api_url = DTABLE_PROXY_SERVER_URL if ENABLE_DTABLE_SERVER_CLUSTER else DTABLE_SERVER_URL
+        rows_link_url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/batch-update-links/?from=dtable_events'
+
+        json_data = {
+            'link_id': self.link_id,
+            'table_id': self.auto_rule.table_id,
+            'other_table_id': self.other_table_id,
+            'row_id_list': self.row_id_list,
+            'other_rows_ids_map': self.other_rows_ids_map,
+        }
+
+        try:
+            response = requests.put(rows_link_url, headers=self.auto_rule.headers, json=json_data)
+        except Exception as e:
+            logger.error('batch link dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
+            return
+        if response.status_code != 200:
+            logger.error('batch link dtable: %s error response status code: %s', self.auto_rule.dtable_uuid, response.status_code)
+        else:
+            self.auto_rule.set_done_actions()
+
 
 class RuleInvalidException(Exception):
     """
@@ -1217,6 +1501,13 @@ class AutomationRule:
                     link_id = action_info.get('link_id')
                     match_conditions = action_info.get('match_conditions')
                     LinkRecordsAction(self, self.data, linked_table_id, link_id, match_conditions).do_action()
+
+                elif action_info.get('type') == 'auto_add_link':
+                    match_table_condition = action_info.get('match_table_condition')
+                    match_column_conditions = action_info.get('match_column_conditions')
+                    selected_link_option = action_info.get('selected_link_option')
+                    action_id = action_info.get('_id')
+                    AutoAddLinkAction(self, self.data, match_table_condition, match_column_conditions, selected_link_option, action_id).do_action()
 
             except RuleInvalidException as e:
                 logger.error('auto rule: %s, invalid error: %s', self.rule_id, e)
