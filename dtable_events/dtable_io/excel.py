@@ -862,6 +862,11 @@ def convert_formula_number(value, column_data):
 
 
 def parse_formula_number(cell_data, column_data):
+    """
+    parse formula number to regular format
+    :param cell_data: data may be 1.25, ￥12.0, $10.20, €10.2, 0:02 or 10%, etc
+    :param column_data: info of formula column
+    """
     src_format = column_data.get('format')
     value = cell_data
     number_format = '0'
