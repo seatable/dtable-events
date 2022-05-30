@@ -841,26 +841,49 @@ def parse_multiple_select_formula(cell_data):
         return str(cell_data)
 
 
-def parse_formula_number(cell_data, src_format):
+def convert_formula_number(value, column_data):
+    decimal = column_data.get('decimal')
+    thousands = column_data.get('thousands')
+    precision = column_data.get('precision')
+    if decimal == 'comma':
+        # decimal maybe dot or comma
+        value = value.replace(',', '.')
+    if thousands == 'space':
+        # thousands maybe space, dot, comma or no
+        value = value.replace(' ', '')
+    elif thousands == 'dot':
+        value = value.replace('.', '')
+        if precision > 0 or decimal == 'dot':
+            value = value[:-precision] + '.' + value[-precision:]
+    elif thousands == 'comma':
+        value = value.replace(',', '')
+
+    return value
+
+
+def parse_formula_number(cell_data, column_data):
+    src_format = column_data.get('format')
     value = cell_data
     number_format = '0'
-    if src_format == 'number':
-        number_format = gen_decimal_format(cell_data)
-    elif src_format == 'percent' and isinstance(cell_data, str):
+    if src_format in ['euro', 'dollar', 'yuan']:
+        value = cell_data[1:]
+    elif src_format == 'percent':
         value = cell_data[:-1]
+    value = convert_formula_number(value, column_data)
+
+    if src_format == 'number':
+        number_format = gen_decimal_format(value)
+    elif src_format == 'percent' and isinstance(value, str):
+        number_format = gen_decimal_format(value) + '%'
         try:
             value = float(value) / 100
         except Exception as e:
             pass
-        number_format = gen_decimal_format(value) + '%'
     elif src_format == 'euro' and isinstance(cell_data, str):
-        value = cell_data[1:]
         number_format = '"€"#,##' + gen_decimal_format(value)+'_-'
     elif src_format == 'dollar' and isinstance(cell_data, str):
-        value = cell_data[1:]
         number_format = '"$"#,##' + gen_decimal_format(value)+'_-'
     elif src_format == 'yuan' and isinstance(cell_data, str):
-        value = cell_data[1:]
         number_format = '"¥"#,##' + gen_decimal_format(value)+'_-'
     try:
         if is_int_str(value):
@@ -869,7 +892,6 @@ def parse_formula_number(cell_data, src_format):
             value = float(value)
     except Exception as e:
         pass
-
     return value, number_format
 
 
@@ -1026,8 +1048,7 @@ def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unkn
             c.value = parse_multiple_select_formula(row[col_num])
         elif head[col_num][1] == ColumnTypes.FORMULA \
                 and isinstance(head[col_num][2], dict) and head[col_num][2].get('result_type') == 'number':
-            c.value, c.number_format = parse_formula_number(
-                row[col_num], head[col_num][2].get('format'))
+            c.value, c.number_format = parse_formula_number(row[col_num], head[col_num][2])
         elif head[col_num][1] == ColumnTypes.LINK:
             c.value = parse_link(head[col_num], row[col_num], email2nickname)
         else:
