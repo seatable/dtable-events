@@ -791,11 +791,11 @@ def parse_geolocation(cell_data):
     elif 'province' in cell_data:
         value = str(cell_data['province'])
         if 'city' in cell_data:
-            value = '%s %s' % (value, cell_data['city'])
+            value = '%s%s' % (value, cell_data['city'])
         if 'district' in cell_data:
-            value = '%s %s' % (value, cell_data['district'])
+            value = '%s%s' % (value, cell_data['district'])
         if 'detail' in cell_data:
-            value = '%s %s' % (value, cell_data['detail'])
+            value = '%s%s' % (value, cell_data['detail'])
         return value
     else:
         return str(cell_data)
