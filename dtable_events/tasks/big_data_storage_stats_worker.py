@@ -37,46 +37,30 @@ __all__ = [
 
 
 def update_big_data_storage_stats(db_session, bases):
-    sql = "REPLACE INTO big_data_storage_stats (dtable_uuid, total_rows, total_storage) VALUES %s" % \
-          ', '.join(["('%s', '%s', '%s')" % (base.get('id'), base.get('rows'), base.get('storage')) for base in bases])
+    uuid_org_id_map = dict()
+    get_org_id_sql = """SELECT uuid, org_id FROM dtables d JOIN workspaces w ON d.workspace_id=w.id
+                        WHERE uuid IN :uuid_list"""
+    results = db_session.execute(get_org_id_sql,
+                                 {'uuid_list': [uuid.UUID(base.get('id')).hex for base in bases]}).fetchall()
+    for result in results:
+        uuid_org_id_map[result[0]] = result[1]
+
+    sql = "REPLACE INTO big_data_storage_stats (dtable_uuid, total_rows, total_storage, org_id) VALUES %s" % ', '.join(
+        ["('%s', '%s', '%s', '%s')" % (base.get('id'), base.get('rows'), base.get('storage'),
+                                       uuid_org_id_map.get(uuid.UUID(base.get('id')).hex)) for base in bases])
     db_session.execute(sql)
     db_session.commit()
 
 
-def update_org_big_data_storage_stats(db_session, uuid_stats_map):
-    # {workspace_id1: [uuid1, uuid2], workspace_id2: [uuid3], workspace_id3: [uuid4]}
-    workspace_id_uuid_map = dict()
-    sql1 = """SELECT workspace_id, uuid FROM dtables WHERE uuid IN :uuid_list"""
-    results1 = db_session.execute(sql1, {'uuid_list': list(uuid_stats_map.keys())}).fetchall()
-    for result in results1:
-        if not workspace_id_uuid_map.get(result[0]):
-            workspace_id_uuid_map[result[0]] = [result[1]]
-        else:
-            workspace_id_uuid_map[result[0]].append(result[1])
+def update_org_big_data_storage_stats(db_session):
+    get_stats_sql = """SELECT org_id, SUM(total_rows) AS total_rows, SUM(total_storage) AS total_storage
+                       FROM big_data_storage_stats WHERE org_id != -1 GROUP BY org_id"""
+    results = db_session.execute(get_stats_sql).fetchall()
 
-    # {org_id1: [uuid1, uuid2, uuid3], org_id2: [uuid4]}
-    org_id_uuid_map = dict()
-    sql2 = """SELECT id, org_id FROM workspaces WHERE org_id != -1 AND id IN :workspace_id_list"""
-    results2 = db_session.execute(sql2, {'workspace_id_list': list(workspace_id_uuid_map.keys())}).fetchall()
-    for result in results2:
-        if not org_id_uuid_map.get(result[1]):
-            org_id_uuid_map[result[1]] = workspace_id_uuid_map[result[0]]
-        else:
-            org_id_uuid_map[result[1]].append(workspace_id_uuid_map[result[0]])
-
-    # {org_id1: {rows: rows1, storage: storage1}, org_id2: {rows: rows2, storage: storage2}}
-    org_id_stats_map = dict()
-    for org_id, uuid_list in org_id_uuid_map.items():
-        org_id_stats_map[org_id] = {'rows': 0, 'storage': 0}
-        for uuid in uuid_list:
-            org_id_stats_map[org_id]['rows'] += int(uuid_stats_map[uuid]['rows'])
-            org_id_stats_map[org_id]['storage'] += int(uuid_stats_map[uuid]['storage'])
-
-    if org_id_stats_map:
-        sql3 = "REPLACE INTO org_big_data_storage_stats (org_id, total_rows, total_storage) VALUES %s" % ', '.join([
-            "('%s', '%s', '%s')" % (org_id, stats.get('rows'), stats.get('storage'))
-            for org_id, stats in org_id_stats_map.items()])
-        db_session.execute(sql3)
+    if results:
+        sql = "REPLACE INTO org_big_data_storage_stats (org_id, total_rows, total_storage) VALUES %s" % \
+              ', '.join(["('%s', '%s', '%s')" % (res[0], res[1], res[2]) for res in results])
+        db_session.execute(sql)
         db_session.commit()
 
 
@@ -108,8 +92,6 @@ class BigDataStorageStatsTask(Thread):
         def timed_job():
             logging.info('Start big data storage stats task...')
 
-            # {uuid1: {rows: rows1, storage: storage1}, uuid2: {rows: rows2, storage: storage2}}
-            uuid_stats_map = dict()
             offset = 0
             limit = 1000
             while 1:
@@ -120,9 +102,6 @@ class BigDataStorageStatsTask(Thread):
                 try:
                     resp = requests.get(api_url, headers=headers).json()
                     bases = resp.get('bases', []) if resp else []
-                    for base in bases:
-                        dtable_uuid = uuid.UUID(base.get('id')).hex
-                        uuid_stats_map[dtable_uuid] = {'rows': base.get('rows'), 'storage': base.get('storage')}
                     if len(bases) > 0:
                         db_session = self.db_session_class()
                         try:
@@ -138,13 +117,12 @@ class BigDataStorageStatsTask(Thread):
                     logging.error(e)
                     break
 
-            if uuid_stats_map:
-                session = self.db_session_class()
-                try:
-                    update_org_big_data_storage_stats(session, uuid_stats_map)
-                except Exception as e:
-                    logging.error(e)
-                finally:
-                    session.close()
+            session = self.db_session_class()
+            try:
+                update_org_big_data_storage_stats(session)
+            except Exception as e:
+                logging.error(e)
+            finally:
+                session.close()
 
         schedule.start()
