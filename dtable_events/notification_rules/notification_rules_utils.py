@@ -9,10 +9,13 @@ import jwt
 import sys
 import re
 import pytz
+from copy import deepcopy
 
 from dtable_events.utils import is_valid_email, uuid_str_to_36_chars, get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.cache import redis_cache as cache
+from dtable_events.dtable_io import send_dingtalk_msg
+from dtable_events.automations.hasher import AESPasswordHasher
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +46,42 @@ CONDITION_ROWS_ADDED = 'rows_added'
 CONDITION_FILTERS_SATISFY = 'filters_satisfy'
 CONDITION_NEAR_DEADLINE = 'near_deadline'
 
+
+def _decrypt_detail(detail):
+    detail_clone = deepcopy(detail)
+    cryptor = AESPasswordHasher()
+    try:
+        if 'password' in detail_clone.keys():
+            password = detail_clone.get('password')
+            if password:
+                detail_clone.update({'password': cryptor.decode(password)})
+        if 'webhook_url' in detail.keys():
+            webhook_url = detail.get('webhook_url')
+            if webhook_url:
+                detail_clone.update({'webhook_url': cryptor.decode(webhook_url)})
+        if 'api_key' in detail.keys():
+            api_key = detail.get('api_key')
+            if api_key:
+                detail_clone.update({'api_key': cryptor.decode(api_key)})
+        if 'secret_key' in detail.keys():
+            secret_key = detail.get('secret_key')
+            if secret_key:
+                detail_clone.update({'secret_key': cryptor.decode(secret_key)})
+        return detail_clone
+    except Exception as e:
+        logger.error(e)
+        return None
+
+
+def get_third_party_account_detail(db_session, account_id):
+    sql = "SELECT detail FROM bound_third_party_accounts WHERE id=:account_id"
+    account_query = db_session.execute(sql, {'account_id': account_id}).fetchall()
+    if account_query:
+        account_detail = account_query[0][0]
+        return _decrypt_detail(json.loads(account_detail))
+    else:
+        logger.warning("Third party account %s does not exists." % account_id)
+        return None
 
 
 def is_trigger_time_satisfy(last_trigger_time):
@@ -442,6 +481,9 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
     rule_name = trigger.get('rule_name', '')
     table_id = trigger['table_id']
     view_id = trigger['view_id']
+    dingtalk_account_id = action.get('dingtalk_account_id')
+    msg_type = action.get('msg_type', '')
+    msg_title = action.get('dingtalk_title', '')
 
     if message_table_id != table_id:
         return
@@ -489,7 +531,18 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
                 'msg_type': 'notification_rules',
                 'detail': detail,
                 })
-        send_notification(dtable_uuid, user_msg_list, dtable_server_access_token)
+
+        if user_msg_list:
+            send_notification(dtable_uuid, user_msg_list, dtable_server_access_token)
+
+        if dingtalk_account_id:
+            account_detail = get_third_party_account_detail(db_session, dingtalk_account_id)
+            if not account_detail:
+                return
+            webhook_url = account_detail.get('webhook_url', '')
+            if webhook_url:
+                dingtalk_msg = detail.get('msg', '')
+                send_dingtalk_msg(webhook_url, dingtalk_msg, msg_type=msg_type, msg_title=msg_title)
 
     elif (op_type == 'modify_row' and trigger['condition'] == CONDITION_FILTERS_SATISFY) or \
          (op_type in ('insert_row', 'append_rows') and trigger['condition'] == CONDITION_ROWS_ADDED):
@@ -521,7 +574,17 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
                 'msg_type': 'notification_rules',
                 'detail': detail,
                 })
-        send_notification(dtable_uuid, user_msg_list, dtable_server_access_token)
+        if user_msg_list:
+            send_notification(dtable_uuid, user_msg_list, dtable_server_access_token)
+
+        if dingtalk_account_id:
+            account_detail = get_third_party_account_detail(db_session, dingtalk_account_id)
+            if not account_detail:
+                return
+            webhook_url = account_detail.get('webhook_url', '')
+            if webhook_url:
+                dingtalk_msg = detail.get('msg', '')
+                send_dingtalk_msg(webhook_url, dingtalk_msg, msg_type=msg_type, msg_title=msg_title)
 
     else:
         return
