@@ -351,6 +351,7 @@ def send_wechat_msg(webhook_url, msg, msg_type="text"):
         dtable_message_logger.info('Wechat sending success!')
     return result
 
+
 def send_dingtalk_msg(webhook_url, msg, msg_type="text", msg_title=None):
     result = {}
     if msg_type == "markdown":
@@ -370,6 +371,7 @@ def send_dingtalk_msg(webhook_url, msg, msg_type="text", msg_title=None):
     else:
         dtable_message_logger.info('Dingtalk sending success!')
     return result
+
 
 def send_email_msg(auth_info, send_info, username, config=None, db_session=None):
     import smtplib
