@@ -483,7 +483,7 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
     view_id = trigger['view_id']
     dingtalk_account_id = action.get('dingtalk_account_id')
     msg_type = action.get('msg_type', '')
-    msg_title = action.get('dingtalk_title', '')
+    msg_title = action.get('default_title', '')
 
     if message_table_id != table_id:
         return
