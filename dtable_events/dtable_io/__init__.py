@@ -335,7 +335,7 @@ def import_excel_to_table(username, repo_id, workspace_id, dtable_name, dtable_u
 
 def update_file_update_table(username, repo_id, file_name, dtable_uuid, table_name, selected_columns, file_type):
     """
-    upload excel/csv json file to dtable-server
+    update excel/csv file to table
     """
     dtable_io_logger.info('Start update file: %s.%s to table.' % (file_name, file_type))
     try:
