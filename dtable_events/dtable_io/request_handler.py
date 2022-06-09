@@ -647,6 +647,93 @@ def add_update_csv_upload_csv_task():
     return make_response(({'task_id': task_id}, 200))
 
 
+@app.route('/add-import-excel-to-dtable-task', methods=['GET'])
+def add_import_excel_to_dtable_task():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    if task_manager.tasks_queue.full():
+        from dtable_events.dtable_io import dtable_io_logger
+        dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
+                                 % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
+                                    task_manager.threads_is_alive()))
+        return make_response(('dtable io server busy.', 400))
+
+    username = request.args.get('username')
+    repo_id = request.args.get('repo_id')
+    workspace_id = request.args.get('workspace_id')
+    dtable_name = request.args.get('dtable_name')
+    dtable_uuid = request.args.get('dtable_uuid')
+
+    try:
+        task_id = task_manager.add_import_excel_to_dtable_task(username, repo_id, workspace_id, dtable_name, dtable_uuid)
+    except Exception as e:
+        logger.error(e)
+        return make_response((e, 500))
+
+    return make_response(({'task_id': task_id}, 200))
+
+
+@app.route('/add-import-excel-to-table-task', methods=['GET'])
+def add_import_excel_to_table_task():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    if task_manager.tasks_queue.full():
+        from dtable_events.dtable_io import dtable_io_logger
+        dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
+                                 % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
+                                    task_manager.threads_is_alive()))
+        return make_response(('dtable io server busy.', 400))
+
+    username = request.args.get('username')
+    repo_id = request.args.get('repo_id')
+    workspace_id = request.args.get('workspace_id')
+    file_name = request.args.get('file_name')
+    dtable_uuid = request.args.get('dtable_uuid')
+
+    try:
+        task_id = task_manager.add_import_excel_to_dtable_task(username, repo_id, workspace_id, file_name, dtable_uuid)
+    except Exception as e:
+        logger.error(e)
+        return make_response((e, 500))
+
+    return make_response(({'task_id': task_id}, 200))
+
+
+@app.route('/add-update-file-update-table-task', methods=['GET'])
+def add_update_file_update_table_task():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    if task_manager.tasks_queue.full():
+        from dtable_events.dtable_io import dtable_io_logger
+        dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
+                                 % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
+                                    task_manager.threads_is_alive()))
+        return make_response(('dtable io server busy.', 400))
+
+    username = request.args.get('username')
+    repo_id = request.args.get('repo_id')
+    file_name = request.args.get('file_name')
+    dtable_uuid = request.args.get('dtable_uuid')
+    table_name = request.args.get('table_name')
+    selected_columns = request.args.get('selected_columns')
+    file_type = request.args.get('file_type')
+
+    try:
+        task_id = task_manager.add_update_file_update_table_task(
+            username, repo_id, file_name, dtable_uuid, table_name, selected_columns, file_type)
+    except Exception as e:
+        logger.error(e)
+        return make_response((e, 500))
+
+    return make_response(({'task_id': task_id}, 200))
+
+
 @app.route('/import-common-dataset', methods=['POST'])
 def import_common_dataset():
     is_valid, error = check_auth_token(request)
@@ -696,7 +783,6 @@ def sync_common_data():
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
-
 
 
 @app.route('/convert-view-to-excel', methods=['GET'])

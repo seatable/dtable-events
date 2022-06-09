@@ -185,6 +185,33 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    def add_import_excel_to_dtable_task(self, username, repo_id, workspace_id, dtable_name, dtable_uuid):
+        from dtable_events.dtable_io import import_excel_to_dtable
+
+        task_id = str(int(time.time()*1000))
+        task = (import_excel_to_dtable, (username, repo_id, workspace_id, dtable_name, dtable_uuid))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+        return task_id
+
+    def add_import_excel_to_table_task(self, username, repo_id, workspace_id, dtable_name, dtable_uuid):
+        from dtable_events.dtable_io import import_excel_to_table
+
+        task_id = str(int(time.time()*1000))
+        task = (import_excel_to_table, (username, repo_id, workspace_id, dtable_name, dtable_uuid))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+        return task_id
+
+    def add_update_file_update_table_task(self, username, repo_id, file_name, dtable_uuid, table_name, selected_columns, file_type):
+        from dtable_events.dtable_io import update_file_update_table
+
+        task_id = str(int(time.time()*1000))
+        task = (update_file_update_table, (username, repo_id, file_name, dtable_uuid, table_name, selected_columns, file_type))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+        return task_id
+
     def query_status(self, task_id):
         task = self.tasks_map[task_id]
         if task == 'success':

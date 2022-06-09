@@ -18,7 +18,8 @@ from dtable_events.db import init_db_session_class
 from dtable_events.dtable_io.excel import parse_excel_to_json, import_excel_by_dtable_server, \
     append_parsed_file_by_dtable_server, parse_append_excel_upload_excel_to_json, \
     import_excel_add_table_by_dtable_server, update_parsed_file_by_dtable_server, \
-    parse_update_excel_upload_excel_to_json, parse_update_csv_upload_csv_to_json
+    parse_update_excel_upload_excel_to_json, parse_update_csv_upload_csv_to_json, parse_and_import_excel_to_dtable, \
+    parse_and_import_excel_to_table, parse_and_update_file_to_table
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.statistics.db import save_email_sending_records
 from urllib import parse
@@ -300,6 +301,50 @@ def update_csv_upload_csv(username, repo_id, file_name, dtable_uuid, table_name)
         dtable_io_logger.exception('parse update csv failed. ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('parse update csv %s.csv success!' % file_name)
+
+
+def import_excel_to_dtable(username, repo_id, workspace_id, dtable_name, dtable_uuid):
+    """
+    parse excel to json, then import excel to dtable
+    """
+    dtable_io_logger.info('Start import excel: %s.xlsx to dtable.' % dtable_name)
+    try:
+        parse_and_import_excel_to_dtable(repo_id, dtable_name, dtable_uuid, username)
+    except Exception as e:
+        dtable_io_logger.exception('import excel to dtable failed. ERROR: {}'.format(e))
+        if str(e.args[0]) == 'Excel format error':
+            raise Exception('Excel format error')
+    else:
+        dtable_io_logger.info('import excel %s.xlsx to dtable success!' % dtable_name)
+
+
+def import_excel_to_table(username, repo_id, workspace_id, dtable_name, dtable_uuid):
+    """
+    parse excel to json, then import excel to table
+    """
+    dtable_io_logger.info('Start import excel: %s.xlsx to table.' % dtable_name)
+    try:
+        parse_and_import_excel_to_table(repo_id, dtable_name, dtable_uuid, username)
+    except Exception as e:
+        dtable_io_logger.exception('import excel to table failed. ERROR: {}'.format(e))
+        if str(e.args[0]) == 'Excel format error':
+            raise Exception('Excel format error')
+    else:
+        dtable_io_logger.info('import excel %s.xlsx to table success!' % dtable_name)
+
+
+def update_file_update_table(username, repo_id, file_name, dtable_uuid, table_name, selected_columns, file_type):
+    """
+    upload excel/csv json file to dtable-server
+    """
+    dtable_io_logger.info('Start update file: %s.%s to table.' % (file_name, file_type))
+    try:
+        parse_and_update_file_to_table(repo_id, file_name, username, dtable_uuid, table_name, selected_columns, file_type)
+    except Exception as e:
+        dtable_io_logger.exception('update file update to table failed. ERROR: {}'.format(e))
+    else:
+        dtable_io_logger.info('update file %s.%s update to table success!' % (file_name, file_type))
+
 
 def _get_upload_link_to_seafile(seafile_server_url, access_token, parent_dir="/"):
     upload_link_api_url = "%s%s" % (seafile_server_url.rstrip('/'),  '/api/v2.1/via-repo-token/upload-link/')
