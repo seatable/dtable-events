@@ -905,11 +905,8 @@ class LinkRecordsAction(BaseAction):
         self.linked_table_id = linked_table_id
         self.link_id = link_id
         self.match_conditions = match_conditions
-
         self.linked_row_ids = []
-
         self._init_linked_row_ids()
-
 
     def parse_column_value(self, column, value):
         if column.get('type') == ColumnTypes.SINGLE_SELECT:
@@ -929,7 +926,6 @@ class LinkRecordsAction(BaseAction):
                 return parse_value_list
         else:
             return value
-
 
     def _format_filter_groups(self):
         filters = []
@@ -956,16 +952,20 @@ class LinkRecordsAction(BaseAction):
         tables = dtable_metadata.get('tables', [])
         for table in tables:
             if table.get('_id') == table_id:
-                 return table.get('name')
+                return table.get('name')
 
     def get_column(self, table_id, column_key):
+        for col in self.get_columns(table_id):
+            if col.get('key') == column_key:
+                return col
+        return None
+
+    def get_columns(self, table_id):
         dtable_metadata = self.auto_rule.dtable_metadata
         for table in dtable_metadata.get('tables', []):
             if table.get('_id') == table_id:
-                for col in table.get('columns'):
-                    if col.get('key') == column_key:
-                        return col
-        return None
+                return table.get('columns', [])
+        return []
 
     def _get_linked_table_rows(self):
         filter_groups = self._format_filter_groups()
@@ -1003,19 +1003,28 @@ class LinkRecordsAction(BaseAction):
         self.linked_row_ids = linked_rows_data and [row.get('_id') for row in linked_rows_data] or []
 
     def _can_do_action(self):
-        if not self.linked_row_ids:
-            return False
-
-        if not self.auto_rule.run_condition == PER_UPDATE:
-            return False
-
+        table_columns = self.get_columns(self.auto_rule.table_id)
+        link_col_name = ''
+        for col in table_columns:
+            if col.get('type') == 'link' and col.get('data', {}).get('link_id') == self.link_id:
+                link_col_name = col.get('name')
+        if link_col_name:
+            linked_rows = self.data.get('converted_row', {}).get(link_col_name, {})
+            table_linked_rows = {row.get('row_id'): True for row in linked_rows}
+            if len(self.linked_row_ids) == len(table_linked_rows):
+                for row_id in self.linked_row_ids:
+                    if not table_linked_rows.get(row_id):
+                        return True
+                return False
         return True
 
     def do_action(self):
-        api_url = get_inner_dtable_server_url()
-        rows_link_url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/links/?from=dtable_events'
         if not self._can_do_action():
             return
+
+        api_url = get_inner_dtable_server_url()
+        rows_link_url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/links/?from=dtable_events'
+
         json_data = {
             'row_id': self.data['row']['_id'],
             'link_id': self.link_id,
@@ -1033,7 +1042,6 @@ class LinkRecordsAction(BaseAction):
             logger.error('link dtable: %s error response status code: %s', self.auto_rule.dtable_uuid, response.status_code)
         else:
             self.auto_rule.set_done_actions()
-
 
 
 class RuleInvalidException(Exception):
@@ -1283,7 +1291,8 @@ class AutomationRule:
                     linked_table_id = action_info.get('linked_table_id')
                     link_id = action_info.get('link_id')
                     match_conditions = action_info.get('match_conditions')
-                    LinkRecordsAction(self, self.data, linked_table_id, link_id, match_conditions).do_action()
+                    if self.run_condition == PER_UPDATE:
+                        LinkRecordsAction(self, self.data, linked_table_id, link_id, match_conditions).do_action()
 
             except RuleInvalidException as e:
                 logger.error('auto rule: %s, invalid error: %s', self.rule_id, e)
