@@ -194,11 +194,11 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
-    def add_import_excel_to_table_task(self, username, repo_id, workspace_id, dtable_name, dtable_uuid):
+    def add_import_excel_to_table_task(self, username, repo_id, workspace_id, file_name, dtable_uuid):
         from dtable_events.dtable_io import import_excel_to_table
 
         task_id = str(int(time.time()*1000))
-        task = (import_excel_to_table, (username, repo_id, workspace_id, dtable_name, dtable_uuid))
+        task = (import_excel_to_table, (username, repo_id, workspace_id, file_name, dtable_uuid))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         return task_id

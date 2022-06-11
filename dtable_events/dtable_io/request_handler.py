@@ -695,7 +695,7 @@ def add_import_excel_to_table_task():
     dtable_uuid = request.args.get('dtable_uuid')
 
     try:
-        task_id = task_manager.add_import_excel_to_dtable_task(username, repo_id, workspace_id, file_name, dtable_uuid)
+        task_id = task_manager.add_import_excel_to_table_task(username, repo_id, workspace_id, file_name, dtable_uuid)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))

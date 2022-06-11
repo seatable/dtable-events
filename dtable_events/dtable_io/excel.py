@@ -324,10 +324,14 @@ def parse_and_import_excel_to_dtable(repo_id, dtable_name, dtable_uuid, username
 def parse_and_import_excel_to_table(repo_id, dtable_name, dtable_uuid, username):
     from dtable_events.dtable_io.utils import upload_excel_json_add_table_to_dtable_server, delete_excel_file
 
+    import time
+    start = time.time()
     content = parse_excel(repo_id, dtable_name)
     delete_excel_file(username, repo_id, dtable_name)
     # import json file to dtable-server
     upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, content)
+
+    print('消耗时间： ' + str(time.time() - start))
 
 
 def parse_and_update_file_to_table(repo_id, file_name, username, dtable_uuid, table_name, selected_columns, file_type):
