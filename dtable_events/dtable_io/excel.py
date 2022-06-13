@@ -321,11 +321,11 @@ def parse_and_import_excel_to_dtable(repo_id, dtable_name, dtable_uuid, username
     upload_excel_json_to_dtable_server(username, dtable_uuid, content)
 
 
-def parse_and_import_excel_to_table(repo_id, dtable_name, dtable_uuid, username):
+def parse_and_import_excel_to_table(repo_id, file_name, dtable_uuid, username):
     from dtable_events.dtable_io.utils import upload_excel_json_add_table_to_dtable_server, delete_excel_file
 
-    content = parse_excel(repo_id, dtable_name)
-    delete_excel_file(username, repo_id, dtable_name)
+    content = parse_excel(repo_id, file_name)
+    delete_excel_file(username, repo_id, file_name)
     # import json file to dtable-server
     upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, content)
 

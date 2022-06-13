@@ -318,19 +318,19 @@ def import_excel_to_dtable(username, repo_id, workspace_id, dtable_name, dtable_
         dtable_io_logger.info('import excel %s.xlsx to dtable success!' % dtable_name)
 
 
-def import_excel_to_table(username, repo_id, workspace_id, dtable_name, dtable_uuid):
+def import_excel_to_table(username, repo_id, workspace_id, file_name, dtable_uuid):
     """
     parse excel to json, then import excel to table
     """
-    dtable_io_logger.info('Start import excel: %s.xlsx to table.' % dtable_name)
+    dtable_io_logger.info('Start import excel: %s.xlsx to table.' % file_name)
     try:
-        parse_and_import_excel_to_table(repo_id, dtable_name, dtable_uuid, username)
+        parse_and_import_excel_to_table(repo_id, file_name, dtable_uuid, username)
     except Exception as e:
         dtable_io_logger.exception('import excel to table failed. ERROR: {}'.format(e))
         if str(e.args[0]) == 'Excel format error':
             raise Exception('Excel format error')
     else:
-        dtable_io_logger.info('import excel %s.xlsx to table success!' % dtable_name)
+        dtable_io_logger.info('import excel %s.xlsx to table success!' % file_name)
 
 
 def update_file_update_table(username, repo_id, file_name, dtable_uuid, table_name, selected_columns, file_type):
