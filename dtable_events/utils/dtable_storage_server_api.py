@@ -65,7 +65,7 @@ class DTableStorageServerAPI(object):
     def save_dtable(self, dtable_uuid, json_string):
         dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
         url = self.server_url + '/dtables/' + dtable_uuid
-        response = requests.put(url, json=json_string, timeout=TIMEOUT)
+        response = requests.put(url, data=json_string, timeout=TIMEOUT)
         data = parse_response(response)
         return data
 
