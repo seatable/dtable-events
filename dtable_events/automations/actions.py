@@ -924,6 +924,8 @@ class LinkRecordsAction(BaseAction):
                         option_id = option.get('id')
                         parse_value_list.append(option_id)
                 return parse_value_list
+        elif column.get('type') in [ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
+            return [value]
         else:
             return value
 
