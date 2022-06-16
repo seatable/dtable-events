@@ -203,11 +203,11 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
-    def add_update_file_update_table_task(self, username, repo_id, file_name, dtable_uuid, table_name, selected_columns, file_type):
-        from dtable_events.dtable_io import update_file_update_table
+    def add_update_table_via_excel_csv_task(self, username, repo_id, file_name, dtable_uuid, table_name, selected_columns, file_type):
+        from dtable_events.dtable_io import update_table_via_excel_csv
 
         task_id = str(int(time.time()*1000))
-        task = (update_file_update_table, (username, repo_id, file_name, dtable_uuid, table_name, selected_columns, file_type))
+        task = (update_table_via_excel_csv, (username, repo_id, file_name, dtable_uuid, table_name, selected_columns, file_type))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         return task_id

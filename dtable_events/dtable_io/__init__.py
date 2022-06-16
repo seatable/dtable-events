@@ -333,7 +333,7 @@ def import_excel_to_table(username, repo_id, workspace_id, file_name, dtable_uui
         dtable_io_logger.info('import excel %s.xlsx to table success!' % file_name)
 
 
-def update_file_update_table(username, repo_id, file_name, dtable_uuid, table_name, selected_columns, file_type):
+def update_table_via_excel_csv(username, repo_id, file_name, dtable_uuid, table_name, selected_columns, file_type):
     """
     update excel/csv file to table
     """

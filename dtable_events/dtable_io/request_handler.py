@@ -703,8 +703,8 @@ def add_import_excel_to_table_task():
     return make_response(({'task_id': task_id}, 200))
 
 
-@app.route('/add-update-file-update-table-task', methods=['GET'])
-def add_update_file_update_table_task():
+@app.route('/add-update-table-via-excel-csv-task', methods=['GET'])
+def add_update_table_via_excel_csv_task():
     is_valid, error = check_auth_token(request)
     if not is_valid:
         return make_response((error, 403))
@@ -725,7 +725,7 @@ def add_update_file_update_table_task():
     file_type = request.args.get('file_type')
 
     try:
-        task_id = task_manager.add_update_file_update_table_task(
+        task_id = task_manager.add_update_table_via_excel_csv_task(
             username, repo_id, file_name, dtable_uuid, table_name, selected_columns, file_type)
     except Exception as e:
         logger.error(e)
