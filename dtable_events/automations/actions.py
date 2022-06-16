@@ -3,6 +3,7 @@ import logging
 import re
 import time
 import os
+import sys
 from urllib import parse
 from uuid import UUID
 from datetime import datetime, date, timedelta
@@ -15,7 +16,8 @@ from dtable_events.cache import redis_cache
 from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg
 from dtable_events.notification_rules.notification_rules_utils import _fill_msg_blanks as fill_msg_blanks, \
     send_notification
-from dtable_events.utils import utc_to_tz, uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url
+from dtable_events.utils import utc_to_tz, uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url, \
+    gen_random_option
 from dtable_events.utils.constants import ColumnTypes
 
 
@@ -42,6 +44,19 @@ try:
 except ImportError as e:
     logger.critical("Can not import dtable_web settings: %s." % e)
     raise RuntimeError("Can not import dtable_web settings: %s" % e)
+
+central_conf_dir, timezone = os.environ.get('SEAFILE_CENTRAL_CONF_DIR', ''), 'UTC'
+if central_conf_dir:
+    sys.path.insert(0, central_conf_dir)
+    try:
+        import dtable_web_settings
+        timezone = getattr(dtable_web_settings, 'TIME_ZONE', 'UTC')
+    except Exception as e:
+        logging.error('import dtable_web_settings error: %s', e)
+    else:
+        del dtable_web_settings
+else:
+    logging.error('no conf dir SEAFILE_CENTRAL_CONF_DIR find')
 
 PER_DAY = 'per_day'
 PER_WEEK = 'per_week'
@@ -74,6 +89,57 @@ def get_third_party_account(session, account_id):
 def email2list(email_str, split_pattern='[,，]'):
     email_list = [value.strip() for value in re.split(split_pattern, email_str) if value.strip()]
     return email_list
+
+
+def parse_geolocation(cell_data):
+    if not isinstance(cell_data, dict):
+        return str(cell_data)
+    if 'country_region' in cell_data:
+        return cell_data['country_region']
+    elif 'lng' in cell_data:
+        return str(cell_data['lng']) + ', ' + str(cell_data['lat'])
+    elif 'province' in cell_data:
+        value = str(cell_data['province'])
+        if 'city' in cell_data:
+            value = '%s%s' % (value, cell_data['city'])
+        if 'district' in cell_data:
+            value = '%s%s' % (value, cell_data['district'])
+        if 'detail' in cell_data:
+            value = '%s%s' % (value, cell_data['detail'])
+        return value
+    else:
+        return str(cell_data)
+
+
+def parse_date(data_format, cell_value):
+    if not cell_value:
+        return cell_value
+    if data_format == 'YYYY-MM-DD HH:mm':
+        cell_value = datetime.strftime(cell_value, '%Y-%m-%d %H:%M')
+    elif data_format == 'M/D/YYYY HH:mm':
+        cell_value = datetime.strftime(cell_value, '%-m/%-d/%Y %H:%M')
+    elif data_format == 'DD/MM/YYYY HH:mm':
+        cell_value = datetime.strftime(cell_value, '%d/%m/%Y %H:%M')
+    elif data_format == 'DD.MM.YYYY HH:mm':
+        cell_value = datetime.strftime(cell_value, '%d.%m.%Y %H:%M')
+    elif data_format == 'YYYY-MM-DD':
+        cell_value = datetime.strftime(cell_value, '%Y-%m-%d')
+    elif data_format == 'M/D/YYYY':
+        cell_value = datetime.strftime(cell_value, '%-m/%-d/%Y')
+    elif data_format == 'DD/MM/YYYY':
+        cell_value = datetime.strftime(cell_value, '%d/%m/%Y')
+    elif data_format == 'DD.MM.YYYY':
+        cell_value = datetime.strftime(cell_value, '%d.%m.%Y')
+    return cell_value
+
+
+def str_to_date(data_format, data):
+    if not data:
+        return ''
+    if ' ' in data_format:
+        return datetime.strptime(data, '%Y-%m-%d %H:%M')
+    else:
+        return datetime.strptime(data, '%Y-%m-%d')
 
 
 class BaseAction:
@@ -1035,6 +1101,281 @@ class LinkRecordsAction(BaseAction):
             self.auto_rule.set_done_actions()
 
 
+class CopyRecordAction(BaseAction):
+
+    def __init__(self, auto_rule, data, copy_to_table_id):
+        super().__init__(auto_rule, data=data)
+        self.action_type = 'copy_record_to'
+        self.copy_to_table_id = copy_to_table_id
+        self.append_row = {}
+        self._init_copied_row()
+
+    def get_table_name(self, table_id):
+        dtable_metadata = self.auto_rule.dtable_metadata
+        tables = dtable_metadata.get('tables', [])
+        for table in tables:
+            if table.get('_id') == table_id:
+                return table.get('name')
+
+    def get_columns(self, table_id):
+        dtable_metadata = self.auto_rule.dtable_metadata
+        for table in dtable_metadata.get('tables', []):
+            if table.get('_id') == table_id:
+                return table.get('columns')
+        return None
+
+    def _get_related_nicknames(self):
+        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/api/v2.1/dtables/%s/related-users/' % uuid_str_to_36_chars(self.auto_rule.dtable_uuid)
+        payload = {
+            'exp': int(time.time()) + 60,
+            'dtable_uuid': uuid_str_to_36_chars(self.auto_rule.dtable_uuid),
+            'username': self.auto_rule.creator,
+        }
+        access_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
+        headers = {'Authorization': 'Token ' + access_token}
+        try:
+            resp = requests.get(url, headers=headers)
+            if resp.status_code != 200:
+                logger.error('get nicknames error response: %s', resp.status_code)
+                return {}
+            nicknames = resp.json().get('user_list')
+        except Exception as e:
+            logger.error('get script running limit error: %s', e)
+            return {}
+        email2nickname = {nickname['email']: nickname['name'] for nickname in nicknames}
+        return email2nickname
+
+    def _add_column_options(self, column_name, options):
+        api_url = get_inner_dtable_server_url()
+        url = api_url.rstrip('/') + '/api/v1/dtables/' + uuid_str_to_36_chars(self.auto_rule.dtable_uuid) + '/column-options/?from=dtable_events'
+        table_name = self.get_table_name(self.copy_to_table_id)
+        json_data = {
+            'table_name': table_name,
+            'column': column_name,
+            'options': options
+        }
+
+        try:
+            response = requests.post(url, headers=self.auto_rule.headers, json=json_data)
+        except Exception as e:
+            logger.error('add column option: %s, error: %s', self.auto_rule.dtable_uuid, e)
+            return
+        if response.status_code != 200:
+            logger.error('add column option: %s error response status code: %s', self.auto_rule.dtable_uuid,
+                         response.status_code)
+
+    def _init_copied_row(self):
+        copied_to_table_columns = {col.get('name'): col for col in self.get_columns(self.copy_to_table_id)}
+        copied_table_columns = {col.get('name'): col for col in self.get_columns(self.auto_rule.table_id)}
+        copied_row = self.data.get('converted_row')
+        print(self.data)
+
+        email2nickname = self._get_related_nicknames()
+
+        append_row = {}
+        for copied_to_column_name in copied_to_table_columns:
+            copied_to_table_column = copied_to_table_columns.get(copied_to_column_name)
+            copied_table_column = copied_table_columns.get(copied_to_column_name)
+            if not copied_table_column:
+                continue
+            cell_value = copied_row.get(copied_to_column_name)
+            if cell_value is None:
+                continue
+            copied_column_type = copied_table_column.get('type')
+            copied_to_column_type = copied_to_table_column.get('type')
+
+            # 当导出到的列类型 为以下类型不需要处理
+            # LINK_FORMULA、AUTO_NUMBER、CREATOR、LAST_MODIFIER、CTIME、MTIME、BUTTON
+
+            # 当导出列为 BUTTON 类型时不需要处理
+            if copied_column_type in ['button'] or copied_to_column_type in \
+                    ['link-formula', 'auto-number', 'creator', 'last-modifier', 'ctime', 'mtime', 'button']:
+                continue
+            elif copied_column_type == ColumnTypes.DURATION and copied_to_column_type == ColumnTypes.DURATION:
+                copied_to_duration_format = copied_to_table_column.get('data', {}).get('duration_format')
+                if copied_to_duration_format == 'h:mm':
+                    cell_value = cell_value / 60
+            elif copied_column_type == ColumnTypes.MULTIPLE_SELECT and copied_to_column_type == ColumnTypes.MULTIPLE_SELECT:
+                copied_column_options = copied_table_column.get('data', {}).get('options', [])
+                copied_to_column_options = copied_to_table_column.get('data', {}).get('options', [])
+                copied_to_column_option_dict = {option.get('name'): option for option in copied_to_column_options}
+                to_insert_options = []
+                for option in copied_column_options:
+                    if not copied_to_column_option_dict.get(option.get('name')):
+                        to_insert_options.append(gen_random_option(option.get('name')))
+                if to_insert_options:
+                    self._add_column_options(copied_to_table_column.get('name'), to_insert_options)
+
+            elif copied_to_column_type in [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT]:
+                if copied_column_type == ColumnTypes.IMAGE:
+                    cell_value = ', '.join(cell_value)
+
+                elif copied_column_type in [ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
+                    cell_value = email2nickname.get(cell_value, '')
+                elif copied_column_type in [ColumnTypes.CTIME, ColumnTypes.MTIME]:
+                    if 'Z' in cell_value:
+                        utc_time = datetime.strptime(cell_value, '%Y-%m-%dT%H:%M:%S.%fZ')
+                    else:
+                        utc_time = datetime.strptime(cell_value, '%Y-%m-%dT%H:%M:%S.%f+00:00')
+                    cell_value = utc_to_tz(utc_time, timezone).strftime('%Y-%m-%d %H:%M:%S')
+
+                elif copied_column_type == ColumnTypes.GEOLOCATION:
+                    cell_value = parse_geolocation(cell_value)
+                elif copied_column_type == ColumnTypes.COLLABORATOR:
+                    nickname_list = []
+                    for user in cell_value:
+                        if email2nickname.get(user):
+                            nickname_list.append(email2nickname.get(user))
+                    cell_value = ', '.join(nickname_list)
+
+                elif copied_column_type == ColumnTypes.MULTIPLE_SELECT:
+                    cell_value = ', '.join(cell_value)
+                elif copied_column_type == ColumnTypes.LINK:
+                    if isinstance(cell_value, list):
+                        print('cell_value')
+                        print(cell_value)
+                        print(' ')
+                        print(copied_table_column)
+                        array_type = copied_table_column.get('data', {}).get('array_type', '')
+                        if array_type == 'date':
+                            data_format = copied_table_column.get('data', {}).get('array_data', {}).get('format')
+                            cell_value = ', '.join([str(parse_date(data_format, str_to_date(data_format, v.get('display_value', '')))) for v in cell_value])
+                        elif array_type in ['creator', 'last_modifier']:
+                            cell_value = ', '.join([email2nickname.get(v.get('display_value', '')) for v in cell_value])
+                        elif array_type == 'single-select':
+                            pass
+                        elif array_type == 'multiple-select':
+                            pass
+                        else:
+                            cell_value = ', '.join([str(v.get('display_value', '')) for v in cell_value])
+
+                elif copied_column_type == ColumnTypes.DURATION:
+                    h_duration = cell_value // 3600
+                    m_duration = cell_value % 3600 // 60
+                    s_duration = cell_value % 60
+                    duration_format = copied_table_column.get('data', {}).get('duration_format')
+                    # duration_format may be 'h:mm:ss' or 'h:mm'
+                    if duration_format == 'h:mm:ss':
+                        cell_value = str(h_duration) + ':' + str(m_duration) + ':' + str(s_duration)
+                    else:
+                        cell_value = str(h_duration) + ':' + str(m_duration)
+                elif copied_column_type == ColumnTypes.DATE:
+                    cell_value = cell_value.strip()
+                    if cell_value:
+                        try:
+                            if ' ' in cell_value:
+                                cell_value = datetime.strptime(cell_value, '%Y-%m-%d %H:%M')
+                            else:
+                                cell_value = datetime.strptime(cell_value, '%Y-%m-%d')
+                        except Exception as e:
+                            logger.debug(e)
+                    data_format = copied_table_column.get('data', {}).get('format')
+                    cell_value = parse_date(data_format, cell_value)
+                elif copied_column_type == ColumnTypes.NUMBER:
+                    number_data = copied_table_column.get('data', {})
+                    enable_precision = number_data.get('enable_precision')
+                    precision = -1
+                    if enable_precision:
+                        precision = number_data.get('precision')
+                    decimal = number_data.get('decimal')
+                    thousands = number_data.get('thousands')
+
+                    cell_value = str(cell_value)
+                    front = cell_value.split('.')[0]
+                    end = ''
+                    if len(cell_value.split('.')) == 2:
+                        end = cell_value.split('.')[1]
+                    # thousands may be dot no space comma
+                    if thousands == 'dot':
+                        front = '{:,}'.format(int(front))
+                        front = front.replace(',', '.')
+                    elif thousands == 'space':
+                        front = '{:,}'.format(int(front))
+                        front = front.replace(',', ' ')
+                    elif thousands == 'comma':
+                        front = '{:,}'.format(int(front))
+
+                    if precision != -1:
+                        if not end:
+                            end = '0' * precision
+                        else:
+                            end = str(round(int(end), precision))
+                            if len(end) < precision:
+                                end += (precision - len(end)) * '0'
+                    if end:
+                        # decimal may be comma or dot
+                        if decimal == 'comma':
+                            cell_value = front + ',' + end
+                        else:
+                            cell_value = front + '.' + end
+                    else:
+                        cell_value = front
+                    if number_data.get('format') == 'number':
+                        cell_value = cell_value
+                    elif number_data.get('format') == 'dollar':
+                        cell_value = '$' + cell_value
+                    elif number_data.get('format') == 'yuan':
+                        cell_value = '¥' + cell_value
+                    elif number_data.get('format') == 'euro':
+                        cell_value = '€' + cell_value
+                    elif number_data.get('format') == 'percent':
+                        cell_value = cell_value + '%'
+                    elif number_data.get('format') == 'custom_currency':
+                        currency_symbol = number_data.get('currency_symbol')
+                        if number_data.get('currency_symbol_position') == 'after':
+                            cell_value = cell_value + currency_symbol
+                        else:
+                            cell_value = currency_symbol + cell_value
+                else:
+                    cell_value = self.cell_data2str(cell_value)
+
+            elif copied_to_column_type == ColumnTypes.NUMBER:
+                if copied_column_type not in [ColumnTypes.NUMBER, ColumnTypes.DURATION, ColumnTypes.RATE]:
+                    continue
+            elif copied_to_column_type != copied_column_type:
+                # If the column type is different do not need to be handled except in the case above
+                continue
+            append_row[copied_to_column_name] = cell_value
+
+        self.append_row = append_row
+
+    def cell_data2str(self, cell_data):
+        if isinstance(cell_data, list):
+            return ' '.join(self.cell_data2str(item) for item in cell_data)
+        else:
+            return str(cell_data)
+
+    def _can_do_action(self):
+        if not self.append_row:
+            return False
+
+        if not self.auto_rule.run_condition == PER_UPDATE:
+            return False
+        return True
+
+    def do_action(self):
+        if not self._can_do_action():
+            return
+
+        api_url = get_inner_dtable_server_url()
+        url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/rows/?from=dtable_events'
+        table_name = self.get_table_name(self.copy_to_table_id)
+        json_data = {
+            'row': self.append_row,
+            'table_name': table_name
+        }
+
+        try:
+            response = requests.post(url, headers=self.auto_rule.headers, json=json_data)
+        except Exception as e:
+            logger.error('link dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
+            return
+        if response.status_code != 200:
+            logger.error('link dtable: %s error response status code: %s', self.auto_rule.dtable_uuid, response.status_code)
+        else:
+            self.auto_rule.set_done_actions()
+
+
 
 class RuleInvalidException(Exception):
     """
@@ -1284,6 +1625,10 @@ class AutomationRule:
                     link_id = action_info.get('link_id')
                     match_conditions = action_info.get('match_conditions')
                     LinkRecordsAction(self, self.data, linked_table_id, link_id, match_conditions).do_action()
+
+                elif action_info.get('type') == 'copy_record_to':
+                    copy_to_table_id = action_info.get('copy_to_table_id')
+                    CopyRecordAction(self, self.data, copy_to_table_id).do_action()
 
             except RuleInvalidException as e:
                 logger.error('auto rule: %s, invalid error: %s', self.rule_id, e)
