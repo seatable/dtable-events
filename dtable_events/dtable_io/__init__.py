@@ -256,15 +256,15 @@ def append_excel_csv_append_parsed_file(username, repo_id, dtable_uuid, file_nam
 
 def append_excel_csv_upload_file(username, repo_id, file_name, dtable_uuid, table_name, file_type):
     """
-    parse excel to json file, then upload json file to file server
+    parse excel or csv to json file, then upload json file to file server
     """
-    dtable_io_logger.info('Start parse append excel: %s.xlsx.' % file_name)
+    dtable_io_logger.info('Start parse append excel or csv: %s.%s' % (file_name, file_type))
     try:
         parse_append_excel_csv_upload_file_to_json(repo_id, file_name, username, dtable_uuid, table_name, file_type)
     except Exception as e:
-        dtable_io_logger.exception('parse append excel failed. ERROR: {}'.format(e))
+        dtable_io_logger.exception('parse append excel or csv failed. ERROR: {}'.format(e))
     else:
-        dtable_io_logger.info('parse append excel %s.xlsx success!' % file_name)
+        dtable_io_logger.info('parse append excel or csv %s.%s success!' % (file_name, file_type))
 
 def update_excel_csv_update_parsed_file(username, repo_id, dtable_uuid, file_name, table_name, selected_columns):
     """
