@@ -15,11 +15,11 @@ from dtable_events.dtable_io.utils import setup_logger, \
     prepare_dtable_json_from_memory, update_page_design_static_image, \
     copy_src_auto_rules_to_json, create_auto_rules_from_src_dtable
 from dtable_events.db import init_db_session_class
-from dtable_events.dtable_io.excel import parse_excel_to_json, import_excel_by_dtable_server, \
-    append_parsed_file_by_dtable_server, parse_append_excel_upload_excel_to_json, \
-    import_excel_add_table_by_dtable_server, update_parsed_file_by_dtable_server, \
-    parse_update_excel_upload_excel_to_json, parse_update_csv_upload_csv_to_json, parse_and_import_excel_to_dtable, \
-    parse_and_import_excel_to_table, parse_and_update_file_to_table
+from dtable_events.dtable_io.excel import parse_excel_csv_to_json, import_excel_csv_by_dtable_server, \
+    append_parsed_file_by_dtable_server, parse_append_excel_csv_upload_file_to_json, \
+    import_excel_csv_add_table_by_dtable_server, update_parsed_file_by_dtable_server, \
+    parse_update_excel_upload_excel_to_json, parse_update_csv_upload_csv_to_json, parse_and_import_excel_csv_to_dtable, \
+    parse_and_import_excel_csv_to_table, parse_and_update_file_to_table
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.statistics.db import save_email_sending_records
 from urllib import parse
@@ -203,64 +203,64 @@ def get_dtable_export_asset_files(username, repo_id, dtable_uuid, files, task_id
     else:
         dtable_io_logger.info('export files from dtable: %s success!', dtable_uuid)
 
-def parse_excel(username, repo_id, workspace_id, dtable_name, custom, config):
+def parse_excel_csv(username, repo_id, workspace_id, dtable_name, file_type, custom, config):
     """
-    parse excel to json file, then upload json file to file server
+    parse excel or csv to json file, then upload json file to file server
     """
-    dtable_io_logger.info('Start parse excel: %s.xlsx.' % dtable_name)
+    dtable_io_logger.info('Start parse excel or csv: %s.%s.' % (dtable_name, file_type))
     try:
-        parse_excel_to_json(repo_id, dtable_name, custom)
+        parse_excel_csv_to_json(repo_id, dtable_name, file_type, custom)
     except Exception as e:
-        dtable_io_logger.exception('parse excel failed. ERROR: {}'.format(e))
+        dtable_io_logger.exception('parse excel or csv failed. ERROR: {}'.format(e))
         if str(e.args[0]) == 'Excel format error':
             raise Exception('Excel format error')
     else:
         dtable_io_logger.info('parse excel %s.xlsx success!' % dtable_name)
 
-def import_excel(username, repo_id, workspace_id, dtable_uuid, dtable_name, config):
+def import_excel_csv(username, repo_id, workspace_id, dtable_uuid, dtable_name, config):
     """
-    upload excel json file to dtable-server
+    upload excel or csv json file to dtable-server
     """
-    dtable_io_logger.info('Start import excel: {}.'.format(dtable_uuid))
+    dtable_io_logger.info('Start import excel or csv: {}.'.format(dtable_uuid))
     try:
-        import_excel_by_dtable_server(username, repo_id, dtable_uuid, dtable_name)
+        import_excel_csv_by_dtable_server(username, repo_id, dtable_uuid, dtable_name)
     except Exception as e:
-        dtable_io_logger.error('import excel failed. ERROR: {}'.format(e))
+        dtable_io_logger.error('import excel or csv failed. ERROR: {}'.format(e))
     else:
-        dtable_io_logger.info('import excel %s.xlsx success!' % dtable_name)
+        dtable_io_logger.info('import excel or csv %s success!' % dtable_name)
 
-def import_excel_add_table(username, repo_id, workspace_id, dtable_uuid, dtable_name, config):
+def import_excel_csv_add_table(username, repo_id, workspace_id, dtable_uuid, dtable_name, config):
     """
-    add table, upload excel json file to dtable-server
+    add table, upload excel or csv json file to dtable-server
     """
-    dtable_io_logger.info('Start import excel add table: {}.'.format(dtable_uuid))
+    dtable_io_logger.info('Start import excel or csv add table: {}.'.format(dtable_uuid))
     try:
-        import_excel_add_table_by_dtable_server(username, repo_id, dtable_uuid, dtable_name)
+        import_excel_csv_add_table_by_dtable_server(username, repo_id, dtable_uuid, dtable_name)
     except Exception as e:
-        dtable_io_logger.error('import excel add table failed. ERROR: {}'.format(e))
+        dtable_io_logger.error('import excel or csv add table failed. ERROR: {}'.format(e))
     else:
-        dtable_io_logger.info('import excel %s.xlsx add table success!' % dtable_name)
+        dtable_io_logger.info('import excel or csv %s add table success!' % dtable_name)
 
 
-def append_excel_append_parsed_file(username, repo_id, dtable_uuid, file_name, table_name):
+def append_excel_csv_append_parsed_file(username, repo_id, dtable_uuid, file_name, table_name):
     """
-    upload excel json file to dtable-server
+    upload excel or csv json file to dtable-server
     """
-    dtable_io_logger.info('Start import excel: {}.'.format(dtable_uuid))
+    dtable_io_logger.info('Start import excel or csv: {}.'.format(dtable_uuid))
     try:
         append_parsed_file_by_dtable_server(username, repo_id, dtable_uuid, file_name, table_name)
     except Exception as e:
-        dtable_io_logger.error('append excel failed. ERROR: {}'.format(e))
+        dtable_io_logger.error('append excel or csv failed. ERROR: {}'.format(e))
     else:
-        dtable_io_logger.info('append excel %s.xlsx success!' % file_name)
+        dtable_io_logger.info('append excel or csv %s success!' % file_name)
 
-def append_excel_upload_excel(username, repo_id, file_name, dtable_uuid, table_name):
+def append_excel_csv_upload_file(username, repo_id, file_name, dtable_uuid, table_name, file_type):
     """
     parse excel to json file, then upload json file to file server
     """
     dtable_io_logger.info('Start parse append excel: %s.xlsx.' % file_name)
     try:
-        parse_append_excel_upload_excel_to_json(repo_id, file_name, username, dtable_uuid, table_name)
+        parse_append_excel_csv_upload_file_to_json(repo_id, file_name, username, dtable_uuid, table_name, file_type)
     except Exception as e:
         dtable_io_logger.exception('parse append excel failed. ERROR: {}'.format(e))
     else:
@@ -303,34 +303,34 @@ def update_csv_upload_csv(username, repo_id, file_name, dtable_uuid, table_name)
         dtable_io_logger.info('parse update csv %s.csv success!' % file_name)
 
 
-def import_excel_to_dtable(username, repo_id, workspace_id, dtable_name, dtable_uuid):
+def import_excel_csv_to_dtable(username, repo_id, workspace_id, dtable_name, dtable_uuid, file_type):
     """
-    parse excel to json, then import excel to dtable
+    parse excel csv to json, then import excel csv to dtable
     """
-    dtable_io_logger.info('Start import excel: %s.xlsx to dtable.' % dtable_name)
+    dtable_io_logger.info('Start import excel or csv: %s.%s to dtable.' % (dtable_name, file_type))
     try:
-        parse_and_import_excel_to_dtable(repo_id, dtable_name, dtable_uuid, username)
+        parse_and_import_excel_csv_to_dtable(repo_id, dtable_name, dtable_uuid, username, file_type)
     except Exception as e:
-        dtable_io_logger.exception('import excel to dtable failed. ERROR: {}'.format(e))
+        dtable_io_logger.exception('import excel or csv to dtable failed. ERROR: {}'.format(e))
         if str(e.args[0]) == 'Excel format error':
             raise Exception('Excel format error')
     else:
-        dtable_io_logger.info('import excel %s.xlsx to dtable success!' % dtable_name)
+        dtable_io_logger.info('import excel or csv %s.%s to dtable success!' % (dtable_name, file_type))
 
 
-def import_excel_to_table(username, repo_id, workspace_id, file_name, dtable_uuid):
+def import_excel_csv_to_table(username, repo_id, workspace_id, file_name, dtable_uuid, file_type):
     """
-    parse excel to json, then import excel to table
+    parse excel or csv to json, then import excel or csv to table
     """
-    dtable_io_logger.info('Start import excel: %s.xlsx to table.' % file_name)
+    dtable_io_logger.info('Start import excel or csv: %s.%s to table.' % (file_name, file_type))
     try:
-        parse_and_import_excel_to_table(repo_id, file_name, dtable_uuid, username)
+        parse_and_import_excel_csv_to_table(repo_id, file_name, dtable_uuid, username, file_type)
     except Exception as e:
-        dtable_io_logger.exception('import excel to table failed. ERROR: {}'.format(e))
+        dtable_io_logger.exception('import excel or csv to table failed. ERROR: {}'.format(e))
         if str(e.args[0]) == 'Excel format error':
             raise Exception('Excel format error')
     else:
-        dtable_io_logger.info('import excel %s.xlsx to table success!' % file_name)
+        dtable_io_logger.info('import excel or csv %s.%s to table success!' % (file_name, file_type))
 
 
 def update_table_via_excel_csv(username, repo_id, file_name, dtable_uuid, table_name, selected_columns, file_type):

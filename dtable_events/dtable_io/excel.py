@@ -174,7 +174,7 @@ def parse_excel_rows(sheet_rows, columns, head_index, max_column):
     return rows
 
 
-def parse_excel_column_type(value_list):
+def parse_column_type(value_list):
     from dtable_events.dtable_io import dtable_io_logger
 
     try:
@@ -240,7 +240,7 @@ def parse_excel_columns(sheet_rows, head_index, max_column):
         name = head_row[index].value
         column_name = str(name) if name else 'Field' + str(index + 1)
         value_list = [row[index].value for row in value_rows]
-        column_type, column_data = parse_excel_column_type(value_list)
+        column_type, column_data = parse_column_type(value_list)
         column = {
             'name': column_name.replace('\ufeff', '').strip(),
             # remove whitespace from both ends of name and BOM char(\ufeff)
@@ -313,19 +313,112 @@ def parse_excel(repo_id, dtable_name, custom=False):
     return json.dumps(tables)
 
 
-def parse_and_import_excel_to_dtable(repo_id, dtable_name, dtable_uuid, username):
-    from dtable_events.dtable_io.utils import upload_excel_json_to_dtable_server, delete_excel_file
-    content = parse_excel(repo_id, dtable_name)
-    delete_excel_file(username, repo_id, dtable_name)
+def parse_dtable_csv_columns(sheet_rows, max_column):
+    head_row = sheet_rows[0]
+    value_rows = sheet_rows[1:]
+
+    columns = []
+    for index in range(max_column):
+        name = head_row[index].strip()
+        column_name = str(name) if name else 'Field' + str(index + 1)
+        value_list = [row[index] for row in value_rows]
+        column_type, column_data = parse_column_type(value_list)
+        column = {
+            'name': column_name.replace('\ufeff', '').strip(),
+            'type': column_type,
+            'data': column_data,
+        }
+        columns.append(column)
+
+    return columns
+
+
+def parse_dtable_csv_rows(sheet_rows, columns, max_column):
+    from dtable_events.dtable_io import dtable_io_logger
+
+    value_rows = sheet_rows[1:]
+    rows = []
+    for row in value_rows:
+        row_data = {}
+        for index in range(max_column):
+            try:
+                cell_value = row[index]
+                column_name = columns[index]['name']
+                column_type = columns[index]['type']
+                if cell_value is None:
+                    continue
+                if column_type == 'long-text':
+                    row_data[column_name] = parse_long_text(cell_value)
+                elif column_type == 'checkbox':
+                    row_data[column_name] = parse_checkbox(cell_value)
+                elif column_type == 'multiple-select':
+                    row_data[column_name] = parse_multiple_select(cell_value)
+                else:
+                    row_data[column_name] = str(cell_value)
+            except Exception as e:
+                dtable_io_logger.exception(e)
+        if row_data:
+            rows.append(row_data)
+
+    return rows
+
+
+def parse_dtable_csv(repo_id, dtable_name):
+    from dtable_events.dtable_io.utils import get_csv_file
+    from dtable_events.dtable_io import dtable_io_logger
+
+    # parse
+    csv_file = get_csv_file(repo_id, dtable_name)
+    tables = []
+    csv_rows = [row for row in csv.reader(csv_file)]
+    csv_head = csv_rows[0]
+    max_row = len(csv_rows)
+    max_column = len(csv_head)
+
+    if max_row > 10000:
+        max_row = 10000
+    if max_column > 300:
+        max_column = 300
+
+    columns = parse_dtable_csv_columns(csv_rows, max_column)
+    rows = parse_dtable_csv_rows(csv_rows, columns, max_column)
+
+    dtable_io_logger.info(
+        'got table: %s, rows: %d, columns: %d' % (dtable_name, len(rows), len(columns)))
+
+    table = {
+        'name': dtable_name,
+        'rows': rows,
+        'columns': columns,
+        'max_row': max_row,
+        'max_column': max_column,
+    }
+    tables.append(table)
+    return json.dumps(tables)
+
+
+def parse_and_import_excel_csv_to_dtable(repo_id, dtable_name, dtable_uuid, username, file_type):
+    from dtable_events.dtable_io.utils import upload_excel_json_to_dtable_server, delete_file
+
+    if file_type == 'xlsx':
+        content = parse_excel(repo_id, dtable_name)
+    elif file_type == 'csv':
+        content = parse_dtable_csv(repo_id, dtable_name)
+    # delete excel、csv、json  file
+    delete_file(username, repo_id, dtable_name)
     # import json file to dtable-server
     upload_excel_json_to_dtable_server(username, dtable_uuid, content)
 
 
-def parse_and_import_excel_to_table(repo_id, file_name, dtable_uuid, username):
-    from dtable_events.dtable_io.utils import upload_excel_json_add_table_to_dtable_server, delete_excel_file
+def parse_and_import_excel_csv_to_table(repo_id, file_name, dtable_uuid, username, file_type):
+    from dtable_events.dtable_io.utils import upload_excel_json_add_table_to_dtable_server, delete_file
 
-    content = parse_excel(repo_id, file_name)
-    delete_excel_file(username, repo_id, file_name)
+    if file_type == 'xlsx':
+        content = parse_excel(repo_id, file_name)
+    elif file_type == 'csv':
+        content = parse_dtable_csv(repo_id, file_name)
+    # delete excel、csv、json  file
+    delete_file(username, repo_id, file_name)
     # import json file to dtable-server
     upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, content)
 
@@ -337,7 +430,7 @@ def parse_and_update_file_to_table(repo_id, file_name, username, dtable_uuid, ta
     if file_type == 'xlsx':
         file_rows = parse_update_excel_file(repo_id, file_name, username, dtable_uuid, table_name)
     else:
-        file_rows = parse_update_csv_file(repo_id, file_name, username, dtable_uuid, table_name)
+        file_rows = parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name)
 
     file_rows = file_rows[0].get('rows', [])
     dtable_rows = get_rows_from_dtable_server(username, dtable_uuid, table_name)
@@ -355,118 +448,123 @@ def parse_and_update_file_to_table(repo_id, file_name, username, dtable_uuid, ta
     update_append_excel_json_to_dtable_server(username, dtable_uuid, insert_rows, table_name)
 
 
-
-def parse_excel_to_json(repo_id, dtable_name, custom=False):
+def parse_excel_csv_to_json(repo_id, dtable_name, file_type, custom=False):
     from dtable_events.dtable_io.utils import upload_excel_json_file
+    if file_type == 'xlsx':
+        content = parse_excel(repo_id, dtable_name, custom)
+    elif file_type == 'csv':
+        content = parse_dtable_csv(repo_id, dtable_name)
 
-    content = parse_excel(repo_id, dtable_name, custom)
     upload_excel_json_file(repo_id, dtable_name, content)
 
 
-def import_excel_by_dtable_server(username, repo_id, dtable_uuid, dtable_name):
+def import_excel_csv_by_dtable_server(username, repo_id, dtable_uuid, dtable_name):
     from dtable_events.dtable_io.utils import get_excel_json_file, \
-        upload_excel_json_to_dtable_server, delete_excel_file
+        upload_excel_json_to_dtable_server, delete_file
 
     # get json file
     json_file = get_excel_json_file(repo_id, dtable_name)
-    # delete excel file
-    delete_excel_file(username, repo_id, dtable_name)
+    # delete excel、csv、json file
+    delete_file(username, repo_id, dtable_name)
     # upload json file to dtable-server
     upload_excel_json_to_dtable_server(username, dtable_uuid, json_file)
 
 
-def import_excel_add_table_by_dtable_server(username, repo_id, dtable_uuid, dtable_name):
+def import_excel_csv_add_table_by_dtable_server(username, repo_id, dtable_uuid, dtable_name):
     from dtable_events.dtable_io.utils import get_excel_json_file, \
-        upload_excel_json_add_table_to_dtable_server, delete_excel_file
+        upload_excel_json_add_table_to_dtable_server, delete_file
 
     # get json file
     json_file = get_excel_json_file(repo_id, dtable_name)
-    # delete excel file
-    delete_excel_file(username, repo_id, dtable_name)
+    # delete excel、csv、json file
+    delete_file(username, repo_id, dtable_name)
     # upload json file to dtable-server
     upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, json_file)
 
 
 def append_parsed_file_by_dtable_server(username, repo_id, dtable_uuid, file_name, table_name):
     from dtable_events.dtable_io.utils import get_excel_json_file, \
-        append_excel_json_to_dtable_server, delete_excel_file
+        append_excel_json_to_dtable_server, delete_file
 
     # get json file
     json_file = get_excel_json_file(repo_id, file_name)
-    # delete excel file
-    delete_excel_file(username, repo_id, file_name)
+    # delete excel、csv、json  file
+    delete_file(username, repo_id, file_name)
     # upload json file to dtable-server
     append_excel_json_to_dtable_server(username, dtable_uuid, json_file, table_name)
 
 
-def parse_append_excel_upload_excel_to_json(repo_id, file_name, username, dtable_uuid, table_name):
+def parse_append_excel_csv_upload_file_to_json(repo_id, file_name, username, dtable_uuid, table_name, file_type):
     from dtable_events.dtable_io.utils import get_excel_file, \
         upload_excel_json_file, get_columns_from_dtable_server
     from dtable_events.dtable_io import dtable_io_logger
 
     # parse
-    excel_file = get_excel_file(repo_id, file_name)
     tables = []
-    wb = load_workbook(excel_file, read_only=True)
-    sheet = wb.get_sheet_by_name(wb.sheetnames[0])
-    columns = get_columns_from_dtable_server(username, dtable_uuid, table_name)
+    if file_type == 'csv':
+        tables = parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name)
+    else:
+        excel_file = get_excel_file(repo_id, file_name)
+        wb = load_workbook(excel_file, read_only=True)
+        sheet = wb.get_sheet_by_name(wb.sheetnames[0])
+        columns = get_columns_from_dtable_server(username, dtable_uuid, table_name)
 
-    if sheet.max_row is None or sheet.max_column is None:
-        wb.close()
-        # upload empty json to file server
+        if sheet.max_row is None or sheet.max_column is None:
+            wb.close()
+            # upload empty json to file server
+            table = {
+                'name': table_name,
+                'rows': [],
+                'columns': columns,
+                'max_row': 0,
+                'max_column': 0,
+            }
+            tables.append(table)
+            content = json.dumps(tables)
+            upload_excel_json_file(repo_id, file_name, content)
+            return
+
+        dtable_io_logger.info(
+            'parse sheet: %s, rows: %d, columns: %d' % (sheet.title, sheet.max_row, sheet.max_column))
+
+        sheet_rows = list(sheet.rows)
+        max_row = len(sheet_rows)
+        max_column = sheet.max_column
+        if max_row > 50000:
+            max_row = 50000  # rows limit
+        if max_column > 300:
+            max_column = 300  # columns limit
+        if max_row == 0:
+            wb.close()
+            # upload empty json to file server
+            table = {
+                'name': table_name,
+                'rows': [],
+                'columns': columns,
+                'max_row': max_row,
+                'max_column': max_column,
+            }
+            tables.append(table)
+            content = json.dumps(tables)
+            upload_excel_json_file(repo_id, file_name, content)
+            return
+
+        if max_column > len(columns):
+            max_column = len(columns)
+        rows = parse_append_excel_rows(sheet_rows, columns, len(columns))
+
+        dtable_io_logger.info(
+            'got table: %s, rows: %d, columns: %d' % (sheet.title, len(rows), max_column))
+
         table = {
             'name': table_name,
-            'rows': [],
-            'columns': columns,
-            'max_row': 0,
-            'max_column': 0,
-        }
-        tables.append(table)
-        content = json.dumps(tables)
-        upload_excel_json_file(repo_id, file_name, content)
-        return
-
-    dtable_io_logger.info(
-        'parse sheet: %s, rows: %d, columns: %d' % (sheet.title, sheet.max_row, sheet.max_column))
-
-    sheet_rows = list(sheet.rows)
-    max_row = len(sheet_rows)
-    max_column = sheet.max_column
-    if max_row > 50000:
-        max_row = 50000  # rows limit
-    if max_column > 300:
-        max_column = 300  # columns limit
-    if max_row == 0:
-        wb.close()
-        # upload empty json to file server
-        table = {
-            'name': table_name,
-            'rows': [],
+            'rows': rows,
             'columns': columns,
             'max_row': max_row,
             'max_column': max_column,
         }
         tables.append(table)
-        content = json.dumps(tables)
-        upload_excel_json_file(repo_id, file_name, content)
-        return
-
-    if max_column > len(columns):
-        max_column = len(columns)
-    rows = parse_append_excel_rows(sheet_rows, columns, len(columns))
-
-    dtable_io_logger.info(
-        'got table: %s, rows: %d, columns: %d' % (sheet.title, len(rows), max_column))
-
-    table = {
-        'name': table_name,
-        'rows': rows,
-        'columns': columns,
-        'max_row': max_row,
-        'max_column': max_column,
-    }
-    tables.append(table)
-    wb.close()
+        wb.close()
 
     # upload json to file server
     content = json.dumps(tables)
@@ -691,7 +789,7 @@ def parse_update_excel_rows(sheet_rows, columns, column_length):
     return rows
 
 
-def parse_update_csv_file(repo_id, file_name, username, dtable_uuid, table_name):
+def parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name):
     from dtable_events.dtable_io.utils import get_csv_file, get_columns_from_dtable_server
     from dtable_events.dtable_io import dtable_io_logger
 
@@ -701,7 +799,7 @@ def parse_update_csv_file(repo_id, file_name, username, dtable_uuid, table_name)
     columns = get_columns_from_dtable_server(username, dtable_uuid, table_name)
 
     max_column = 300  # columns limit
-    rows, max_column, csv_row_num, csv_column_num = parse_update_csv_rows(csv_file, columns, max_column)
+    rows, max_column, csv_row_num, csv_column_num = parse_csv_rows(csv_file, columns, max_column)
     dtable_io_logger.info(
         'parse csv: %s, rows: %d, columns: %d' % (file_name, csv_row_num, csv_column_num))
 
@@ -726,11 +824,11 @@ def parse_update_csv_file(repo_id, file_name, username, dtable_uuid, table_name)
 def parse_update_csv_upload_csv_to_json(repo_id, file_name, username, dtable_uuid, table_name):
     from dtable_events.dtable_io.utils import upload_excel_json_file
 
-    content = parse_update_csv_file(repo_id, file_name, username, dtable_uuid, table_name)
+    content = parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name)
     upload_excel_json_file(repo_id, file_name, json.dumps(content))
 
 
-def parse_update_csv_rows(csv_file, columns, max_column):
+def parse_csv_rows(csv_file, columns, max_column):
     from dtable_events.dtable_io import dtable_io_logger
 
     rows = []

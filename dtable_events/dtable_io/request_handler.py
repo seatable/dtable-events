@@ -89,8 +89,8 @@ def add_import_task():
     return make_response(({'task_id': task_id}, 200))
 
 
-@app.route('/add-parse-excel-task', methods=['GET'])
-def add_parse_excel_task():
+@app.route('/add-parse-excel-csv-task', methods=['GET'])
+def add_parse_excel_csv_task():
     is_valid, error = check_auth_token(request)
     if not is_valid:
         return make_response((error, 403))
@@ -107,11 +107,12 @@ def add_parse_excel_task():
     workspace_id = request.args.get('workspace_id')
     dtable_name = request.args.get('dtable_name')
     custom = request.args.get('custom')
+    file_type = request.args.get('file_type')
     custom = bool(int(custom))
 
     try:
-        task_id = task_manager.add_parse_excel_task(
-            username, repo_id, workspace_id, dtable_name, custom)
+        task_id = task_manager.add_parse_excel_csv_task(
+            username, repo_id, workspace_id, dtable_name, file_type, custom)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -119,8 +120,8 @@ def add_parse_excel_task():
     return make_response(({'task_id': task_id}, 200))
 
 
-@app.route('/add-import-excel-task', methods=['GET'])
-def add_import_excel_task():
+@app.route('/add-import-excel-csv-task', methods=['GET'])
+def add_import_excel_csv_task():
     is_valid, error = check_auth_token(request)
     if not is_valid:
         return make_response((error, 403))
@@ -139,7 +140,7 @@ def add_import_excel_task():
     dtable_name = request.args.get('dtable_name')
 
     try:
-        task_id = task_manager.add_import_excel_task(
+        task_id = task_manager.add_import_excel_csv_task(
             username, repo_id, workspace_id, dtable_uuid, dtable_name)
     except Exception as e:
         logger.error(e)
@@ -148,8 +149,8 @@ def add_import_excel_task():
     return make_response(({'task_id': task_id}, 200))
 
 
-@app.route('/add-import-excel-add-table-task', methods=['GET'])
-def add_import_excel_add_table_task():
+@app.route('/add-import-excel-csv-add-table-task', methods=['GET'])
+def add_import_excel_csv_add_table_task():
     is_valid, error = check_auth_token(request)
     if not is_valid:
         return make_response((error, 403))
@@ -168,7 +169,7 @@ def add_import_excel_add_table_task():
     dtable_name = request.args.get('dtable_name')
 
     try:
-        task_id = task_manager.add_import_excel_add_table_task(
+        task_id = task_manager.add_import_excel_csv_add_table_task(
             username, repo_id, workspace_id, dtable_uuid, dtable_name)
     except Exception as e:
         logger.error(e)
@@ -177,8 +178,8 @@ def add_import_excel_add_table_task():
     return make_response(({'task_id': task_id}, 200))
 
 
-@app.route('/add-append-excel-append-parsed-file-task', methods=['GET'])
-def add_append_excel_append_parsed_file_task():
+@app.route('/add-append-excel-csv-append-parsed-file-task', methods=['GET'])
+def add_append_excel_csv_append_parsed_file_task():
     is_valid, error = check_auth_token(request)
     if not is_valid:
         return make_response((error, 403))
@@ -197,7 +198,7 @@ def add_append_excel_append_parsed_file_task():
     table_name = request.args.get('table_name')
 
     try:
-        task_id = task_manager.add_append_excel_append_parsed_file_task(
+        task_id = task_manager.add_append_excel_csv_append_parsed_file_task(
             username, repo_id, dtable_uuid, file_name, table_name)
     except Exception as e:
         logger.error(e)
@@ -206,8 +207,8 @@ def add_append_excel_append_parsed_file_task():
     return make_response(({'task_id': task_id}, 200))
 
 
-@app.route('/add-append-excel-upload-excel-task', methods=['GET'])
-def add_append_excel_upload_excel_task():
+@app.route('/add-append-excel-csv-upload-file-task', methods=['GET'])
+def add_append_excel_csv_upload_file_task():
     is_valid, error = check_auth_token(request)
     if not is_valid:
         return make_response((error, 403))
@@ -224,10 +225,11 @@ def add_append_excel_upload_excel_task():
     file_name = request.args.get('file_name')
     dtable_uuid = request.args.get('dtable_uuid')
     table_name = request.args.get('table_name')
+    file_type = request.args.get('file_type')
 
     try:
-        task_id = task_manager.add_append_excel_upload_excel_task(
-            username, repo_id, file_name, dtable_uuid, table_name)
+        task_id = task_manager.add_append_excel_csv_upload_file_task(
+            username, repo_id, file_name, dtable_uuid, table_name, file_type)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -647,8 +649,8 @@ def add_update_csv_upload_csv_task():
     return make_response(({'task_id': task_id}, 200))
 
 
-@app.route('/add-import-excel-to-dtable-task', methods=['GET'])
-def add_import_excel_to_dtable_task():
+@app.route('/add-import-excel-csv-to-dtable-task', methods=['GET'])
+def add_import_excel_csv_to_dtable_task():
     is_valid, error = check_auth_token(request)
     if not is_valid:
         return make_response((error, 403))
@@ -665,9 +667,10 @@ def add_import_excel_to_dtable_task():
     workspace_id = request.args.get('workspace_id')
     dtable_name = request.args.get('dtable_name')
     dtable_uuid = request.args.get('dtable_uuid')
+    file_type = request.args.get('file_type')
 
     try:
-        task_id = task_manager.add_import_excel_to_dtable_task(username, repo_id, workspace_id, dtable_name, dtable_uuid)
+        task_id = task_manager.add_import_excel_csv_to_dtable_task(username, repo_id, workspace_id, dtable_name, dtable_uuid, file_type)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -675,7 +678,7 @@ def add_import_excel_to_dtable_task():
     return make_response(({'task_id': task_id}, 200))
 
 
-@app.route('/add-import-excel-to-table-task', methods=['GET'])
+@app.route('/add-import-excel-csv-to-table-task', methods=['GET'])
 def add_import_excel_to_table_task():
     is_valid, error = check_auth_token(request)
     if not is_valid:
@@ -693,9 +696,10 @@ def add_import_excel_to_table_task():
     workspace_id = request.args.get('workspace_id')
     file_name = request.args.get('file_name')
     dtable_uuid = request.args.get('dtable_uuid')
+    file_type = request.args.get('file_type')
 
     try:
-        task_id = task_manager.add_import_excel_to_table_task(username, repo_id, workspace_id, file_name, dtable_uuid)
+        task_id = task_manager.add_import_excel_csv_to_table_task(username, repo_id, workspace_id, file_name, dtable_uuid, file_type)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
