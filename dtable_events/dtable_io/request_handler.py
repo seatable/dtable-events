@@ -777,7 +777,9 @@ def sync_common_data():
         return make_response(('sync common dataset context invalid.', 400))
 
     try:
-        task_id = task_manager.add_sync_common_dataset_task(context)
+        task_id, error_type = task_manager.add_sync_common_dataset_task(context)
+        if error_type == 'syncing':
+            return make_response({'error_msg': 'Dataset is syncing'}, 429)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
