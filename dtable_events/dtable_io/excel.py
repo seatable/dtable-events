@@ -377,8 +377,8 @@ def parse_dtable_csv(repo_id, dtable_name):
 
     if max_row > 10000:
         max_row = 10000
-    if max_column > 300:
-        max_column = 300
+    if max_column > 500:
+        max_column = 500
 
     columns = parse_dtable_csv_columns(csv_rows, max_column)
     rows = parse_dtable_csv_rows(csv_rows, columns, max_column)
@@ -532,8 +532,8 @@ def parse_append_excel_csv_upload_file_to_json(repo_id, file_name, username, dta
         max_column = sheet.max_column
         if max_row > 50000:
             max_row = 50000  # rows limit
-        if max_column > 300:
-            max_column = 300  # columns limit
+        if max_column > 500:
+            max_column = 500  # columns limit
         if max_row == 0:
             wb.close()
             # upload empty json to file server
@@ -715,8 +715,8 @@ def parse_update_excel_file(repo_id, file_name, username, dtable_uuid, table_nam
     max_column = sheet.max_column
     if max_row > 50000:
         max_row = 50000  # rows limit
-    if max_column > 300:
-        max_column = 300  # columns limit
+    if max_column > 500:
+        max_column = 500  # columns limit
     if max_row == 0:
         wb.close()
         # upload empty json to file server
@@ -798,7 +798,7 @@ def parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name):
     tables = []
     columns = get_columns_from_dtable_server(username, dtable_uuid, table_name)
 
-    max_column = 300  # columns limit
+    max_column = 500  # columns limit
     rows, max_column, csv_row_num, csv_column_num = parse_csv_rows(csv_file, columns, max_column)
     dtable_io_logger.info(
         'parse csv: %s, rows: %d, columns: %d' % (file_name, csv_row_num, csv_column_num))
