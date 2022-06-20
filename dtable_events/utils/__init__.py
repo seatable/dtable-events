@@ -8,6 +8,8 @@ import uuid
 
 import pytz
 import re
+import random
+from dtable_events.utils.constants import VALID_OPTION_TAGS
 
 logger = logging.getLogger(__name__)
 pyexec = None
@@ -197,3 +199,13 @@ def get_inner_dtable_server_url():
         return INNER_DTABLE_SERVER_URL
     else:
         return DTABLE_SERVER_URL
+
+
+def gen_random_option(option_name):
+    index = random.randint(0, len(VALID_OPTION_TAGS) - 1)
+    tag = {
+        'name': option_name,
+        'color': VALID_OPTION_TAGS[index]['color'],
+        'text_color': VALID_OPTION_TAGS[index]['text_color']
+    }
+    return tag
