@@ -133,13 +133,28 @@ def parse_date(data_format, cell_value):
     return cell_value
 
 
-def str_to_date(data_format, data):
+def str_2_date(data_format, data):
     if not data:
         return ''
     if ' ' in data_format:
         return datetime.strptime(data, '%Y-%m-%d %H:%M')
     else:
         return datetime.strptime(data, '%Y-%m-%d')
+
+
+def convert_time_to_utc_str(time_str):
+    if 'Z' in time_str:
+        utc_time = datetime.strptime(time_str, '%Y-%m-%dT%H:%M:%S.%fZ')
+    else:
+        utc_time = datetime.strptime(time_str, '%Y-%m-%dT%H:%M:%S.%f+00:00')
+    return utc_to_tz(utc_time, timezone).strftime('%Y-%m-%d %H:%M:%S')
+
+
+def cell_data2str(cell_data):
+    if isinstance(cell_data, list):
+        return ' '.join(cell_data2str(item) for item in cell_data)
+    else:
+        return str(cell_data)
 
 
 class BaseAction:
@@ -1103,10 +1118,10 @@ class LinkRecordsAction(BaseAction):
 
 class CopyRecordAction(BaseAction):
 
-    def __init__(self, auto_rule, data, copy_to_table_id):
+    def __init__(self, auto_rule, data, dst_table_id):
         super().__init__(auto_rule, data=data)
         self.action_type = 'copy_record_to'
-        self.copy_to_table_id = copy_to_table_id
+        self.dst_table_id = dst_table_id
         self.append_row = {}
         self._init_copied_row()
 
@@ -1140,7 +1155,7 @@ class CopyRecordAction(BaseAction):
                 return {}
             nicknames = resp.json().get('user_list')
         except Exception as e:
-            logger.error('get script running limit error: %s', e)
+            logger.error('get nicknames error: %s', e)
             return {}
         email2nickname = {nickname['email']: nickname['name'] for nickname in nicknames}
         return email2nickname
@@ -1148,7 +1163,7 @@ class CopyRecordAction(BaseAction):
     def _add_column_options(self, column_name, options):
         api_url = get_inner_dtable_server_url()
         url = api_url.rstrip('/') + '/api/v1/dtables/' + uuid_str_to_36_chars(self.auto_rule.dtable_uuid) + '/column-options/?from=dtable_events'
-        table_name = self.get_table_name(self.copy_to_table_id)
+        table_name = self.get_table_name(self.dst_table_id)
         json_data = {
             'table_name': table_name,
             'column': column_name,
@@ -1165,101 +1180,90 @@ class CopyRecordAction(BaseAction):
                          response.status_code)
 
     def _init_copied_row(self):
-        copied_to_table_columns = {col.get('name'): col for col in self.get_columns(self.copy_to_table_id)}
-        copied_table_columns = {col.get('name'): col for col in self.get_columns(self.auto_rule.table_id)}
+        dst_columns = {col.get('name'): col for col in self.get_columns(self.dst_table_id)}
+        src_columns = {col.get('name'): col for col in self.get_columns(self.auto_rule.table_id)}
         copied_row = self.data.get('converted_row')
-        print(self.data)
 
         email2nickname = self._get_related_nicknames()
 
         append_row = {}
-        for copied_to_column_name in copied_to_table_columns:
-            copied_to_table_column = copied_to_table_columns.get(copied_to_column_name)
-            copied_table_column = copied_table_columns.get(copied_to_column_name)
-            if not copied_table_column:
+        for dst_column_name in dst_columns:
+            dst_column = dst_columns.get(dst_column_name)
+            src_column = src_columns.get(dst_column_name)
+            if not src_column:
                 continue
-            cell_value = copied_row.get(copied_to_column_name)
+            cell_value = copied_row.get(dst_column_name)
             if cell_value is None:
                 continue
-            copied_column_type = copied_table_column.get('type')
-            copied_to_column_type = copied_to_table_column.get('type')
+            src_column_type = src_column.get('type')
+            dst_column_type = dst_column.get('type')
 
-            # 当导出到的列类型 为以下类型不需要处理
-            # LINK_FORMULA、AUTO_NUMBER、CREATOR、LAST_MODIFIER、CTIME、MTIME、BUTTON
-
-            # 当导出列为 BUTTON 类型时不需要处理
-            if copied_column_type in ['button'] or copied_to_column_type in \
+            if src_column_type in ['button'] or dst_column_type in \
                     ['link-formula', 'auto-number', 'creator', 'last-modifier', 'ctime', 'mtime', 'button']:
                 continue
-            elif copied_column_type == ColumnTypes.DURATION and copied_to_column_type == ColumnTypes.DURATION:
-                copied_to_duration_format = copied_to_table_column.get('data', {}).get('duration_format')
+            elif src_column_type == ColumnTypes.DURATION and dst_column_type == ColumnTypes.DURATION:
+                copied_to_duration_format = dst_column.get('data', {}).get('duration_format')
                 if copied_to_duration_format == 'h:mm':
                     cell_value = cell_value / 60
-            elif copied_column_type == ColumnTypes.MULTIPLE_SELECT and copied_to_column_type == ColumnTypes.MULTIPLE_SELECT:
-                copied_column_options = copied_table_column.get('data', {}).get('options', [])
-                copied_to_column_options = copied_to_table_column.get('data', {}).get('options', [])
+            elif src_column_type == ColumnTypes.MULTIPLE_SELECT and dst_column_type == ColumnTypes.MULTIPLE_SELECT:
+                copied_column_options = src_column.get('data', {}).get('options', [])
+                copied_to_column_options = dst_column.get('data', {}).get('options', [])
                 copied_to_column_option_dict = {option.get('name'): option for option in copied_to_column_options}
                 to_insert_options = []
                 for option in copied_column_options:
                     if not copied_to_column_option_dict.get(option.get('name')):
                         to_insert_options.append(gen_random_option(option.get('name')))
                 if to_insert_options:
-                    self._add_column_options(copied_to_table_column.get('name'), to_insert_options)
+                    self._add_column_options(dst_column.get('name'), to_insert_options)
 
-            elif copied_to_column_type in [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT]:
-                if copied_column_type == ColumnTypes.IMAGE:
+            elif dst_column_type in [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT]:
+                if src_column_type == ColumnTypes.IMAGE:
                     cell_value = ', '.join(cell_value)
-
-                elif copied_column_type in [ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
+                elif src_column_type in [ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
                     cell_value = email2nickname.get(cell_value, '')
-                elif copied_column_type in [ColumnTypes.CTIME, ColumnTypes.MTIME]:
-                    if 'Z' in cell_value:
-                        utc_time = datetime.strptime(cell_value, '%Y-%m-%dT%H:%M:%S.%fZ')
-                    else:
-                        utc_time = datetime.strptime(cell_value, '%Y-%m-%dT%H:%M:%S.%f+00:00')
-                    cell_value = utc_to_tz(utc_time, timezone).strftime('%Y-%m-%d %H:%M:%S')
-
-                elif copied_column_type == ColumnTypes.GEOLOCATION:
+                elif src_column_type in [ColumnTypes.CTIME, ColumnTypes.MTIME]:
+                    cell_value = convert_time_to_utc_str(cell_value)
+                elif src_column_type == ColumnTypes.GEOLOCATION:
                     cell_value = parse_geolocation(cell_value)
-                elif copied_column_type == ColumnTypes.COLLABORATOR:
+                elif src_column_type == ColumnTypes.COLLABORATOR:
                     nickname_list = []
                     for user in cell_value:
                         if email2nickname.get(user):
                             nickname_list.append(email2nickname.get(user))
                     cell_value = ', '.join(nickname_list)
-
-                elif copied_column_type == ColumnTypes.MULTIPLE_SELECT:
+                elif src_column_type == ColumnTypes.MULTIPLE_SELECT:
                     cell_value = ', '.join(cell_value)
-                elif copied_column_type == ColumnTypes.LINK:
+                elif src_column_type == ColumnTypes.LINK:
                     if isinstance(cell_value, list):
-                        print('cell_value')
-                        print(cell_value)
-                        print(' ')
-                        print(copied_table_column)
-                        array_type = copied_table_column.get('data', {}).get('array_type', '')
+                        array_type = src_column.get('data', {}).get('array_type', '')
                         if array_type == 'date':
-                            data_format = copied_table_column.get('data', {}).get('array_data', {}).get('format')
-                            cell_value = ', '.join([str(parse_date(data_format, str_to_date(data_format, v.get('display_value', '')))) for v in cell_value])
+                            data_format = src_column.get('data', {}).get('array_data', {}).get('format')
+                            cell_value = [str(parse_date(data_format, str_2_date(data_format, v.get('display_value', '')))) for v in cell_value]
                         elif array_type in ['creator', 'last_modifier']:
-                            cell_value = ', '.join([email2nickname.get(v.get('display_value', '')) for v in cell_value])
+                            cell_value = [email2nickname.get(v.get('display_value', ''), '') for v in cell_value]
                         elif array_type == 'single-select':
-                            pass
+                            options = src_column.get('data', {}).get('array_data', {}).get('options', [])
+                            option_id_2_name = {option['id']: option['name'] for option in options}
+                            cell_value = [option_id_2_name.get(str(v.get('display_value', '')), '') for v in cell_value]
                         elif array_type == 'multiple-select':
-                            pass
+                            cell_value = []
+                        elif array_type in ['ctime', 'mtime']:
+                            cell_value = [convert_time_to_utc_str(v.get('display_value')) for v in cell_value]
                         else:
-                            cell_value = ', '.join([str(v.get('display_value', '')) for v in cell_value])
+                            cell_value = [str(v.get('display_value', '')) for v in cell_value]
+                        cell_value = ', '.join(cell_value)
 
-                elif copied_column_type == ColumnTypes.DURATION:
+                elif src_column_type == ColumnTypes.DURATION:
                     h_duration = cell_value // 3600
                     m_duration = cell_value % 3600 // 60
                     s_duration = cell_value % 60
-                    duration_format = copied_table_column.get('data', {}).get('duration_format')
+                    duration_format = src_column.get('data', {}).get('duration_format')
                     # duration_format may be 'h:mm:ss' or 'h:mm'
                     if duration_format == 'h:mm:ss':
                         cell_value = str(h_duration) + ':' + str(m_duration) + ':' + str(s_duration)
                     else:
                         cell_value = str(h_duration) + ':' + str(m_duration)
-                elif copied_column_type == ColumnTypes.DATE:
+                elif src_column_type == ColumnTypes.DATE:
                     cell_value = cell_value.strip()
                     if cell_value:
                         try:
@@ -1269,10 +1273,10 @@ class CopyRecordAction(BaseAction):
                                 cell_value = datetime.strptime(cell_value, '%Y-%m-%d')
                         except Exception as e:
                             logger.debug(e)
-                    data_format = copied_table_column.get('data', {}).get('format')
+                    data_format = src_column.get('data', {}).get('format')
                     cell_value = parse_date(data_format, cell_value)
-                elif copied_column_type == ColumnTypes.NUMBER:
-                    number_data = copied_table_column.get('data', {})
+                elif src_column_type == ColumnTypes.NUMBER:
+                    number_data = src_column.get('data', {})
                     enable_precision = number_data.get('enable_precision')
                     precision = -1
                     if enable_precision:
@@ -1281,35 +1285,35 @@ class CopyRecordAction(BaseAction):
                     thousands = number_data.get('thousands')
 
                     cell_value = str(cell_value)
-                    front = cell_value.split('.')[0]
-                    end = ''
+                    front_part = cell_value.split('.')[0]
+                    end_part = ''
                     if len(cell_value.split('.')) == 2:
-                        end = cell_value.split('.')[1]
-                    # thousands may be dot no space comma
+                        end_part = cell_value.split('.')[1]
+                    # thousands may be dot、no、space or comma
                     if thousands == 'dot':
-                        front = '{:,}'.format(int(front))
-                        front = front.replace(',', '.')
+                        front_part = '{:,}'.format(int(front_part))
+                        front_part = front_part.replace(',', '.')
                     elif thousands == 'space':
-                        front = '{:,}'.format(int(front))
-                        front = front.replace(',', ' ')
+                        front_part = '{:,}'.format(int(front_part))
+                        front_part = front_part.replace(',', ' ')
                     elif thousands == 'comma':
-                        front = '{:,}'.format(int(front))
+                        front_part = '{:,}'.format(int(front_part))
 
                     if precision != -1:
-                        if not end:
-                            end = '0' * precision
+                        if not end_part:
+                            end_part = '0' * precision
                         else:
-                            end = str(round(int(end), precision))
-                            if len(end) < precision:
-                                end += (precision - len(end)) * '0'
-                    if end:
+                            end_part = str(round(int(end_part), precision))
+                            if len(end_part) < precision:
+                                end_part += (precision - len(end_part)) * '0'
+                    if end_part:
                         # decimal may be comma or dot
                         if decimal == 'comma':
-                            cell_value = front + ',' + end
+                            cell_value = front_part + ',' + end_part
                         else:
-                            cell_value = front + '.' + end
+                            cell_value = front_part + '.' + end_part
                     else:
-                        cell_value = front
+                        cell_value = front_part
                     if number_data.get('format') == 'number':
                         cell_value = cell_value
                     elif number_data.get('format') == 'dollar':
@@ -1327,29 +1331,20 @@ class CopyRecordAction(BaseAction):
                         else:
                             cell_value = currency_symbol + cell_value
                 else:
-                    cell_value = self.cell_data2str(cell_value)
+                    cell_value = cell_data2str(cell_value)
 
-            elif copied_to_column_type == ColumnTypes.NUMBER:
-                if copied_column_type not in [ColumnTypes.NUMBER, ColumnTypes.DURATION, ColumnTypes.RATE]:
+            elif dst_column_type == ColumnTypes.NUMBER:
+                if src_column_type not in [ColumnTypes.NUMBER, ColumnTypes.DURATION, ColumnTypes.RATE]:
                     continue
-            elif copied_to_column_type != copied_column_type:
+            elif dst_column_type != src_column_type:
                 # If the column type is different do not need to be handled except in the case above
                 continue
-            append_row[copied_to_column_name] = cell_value
+            append_row[dst_column_name] = cell_value
 
         self.append_row = append_row
 
-    def cell_data2str(self, cell_data):
-        if isinstance(cell_data, list):
-            return ' '.join(self.cell_data2str(item) for item in cell_data)
-        else:
-            return str(cell_data)
-
     def _can_do_action(self):
         if not self.append_row:
-            return False
-
-        if not self.auto_rule.run_condition == PER_UPDATE:
             return False
         return True
 
@@ -1359,7 +1354,7 @@ class CopyRecordAction(BaseAction):
 
         api_url = get_inner_dtable_server_url()
         url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/rows/?from=dtable_events'
-        table_name = self.get_table_name(self.copy_to_table_id)
+        table_name = self.get_table_name(self.dst_table_id)
         json_data = {
             'row': self.append_row,
             'table_name': table_name
@@ -1368,13 +1363,12 @@ class CopyRecordAction(BaseAction):
         try:
             response = requests.post(url, headers=self.auto_rule.headers, json=json_data)
         except Exception as e:
-            logger.error('link dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
+            logger.error('append row to dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
         if response.status_code != 200:
-            logger.error('link dtable: %s error response status code: %s', self.auto_rule.dtable_uuid, response.status_code)
+            logger.error('append row to dtable: %s error response status code: %s', self.auto_rule.dtable_uuid, response.status_code)
         else:
             self.auto_rule.set_done_actions()
-
 
 
 class RuleInvalidException(Exception):
@@ -1627,8 +1621,9 @@ class AutomationRule:
                     LinkRecordsAction(self, self.data, linked_table_id, link_id, match_conditions).do_action()
 
                 elif action_info.get('type') == 'copy_record_to':
-                    copy_to_table_id = action_info.get('copy_to_table_id')
-                    CopyRecordAction(self, self.data, copy_to_table_id).do_action()
+                    dst_table_id = action_info.get('dst_table_id')
+                    if self.run_condition == PER_UPDATE:
+                        CopyRecordAction(self, self.data, dst_table_id).do_action()
 
             except RuleInvalidException as e:
                 logger.error('auto rule: %s, invalid error: %s', self.rule_id, e)
