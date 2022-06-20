@@ -1218,6 +1218,8 @@ class CopyRecordAction(BaseAction):
                     cell_value = cell_value / 60
             elif src_column_type == ColumnTypes.NUMBER and dst_column_type == ColumnTypes.DURATION:
                 cell_value = cell_value
+            elif src_column_type in [ColumnTypes.CTIME, ColumnTypes.MTIME] and dst_column_type == ColumnTypes.DATE:
+                cell_value = convert_time_to_utc_str(cell_value)
             elif src_column_type == ColumnTypes.MULTIPLE_SELECT and dst_column_type == ColumnTypes.MULTIPLE_SELECT:
                 copied_column_options = src_column.get('data', {}).get('options', [])
                 copied_to_column_options = dst_column.get('data', {}).get('options', [])
