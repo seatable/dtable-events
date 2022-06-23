@@ -126,6 +126,9 @@ class Operator(object):
             'column_name': self.column_name
         })
 
+    def op_is_current_user_id(self):
+        return self.op_is()
+
 
 class TextOperator(Operator):
     SUPPORT_FILTER_PREDICATE = [
@@ -135,6 +138,7 @@ class TextOperator(Operator):
         FilterPredicateTypes.IS_NOT,
         FilterPredicateTypes.EMPTY,
         FilterPredicateTypes.NOT_EMPTY,
+        FilterPredicateTypes.IS_CURRENT_USER_ID,
     ]
 
     def __init__(self, column, filter_item):
@@ -813,6 +817,8 @@ def _filter2sqlslice(operator):
         return operator.op_has_none_of()
     if filter_predicate == FilterPredicateTypes.INCLUDE_ME:
         return operator.op_include_me()
+    if filter_predicate == FilterPredicateTypes.IS_CURRENT_USER_ID:
+        return operator.op_is_current_user_id()
     return ''
 
 def _get_operator_by_type(column_type):
