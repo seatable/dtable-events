@@ -111,26 +111,32 @@ def parse_geolocation(cell_data):
         return str(cell_data)
 
 
+def convert_date_format(data_format):
+    if data_format == 'YYYY-MM-DD HH:mm':
+        return '%Y-%m-%d %H:%M'
+    elif data_format == 'M/D/YYYY HH:mm':
+        return '%-m/%-d/%Y %H:%M'
+    elif data_format == 'DD/MM/YYYY HH:mm':
+        return '%d/%m/%Y %H:%M'
+    elif data_format == 'DD.MM.YYYY HH:mm':
+        return '%d.%m.%Y %H:%M'
+    elif data_format == 'YYYY-MM-DD':
+        return '%Y-%m-%d'
+    elif data_format == 'M/D/YYYY':
+        return '%-m/%-d/%Y'
+    elif data_format == 'DD/MM/YYYY':
+        return '%d/%m/%Y'
+    elif data_format == 'DD.MM.YYYY':
+        return '%d.%m.%Y'
+
+
 def parse_date(data_format, cell_value):
     if not cell_value:
         return cell_value
-    if data_format == 'YYYY-MM-DD HH:mm':
-        cell_value = datetime.strftime(cell_value, '%Y-%m-%d %H:%M')
-    elif data_format == 'M/D/YYYY HH:mm':
-        cell_value = datetime.strftime(cell_value, '%-m/%-d/%Y %H:%M')
-    elif data_format == 'DD/MM/YYYY HH:mm':
-        cell_value = datetime.strftime(cell_value, '%d/%m/%Y %H:%M')
-    elif data_format == 'DD.MM.YYYY HH:mm':
-        cell_value = datetime.strftime(cell_value, '%d.%m.%Y %H:%M')
-    elif data_format == 'YYYY-MM-DD':
-        cell_value = datetime.strftime(cell_value, '%Y-%m-%d')
-    elif data_format == 'M/D/YYYY':
-        cell_value = datetime.strftime(cell_value, '%-m/%-d/%Y')
-    elif data_format == 'DD/MM/YYYY':
-        cell_value = datetime.strftime(cell_value, '%d/%m/%Y')
-    elif data_format == 'DD.MM.YYYY':
-        cell_value = datetime.strftime(cell_value, '%d.%m.%Y')
-    return cell_value
+    data_format = convert_date_format(data_format)
+    if not data_format:
+        return cell_value
+    return datetime.strftime(cell_value, data_format)
 
 
 def str_2_date(data_format, data):
@@ -1147,8 +1153,8 @@ class CopyRecordAction(BaseAction):
         dtable_metadata = self.auto_rule.dtable_metadata
         for table in dtable_metadata.get('tables', []):
             if table.get('_id') == table_id:
-                return table.get('columns')
-        return None
+                return table.get('columns', [])
+        return []
 
     def _get_related_nicknames(self):
         url = DTABLE_WEB_SERVICE_URL.strip('/') + '/api/v2.1/dtables/%s/related-users/' % uuid_str_to_36_chars(self.auto_rule.dtable_uuid)
@@ -1193,7 +1199,7 @@ class CopyRecordAction(BaseAction):
     def _init_copied_row(self):
         dst_columns = {col.get('name'): col for col in self.get_columns(self.dst_table_id)}
         src_columns = {col.get('name'): col for col in self.get_columns(self.auto_rule.table_id)}
-        copied_row = self.data.get('converted_row')
+        src_row = self.data.get('converted_row')
 
         email2nickname = self._get_related_nicknames()
 
@@ -1203,7 +1209,7 @@ class CopyRecordAction(BaseAction):
             src_column = src_columns.get(dst_column_name)
             if not src_column:
                 continue
-            cell_value = copied_row.get(dst_column_name)
+            cell_value = src_row.get(dst_column_name)
             if cell_value is None:
                 continue
             src_column_type = src_column.get('type')
@@ -1212,21 +1218,30 @@ class CopyRecordAction(BaseAction):
             if src_column_type in ['button'] or dst_column_type in \
                     ['link-formula', 'auto-number', 'creator', 'last-modifier', 'ctime', 'mtime', 'button']:
                 continue
-            elif src_column_type == ColumnTypes.DURATION and dst_column_type == ColumnTypes.DURATION:
-                copied_to_duration_format = dst_column.get('data', {}).get('duration_format')
-                if copied_to_duration_format == 'h:mm':
-                    cell_value = cell_value / 60
-            elif src_column_type == ColumnTypes.NUMBER and dst_column_type == ColumnTypes.DURATION:
-                cell_value = cell_value
-            elif src_column_type in [ColumnTypes.CTIME, ColumnTypes.MTIME] and dst_column_type == ColumnTypes.DATE:
-                cell_value = convert_time_to_utc_str(cell_value)
-            elif src_column_type == ColumnTypes.MULTIPLE_SELECT and dst_column_type == ColumnTypes.MULTIPLE_SELECT:
-                copied_column_options = src_column.get('data', {}).get('options', [])
-                copied_to_column_options = dst_column.get('data', {}).get('options', [])
-                copied_to_column_option_dict = {option.get('name'): option for option in copied_to_column_options}
+            elif dst_column_type == ColumnTypes.DATE:
+                if src_column_type in [ColumnTypes.CTIME, ColumnTypes.MTIME]:
+                    cell_value = convert_time_to_utc_str(cell_value)
+                elif src_column_type == ColumnTypes.FORMULA:
+                    if src_column.get('data').get('result_type') != 'date':
+                        continue
+                    data_format = convert_date_format(src_column.get('data').get('format'))
+                    try:
+                        if ' ' in cell_value:
+                            cell_value = datetime.strftime(datetime.strptime(cell_value, data_format), '%Y-%m-%d %H:%M')
+                        else:
+                            cell_value = datetime.strftime(datetime.strptime(cell_value, data_format), '%Y-%m-%d')
+                    except Exception as e:
+                        logger.debug(e)
+                else:
+                    if src_column_type != ColumnTypes.DATE:
+                        continue
+            elif dst_column_type == ColumnTypes.MULTIPLE_SELECT and src_column_type == ColumnTypes.MULTIPLE_SELECT:
+                src_column_options = src_column.get('data', {}).get('options', [])
+                dst_column_options = dst_column.get('data', {}).get('options', [])
+                dst_column_option_dict = {option.get('name'): option for option in dst_column_options}
                 to_insert_options = []
-                for option in copied_column_options:
-                    if not copied_to_column_option_dict.get(option.get('name')):
+                for option in src_column_options:
+                    if not dst_column_option_dict.get(option.get('name')):
                         to_insert_options.append(gen_random_option(option.get('name')))
                 if to_insert_options:
                     self._add_column_options(dst_column.get('name'), to_insert_options)
@@ -1348,9 +1363,16 @@ class CopyRecordAction(BaseAction):
                 else:
                     cell_value = cell_data2str(cell_value)
 
-            elif dst_column_type == ColumnTypes.NUMBER:
-                if src_column_type not in [ColumnTypes.NUMBER, ColumnTypes.DURATION, ColumnTypes.RATE]:
-                    continue
+            elif dst_column_type in [ColumnTypes.NUMBER, ColumnTypes.DURATION]:
+                if src_column_type in [ColumnTypes.FORMULA, ColumnTypes.LINK_FORMULA]:
+                    if src_column.get('data').get('result_type') != 'number' or \
+                            src_column.get('data').get('format') == 'duration':
+                        continue
+                    elif src_column.get('data').get('format') == 'percent':
+                        cell_value = float(cell_value.strip('%')) / 100
+                else:
+                    if src_column_type not in [ColumnTypes.NUMBER, ColumnTypes.DURATION, ColumnTypes.RATE]:
+                        continue
             elif dst_column_type != src_column_type:
                 # If the column type is different do not need to be handled except in the case above
                 continue
