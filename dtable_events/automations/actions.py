@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import re
 import time
 import os
@@ -75,6 +76,9 @@ MESSAGE_TYPE_AUTOMATION_RULE = 'automation_rule'
 AUTO_RULE_TRIGGER_LIMIT_PER_MINUTE = 10
 AUTO_RULE_TRIGGER_TIMES_PER_MINUTE_TIMEOUT = 60
 
+VALIDATE_DATE_FORMATS = ['%Y-%m-%dT%H:%M:%S.%fZ', '%Y-%m-%dT%H:%M:%S.%f+00:00', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%Y-%m-%d']
+
+
 def get_third_party_account(session, account_id):
     account_query = session.query(BoundThirdPartyAccounts).filter(
         BoundThirdPartyAccounts.id == account_id
@@ -146,6 +150,16 @@ def str_2_date(data_format, data):
         return datetime.strptime(data, '%Y-%m-%d %H:%M')
     else:
         return datetime.strptime(data, '%Y-%m-%d')
+
+
+def convert_text_to_checkbox(cell_value):
+    if cell_value in ['true', 'True']:
+        return True
+    else:
+        try:
+            return float(cell_value) > 0
+        except:
+            return False
 
 
 def convert_time_to_utc_str(time_str):
@@ -1175,7 +1189,8 @@ class CopyRecordAction(BaseAction):
             logger.error('get nicknames error: %s', e)
             return {}
         email2nickname = {nickname['email']: nickname['name'] for nickname in nicknames}
-        return email2nickname
+        nickname2email = {nickname['name']: nickname['email'] for nickname in nicknames}
+        return email2nickname, nickname2email
 
     def _add_column_options(self, column_name, options):
         api_url = get_inner_dtable_server_url()
@@ -1201,7 +1216,7 @@ class CopyRecordAction(BaseAction):
         src_columns = {col.get('name'): col for col in self.get_columns(self.auto_rule.table_id)}
         src_row = self.data.get('converted_row')
 
-        email2nickname = self._get_related_nicknames()
+        email2nickname, nickname2email = self._get_related_nicknames()
 
         append_row = {}
         for dst_column_name in dst_columns:
@@ -1218,10 +1233,21 @@ class CopyRecordAction(BaseAction):
             if src_column_type in ['button'] or dst_column_type in \
                     ['link-formula', 'auto-number', 'creator', 'last-modifier', 'ctime', 'mtime', 'button']:
                 continue
+            elif dst_column_type == ColumnTypes.CHECKBOX:
+                if src_column_type not in [ColumnTypes.TEXT, ColumnTypes.NUMBER, ColumnTypes.CHECKBOX]:
+                    continue
+                if src_column_type == ColumnTypes.TEXT:
+                    cell_value = convert_text_to_checkbox(cell_value)
+                elif src_column_type == ColumnTypes.NUMBER:
+                    cell_value = cell_value > 0
+
             elif dst_column_type == ColumnTypes.DATE:
+                if src_column_type not in [ColumnTypes.TEXT, ColumnTypes.DATE, ColumnTypes.CTIME, ColumnTypes.MTIME,
+                                           ColumnTypes.FORMULA, ColumnTypes.LINK_FORMULA]:
+                    continue
                 if src_column_type in [ColumnTypes.CTIME, ColumnTypes.MTIME]:
                     cell_value = convert_time_to_utc_str(cell_value)
-                elif src_column_type == ColumnTypes.FORMULA:
+                elif src_column_type in [ColumnTypes.FORMULA, ColumnTypes.LINK_FORMULA]:
                     if src_column.get('data').get('result_type') != 'date':
                         continue
                     data_format = convert_date_format(src_column.get('data').get('format'))
@@ -1232,27 +1258,49 @@ class CopyRecordAction(BaseAction):
                             cell_value = datetime.strftime(datetime.strptime(cell_value, data_format), '%Y-%m-%d')
                     except Exception as e:
                         logger.debug(e)
-                else:
-                    if src_column_type != ColumnTypes.DATE:
-                        continue
-            elif dst_column_type == ColumnTypes.MULTIPLE_SELECT and src_column_type == ColumnTypes.MULTIPLE_SELECT:
-                src_column_options = src_column.get('data', {}).get('options', [])
+                elif src_column_type == ColumnTypes.TEXT:
+                    for date_format in VALIDATE_DATE_FORMATS:
+                        try:
+                            cell_value = datetime.strftime(datetime.strptime(cell_value, date_format), date_format)
+                            break
+                        except:
+                            continue
+
+            elif dst_column_type == ColumnTypes.SINGLE_SELECT:
+                if src_column_type not in [ColumnTypes.TEXT, ColumnTypes.SINGLE_SELECT]:
+                    continue
+                dst_column_options = dst_column.get('data', {}).get('options', [])
+                dst_column_option_dict = {option.get('name'): option for option in dst_column_options}
+                if not dst_column_option_dict.get(cell_value):
+                    self._add_column_options(dst_column.get('name'), [gen_random_option(cell_value)])
+
+            elif dst_column_type == ColumnTypes.MULTIPLE_SELECT:
+                if src_column_type not in [ColumnTypes.MULTIPLE_SELECT, ColumnTypes.TEXT]:
+                    continue
+                if src_column_type == ColumnTypes.TEXT:
+                    cell_value = [cell.strip() for cell in cell_value.split(',')]
+
+                src_column_options = cell_value
                 dst_column_options = dst_column.get('data', {}).get('options', [])
                 dst_column_option_dict = {option.get('name'): option for option in dst_column_options}
                 to_insert_options = []
                 for option in src_column_options:
-                    if not dst_column_option_dict.get(option.get('name')):
-                        to_insert_options.append(gen_random_option(option.get('name')))
+                    if not dst_column_option_dict.get(option):
+                        to_insert_options.append(gen_random_option(option))
                 if to_insert_options:
                     self._add_column_options(dst_column.get('name'), to_insert_options)
 
             elif dst_column_type in [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT]:
+                if src_column_type in [ColumnTypes.MULTIPLE_SELECT, ColumnTypes.CHECKBOX, ColumnTypes.CTIME, ColumnTypes.MTIME]:
+                    continue
+                if dst_column_type == ColumnTypes.LONG_TEXT and src_column_type in \
+                        [ColumnTypes.GEOLOCATION, ColumnTypes.RATE, ColumnTypes.DURATION, ColumnTypes.COLLABORATOR,
+                         ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
+                    continue
                 if src_column_type == ColumnTypes.IMAGE:
                     cell_value = ', '.join(cell_value)
                 elif src_column_type in [ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
                     cell_value = email2nickname.get(cell_value, '')
-                elif src_column_type in [ColumnTypes.CTIME, ColumnTypes.MTIME]:
-                    cell_value = convert_time_to_utc_str(cell_value)
                 elif src_column_type == ColumnTypes.GEOLOCATION:
                     cell_value = parse_geolocation(cell_value)
                 elif src_column_type == ColumnTypes.COLLABORATOR:
@@ -1261,8 +1309,6 @@ class CopyRecordAction(BaseAction):
                         if email2nickname.get(user):
                             nickname_list.append(email2nickname.get(user))
                     cell_value = ', '.join(nickname_list)
-                elif src_column_type == ColumnTypes.MULTIPLE_SELECT:
-                    cell_value = ', '.join(cell_value)
                 elif src_column_type == ColumnTypes.LINK:
                     if isinstance(cell_value, list):
                         array_type = src_column.get('data', {}).get('array_type', '')
@@ -1363,19 +1409,52 @@ class CopyRecordAction(BaseAction):
                 else:
                     cell_value = cell_data2str(cell_value)
 
-            elif dst_column_type in [ColumnTypes.NUMBER, ColumnTypes.DURATION]:
+            elif dst_column_type in [ColumnTypes.NUMBER, ColumnTypes.DURATION, ColumnTypes.RATE]:
+                if src_column_type not in [ColumnTypes.TEXT, ColumnTypes.NUMBER, ColumnTypes.DURATION, ColumnTypes.RATE,
+                                           ColumnTypes.FORMULA, ColumnTypes.LINK_FORMULA]:
+                    continue
+
+                if src_column_type == ColumnTypes.TEXT and dst_column_type == ColumnTypes.DURATION:
+                    continue
+
                 if src_column_type in [ColumnTypes.FORMULA, ColumnTypes.LINK_FORMULA]:
                     if src_column.get('data').get('result_type') != 'number' or \
                             src_column.get('data').get('format') == 'duration':
                         continue
                     elif src_column.get('data').get('format') == 'percent':
                         cell_value = float(cell_value.strip('%')) / 100
-                else:
-                    if src_column_type not in [ColumnTypes.NUMBER, ColumnTypes.DURATION, ColumnTypes.RATE]:
+                elif src_column_type == ColumnTypes.TEXT:
+                    try:
+                        cell_value = float(cell_value)
+                    except:
                         continue
-            elif dst_column_type != src_column_type:
-                # If the column type is different do not need to be handled except in the case above
+                if dst_column_type == ColumnTypes.DURATION:
+                    if dst_column.get('data').get('format') == 'duration' and dst_column.get('data').get('duration_format') == 'h:mm':
+                        cell_value = cell_value / 60
+                if dst_column_type == ColumnTypes.RATE:
+                    cell_value = round(float(cell_value))
+
+            elif dst_column_type == ColumnTypes.COLLABORATOR:
+                if src_column_type not in [ColumnTypes.TEXT, ColumnTypes.COLLABORATOR, ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
+                    continue
+
+                if src_column_type == ColumnTypes.TEXT:
+                    cell_value = [nickname2email.get(cell.strip()) for cell in cell_value.split(',') if nickname2email.get(cell.strip())]
+                elif src_column_type in [ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
+                    cell_value = [cell_value]
+            elif dst_column_type == ColumnTypes.URL:
+                if src_column_type not in [ColumnTypes.TEXT, ColumnTypes.URL]:
+                    continue
+            elif dst_column_type == ColumnTypes.EMAIL:
+                if src_column_type not in [ColumnTypes.TEXT, ColumnTypes.EMAIL]:
+                    continue
+
+            elif dst_column_type == src_column_type:
+                if dst_column_type not in [ColumnTypes.IMAGE, ColumnTypes.FILE, ColumnTypes.GEOLOCATION]:
+                    continue
+            else:
                 continue
+
             append_row[dst_column_name] = cell_value
 
         self.append_row = append_row
