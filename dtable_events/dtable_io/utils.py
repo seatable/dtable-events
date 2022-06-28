@@ -21,10 +21,13 @@ from dateutil import parser
 from django.utils.http import urlquote
 from seaserv import seafile_api
 
+from dtable_events.dtable_io.external_app import APP_USERS_COUMNS_TYPE_MAP, match_user_info, update_app_syncer
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.utils import get_inner_dtable_server_url
 
 # this two prefix used in exported zip file
+from dtable_events.utils.constants import ColumnTypes
+
 FILE_URL_PREFIX = 'file://dtable-bundle/asset/files/'
 IMG_URL_PREFIX = 'file://dtable-bundle/asset/images/'
 EXCEL_DIR_PATH = '/tmp/excel/'
@@ -859,3 +862,78 @@ def get_nicknames_from_dtable(user_id_list):
         raise ConnectionError('failed to get users %s' % res.text)
 
     return res.json().get('user_list')
+
+def sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username, user_list, db_session):
+    from seatable_api import Base
+    DTABLE_PRIVATE_KEY = str(task_manager.conf['dtable_private_key'])
+    payload = {
+        'exp': int(time.time()) + 60,
+        'dtable_uuid': dtable_uuid,
+        'username': username,
+        'permission': 'rw',
+    }
+    access_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
+    server_url =  task_manager.conf['dtable_web_service_url']
+
+    base = Base(access_token, server_url)
+    base.auth()
+
+    # handle the sync logic
+    metadata = base.get_metadata()
+
+    # handle table
+    tables = metadata.get('tables', [])
+    table = None
+    for t in tables:
+        if t.get('name') == table_name:
+            table = t
+            break
+        if t.get('_id') == table_id:
+            table = t
+            break
+
+    if not table:
+        table = base.add_table(table_name)
+        for column_name, column_type in APP_USERS_COUMNS_TYPE_MAP.items():
+            base.insert_column(table, column_name, column_type)
+    else:
+        table_columns = table.get('columns', [])
+        column_names = [col.get('name') for col in table_columns]
+
+        column_for_create = set(APP_USERS_COUMNS_TYPE_MAP.keys()).difference(set(column_names))
+
+        for col in column_for_create:
+            base.insert_column(table['name'], col, APP_USERS_COUMNS_TYPE_MAP.get(col))
+
+    rows = base.list_rows(table['name'])
+
+    row_data_for_create = []
+    row_data_for_update = []
+    print(user_list,'uuuuu')
+    print(type(user_list), 'aaaaaaa')
+    for user_info in user_list:
+        username = user_info.get('email')
+        matched, op, row_id = match_user_info(rows, username, user_info)
+        row_data = {
+                "Name": user_info.get('name'),
+                "Username": [username, ],
+                "RoleName": user_info.get('role_name'),
+                "RolePermission": user_info.get('role_permission'),
+                "IsActive": True if user_info.get('is_active') else None
+            }
+        if matched:
+            continue
+        if op == 'create':
+            row_data_for_create.append(row_data)
+        elif op == 'update':
+            row_data_for_update.append({
+                "row_id": row_id,
+                "row": row_data
+            })
+
+    if row_data_for_create:
+        base.batch_append_rows(table['name'], row_data_for_create)
+    if row_data_for_update:
+        base.batch_update_rows(table['name'], row_data_for_update)
+
+    update_app_syncer(db_session, app_id, table['_id'])

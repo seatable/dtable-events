@@ -847,3 +847,35 @@ def convert_table_to_excel():
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
+
+
+@app.route('/add-app-users-sync-task', methods=['POST'])
+def add_app_users_sync_task():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    if message_task_manager.tasks_queue.full():
+        return make_response(('dtable io server busy.', 400))
+
+    data = request.form
+    if not isinstance(data, dict):
+        return make_response(('Bad request', 400))
+
+    username = data.get('username')
+    table_name = data.get('table_name')
+    dtable_uuid = data.get('dtable_uuid')
+    user_info = data.get('user_info')
+    app_name = data.get('app_name')
+    table_id = data.get('table_id')
+    app_id = data.get('app_id')
+
+
+    user_list = json.loads(user_info).get('user_list', [])
+    try:
+        task_id = task_manager.add_app_users_sysnc_task(dtable_uuid, app_name, app_id, table_name, table_id, username, user_list)
+    except Exception as e:
+        logger.error(e)
+        return make_response((e, 500))
+
+    return make_response(({'task_id': task_id}, 200))

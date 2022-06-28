@@ -285,6 +285,15 @@ class TaskManager(object):
 
         return task_id
 
+    def add_app_users_sysnc_task(self, dtable_uuid, app_name, app_id, table_name, table_id, username, user_list):
+        from dtable_events.dtable_io import app_user_sync
+        task_id = str(int(time.time() * 1000))
+        task = (app_user_sync, (dtable_uuid, app_name, app_id, table_name, table_id, username, user_list, self.config))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+
+        return task_id
+
     def threads_is_alive(self):
         info = {}
         for t in self.threads:

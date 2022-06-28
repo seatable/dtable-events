@@ -13,7 +13,7 @@ from dtable_events.dtable_io.utils import setup_logger, \
     prepare_asset_file_folder, post_dtable_json, post_asset_files, \
     download_files_to_path, create_forms_from_src_dtable, copy_src_forms_to_json, \
     prepare_dtable_json_from_memory, update_page_design_static_image, \
-    copy_src_auto_rules_to_json, create_auto_rules_from_src_dtable
+    copy_src_auto_rules_to_json, create_auto_rules_from_src_dtable, sync_app_users_to_table
 from dtable_events.db import init_db_session_class
 from dtable_events.dtable_io.excel import parse_excel_csv_to_json, import_excel_csv_by_dtable_server, \
     append_parsed_file_by_dtable_server, parse_append_excel_csv_upload_file_to_json, \
@@ -747,3 +747,15 @@ def convert_table_to_execl(dtable_uuid, table_id, username, permission, name):
         return
     target_path = os.path.join(target_dir, excel_name)
     wb.save(target_path)
+
+def app_user_sync(dtable_uuid, app_name, app_id, table_name, table_id, username, user_list, config):
+    dtable_io_logger.info('Start sysnc app %s users: to table %s.' % (app_name, table_name))
+    try:
+        db_session = init_db_session_class(config)()
+        sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username, user_list, db_session)
+    except Exception as e:
+        dtable_io_logger.exception('app user sync ERROR: {}'.format(e))
+    else:
+        dtable_io_logger.info('app %s user sync success!' % app_name)
+    finally:
+        db_session.close()
