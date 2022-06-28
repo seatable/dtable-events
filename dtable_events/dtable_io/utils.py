@@ -895,7 +895,10 @@ def sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username,
     if not table:
         table = base.add_table(table_name)
         for column_name, column_type in APP_USERS_COUMNS_TYPE_MAP.items():
-            base.insert_column(table, column_name, column_type)
+            try:
+                base.insert_column(table['name'], column_name, column_type)
+            except:
+                continue
     else:
         table_columns = table.get('columns', [])
         column_names = [col.get('name') for col in table_columns]
@@ -903,14 +906,15 @@ def sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username,
         column_for_create = set(APP_USERS_COUMNS_TYPE_MAP.keys()).difference(set(column_names))
 
         for col in column_for_create:
-            base.insert_column(table['name'], col, APP_USERS_COUMNS_TYPE_MAP.get(col))
+            try:
+                base.insert_column(table['name'], col, APP_USERS_COUMNS_TYPE_MAP.get(col))
+            except:
+                continue
 
     rows = base.list_rows(table['name'])
 
     row_data_for_create = []
     row_data_for_update = []
-    print(user_list,'uuuuu')
-    print(type(user_list), 'aaaaaaa')
     for user_info in user_list:
         username = user_info.get('email')
         matched, op, row_id = match_user_info(rows, username, user_info)
