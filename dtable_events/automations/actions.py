@@ -427,7 +427,7 @@ class NotifyAction(BaseAction):
         try:
             send_notification(dtable_uuid, user_msg_list, self.auto_rule.access_token)
         except Exception as e:
-            logger.error('send users: %s notifications error: %s', e)
+            logger.error('send users: %s notifications error: %s', users, e)
 
     def cron_notify(self):
         dtable_uuid = self.auto_rule.dtable_uuid
@@ -1759,3 +1759,119 @@ class AutomationRule:
             self.db_session.commit()
         except Exception as e:
             logger.error('set rule: %s invalid error: %s', self.rule_id, e)
+
+
+class NewAutomationRule:
+
+    def __init__(self, data, db_session, raw_trigger, raw_actions, options):
+        self.rule_id = options.get('rule_id', None)
+        self.data = data
+        self.db_session = db_session
+        self.run_condition = options.get('run_condition', None)
+        self.dtable_uuid = options.get('dtable_uuid', None)
+        self.table_id = None
+        self.view_id = None
+
+        self._load_trigger_and_actions(raw_trigger, raw_actions)
+        self.cache_key = 'AUTOMATION_RULE:%s' % self.rule_id
+
+        self.row = data.get('row')
+        self.converted_row = data.get('converted_row')
+        pass
+
+    def _load_trigger_and_actions(self, raw_trigger, raw_actions):
+        self.trigger = json.loads(raw_trigger)
+
+        self.table_id = self.trigger.get('table_id')
+        if self.run_condition == PER_UPDATE:
+            self._table_name = self.data.get('table_name', '')
+        self.view_id = self.trigger.get('view_id')
+
+        self.rule_name = self.trigger.get('rule_name', '')
+        self.action_infos = json.loads(raw_actions)
+
+    def can_do_actions(self):
+        if self.trigger.get('condition') not in (CONDITION_FILTERS_SATISFY, CONDITION_PERIODICALLY, CONDITION_ROWS_ADDED, CONDITION_PERIODICALLY_BY_CONDITION):
+            return False
+
+        if self.trigger.get('condition') == CONDITION_ROWS_ADDED:
+            if self.data.get('op_type') not in ['insert_row', 'append_rows']:
+                return False
+
+        if self.trigger.get('condition') in [CONDITION_FILTERS_SATISFY, CONDITION_ROWS_MODIFIED]:
+            if self.data.get('op_type') not in ['modify_row', 'modify_rows']:
+                return False
+
+        if self.run_condition == PER_UPDATE:
+            # automation rule triggered by human or code, perhaps triggered quite quickly
+            trigger_times = redis_cache.get(self.cache_key)
+            if not trigger_times:
+                return True
+            trigger_times = trigger_times.split(',')
+            if len(trigger_times) >= AUTO_RULE_TRIGGER_LIMIT_PER_MINUTE and time.time() - int(trigger_times[0]) < 60:
+                return False
+            return True
+
+        elif self.run_condition in (PER_DAY, PER_WEEK, PER_MONTH):
+            cur_datetime = datetime.now()
+            cur_hour = cur_datetime.hour
+            cur_week_day = cur_datetime.isoweekday()
+            cur_month_day = cur_datetime.day
+            if self.run_condition == PER_DAY:
+                trigger_hour = self.trigger.get('notify_hour', 12)
+                if cur_hour != trigger_hour:
+                    return False
+            elif self.run_condition == PER_WEEK:
+                trigger_hour = self.trigger.get('notify_week_hour', 12)
+                trigger_day = self.trigger.get('notify_week_day', 7)
+                if cur_hour != trigger_hour or cur_week_day != trigger_day:
+                    return False
+            else:
+                trigger_hour = self.trigger.get('notify_month_hour', 12)
+                trigger_day = self.trigger.get('notify_month_day', 1)
+                if cur_hour != trigger_hour or cur_month_day != trigger_day:
+                    return False
+            return True
+
+        return False
+
+    def do_actions(self, with_test=False):
+        from dtable_events.automations.refactor_actions import BaseContext, NotifyAction, SendEmailAction, NOTIFY_TYPE_AUTOMATION_RULE
+
+        if (not self.can_do_actions()) and (not with_test):
+            return
+
+        self.context = BaseContext(self.dtable_uuid, self.table_id, self.db_session, view_id=self.view_id)
+
+        for action_info in self.action_infos:
+            try:
+                if action_info.get('type') == 'notify':
+                    users = action_info.get('users', [])
+                    users_column_key = action_info.get('users_column_key')
+                    msg = action_info.get('default_msg')
+                    NotifyAction(
+                        self.context,
+                        users,
+                        msg,
+                        NOTIFY_TYPE_AUTOMATION_RULE,
+                        row=self.row,
+                        converted_row=self.converted_row,
+                        users_column_key=users_column_key,
+                        condition=self.trigger.get('condition'),
+                        rule_id=self.rule_id
+                    ).do_action()
+                if action_info.get('type') == 'send_email':
+                    msg = action_info.get('default_msg')
+                    subject = action_info.get('subject')
+                    send_to = action_info.get('send_to')
+                    copy_to = action_info.get('copy_to')
+                    SendEmailAction(
+                        self.context,
+                        msg,
+                        subject,
+                        'automation-rules',
+                        send_to,
+                        
+                    )
+            except Exception as e:
+                pass
