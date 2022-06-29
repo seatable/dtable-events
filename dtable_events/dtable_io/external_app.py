@@ -42,7 +42,7 @@ def match_user_info(rows, username, user_info):
 
 def update_app_syncer(db_session, app_id, table_id):
     sql = """
-    INSERT INTO dtable_app_user_syncer (app_id, dst_table_id, created_at, updated_at) VALUES
+    INSERT INTO dtable_app_user_sync (app_id, dst_table_id, created_at, updated_at) VALUES
     (:app_id, :dst_table_id, :created_at, :updated_at)
     ON DUPLICATE KEY UPDATE
     updated_at=:updated_at,
