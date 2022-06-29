@@ -855,7 +855,7 @@ def add_app_users_sync_task():
     if not is_valid:
         return make_response((error, 403))
 
-    if message_task_manager.tasks_queue.full():
+    if task_manager.tasks_queue.full():
         return make_response(('dtable io server busy.', 400))
 
     data = request.form

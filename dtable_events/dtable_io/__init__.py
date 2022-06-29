@@ -750,12 +750,14 @@ def convert_table_to_execl(dtable_uuid, table_id, username, permission, name):
 
 def app_user_sync(dtable_uuid, app_name, app_id, table_name, table_id, username, user_list, config):
     dtable_io_logger.info('Start sysnc app %s users: to table %s.' % (app_name, table_name))
+    db_session = init_db_session_class(config)()
     try:
-        db_session = init_db_session_class(config)()
         sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username, user_list, db_session)
     except Exception as e:
+
         dtable_io_logger.exception('app user sync ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('app %s user sync success!' % app_name)
     finally:
-        db_session.close()
+        if db_session:
+            db_session.close()

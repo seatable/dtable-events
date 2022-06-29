@@ -3,7 +3,7 @@ from datetime import datetime
 from seatable_api.constants import ColumnTypes
 
 APP_USERS_COUMNS_TYPE_MAP = {
-    "Name" : ColumnTypes.TEXT,
+    "UserID" : ColumnTypes.TEXT,
     "Username": ColumnTypes.COLLABORATOR,
     "RoleName": ColumnTypes.TEXT,
     "RolePermission": ColumnTypes.TEXT,

@@ -885,20 +885,20 @@ def sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username,
     tables = metadata.get('tables', [])
     table = None
     for t in tables:
-        if t.get('name') == table_name:
-            table = t
-            break
         if t.get('_id') == table_id:
             table = t
             break
+        if t.get('name') == table_name:
+            table = t
+            break
+
 
     if not table:
-        table = base.add_table(table_name)
-        for column_name, column_type in APP_USERS_COUMNS_TYPE_MAP.items():
-            try:
-                base.insert_column(table['name'], column_name, column_type)
-            except:
-                continue
+        new_columns = [
+            {
+                'column_name': k, 'column_type': v.value} for k, v in APP_USERS_COUMNS_TYPE_MAP.items()
+        ]
+        table = base.add_table(table_name, columns = new_columns)
     else:
         table_columns = table.get('columns', [])
         column_names = [col.get('name') for col in table_columns]
@@ -919,7 +919,7 @@ def sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username,
         username = user_info.get('email')
         matched, op, row_id = match_user_info(rows, username, user_info)
         row_data = {
-                "Name": user_info.get('name'),
+                "UserID": user_info.get('id'),
                 "Username": [username, ],
                 "RoleName": user_info.get('role_name'),
                 "RolePermission": user_info.get('role_permission'),
