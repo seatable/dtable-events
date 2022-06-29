@@ -157,13 +157,16 @@ def list_pending_common_dataset_syncs(db_session):
             INNER JOIN dtable_common_dataset_sync dcds ON dcds.dataset_id=dcd.id
             INNER JOIN dtables d_src ON dcd.dtable_uuid=d_src.uuid AND d_src.deleted=0
             INNER JOIN dtables d_dst ON dcds.dst_dtable_uuid=d_dst.uuid AND d_dst.deleted=0
-            WHERE dcds.is_sync_periodically=1 AND dcds.last_sync_time<:per_day_check_time
-            AND dcd.is_valid=1 AND dcds.is_valid=1
+            WHERE dcds.is_sync_periodically=1 AND dcd.is_valid=1 AND dcds.is_valid=1 AND 
+            ((dcds.sync_interval='per_day' AND dcds.last_sync_time<:per_day_check_time) OR 
+            (dcds.sync_interval='per_hour' AND dcds.last_sync_time<:per_hour_check_time))
         '''
 
     per_day_check_time = datetime.now() - timedelta(hours=23)
+    per_hour_check_time = datetime.now() - timedelta(hours=1)
     dataset_list = db_session.execute(sql, {
         'per_day_check_time': per_day_check_time,
+        'per_hour_check_time': per_hour_check_time,
     })
     return dataset_list
 
