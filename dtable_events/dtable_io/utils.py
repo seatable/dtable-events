@@ -937,7 +937,9 @@ def sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username,
 
     if row_data_for_create:
         base.batch_append_rows(table['name'], row_data_for_create)
+
     if row_data_for_update:
         base.batch_update_rows(table['name'], row_data_for_update)
 
-    update_app_syncer(db_session, app_id, table['_id'])
+    if row_data_for_create or row_data_for_update:
+        update_app_syncer(db_session, app_id, table['_id'])
