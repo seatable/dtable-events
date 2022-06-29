@@ -21,7 +21,8 @@ from dateutil import parser
 from django.utils.http import urlquote
 from seaserv import seafile_api
 
-from dtable_events.dtable_io.external_app import APP_USERS_COUMNS_TYPE_MAP, match_user_info, update_app_syncer
+from dtable_events.dtable_io.external_app import APP_USERS_COUMNS_TYPE_MAP, match_user_info, update_app_syncer, \
+    parse_dt_str
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.utils import get_inner_dtable_server_url
 
@@ -919,11 +920,11 @@ def sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username,
         username = user_info.get('email')
         matched, op, row_id = match_user_info(rows, username, user_info)
         row_data = {
-                "UserID": user_info.get('id'),
-                "Username": [username, ],
-                "RoleName": user_info.get('role_name'),
-                "RolePermission": user_info.get('role_permission'),
-                "IsActive": True if user_info.get('is_active') else None
+                "Name": user_info.get('name'),
+                "User": [username, ],
+                "Role": user_info.get('role_name'),
+                "IsActive": True if user_info.get('is_active') else None,
+                "JoinedAt": parse_dt_str(user_info.get('created_at'))
             }
         if matched:
             continue
