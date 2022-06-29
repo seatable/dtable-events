@@ -22,12 +22,13 @@ def match_user_info(rows, username, user_info):
     if not row_info:
         return False, 'create', None
 
-    name = row_info.get('Name')
-    role_name = row_info.get('Name')
+    user_id = row_info.get('UserID')
+    role_name = row_info.get('RoleName')
     role_permission = row_info.get('RolePermission')
     is_active = row_info.get('IsActive')
 
-    if user_info.get('name') == name and \
+
+    if str(user_info.get('id', '')) == user_id and \
         user_info.get('role_name') == role_name and \
         user_info.get('role_permission') == role_permission and \
         user_info.get('is_active') == is_active:
