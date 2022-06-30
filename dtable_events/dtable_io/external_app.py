@@ -11,10 +11,6 @@ APP_USERS_COUMNS_TYPE_MAP = {
     "JoinedAt": ColumnTypes.TEXT,
 }
 
-
-def get_row_info_by_app_username(rows_name_id_map, username):
-    return rows_name_id_map.get(username, None)
-
 def get_row_ids_for_delete(rows_name_id_map, userlist):
     username_list = [user.get('email') for user in userlist]
     username_for_delete = set(rows_name_id_map.keys()).difference(set(username_list))
