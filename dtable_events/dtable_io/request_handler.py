@@ -865,15 +865,14 @@ def add_app_users_sync_task():
     username = data.get('username')
     table_name = data.get('table_name')
     dtable_uuid = data.get('dtable_uuid')
-    user_info = data.get('user_info')
     app_name = data.get('app_name')
     table_id = data.get('table_id')
     app_id = data.get('app_id')
+    user_count = int(data.get('user_count'))
 
 
-    user_list = json.loads(user_info).get('user_list', [])
     try:
-        task_id = task_manager.add_app_users_sysnc_task(dtable_uuid, app_name, app_id, table_name, table_id, username, user_list)
+        task_id = task_manager.add_app_users_sysnc_task(dtable_uuid, app_name, user_count, app_id, table_name, table_id, username)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
