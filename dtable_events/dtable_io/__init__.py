@@ -749,7 +749,7 @@ def convert_table_to_execl(dtable_uuid, table_id, username, permission, name):
     wb.save(target_path)
 
 def app_user_sync(dtable_uuid, app_name, app_id, table_name, table_id, username, config):
-    dtable_io_logger.info('Start sysnc app %s users: to table %s.' % (app_name, table_name))
+    dtable_io_logger.info('Start sync app %s users: to table %s.' % (app_name, table_name))
     db_session = init_db_session_class(config)()
     try:
         sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username, db_session)
