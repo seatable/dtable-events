@@ -50,8 +50,11 @@ def update_app_sync(db_session, app_id, table_id):
 
     db_session.commit()
 
-def get_app_users(db_session, app_id, total_count):
+def get_app_users(db_session, app_id):
     start, offset, user_list = 0, 1000, []
+    count_sql = "SELECT COUNT(1) AS count FROM dtable_app_users where app_id=:app_id"
+    count_result = db_session.execute(count_sql, {'app_id': app_id})
+    total_count = count_result.cursor.fetchone()[0]
     while start <= total_count:
         sql = """
         SELECT u.username, p.nickname, r.role_name, u.is_active, u.created_at

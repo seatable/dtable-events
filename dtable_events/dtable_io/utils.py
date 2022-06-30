@@ -865,11 +865,11 @@ def get_nicknames_from_dtable(user_id_list):
 
     return res.json().get('user_list')
 
-def sync_app_users_to_table(dtable_uuid, app_id, user_count, table_name, table_id, username, db_session):
+def sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username, db_session):
     from dtable_events.utils.dtable_server_api import DTableServerAPI
     api_url = get_inner_dtable_server_url()
     base = DTableServerAPI(username, dtable_uuid, api_url)
-    user_list = get_app_users(db_session, app_id, user_count)
+    user_list = get_app_users(db_session, app_id)
     # handle the sync logic
     metadata = base.get_metadata()
 
