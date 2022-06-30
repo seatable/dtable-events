@@ -1,8 +1,6 @@
 import json
 import requests
 from dtable_events.dtable_io.utils import get_dtable_server_token
-from dtable_events.utils.constants import ColumnTypes
-
 
 def parse_response(response):
     if response.status_code >= 400:
