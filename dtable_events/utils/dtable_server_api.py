@@ -23,9 +23,9 @@ class DTableServerAPI(object):
         self.dtable_uuid = dtable_uuid
         self.headers = None
         self.dtable_server_url = dtable_server_url.rstrip('/')
-        self._ini()
+        self._init()
 
-    def _ini(self):
+    def _init(self):
         dtable_server_access_token = get_dtable_server_token(self.username, self.dtable_uuid)
         self.headers = {'Authorization': 'Token ' + dtable_server_access_token}
 
