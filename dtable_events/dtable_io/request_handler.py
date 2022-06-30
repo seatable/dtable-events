@@ -870,7 +870,7 @@ def add_app_users_sync_task():
     app_id = data.get('app_id')
 
     try:
-        task_id = task_manager.add_app_users_sysnc_task(dtable_uuid, app_name, app_id, table_name, table_id, username)
+        task_id = task_manager.add_app_users_sync_task(dtable_uuid, app_name, app_id, table_name, table_id, username)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
