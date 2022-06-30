@@ -1865,13 +1865,6 @@ class NewAutomationRule:
                     subject = action_info.get('subject')
                     send_to = action_info.get('send_to')
                     copy_to = action_info.get('copy_to')
-                    SendEmailAction(
-                        self.context,
-                        msg,
-                        subject,
-                        'automation-rules',
-                        send_to,
-                        
-                    )
+                    # TODO: send email action and the rest actions
             except Exception as e:
                 pass

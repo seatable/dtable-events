@@ -418,36 +418,35 @@ class NotifyAction(BaseAction):
 
 class SendEmailAction(BaseAction):
 
-    def __init__(self, context: BaseContext, msg, subject, send_from, send_to: str, email_host, email_port, host_user, password,
-                copy_to: str=None, row=None, converted_row=None):
+    def __init__(self, context: BaseContext, account_id, msg, send_to, copy_to, send_from, row=None, converted_row=None):
         super().__init__(context)
-        send_to_list = list(filter(lambda x: is_valid_username(x), email2list(send_to) if send_to else []))
-        copy_to_list = list(filter(lambda x: is_valid_username(x), email2list(copy_to) if copy_to else []))
-        self.auth_info = {
-            'email_host': email_host,
-            'email_port': email_port,
-            'host_user': host_user,
-            'password': password
-        }
-        self.send_from = send_from
+        self.account_dict = get_third_party_account(self.context.db_session, account_id)
         self.msg = msg
-        self.send_info = {
-            'send_to': send_to_list,
-            'copy_to': copy_to_list,
-            'subject': subject
-        }
         self.row = row
         self.converted_row = converted_row
+        self.send_to_list = [email for email in email2list(send_to) if is_valid_username(email)]
+        self.copy_to_list = [email for email in email2list(copy_to) if is_valid_username(email)]
+        self.send_from = send_from
 
     def do_action(self):
-        if not self.send_to_list:
+        if not self.account_dict:
             return
-        # send info
+        account_detail = self.account_dict.get('detail', {})
+        auth_info = {
+            'email_host': account_detail.get('email_host', ''),
+            'email_port': int(account_detail.get('email_port', 0)),
+            'host_user': account_detail.ge('host_user', ''),
+            'password': account_detail.get('password', '')
+        }
+        send_info = {
+            'send_to': self.send_to_list,
+            'copy_to': self.copy_to_list
+        }
         try:
-            self.send_info['message'] = self.generate_real_msg(self.msg, self.converted_row)
+            send_info['message'] = self.generate_real_msg(self.msg, self.converted_row)
             send_email_msg(
-                auth_info=self.auth_info,
-                send_info=self.send_info,
+                auth_info=auth_info,
+                send_info=send_info,
                 username=self.send_from,
                 db_session=self.context.db_session
             )
