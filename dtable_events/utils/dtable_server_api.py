@@ -57,8 +57,6 @@ class DTableServerAPI(object):
         return data.get('rows')
 
     def insert_column(self, table_name, column_name, column_type):
-        if column_type not in ColumnTypes:
-            raise ValueError("type %s invalid!" % (column_type,))
         url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/columns/'
         json_data = {
             'table_name': table_name,
