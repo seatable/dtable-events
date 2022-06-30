@@ -1,7 +1,6 @@
 from datetime import datetime
-
-from seatable_api.constants import ColumnTypes
 from dateutil.parser import parse
+from dtable_events.utils.constants import ColumnTypes
 
 APP_USERS_COUMNS_TYPE_MAP = {
     "Name" : ColumnTypes.TEXT,
@@ -18,6 +17,14 @@ def get_row_info_by_app_username(rows, username):
         if row.get('User') == [username, ]:
             return row
     return None
+
+def get_row_ids_for_delete(rows, userlist):
+    username_list = [[user.get('email'), ] for user in userlist]
+    row_ids = []
+    for row in rows:
+        if row.get('User') not in username_list:
+            row_ids.append(row.get('_id'))
+    return row_ids
 
 def parse_dt_str(dt_str):
     dt_obj = parse(dt_str)

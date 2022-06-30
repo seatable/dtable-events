@@ -22,12 +22,13 @@ from django.utils.http import urlquote
 from seaserv import seafile_api
 
 from dtable_events.dtable_io.external_app import APP_USERS_COUMNS_TYPE_MAP, match_user_info, update_app_syncer, \
-    parse_dt_str
+    parse_dt_str, get_row_ids_for_delete
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.utils import get_inner_dtable_server_url
 
 # this two prefix used in exported zip file
 from dtable_events.utils.constants import ColumnTypes
+
 
 FILE_URL_PREFIX = 'file://dtable-bundle/asset/files/'
 IMG_URL_PREFIX = 'file://dtable-bundle/asset/images/'
@@ -865,19 +866,9 @@ def get_nicknames_from_dtable(user_id_list):
     return res.json().get('user_list')
 
 def sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username, user_list, db_session):
-    from seatable_api import Base
-    DTABLE_PRIVATE_KEY = str(task_manager.conf['dtable_private_key'])
-    payload = {
-        'exp': int(time.time()) + 60,
-        'dtable_uuid': dtable_uuid,
-        'username': username,
-        'permission': 'rw',
-    }
-    access_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
-    server_url =  task_manager.conf['dtable_web_service_url']
-
-    base = Base(access_token, server_url)
-    base.auth()
+    from dtable_events.utils.dtable_server_api import DTableServerAPI
+    api_url = get_inner_dtable_server_url()
+    base = DTableServerAPI(username, dtable_uuid, api_url)
 
     # handle the sync logic
     metadata = base.get_metadata()
@@ -896,8 +887,7 @@ def sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username,
 
     if not table:
         new_columns = [
-            {
-                'column_name': k, 'column_type': v.value} for k, v in APP_USERS_COUMNS_TYPE_MAP.items()
+            {'column_name': k, 'column_type': v} for k, v in APP_USERS_COUMNS_TYPE_MAP.items()
         ]
         table = base.add_table(table_name, columns = new_columns)
     else:
@@ -916,6 +906,7 @@ def sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username,
 
     row_data_for_create = []
     row_data_for_update = []
+    row_ids_for_delete = get_row_ids_for_delete(rows, user_list)
     for user_info in user_list:
         username = user_info.get('email')
         matched, op, row_id = match_user_info(rows, username, user_info)
@@ -936,11 +927,19 @@ def sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username,
                 "row": row_data
             })
 
+
+    step = 1000
     if row_data_for_create:
-        base.batch_append_rows(table['name'], row_data_for_create)
+        for i in range(0, len(row_data_for_create), step):
+            base.batch_append_rows(table['name'], row_data_for_create[i: i+step])
 
     if row_data_for_update:
-        base.batch_update_rows(table['name'], row_data_for_update)
+        for i in range(0, len(row_data_for_update), step):
+            base.batch_update_rows(table['name'], row_data_for_update[i: i+step])
 
-    if row_data_for_create or row_data_for_update:
+    if row_ids_for_delete:
+        for i in range(0, len(row_ids_for_delete), step):
+            base.batch_delete_rows(table['name'], row_ids_for_delete[i: i+step])
+
+    if row_data_for_create or row_data_for_update or row_ids_for_delete:
         update_app_syncer(db_session, app_id, table['_id'])
