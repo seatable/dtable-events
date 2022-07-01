@@ -54,13 +54,15 @@ class DTableServerAPI(object):
         data = parse_response(response)
         return data.get('rows')
 
-    def insert_column(self, table_name, column_name, column_type):
+    def insert_column(self, table_name, column_name, column_type, column_data=None):
         url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/columns/'
         json_data = {
             'table_name': table_name,
             'column_name': column_name,
             'column_type': column_type
         }
+        if column_data:
+            json_data['column_data'] = column_data
         response = requests.post(url, json=json_data, headers=self.headers)
         data = parse_response(response)
         return data

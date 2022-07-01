@@ -8,7 +8,7 @@ APP_USERS_COUMNS_TYPE_MAP = {
     "Role": ColumnTypes.TEXT,
     # "RolePermission": ColumnTypes.TEXT,
     "IsActive": ColumnTypes.CHECKBOX,
-    "JoinedAt": ColumnTypes.TEXT,
+    "JoinedAt": ColumnTypes.DATE,
 }
 
 def get_row_ids_for_delete(rows_name_id_map, userlist):
@@ -24,10 +24,12 @@ def match_user_info(rows_name_id_map, username, user_info):
     name = row_info.get('Name')
     role_name = row_info.get('Role')
     is_active = row_info.get('IsActive')
+    joined_at = row_info.get('JoinedAt')
 
 
     if user_info.get('name', '') == name and \
         user_info.get('role_name') == role_name and \
+        user_info.get('created_at') == joined_at and \
         user_info.get('is_active') == is_active:
         return True, None, None
     return False, 'update', row_info.get('_id')
@@ -73,7 +75,7 @@ def get_app_users(db_session, app_id):
                 'name': nickname,
                 'role_name': role_name,
                 'is_active': is_active,
-                'created_at': created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                'created_at': created_at.strftime("%Y-%m-%d %H:%M"),
             })
         user_list.extend(users)
         start += offset

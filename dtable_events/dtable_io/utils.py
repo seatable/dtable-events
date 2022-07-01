@@ -886,9 +886,12 @@ def sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username,
 
 
     if not table:
-        new_columns = [
-            {'column_name': k, 'column_type': v} for k, v in APP_USERS_COUMNS_TYPE_MAP.items()
-        ]
+        new_columns = []
+        for col_name, col_type in APP_USERS_COUMNS_TYPE_MAP.items():
+            col_info = {'column_name': col_name, 'column_type': col_type}
+            if col_type == ColumnTypes.DATE:
+                col_info['column_data'] = {'format': "YYYY-MM-DD HH:mm"}
+            new_columns.append(col_info)
         table = base.add_table(table_name, columns = new_columns)
     else:
         table_columns = table.get('columns', [])
@@ -897,8 +900,12 @@ def sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username,
         column_for_create = set(APP_USERS_COUMNS_TYPE_MAP.keys()).difference(set(column_names))
 
         for col in column_for_create:
+            column_data = None
+            column_type = APP_USERS_COUMNS_TYPE_MAP.get(col)
+            if column_type == ColumnTypes.DATE:
+                column_data = {'format': "YYYY-MM-DD HH:mm"}
             try:
-                base.insert_column(table['name'], col, APP_USERS_COUMNS_TYPE_MAP.get(col))
+                base.insert_column(table['name'], col, column_type, column_data=column_data)
             except:
                 continue
 
