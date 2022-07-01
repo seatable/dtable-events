@@ -358,6 +358,8 @@ class AddRowAction(BaseAction):
                         format_length = len(time_format.split(" "))
                         try:
                             time_dict = self.row.get(col_key)
+                            if not time_dict:
+                                continue
                             set_type = time_dict.get('set_type')
                             if set_type == 'specific_value':
                                 time_value = time_dict.get('value')
@@ -1046,6 +1048,135 @@ class LinkRecordsAction(BaseAction):
             self.auto_rule.set_done_actions()
 
 
+class AddRecordToOtherTableAction(BaseAction):
+
+    VALID_COLUMN_TYPES = [
+        ColumnTypes.TEXT,
+        ColumnTypes.DATE,
+        ColumnTypes.LONG_TEXT,
+        ColumnTypes.CHECKBOX,
+        ColumnTypes.SINGLE_SELECT,
+        ColumnTypes.MULTIPLE_SELECT,
+        ColumnTypes.URL,
+        ColumnTypes.DURATION,
+        ColumnTypes.NUMBER,
+        ColumnTypes.COLLABORATOR,
+        ColumnTypes.EMAIL,
+        ColumnTypes.RATE,
+    ]
+
+    def __init__(self, auto_rule, data, row, dst_table_id):
+        """
+        auto_rule: instance of AutomationRule
+        data: data is event data from redis
+        row: {'col_1_name: ', value1, 'col_2_name': value2...}
+        dst_table_id: id of table that record to be added
+        """
+        super().__init__(auto_rule, data)
+        self.action_type = 'add_record_to_other_table'
+        self.row = row
+        self.col_name_dict = {}
+        self.dst_table_id = dst_table_id
+        self.row_data = {
+            'row': {},
+            'table_name': self.get_table_name(dst_table_id)
+        }
+        self._init_append_rows()
+
+    def get_table_name(self, table_id):
+        dtable_metadata = self.auto_rule.dtable_metadata
+        tables = dtable_metadata.get('tables', [])
+        for table in tables:
+            if table.get('_id') == table_id:
+                return table.get('name')
+
+    def get_columns(self, table_id):
+        dtable_metadata = self.auto_rule.dtable_metadata
+        for table in dtable_metadata.get('tables', []):
+            if table.get('_id') == table_id:
+                return table.get('columns', [])
+        return []
+
+    def _fill_msg_blanks(self, row, text, blanks):
+        col_name_dict = self.col_name_dict
+        dtable_uuid, db_session, dtable_metadata = self.auto_rule.dtable_uuid, self.auto_rule.db_session, self.auto_rule.dtable_metadata
+        return fill_msg_blanks(dtable_uuid, text, blanks, col_name_dict, row, db_session, dtable_metadata)
+
+    def format_time_by_offset(self, offset, format_length):
+        cur_datetime = datetime.now()
+        cur_datetime_offset = cur_datetime + timedelta(days=offset)
+        if format_length == 2:
+            return cur_datetime_offset.strftime("%Y-%m-%d %H:%M")
+        if format_length == 1:
+            return cur_datetime_offset.strftime("%Y-%m-%d")
+
+    def _init_append_rows(self):
+        src_row = self.data['converted_row']
+        self.col_name_dict = {col.get('name'): col for col in self.auto_rule.view_columns}
+
+        for row_id in self.row:
+            cell_value = self.row.get(row_id)
+            # cell_value may be dict if the column type is date
+            if not isinstance(cell_value, str):
+                continue
+            blanks = set(re.findall(r'\{([^{]*?)\}', cell_value))
+            self.column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
+            self.row[row_id] = self._fill_msg_blanks(src_row, cell_value, self.column_blanks)
+
+        dst_columns = self.get_columns(self.dst_table_id)
+
+        filtered_updates = {}
+        for col in dst_columns:
+            if 'key' in col and col.get('type') in self.VALID_COLUMN_TYPES:
+                col_name = col.get('name')
+                col_type = col.get('type')
+                col_key = col.get('key')
+                if col_key in self.row.keys():
+                    if col_type == ColumnTypes.DATE:
+                        time_format = col.get('data', {}).get('format', '')
+                        format_length = len(time_format.split(" "))
+                        try:
+                            time_dict = self.row.get(col_key)
+                            if not time_dict:
+                                continue
+                            set_type = time_dict.get('set_type')
+                            if set_type == 'specific_value':
+                                time_value = time_dict.get('value')
+                                filtered_updates[col_name] = time_value
+                            elif set_type == 'relative_date':
+                                offset = time_dict.get('offset')
+                                filtered_updates[col_name] = self.format_time_by_offset(int(offset), format_length)
+                        except Exception as e:
+                            logger.error(e)
+                            filtered_updates[col_name] = self.row.get(col_key)
+                    else:
+                        filtered_updates[col_name] = self.parse_column_value(col, self.row.get(col_key))
+
+        self.row_data['row'] = filtered_updates
+
+    def _can_do_action(self):
+        if not self.row_data.get('row'):
+            return False
+
+        return True
+
+    def do_action(self):
+        if not self._can_do_action():
+            return
+
+        api_url = get_inner_dtable_server_url()
+        row_add_url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/rows/?from=dtable_events'
+        try:
+            response = requests.post(row_add_url, headers=self.auto_rule.headers, json=self.row_data)
+        except Exception as e:
+            logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
+            return
+        if response.status_code != 200:
+            logger.error('update dtable: %s error response status code: %s', self.auto_rule.dtable_uuid, response.status_code)
+        else:
+            self.auto_rule.set_done_actions()
+
+
 class RuleInvalidException(Exception):
     """
     Exception which indicates rule need to be set is_valid=Fasle
@@ -1295,6 +1426,11 @@ class AutomationRule:
                     match_conditions = action_info.get('match_conditions')
                     if self.run_condition == PER_UPDATE:
                         LinkRecordsAction(self, self.data, linked_table_id, link_id, match_conditions).do_action()
+
+                elif action_info.get('type') == 'add_record_to_other_table':
+                    row = action_info.get('row')
+                    dst_table_id = action_info.get('dst_table_id')
+                    AddRecordToOtherTableAction(self, self.data, row, dst_table_id).do_action()
 
             except RuleInvalidException as e:
                 logger.error('auto rule: %s, invalid error: %s', self.rule_id, e)
