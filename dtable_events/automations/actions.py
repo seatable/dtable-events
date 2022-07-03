@@ -1766,6 +1766,7 @@ class NewAutomationRule:
     def __init__(self, data, db_session, raw_trigger, raw_actions, options):
         self.rule_id = options.get('rule_id', None)
         self.data = data
+        self.options = options
         self.db_session = db_session
         self.run_condition = options.get('run_condition', None)
         self.dtable_uuid = options.get('dtable_uuid', None)
@@ -1836,14 +1837,19 @@ class NewAutomationRule:
         return False
 
     def do_actions(self, with_test=False):
-        from dtable_events.automations.refactor_actions import BaseContext, NotifyAction, SendEmailAction, NOTIFY_TYPE_AUTOMATION_RULE
+        from dtable_events.automations.refactor_actions import BaseContext, NotifyAction, SendEmailAction, SendWechatAction, SendDingtalkAction, AddRowAction, UpdateAction, LockRecordAction, LinkRecordsAction, RunPythonScriptAction
 
         if (not self.can_do_actions()) and (not with_test):
             return
 
         self.context = BaseContext(self.dtable_uuid, self.table_id, self.db_session, view_id=self.view_id)
+        print('<' * 50)
+        print('row: ', self.row)
+        print('converted_row: ', self.converted_row)
+        print('>' * 50)
 
         for action_info in self.action_infos:
+            logger.info('start action: %s', action_info.get('type'))
             try:
                 if action_info.get('type') == 'notify':
                     users = action_info.get('users', [])
@@ -1853,18 +1859,115 @@ class NewAutomationRule:
                         self.context,
                         users,
                         msg,
-                        NOTIFY_TYPE_AUTOMATION_RULE,
+                        NotifyAction.NOTIFY_TYPE_AUTOMATION_RULE,
                         row=self.row,
                         converted_row=self.converted_row,
                         users_column_key=users_column_key,
                         condition=self.trigger.get('condition'),
-                        rule_id=self.rule_id
+                        rule_id=self.rule_id,
+                        rule_name=self.rule_name
                     ).do_action()
-                if action_info.get('type') == 'send_email':
+                elif action_info.get('type') == 'send_email':
                     msg = action_info.get('default_msg')
                     subject = action_info.get('subject')
                     send_to = action_info.get('send_to')
                     copy_to = action_info.get('copy_to')
-                    # TODO: send email action and the rest actions
+                    account_id = int(action_info.get('account_id'))
+                    SendEmailAction(
+                        self.context,
+                        account_id,
+                        subject,
+                        msg,
+                        send_to,
+                        copy_to,
+                        'automation-rules',
+                        row=self.row,
+                        converted_row=self.converted_row
+                    ).do_action()
+                elif action_info.get('type') == 'send_wechat':
+                    account_id = int(action_info.get('account_id'))
+                    msg = action_info.get('default_msg')
+                    msg_type = action_info.get('msg_type', 'text')
+                    SendWechatAction(
+                        self.context,
+                        account_id,
+                        msg,
+                        msg_type,
+                        row=self.row,
+                        converted_row=self.converted_row
+                    ).do_action()
+                elif action_info.get('type') == 'send_dingtalk':
+                    account_id = int(action_info.get('account_id'))
+                    msg = action_info.get('default_msg')
+                    title = action_info.get('default_title')
+                    msg_type = action_info.get('msg_type', 'text')
+                    SendDingtalkAction(
+                        self.context,
+                        account_id,
+                        msg,
+                        msg_type,
+                        title,
+                        row=self.row,
+                        converted_row=self.converted_row
+                    ).do_action()
+                elif action_info.get('type') == 'add_record':
+                    new_row = action_info.get('row')
+                    # TODO: cant add row
+                    if not new_row:
+                        continue
+                    AddRowAction(
+                        self.context,
+                        new_row
+                    ).do_action()
+                elif action_info.get('type') == 'update_record' and self.row:
+                    updates = action_info.get('updates')
+                    UpdateAction(
+                        self.context,
+                        updates,
+                        row_id=self.row['_id'] or self.converted_row['_id']
+                    ).do_action()
+                elif action_info.get('type') == 'lock_record':
+                    if self.row:
+                        kwargs = {'row_id': self.row['_id']}
+                    else:
+                        filters = self.trigger.get('filters', [])
+                        filter_conjunction = self.trigger.get('filter_conjunction', 'And')
+                        kwargs = {
+                            'filters': filters,
+                            'filter_conjunction': filter_conjunction
+                        }
+                    LockRecordAction(self.context, **kwargs).do_action()
+                elif action_info.get('type') == 'link_records':
+                    if not self.row or self.run_condition != PER_UPDATE:
+                        continue
+                    link_id = action_info.get('link_id')
+                    linked_table_id = action_info.get('linked_table_id')
+                    match_conditions = action_info.get('match_conditions')
+                    LinkRecordsAction(
+                        self.context,
+                        link_id,
+                        linked_table_id,
+                        match_conditions,
+                        self.row,
+                        self.converted_row
+                    ).do_action()
+                elif action_info.get('type') == 'run_python_script':
+                    script_name = action_info.get('script_name')
+                    workspace_id = action_info.get('workspace_id')
+                    owner = action_info.get('owner')
+                    org_id = action_info.get('org_id')
+                    repo_id = action_info.get('repo_id')
+                    RunPythonScriptAction(
+                        self.context,
+                        script_name,
+                        workspace_id,
+                        owner,
+                        org_id,
+                        repo_id,
+                        converted_row=self.converted_row,
+                        operate_from='automation-rule',
+                        operator=self.rule_id
+                    ).do_action()
             except Exception as e:
-                pass
+                logger.exception(e)
+                logger.error('rule: %s, data: %s options: %s do actions error: %s', self.rule_id, self.data, self.options, e)

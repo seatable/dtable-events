@@ -105,11 +105,6 @@ def parse_column_value(column, value):
         return value
 
 
-NOTIFY_TYPE_NOTIFICATION_RULE = 'notify_type_notification_rule'
-NOTIFY_TYPE_AUTOMATION_RULE = 'notify_type_automation_rule'
-NOTIFY_TYPE_WORKFLOW = 'notify_type_workflow'
-
-
 def is_valid_username(user):
     if not user:
         return False
@@ -151,9 +146,10 @@ class BaseContext:
             return self._access_token
         payload = {
             'username': self.caller,
-            'exp': time.time() + 60 * 60 * 15,
+            'exp': int(time.time()) + 60 * 60 * 15,
             'dtable_uuid': str(UUID(self.dtable_uuid)),
-            'permission': 'rw'
+            'permission': 'rw',
+            'id_in_org': ''
         }
         access_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, 'HS256')
         self._access_token = access_token
@@ -198,21 +194,21 @@ class BaseContext:
                 return self._view
         return None
 
-    @property.setter
-    def can_run_python(self, can_run_python):
-        self._can_run_python = can_run_python
-
     @property
     def can_run_python(self):
         return self._can_run_python
 
-    @property.setter
-    def scripts_running_limit(self, limit):
-        self._scripts_running_limit = limit
+    @can_run_python.setter
+    def can_run_python(self, can_run_python):
+        self._can_run_python = can_run_python
 
     @property
     def scripts_running_limit(self):
         return self._scripts_running_limit
+
+    @scripts_running_limit.setter
+    def scripts_running_limit(self, limit):
+        self._scripts_running_limit = limit
 
     @property
     def columns_dict(self):
@@ -253,6 +249,17 @@ class ActionInvalid(Exception):
     pass
 
 
+# def after_action(func):
+#     def wrapper(*args, **kwargs):
+#         return func(*args, **kwargs)
+#     return wrapper
+
+
+# def after_action(callbacks):
+#     def wrapper(*args, **kwargs):
+#         pass
+
+
 class BaseAction:
 
     LINK_URL_FORMAT = get_inner_dtable_server_url().strip('/') + '/api/v1/dtables/%(dtable_uuid)s/links/?from=dtable_events'
@@ -272,7 +279,7 @@ class BaseAction:
         if not converted_row:
             return msg
         blanks = set(re.findall(r'\{([^{]*?)\}', msg))
-        col_name_dict = {col.get('name'): col for col in self.context.columns_dict}
+        col_name_dict = {col.get('name'): col for col in self.context.table['columns']}
         column_blanks = [blank for blank in blanks if blank in col_name_dict]
         if not column_blanks:
             return msg
@@ -283,7 +290,7 @@ class BaseAction:
 
     def generate_filter_updates(self, add_or_updates):
         filter_updates = {}
-        for col in self.table['columns']:
+        for col in self.context.table['columns']:
             if col['type'] not in self.VALID_COLUMN_TYPES:
                 continue
             col_name = col['name']
@@ -315,6 +322,10 @@ class BaseAction:
 
 class NotifyAction(BaseAction):
 
+    NOTIFY_TYPE_NOTIFICATION_RULE = 'notify_type_notification_rule'
+    NOTIFY_TYPE_AUTOMATION_RULE = 'notify_type_automation_rule'
+    NOTIFY_TYPE_WORKFLOW = 'notify_type_workflow'
+
     NOTIFY_TYPES = [
         NOTIFY_TYPE_NOTIFICATION_RULE,
         NOTIFY_TYPE_AUTOMATION_RULE,
@@ -338,7 +349,7 @@ class NotifyAction(BaseAction):
         self.msg = msg
         self.row = row
         self.converted_row = converted_row
-        if notify_type == NOTIFY_TYPE_NOTIFICATION_RULE:
+        if notify_type == self.NOTIFY_TYPE_NOTIFICATION_RULE:
             if not condition:
                 raise ActionInvalid('condition invalid')
             if not rule_id:
@@ -353,7 +364,7 @@ class NotifyAction(BaseAction):
                 'rule_name': rule_name,
                 'row_id_list': [row['_id']] if row else []
             }
-        elif notify_type == NOTIFY_TYPE_AUTOMATION_RULE:
+        elif notify_type == self.NOTIFY_TYPE_AUTOMATION_RULE:
             if not condition:
                 raise ActionInvalid('condition invalid')
             if not rule_id:
@@ -368,7 +379,7 @@ class NotifyAction(BaseAction):
                 'rule_name': rule_name,
                 'row_id_list': [row['_id']] if row else []
             }
-        elif notify_type == NOTIFY_TYPE_WORKFLOW:
+        elif notify_type == self.NOTIFY_TYPE_WORKFLOW:
             if not workflow_token:
                 raise ActionInvalid('workflow_token invalid')
             if not workflow_name:
@@ -418,7 +429,7 @@ class NotifyAction(BaseAction):
 
 class SendEmailAction(BaseAction):
 
-    def __init__(self, context: BaseContext, account_id, msg, send_to, copy_to, send_from, row=None, converted_row=None):
+    def __init__(self, context: BaseContext, account_id, subject, msg, send_to, copy_to, send_from, row=None, converted_row=None):
         super().__init__(context)
         self.account_dict = get_third_party_account(self.context.db_session, account_id)
         self.msg = msg
@@ -427,6 +438,7 @@ class SendEmailAction(BaseAction):
         self.send_to_list = [email for email in email2list(send_to) if is_valid_username(email)]
         self.copy_to_list = [email for email in email2list(copy_to) if is_valid_username(email)]
         self.send_from = send_from
+        self.subject = subject
 
     def do_action(self):
         if not self.account_dict:
@@ -435,14 +447,15 @@ class SendEmailAction(BaseAction):
         auth_info = {
             'email_host': account_detail.get('email_host', ''),
             'email_port': int(account_detail.get('email_port', 0)),
-            'host_user': account_detail.ge('host_user', ''),
+            'host_user': account_detail.get('host_user', ''),
             'password': account_detail.get('password', '')
         }
         send_info = {
             'send_to': self.send_to_list,
-            'copy_to': self.copy_to_list
+            'copy_to': self.copy_to_list,
+            'subject': self.subject
         }
-        try:
+        try:  # TODO: [WARNING] Email server configured failed. host: smtp.163.com, port: 587, error: Connection unexpectedly closed 
             send_info['message'] = self.generate_real_msg(self.msg, self.converted_row)
             send_email_msg(
                 auth_info=auth_info,
@@ -526,6 +539,8 @@ class AddRowAction(BaseAction):
 
     def __init__(self, context: BaseContext, new_row):
         super().__init__(context)
+        if not new_row:
+            raise ActionInvalid('new_row invalid')
         self.add_url = self.ADD_ROW_URL_FORMAT % {'dtable_uuid': str(UUID(self.context.dtable_uuid))}
         self.row_data = {
             'row': {},
@@ -675,7 +690,12 @@ class LinkRecordsAction(BaseAction):
             }
             filter_url = self.FILTER_ROWS_URL_FORMAT % {'dtable_uuid': str(UUID(self.context.dtable_uuid))}
             try:
-                resp = requests.get(filter_url, headers=self.context.headers, json=json_data)
+                print('<' * 50)
+                print('filter_url: ', filter_url)
+                print('headers: ', self.context.headers)
+                print('json_data: ', json_data)
+                print('>' * 50)
+                resp = requests.post(filter_url, headers=self.context.headers, json=json_data)
                 if resp.status_code != 200:
                     logger.error('filter dtable: %s data: %s error status code: %s', self.context.dtable_uuid, json_data, resp.status_code)
                 else:
@@ -760,7 +780,7 @@ class RunPythonScriptAction(BaseAction):
         self.repo_id = repo_id
         self.converted_row = converted_row
         self.operate_from = operate_from
-        self.operator = self.operator
+        self.operator = operator
 
     def _can_do_action(self):
         if not SEATABLE_FAAS_URL:

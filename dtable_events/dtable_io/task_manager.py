@@ -292,6 +292,9 @@ class TaskManager(object):
 
         return task_id
 
+    def run_workflow_actions(self, dtable_uuid, table_id, actions):
+        pass
+
     def threads_is_alive(self):
         info = {}
         for t in self.threads:
