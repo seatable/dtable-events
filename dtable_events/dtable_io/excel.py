@@ -1094,7 +1094,12 @@ def gen_decimal_format(num):
 
 def _get_strtime_time(time_str):
     from dtable_events.dtable_io import dtable_io_logger
-    time_str = time_str.strip()
+
+    try:
+        time_str = time_str.strip()
+    except:
+        return ''
+
     if not time_str:
         return ''
 
