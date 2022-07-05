@@ -52,13 +52,13 @@ class TaskManager(object):
         return task_id
 
     def add_import_task(self, username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage,
-                        can_use_automation_rules):
+                        can_use_automation_rules, can_use_workflows, owner):
         from dtable_events.dtable_io import post_dtable_import_files
 
         task_id = str(int(time.time()*1000))
         task = (post_dtable_import_files,
                 (username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage,
-                 can_use_automation_rules, self.config))
+                 can_use_automation_rules, can_use_workflows, owner, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         return task_id

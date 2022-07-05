@@ -239,6 +239,22 @@ def copy_src_auto_rules_to_json(dtable_uuid, tmp_file_path, db_session):
             fp.write(json.dumps(src_auto_rules_json))
 
 
+def copy_src_workflows_to_json(dtable_uuid, tmp_file_path, db_session):
+    if not db_session:
+        return
+    sql = """SELECT `workflow_config` FROM dtable_workflows WHERE dtable_uuid=:dtable_uuid"""
+    src_workflows = db_session.execute(sql, {'dtable_uuid': ''.join(dtable_uuid.split('-'))})
+    src_workflows_json = []
+    for src_workflow in src_workflows:
+        workflow = {
+            'workflow_config': src_workflow[0]
+        }
+        src_workflows_json.append(workflow)
+    if src_workflows_json:
+        with open(os.path.join(tmp_file_path, 'workflows.json'), 'w+') as fp:
+            fp.write(json.dumps(src_workflows_json))
+
+
 def convert_dtable_import_file_url(dtable_content, workspace_id, dtable_uuid):
     """ notice that this function receive a python dict and return a python dict
         json related operations are excluded
@@ -468,6 +484,21 @@ def add_a_auto_rule_to_db(username, auto_rule, workspace_id, dtable_uuid, db_ses
     db_session.commit()
 
 
+def add_a_workflow_to_db(username, workflow, workspace_id, dtable_uuid, owner, db_session):
+    sql = """INSERT INTO dtable_workflows (`token`,`dtable_uuid`, `workflow_config`, `creator`, `created_at`,
+             `owner`) VALUES (:token, :dtable_uuid, :workflow_config,
+             :creator, :created_at, :owner)"""
+    db_session.execute(sql, {
+        'token': str(uuid.uuid4()),
+        'dtable_uuid': ''.join(dtable_uuid.split('-')),
+        'workflow_config': workflow['workflow_config'],
+        'creator': username,
+        'created_at': datetime.datetime.utcnow(),
+        'owner': owner,
+        })
+    db_session.commit()
+
+
 def create_forms_from_src_dtable(workspace_id, dtable_uuid, db_session):
     if not db_session:
         return
@@ -497,6 +528,21 @@ def create_auto_rules_from_src_dtable(username, workspace_id, dtable_uuid, db_se
         if ('run_condition' not in auto_rule) or ('trigger' not in auto_rule) or ('actions' not in auto_rule):
             continue
         add_a_auto_rule_to_db(username, auto_rule, workspace_id, dtable_uuid, db_session)
+
+
+def create_workflows_from_src_dtable(username, workspace_id, dtable_uuid, owner, db_session):
+    if not db_session:
+        return
+    workflows_json_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted/', 'workflows.json')
+    if not os.path.exists(workflows_json_path):
+        return
+    with open(workflows_json_path, 'r') as fp:
+        workflows_json = fp.read()
+    workflows = json.loads(workflows_json)
+    for workflow in workflows:
+        if 'workflow_config' not in workflow:
+            continue
+        add_a_workflow_to_db(username, workflow, workspace_id, dtable_uuid, owner, db_session)
 
 
 def download_files_to_path(username, repo_id, dtable_uuid, files, path, files_map=None):
