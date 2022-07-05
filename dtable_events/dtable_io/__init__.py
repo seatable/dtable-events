@@ -348,11 +348,14 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
     source = send_info.get('source', '')
     copy_to = send_info.get('copy_to', [])
     reply_to = send_info.get('reply_to', '')
+    subtype = send_info.get('subtype', '')
 
     file_download_urls = send_info.get('file_download_urls', None)
 
     msg_obj = MIMEMultipart()
-    content_body = MIMEText(msg, 'html', 'utf-8')
+    content_body = MIMEText(msg)
+    if subtype:
+        content_body = MIMEText(msg, subtype)
     msg_obj['Subject'] = subject
     msg_obj['From'] = source or host_user
     msg_obj['To'] = ",".join(send_to)
