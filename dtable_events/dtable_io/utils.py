@@ -621,8 +621,8 @@ def get_excel_json_file(repo_id, file_name):
     return json_file
 
 def delete_excel_file(username, repo_id, file_name):
-    filename = file_name + '.xlsx\t' + file_name + '.json\t'
-    seafile_api.del_file(repo_id, EXCEL_DIR_PATH, filename, username)
+    filenames = [file_name + '.xlsx', file_name + '.json']
+    seafile_api.del_file(repo_id, EXCEL_DIR_PATH, json.dumps(filenames), username)
 
 def upload_excel_json_to_dtable_server(username, dtable_uuid, json_file):
     api_url = get_inner_dtable_server_url()
@@ -757,8 +757,8 @@ def update_append_excel_json_to_dtable_server(username, dtable_uuid, rows_data, 
 
 
 def delete_file(username, repo_id, file_name):
-    filename = file_name + '.xlsx\t' + file_name + '.json\t' + file_name + '.csv\t'
-    seafile_api.del_file(repo_id, EXCEL_DIR_PATH, filename, username)
+    filenames = [file_name + '.xlsx', file_name + '.json', file_name + '.csv']
+    seafile_api.del_file(repo_id, EXCEL_DIR_PATH, json.dumps(filenames), username)
 
 
 def get_metadata_from_dtable_server(dtable_uuid, username, permission):
