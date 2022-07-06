@@ -348,20 +348,19 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
     source = send_info.get('source', '')
     copy_to = send_info.get('copy_to', [])
     reply_to = send_info.get('reply_to', '')
-    subtype = send_info.get('subtype', '')
 
     file_download_urls = send_info.get('file_download_urls', None)
 
     msg_obj = MIMEMultipart()
-    content_body = MIMEText(msg)
-    if subtype:
-        content_body = MIMEText(msg, subtype)
+    plain_content_body = MIMEText(msg)
+    html_content_body = MIMEText(msg, 'html')
     msg_obj['Subject'] = subject
     msg_obj['From'] = source or host_user
     msg_obj['To'] = ",".join(send_to)
     msg_obj['Cc'] = copy_to and ",".join(copy_to) or ""
     msg_obj['Reply-to'] = reply_to
-    msg_obj.attach(content_body)
+    msg_obj.attach(plain_content_body)
+    msg_obj.attach(html_content_body)
 
     if file_download_urls:
         for file_name, file_url in file_download_urls.items():
