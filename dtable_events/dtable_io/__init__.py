@@ -343,24 +343,33 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
 
     # send info
     msg = send_info.get('message', '')
+    html_msg = send_info.get('html_message', '')
     send_to = send_info.get('send_to', [])
     subject = send_info.get('subject', '')
     source = send_info.get('source', '')
     copy_to = send_info.get('copy_to', [])
     reply_to = send_info.get('reply_to', '')
-
     file_download_urls = send_info.get('file_download_urls', None)
 
+    result = {}
+    if not msg and not html_msg:
+        result['err_msg'] = 'Email message invalid'
+        return result
+
     msg_obj = MIMEMultipart()
-    plain_content_body = MIMEText(msg)
-    html_content_body = MIMEText(msg, 'html')
     msg_obj['Subject'] = subject
     msg_obj['From'] = source or host_user
     msg_obj['To'] = ",".join(send_to)
     msg_obj['Cc'] = copy_to and ",".join(copy_to) or ""
     msg_obj['Reply-to'] = reply_to
-    msg_obj.attach(plain_content_body)
-    msg_obj.attach(html_content_body)
+
+    if msg:
+        plain_content_body = MIMEText(msg)
+        msg_obj.attach(plain_content_body)
+
+    if html_msg:
+        html_content_body = MIMEText(html_msg, 'html')
+        msg_obj.attach(html_content_body)
 
     if file_download_urls:
         for file_name, file_url in file_download_urls.items():
@@ -370,7 +379,6 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
             attach_file["Content-Disposition"] = 'attachment;filename*=UTF-8\'\'' + parse.quote(file_name)
             msg_obj.attach(attach_file)
 
-    result = {}
     try:
         smtp = smtplib.SMTP(email_host, int(email_port), timeout=30)
     except Exception as e:
