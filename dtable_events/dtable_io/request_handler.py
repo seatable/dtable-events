@@ -516,6 +516,7 @@ def add_email_sending_task():
 
     send_info = {
         'message': data.get('message'),
+        'html_message': data.get('html_message'),
         'send_to': send_to,
         'subject': data.get('subject'),
         'source': data.get('source'),
