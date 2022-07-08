@@ -118,13 +118,12 @@ class ContextException(Exception):
 
 class BaseContext:
 
-    caller = 'base_caller'
-
-    def __init__(self, dtable_uuid, table_id, db_session, view_id=None):
+    def __init__(self, dtable_uuid, table_id, db_session, view_id=None, caller='dtable-events'):
         self.dtable_uuid = dtable_uuid
         self.table_id = table_id
         self.view_id = view_id
         self.db_session = db_session
+        self.caller = caller
 
         self._dtable_metadata = None
 
@@ -244,20 +243,28 @@ class BaseContext:
         temp_api_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
         return temp_api_token
 
+    def get_converted_row(self, table_id, row_id):
+        url = get_inner_dtable_server_url().strip('/') + '/api/v1/dtables/%(dtable_uuid)s/rows/%(row_id)s/?from=dtable_events' % {
+            'dtable_uuid': str(UUID(self.dtable_uuid)),
+            'row_id': row_id
+        }
+        params = {
+            'table_id': table_id,
+            'convert_link_id': True
+        }
+        try:
+            resp = requests.get(url, params=params, headers=self.headers)
+            if resp.status_code != 200:
+                logger.error('request dtable: %s table: %s row: %s error status code: %s', self.dtable_uuid, table_id, row_id, resp.status_code)
+                return None
+        except Exception as e:
+            logger.error('request dtable: %s table: %s row: %s error: %s', self.dtable_uuid, table_id, row_id, e)
+            return None
+        return resp.json()
+
 
 class ActionInvalid(Exception):
     pass
-
-
-# def after_action(func):
-#     def wrapper(*args, **kwargs):
-#         return func(*args, **kwargs)
-#     return wrapper
-
-
-# def after_action(callbacks):
-#     def wrapper(*args, **kwargs):
-#         pass
 
 
 class BaseAction:
@@ -334,11 +341,11 @@ class NotifyAction(BaseAction):
 
     MSG_TYPES_DICT = {
         NOTIFY_TYPE_NOTIFICATION_RULE: 'notification_rules',
-        NOTIFY_TYPE_AUTOMATION_RULE: 'notification_rules',
+        NOTIFY_TYPE_AUTOMATION_RULE: 'automation_rules',
         NOTIFY_TYPE_WORKFLOW: 'workflows'
     }
 
-    def __init__(self, context: BaseContext, users, msg, notify_type, row=None, converted_row=None,
+    def __init__(self, context: BaseContext, users, msg, notify_type, converted_row=None,
                 users_column_key=None, condition=None, rule_id=None, rule_name=None,
                 workflow_token=None, workflow_name=None, workflow_task_id=None):
         super().__init__(context)
@@ -347,13 +354,12 @@ class NotifyAction(BaseAction):
         self.users_column_key = users_column_key
         self.users_column = self.context.columns_dict.get(self.users_column_key)
         self.msg = msg
-        self.row = row
         self.converted_row = converted_row
         if notify_type == self.NOTIFY_TYPE_NOTIFICATION_RULE:
             if not condition:
                 raise ActionInvalid('condition invalid')
             if not rule_id:
-                raise ActionInvalid('view_id invalid')
+                raise ActionInvalid('rule_id invalid')
             if not rule_name:
                 raise ActionInvalid('rule_name invalid')
             self.detail = {
@@ -362,13 +368,13 @@ class NotifyAction(BaseAction):
                 'condition': condition,
                 'rule_id': rule_id,
                 'rule_name': rule_name,
-                'row_id_list': [row['_id']] if row else []
+                'row_id_list': [converted_row['_id']] if converted_row else []
             }
         elif notify_type == self.NOTIFY_TYPE_AUTOMATION_RULE:
             if not condition:
                 raise ActionInvalid('condition invalid')
             if not rule_id:
-                raise ActionInvalid('view_id invalid')
+                raise ActionInvalid('rule_id invalid')
             if not rule_name:
                 raise ActionInvalid('rule_name invalid')
             self.detail = {
@@ -377,7 +383,7 @@ class NotifyAction(BaseAction):
                 'condition': condition,
                 'rule_id': rule_id,
                 'rule_name': rule_name,
-                'row_id_list': [row['_id']] if row else []
+                'row_id_list': [converted_row['_id']] if converted_row else []
             }
         elif notify_type == self.NOTIFY_TYPE_WORKFLOW:
             if not workflow_token:
@@ -391,7 +397,7 @@ class NotifyAction(BaseAction):
                 'workflow_token': workflow_token,
                 'workflow_name': workflow_name,
                 'workflow_task_id': workflow_task_id,
-                'row_id_list': [row['_id']] if row else []
+                'row_id': converted_row['_id'] if converted_row else None
             }
         else:
             raise ActionInvalid()
@@ -429,11 +435,13 @@ class NotifyAction(BaseAction):
 
 class SendEmailAction(BaseAction):
 
-    def __init__(self, context: BaseContext, account_id, subject, msg, send_to, copy_to, send_from, row=None, converted_row=None):
+    SEND_FROM_AUTOMATION_RULES = 'automation-rules'
+    SEND_FROM_WORKFLOW = 'workflow'
+
+    def __init__(self, context: BaseContext, account_id, subject, msg, send_to, copy_to, send_from, converted_row=None):
         super().__init__(context)
         self.account_dict = get_third_party_account(self.context.db_session, account_id)
         self.msg = msg
-        self.row = row
         self.converted_row = converted_row
         self.send_to_list = [email for email in email2list(send_to) if is_valid_username(email)]
         self.copy_to_list = [email for email in email2list(copy_to) if is_valid_username(email)]
@@ -455,7 +463,7 @@ class SendEmailAction(BaseAction):
             'copy_to': self.copy_to_list,
             'subject': self.subject
         }
-        try:  # TODO: [WARNING] Email server configured failed. host: smtp.163.com, port: 587, error: Connection unexpectedly closed 
+        try:
             send_info['message'] = self.generate_real_msg(self.msg, self.converted_row)
             send_email_msg(
                 auth_info=auth_info,
@@ -470,12 +478,11 @@ class SendEmailAction(BaseAction):
 
 class SendWechatAction(BaseAction):
 
-    def __init__(self, context: BaseContext, account_id, msg, msg_type, row=None, converted_row=None):
+    def __init__(self, context: BaseContext, account_id, msg, msg_type, converted_row=None):
         super().__init__(context)
         self.account_dict = get_third_party_account(self.context.db_session, account_id)
         self.msg = msg
         self.msg_type = msg_type
-        self.row = row
         self.converted_row = converted_row
 
     def do_action(self):
@@ -495,13 +502,12 @@ class SendWechatAction(BaseAction):
 
 class SendDingtalkAction(BaseAction):
 
-    def __init__(self, context: BaseContext, account_id, msg, msg_type, msg_title, row=None, converted_row=None):
+    def __init__(self, context: BaseContext, account_id, msg, msg_type, msg_title, converted_row=None):
         super().__init__(context)
         self.msg = msg
         self.msg_type = msg_type
         self.msg_title = msg_title
         self.account_dict = get_third_party_account(self.context.db_session, account_id)
-        self.row = row
         self.converted_row = converted_row
 
     def do_action(self):
@@ -549,6 +555,7 @@ class AddRowAction(BaseAction):
         self.row_data['row'] = self.generate_filter_updates(new_row)
 
     def do_action(self):
+        logger.info('add self.row_data: %s', self.row_data)
         try:
             resp = requests.post(self.add_url, headers=self.context.headers, json=self.row_data)
             if resp.status_code != 200:
@@ -558,6 +565,21 @@ class AddRowAction(BaseAction):
 
 
 class UpdateAction(BaseAction):
+
+    VALID_COLUMN_TYPES = [
+        ColumnTypes.TEXT,
+        ColumnTypes.DATE,
+        ColumnTypes.LONG_TEXT,
+        ColumnTypes.CHECKBOX,
+        ColumnTypes.SINGLE_SELECT,
+        ColumnTypes.MULTIPLE_SELECT,
+        ColumnTypes.URL,
+        ColumnTypes.DURATION,
+        ColumnTypes.NUMBER,
+        ColumnTypes.COLLABORATOR,
+        ColumnTypes.EMAIL,
+        ColumnTypes.RATE,
+    ]
 
     UPDATE_ROW_URL_FORMAT = get_inner_dtable_server_url().strip('/') + '/api/v1/dtables/%(dtable_uuid)s/rows/?from=dtable_events'
 
@@ -571,8 +593,8 @@ class UpdateAction(BaseAction):
         }
         self.row_data['row'] = self.generate_filter_updates(updates)
 
-
     def do_action(self):
+        logger.info('update self.row_data: %s', self.row_data)
         if not self.row_data['row']:
             return
         try:
@@ -590,8 +612,8 @@ class LockRecordAction(BaseAction):
 
     def __init__(self, context: BaseContext, row_id=None, filters=None, filter_conjunction=None):
         super().__init__(context)
-        if not self.context.view:
-            raise ActionInvalid('no view_id or view: %s not found' % self.context.view_id)
+        if not row_id and not self.context.view:
+            raise ActionInvalid('row_id invalid or view: %s not found' % self.context.view_id)
         if not row_id and not all(filters, filter_conjunction):
             raise ActionInvalid('row_id or (filters, filter_conjunction) invalid')
         self.lock_url = self.LOCK_URL_FORMAT % {'dtable_uuid': str(UUID(self.context.dtable_uuid))}
@@ -668,9 +690,8 @@ class LinkRecordsAction(BaseAction):
         ColumnTypes.RATE: "equal",
     }
 
-    def __init__(self, context: BaseContext, link_id, linked_table_id, match_conditions, row, converted_row):
+    def __init__(self, context: BaseContext, link_id, linked_table_id, match_conditions, converted_row):
         super().__init__(context)
-        self.row = row
         self.converted_row = converted_row
         self.link_id = link_id
         self.linked_table_id = linked_table_id
@@ -769,6 +790,9 @@ class LinkRecordsAction(BaseAction):
 
 
 class RunPythonScriptAction(BaseAction):
+
+    OPERATE_FROM_AUTOMATION_RULE = 'automation-rule'
+    OPERATE_FROM_WORKFLOW = 'workflow'
 
     def __init__(self, context: BaseContext, script_name, workspace_id, owner, org_id, repo_id,
                 converted_row=None, operate_from=None, operator=None):
