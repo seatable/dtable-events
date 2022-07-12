@@ -57,8 +57,7 @@ CONDITION_PERIODICALLY_BY_CONDITION = 'run_periodically_by_condition'
 
 MESSAGE_TYPE_AUTOMATION_RULE = 'automation_rule'
 
-AUTO_RULE_TRIGGER_LIMIT_PER_MINUTE = 10
-AUTO_RULE_TRIGGER_TIMES_PER_MINUTE_TIMEOUT = 60
+MINUTE_TIMEOUT = 60
 
 def get_third_party_account(session, account_id):
     account_query = session.query(BoundThirdPartyAccounts).filter(
@@ -251,10 +250,7 @@ class LockRowAction(BaseAction):
             'table_id': table_id,
             'filter_conditions': {
                 'filter_groups':filter_groups,
-                'group_conjunction': 'And',
-                'sorts': [
-                    {"column_key": "_mtime", "sort_type": "down"}
-                ],
+                'group_conjunction': 'And'
             },
             'limit': 500
         }
@@ -979,10 +975,7 @@ class LinkRecordsAction(BaseAction):
             'table_id': self.linked_table_id,
             'filter_conditions': {
                 'filter_groups': filter_groups,
-                'group_conjunction': 'And',
-                'sorts': [
-                    {"column_key": "_mtime", "sort_type": "down"}
-                ],
+                'group_conjunction': 'And'
             },
             'limit': 500
         }
@@ -1186,7 +1179,7 @@ class RuleInvalidException(Exception):
 
 class AutomationRule:
 
-    def __init__(self, data, db_session, raw_trigger, raw_actions, options):
+    def __init__(self, data, db_session, raw_trigger, raw_actions, options, automation_rule_config=None):
         self.rule_id = options.get('rule_id', None)
         self.rule_name = ''
         self.run_condition = options.get('run_condition', None)
@@ -1218,6 +1211,10 @@ class AutomationRule:
         self._load_trigger_and_actions(raw_trigger, raw_actions)
 
         self.current_valid = True
+
+        self.per_minute_trigger_limit = 10
+        if automation_rule_config and 'per_minute_trigger_limit' in automation_rule_config:
+            self.per_minute_trigger_limit = automation_rule_config['per_minute_trigger_limit']
 
     def _load_trigger_and_actions(self, raw_trigger, raw_actions):
         self.trigger = json.loads(raw_trigger)
@@ -1329,11 +1326,13 @@ class AutomationRule:
 
         if self.run_condition == PER_UPDATE:
             # automation rule triggered by human or code, perhaps triggered quite quickly
+            if self.per_minute_trigger_limit <= 0:
+                return True
             trigger_times = redis_cache.get(self.cache_key)
             if not trigger_times:
                 return True
             trigger_times = trigger_times.split(',')
-            if len(trigger_times) >= AUTO_RULE_TRIGGER_LIMIT_PER_MINUTE and time.time() - int(trigger_times[0]) < 60:
+            if len(trigger_times) >= self.per_minute_trigger_limit and time.time() - int(trigger_times[0]) < 60:
                 return False
             return True
 
@@ -1515,15 +1514,15 @@ class AutomationRule:
         except Exception as e:
             logger.error('set rule: %s invalid error: %s', self.rule_id, e)
 
-        if self.run_condition == PER_UPDATE:
+        if self.run_condition == PER_UPDATE and self.per_minute_trigger_limit > 0:
             trigger_times = redis_cache.get(self.cache_key)
             if not trigger_times:
-                redis_cache.set(self.cache_key, int(time.time()), timeout=AUTO_RULE_TRIGGER_TIMES_PER_MINUTE_TIMEOUT)
+                redis_cache.set(self.cache_key, int(time.time()), timeout=MINUTE_TIMEOUT)
             else:
                 trigger_times = trigger_times.split(',')
                 trigger_times.append(str(int(time.time())))
-                trigger_times = trigger_times[-AUTO_RULE_TRIGGER_LIMIT_PER_MINUTE:]
-                redis_cache.set(self.cache_key, ','.join([t for t in trigger_times]), timeout=AUTO_RULE_TRIGGER_TIMES_PER_MINUTE_TIMEOUT)
+                trigger_times = trigger_times[-self.per_minute_trigger_limit:]
+                redis_cache.set(self.cache_key, ','.join([t for t in trigger_times]), timeout=MINUTE_TIMEOUT)
 
     def set_invalid(self):
         try:

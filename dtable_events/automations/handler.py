@@ -6,6 +6,7 @@ from threading import Thread, Event
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.automations.auto_rules_utils import scan_triggered_automation_rules
 from dtable_events.db import init_db_session_class
+from dtable_events.utils import get_opt_from_conf_or_env
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,30 @@ class AutomationRuleHandler(Thread):
         self._finished = Event()
         self._db_session_class = init_db_session_class(config)
         self._redis_client = RedisClient(config)
+        self.automation_rule_config = {
+            'per_minute_trigger_limit': 10
+        }
+        self._parse_config(config)
+
+    def _parse_config(self, config):
+        """parse send email related options from config file
+        """
+        section_name = 'AUTOMATION-HANDLER'
+        key_per_minute_trigger_limit = 'per_minute_trigger_limit'
+
+        if not config.has_section(section_name):
+            section_name = 'AUTOMATION HANDLER'
+            if not config.has_section(section_name):
+                return
+
+        per_minute_trigger_limit = get_opt_from_conf_or_env(config, section_name, key_per_minute_trigger_limit, default=10)
+        try:
+            per_minute_trigger_limit = int(per_minute_trigger_limit)
+        except Exception as e:
+            logger.error('parse section: %s key: %s error: %s', section_name, key_per_minute_trigger_limit, e)
+            per_minute_trigger_limit = 10
+
+        self.automation_rule_config['per_minute_trigger_limit'] = per_minute_trigger_limit
 
     def run(self):
         logger.info('Starting handle automation rules...')
@@ -28,7 +53,7 @@ class AutomationRuleHandler(Thread):
                     event = json.loads(message['data'])
                     session = self._db_session_class()
                     try:
-                        scan_triggered_automation_rules(event, db_session=session)
+                        scan_triggered_automation_rules(event, session, self.automation_rule_config)
                     except Exception as e:
                         logger.error('Handle automation rules failed: %s' % e)
                     finally:
