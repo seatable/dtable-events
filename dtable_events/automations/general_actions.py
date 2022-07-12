@@ -711,11 +711,6 @@ class LinkRecordsAction(BaseAction):
             }
             filter_url = self.FILTER_ROWS_URL_FORMAT % {'dtable_uuid': str(UUID(self.context.dtable_uuid))}
             try:
-                print('<' * 50)
-                print('filter_url: ', filter_url)
-                print('headers: ', self.context.headers)
-                print('json_data: ', json_data)
-                print('>' * 50)
                 resp = requests.post(filter_url, headers=self.context.headers, json=json_data)
                 if resp.status_code != 200:
                     logger.error('filter dtable: %s data: %s error status code: %s', self.context.dtable_uuid, json_data, resp.status_code)
