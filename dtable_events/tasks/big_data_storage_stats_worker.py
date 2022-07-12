@@ -47,7 +47,7 @@ def update_big_data_storage_stats(db_session, bases):
 
     sql = "REPLACE INTO big_data_storage_stats (dtable_uuid, total_rows, total_storage, org_id) VALUES %s" % ', '.join(
         ["('%s', '%s', '%s', '%s')" % (base.get('id'), base.get('rows'), base.get('storage'),
-                                       uuid_org_id_map.get(uuid.UUID(base.get('id')).hex)) for base in bases])
+                                       uuid_org_id_map.get(uuid.UUID(base.get('id')).hex, -1)) for base in bases])
     db_session.execute(sql)
     db_session.commit()
 
