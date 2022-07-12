@@ -6,7 +6,7 @@ from dtable_events.automations.actions import AutomationRule
 logger = logging.getLogger(__name__)
 
 
-def scan_triggered_automation_rules(event_data, db_session, automation_rule_config):
+def scan_triggered_automation_rules(event_data, db_session, per_minute_trigger_limit):
     # if event_data.get('op_user') == 'Automation Rule':
     #     # For preventing loop do automation actions, foribidden triggering actions!!!
     #     return
@@ -33,7 +33,7 @@ def scan_triggered_automation_rules(event_data, db_session, automation_rule_conf
             'last_trigger_time': last_trigger_time,
         }
         try:
-            auto_rule = AutomationRule(event_data, db_session, trigger, actions, options, automation_rule_config=automation_rule_config)
+            auto_rule = AutomationRule(event_data, db_session, trigger, actions, options, per_minute_trigger_limit=per_minute_trigger_limit)
             auto_rule.do_actions()
         except Exception as e:
             logger.error('auto rule: %s do actions error: %s', rule_id, e)

@@ -1179,7 +1179,7 @@ class RuleInvalidException(Exception):
 
 class AutomationRule:
 
-    def __init__(self, data, db_session, raw_trigger, raw_actions, options, automation_rule_config=None):
+    def __init__(self, data, db_session, raw_trigger, raw_actions, options, per_minute_trigger_limit=None):
         self.rule_id = options.get('rule_id', None)
         self.rule_name = ''
         self.run_condition = options.get('run_condition', None)
@@ -1212,9 +1212,7 @@ class AutomationRule:
 
         self.current_valid = True
 
-        self.per_minute_trigger_limit = 10
-        if automation_rule_config and 'per_minute_trigger_limit' in automation_rule_config:
-            self.per_minute_trigger_limit = automation_rule_config['per_minute_trigger_limit']
+        self.per_minute_trigger_limit = per_minute_trigger_limit or 10
 
     def _load_trigger_and_actions(self, raw_trigger, raw_actions):
         self.trigger = json.loads(raw_trigger)

@@ -17,9 +17,7 @@ class AutomationRuleHandler(Thread):
         self._finished = Event()
         self._db_session_class = init_db_session_class(config)
         self._redis_client = RedisClient(config)
-        self.automation_rule_config = {
-            'per_minute_trigger_limit': 10
-        }
+        self.per_minute_trigger_limit = 10
         self._parse_config(config)
 
     def _parse_config(self, config):
@@ -38,7 +36,7 @@ class AutomationRuleHandler(Thread):
             logger.error('parse section: %s key: %s error: %s', section_name, key_per_minute_trigger_limit, e)
             per_minute_trigger_limit = 10
 
-        self.automation_rule_config['per_minute_trigger_limit'] = per_minute_trigger_limit
+        self.per_minute_trigger_limit = per_minute_trigger_limit
 
     def run(self):
         logger.info('Starting handle automation rules...')
@@ -51,7 +49,7 @@ class AutomationRuleHandler(Thread):
                     event = json.loads(message['data'])
                     session = self._db_session_class()
                     try:
-                        scan_triggered_automation_rules(event, session, self.automation_rule_config)
+                        scan_triggered_automation_rules(event, session, self.per_minute_trigger_limit)
                     except Exception as e:
                         logger.error('Handle automation rules failed: %s' % e)
                     finally:
