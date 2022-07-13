@@ -17,6 +17,7 @@ from dtable_events.notification_rules.notification_rules_utils import _fill_msg_
     send_notification
 from dtable_events.utils import utc_to_tz, uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes
+from dtable_events.utils.dtable_server_api import DTableServerAPI
 
 
 logger = logging.getLogger(__name__)
@@ -195,15 +196,11 @@ class UpdateAction(BaseAction):
     def do_action(self):
         if not self._can_do_action():
             return
-        api_url = get_inner_dtable_server_url()
-        row_update_url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/rows/?from=dtable_events'
         try:
-            response = requests.put(row_update_url, headers=self.auto_rule.headers, json=self.update_data)
+            self.auto_rule.dtable_server_api.update_row(self.auto_rule.table_name, self.data['row']['_id'], self.update_data['row'])
         except Exception as e:
             logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
-        if response.status_code != 200:
-            logger.error('update dtable: %s error response status code: %s', self.auto_rule.dtable_uuid, response.status_code)
         else:
             self.auto_rule.set_done_actions()
 
@@ -243,9 +240,6 @@ class LockRowAction(BaseAction):
             if trigger_filters:
                 filter_groups.append({'filters': trigger_filters, 'filter_conjunction': filter_conjunction})
 
-        api_url = get_inner_dtable_server_url()
-        client_url = api_url.rstrip('/') + '/api/v1/internal/dtables/' + \
-                     uuid_str_to_36_chars(self.auto_rule.dtable_uuid) + '/filter-rows/?from=dtable_events'
         json_data = {
             'table_id': table_id,
             'filter_conditions': {
@@ -255,8 +249,8 @@ class LockRowAction(BaseAction):
             'limit': 500
         }
         try:
-            response = requests.post(client_url, headers=self.auto_rule.headers, json=json_data)
-            rows_data = response.json().get('rows')
+            response_data = self.auto_rule.dtable_server_api.internal_filter_rows(json_data)
+            rows_data = response_data.get('rows')
             logger.debug('Number of locking dtable row by auto-rules: %s, dtable_uuid: %s, details: %s' % (
                 len(rows_data),
                 self.auto_rule.dtable_uuid,
@@ -288,15 +282,11 @@ class LockRowAction(BaseAction):
         if not self._can_do_action():
             return
 
-        api_url = get_inner_dtable_server_url()
-        row_update_url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/lock-rows/?from=dtable_events'
         try:
-            response = requests.put(row_update_url, headers=self.auto_rule.headers, json=self.update_data)
+            self.auto_rule.dtable_server_api.lock_rows(self.auto_rule.table_name, self.update_data.get('row_ids'))
         except Exception as e:
             logger.error('lock dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
-        if response.status_code != 200:
-            logger.error('lock dtable: %s error response status code: %s', self.auto_rule.dtable_uuid, response.status_code)
         else:
             self.auto_rule.set_done_actions()
 
@@ -379,15 +369,11 @@ class AddRowAction(BaseAction):
     def do_action(self):
         if not self._can_do_action():
             return
-        api_url = get_inner_dtable_server_url()
-        row_add_url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/rows/?from=dtable_events'
         try:
-            response = requests.post(row_add_url, headers=self.auto_rule.headers, json=self.row_data)
+            self.auto_rule.dtable_server_api.add_row(self.auto_rule.table_name, self.row_data['row'])
         except Exception as e:
             logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
-        if response.status_code != 200:
-            logger.error('update dtable: %s error response status code: %s', self.auto_rule.dtable_uuid, response.status_code)
         else:
             self.auto_rule.set_done_actions()
 
@@ -979,12 +965,9 @@ class LinkRecordsAction(BaseAction):
             },
             'limit': 500
         }
-        api_url = get_inner_dtable_server_url()
-        client_url = api_url.rstrip('/') + '/api/v1/internal/dtables/' + \
-                     uuid_str_to_36_chars(self.auto_rule.dtable_uuid) + '/filter-rows/?from=dtable_events'
         try:
-            response = requests.post(client_url, headers=self.auto_rule.headers, json=json_data)
-            rows_data = response.json().get('rows')
+            response_data = self.auto_rule.dtable_server_api.internal_filter_rows(json_data)
+            rows_data = response_data.get('rows')
             logger.debug('Number of linking dtable rows by auto-rules: %s, dtable_uuid: %s, details: %s' % (
                 rows_data and len(rows_data) or 0,
                 self.auto_rule.dtable_uuid,
@@ -1019,9 +1002,6 @@ class LinkRecordsAction(BaseAction):
         if not self._can_do_action():
             return
 
-        api_url = get_inner_dtable_server_url()
-        rows_link_url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/links/?from=dtable_events'
-
         json_data = {
             'row_id': self.data['row']['_id'],
             'link_id': self.link_id,
@@ -1031,12 +1011,10 @@ class LinkRecordsAction(BaseAction):
         }
 
         try:
-            response = requests.put(rows_link_url, headers=self.auto_rule.headers, json=json_data)
+            self.auto_rule.dtable_server_api.update_links(self.link_id, self.auto_rule.table_id, self.data['row']['_id'], self.linked_table_id, self.linked_row_ids)
         except Exception as e:
             logger.error('link dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
-        if response.status_code != 200:
-            logger.error('link dtable: %s error response status code: %s', self.auto_rule.dtable_uuid, response.status_code)
         else:
             self.auto_rule.set_done_actions()
 
@@ -1157,15 +1135,11 @@ class AddRecordToOtherTableAction(BaseAction):
         if not self._can_do_action():
             return
 
-        api_url = get_inner_dtable_server_url()
-        row_add_url = api_url.rstrip('/') + '/api/v1/dtables/' + self.auto_rule.dtable_uuid + '/rows/?from=dtable_events'
         try:
-            response = requests.post(row_add_url, headers=self.auto_rule.headers, json=self.row_data)
+            self.auto_rule.dtable_server_api.add_row(self.get_table_name(self.dst_table_id), self.row_data['row'])
         except Exception as e:
             logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
-        if response.status_code != 200:
-            logger.error('update dtable: %s error response status code: %s', self.auto_rule.dtable_uuid, response.status_code)
         else:
             self.auto_rule.set_done_actions()
 
@@ -1192,6 +1166,8 @@ class AutomationRule:
         self.creator = options.get('creator', None)
         self.data = data
         self.db_session = db_session
+
+        self.dtable_server_api = DTableServerAPI('Automation Rule', str(UUID(self.dtable_uuid)), get_inner_dtable_server_url())
 
         self.table_id = None
         self.view_id = None
@@ -1242,17 +1218,17 @@ class AutomationRule:
 
     @property
     def headers(self):
-        return {'Authorization': 'Token ' + self.access_token}
+        return self.dtable_server_api.headers
 
     @property
     def dtable_metadata(self):
         if not self._dtable_metadata:
-            api_url = get_inner_dtable_server_url()
-            url = api_url.rstrip('/') + '/api/v1/dtables/' + self.dtable_uuid + '/metadata/?from=dtable_events'
-            response = requests.get(url, headers=self.headers)
-            if response.status_code == 404:
-                raise RuleInvalidException('request metadata 404')
-            self._dtable_metadata = response.json().get('metadata')
+            try:
+                self._dtable_metadata = self.dtable_server_api.get_metadata()
+            except:
+                raise RuleInvalidException('request metadata error')
+            if not self._dtable_metadata:
+                raise RuleInvalidException('request metadata parse error')
         return self._dtable_metadata
 
     @property
@@ -1262,12 +1238,12 @@ class AutomationRule:
         """
         if not self._view_columns:
             table_id, view_id = self.table_id, self.view_id
-            api_url = get_inner_dtable_server_url()
-            url = api_url.rstrip('/') + '/api/v1/dtables/' + self.dtable_uuid + '/columns/?from=dtable_events'
-            response = requests.get(url, params={'table_id': table_id, 'view_id': view_id}, headers=self.headers)
-            if response.status_code == 404:
-                raise RuleInvalidException('request view columns 404')
-            self._view_columns = response.json().get('columns')
+            try:
+                self._view_columns = self.dtable_server_api.list_columns(table_id, view_id=view_id)
+            except:
+                raise RuleInvalidException('request view columns error')
+            if not self._view_columns:
+                raise RuleInvalidException('request view columns parse error')
         return self._view_columns
 
     @property
