@@ -31,6 +31,7 @@ def check_auth_token(req):
 
 @app.route('/add-export-task', methods=['GET'])
 def add_export_task():
+    from dtable_events.utils import parse_bool
     is_valid, error = check_auth_token(request)
     if not is_valid:
         return make_response((error, 403))
@@ -46,10 +47,11 @@ def add_export_task():
     repo_id = request.args.get('repo_id')
     table_name = request.args.get('table_name')
     dtable_uuid = request.args.get('dtable_uuid')
+    ignore_asset = parse_bool(request.args.get('ignore_asset', default=False))
 
     try:
         task_id = task_manager.add_export_task(
-            username, repo_id, dtable_uuid, table_name)
+            username, repo_id, dtable_uuid, table_name, ignore_asset)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
