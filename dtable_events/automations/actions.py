@@ -134,7 +134,7 @@ class UpdateAction(BaseAction):
         self.updates = updates
         self.update_data = {
             'row': {},
-            'table_name': self.auto_rule.table_name,
+            'table_name': self.auto_rule.table_info['name'],
             'row_id':''
         }
         self._init_updates()
@@ -197,7 +197,7 @@ class UpdateAction(BaseAction):
         if not self._can_do_action():
             return
         try:
-            self.auto_rule.dtable_server_api.update_row(self.auto_rule.table_name, self.data['row']['_id'], self.update_data['row'])
+            self.auto_rule.dtable_server_api.update_row(self.auto_rule.table_info['name'], self.data['row']['_id'], self.update_data['row'])
         except Exception as e:
             logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
@@ -216,7 +216,7 @@ class LockRowAction(BaseAction):
         super().__init__(auto_rule, data)
         self.action_type = 'lock'
         self.update_data = {
-            'table_name': self.auto_rule.table_name,
+            'table_name': self.auto_rule.table_info['name'],
             'row_ids':[],
         }
         self.trigger = trigger
@@ -283,7 +283,7 @@ class LockRowAction(BaseAction):
             return
 
         try:
-            self.auto_rule.dtable_server_api.lock_rows(self.auto_rule.table_name, self.update_data.get('row_ids'))
+            self.auto_rule.dtable_server_api.lock_rows(self.auto_rule.table_info['name'], self.update_data.get('row_ids'))
         except Exception as e:
             logger.error('lock dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
@@ -318,7 +318,7 @@ class AddRowAction(BaseAction):
         self.row = row
         self.row_data = {
             'row': {},
-            'table_name': self.auto_rule.table_name
+            'table_name': self.auto_rule.table_info['name']
         }
         self._init_updates()
 
@@ -370,7 +370,7 @@ class AddRowAction(BaseAction):
         if not self._can_do_action():
             return
         try:
-            self.auto_rule.dtable_server_api.add_row(self.auto_rule.table_name, self.row_data['row'])
+            self.auto_rule.dtable_server_api.append_row(self.auto_rule.table_info['name'], self.row_data['row'])
         except Exception as e:
             logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
@@ -836,7 +836,7 @@ class RunPythonScriptAction(BaseAction):
         if not self._can_do_action():
             return
 
-        context_data = {'table': self.auto_rule.table_name}
+        context_data = {'table': self.auto_rule.table_info['name']}
         if self.auto_rule.run_condition == PER_UPDATE:
             context_data['row'] = self.data['converted_row']
         scripts_running_limit = self._get_scripts_running_limit()
@@ -1002,16 +1002,8 @@ class LinkRecordsAction(BaseAction):
         if not self._can_do_action():
             return
 
-        json_data = {
-            'row_id': self.data['row']['_id'],
-            'link_id': self.link_id,
-            'table_id': self.auto_rule.table_id,
-            'other_table_id': self.linked_table_id,
-            'other_rows_ids': self.linked_row_ids
-        }
-
         try:
-            self.auto_rule.dtable_server_api.update_links(self.link_id, self.auto_rule.table_id, self.data['row']['_id'], self.linked_table_id, self.linked_row_ids)
+            self.auto_rule.dtable_server_api.update_link(self.link_id, self.auto_rule.table_id, self.linked_table_id, self.data['row']['_id'], self.linked_row_ids)
         except Exception as e:
             logger.error('link dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
@@ -1136,7 +1128,7 @@ class AddRecordToOtherTableAction(BaseAction):
             return
 
         try:
-            self.auto_rule.dtable_server_api.add_row(self.get_table_name(self.dst_table_id), self.row_data['row'])
+            self.auto_rule.dtable_server_api.append_row(self.get_table_name(self.dst_table_id), self.row_data['row'])
         except Exception as e:
             logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
@@ -1171,9 +1163,9 @@ class AutomationRule:
 
         self.table_id = None
         self.view_id = None
-        self._view_info = {}
 
-        self._table_name = ''
+        self._table_info = None
+        self._view_info = None
         self._dtable_metadata = None
         self._access_token = None
         self._view_columns = None
@@ -1237,9 +1229,10 @@ class AutomationRule:
         columns of the view defined in trigger
         """
         if not self._view_columns:
-            table_id, view_id = self.table_id, self.view_id
+            table_name = self.table_info['name']
+            view_name = self.view_info['name']
             try:
-                self._view_columns = self.dtable_server_api.list_columns(table_id, view_id=view_id)
+                self._view_columns = self.dtable_server_api.list_columns(table_name, view_name=view_name)
             except:
                 raise RuleInvalidException('request view columns error')
             if not self._view_columns:
@@ -1247,30 +1240,33 @@ class AutomationRule:
         return self._view_columns
 
     @property
-    def table_name(self):
+    def table_info(self):
         """
         name of table defined in rule
         """
-        if not self._table_name and self.run_condition in (PER_DAY, PER_WEEK, PER_MONTH):
+        if not self._table_info:
             dtable_metadata = self.dtable_metadata
             tables = dtable_metadata.get('tables', [])
             for table in tables:
                 if table.get('_id') == self.table_id:
-                    self._table_name = table.get('name')
+                    self._table_info = table
                     break
-        return self._table_name
+            if not self._table_info:
+                raise RuleInvalidException('table not found')
+        return self._table_info
 
     @property
     def view_info(self):
-        dtable_metadata = self.dtable_metadata
-        tables = dtable_metadata.get('tables', [])
-        for table in tables:
-            if table.get('_id') == self.table_id:
-                views = table.get('views')
-                for table_view in views:
-                    if table_view.get('_id') == self.view_id:
-                        self._view_info = table_view
-                        break
+        table_info = self.table_info
+        if not self.view_id:
+            self._view_info = table_info['views'][0]
+            return self._view_info
+        for view in table_info['views']:
+            if view['_id'] == self.view_id:
+                self._view_info = view
+                break
+        if not self._view_info:
+            raise RuleInvalidException('view not found')
         return self._view_info
 
 
@@ -1339,6 +1335,7 @@ class AutomationRule:
             return
 
         for action_info in self.action_infos:
+            logger.debug('start action: %s type: %s', action_info.get('_id'), action_info['type'])
             try:
                 if action_info.get('type') == 'update_record':
                     updates = action_info.get('updates')
