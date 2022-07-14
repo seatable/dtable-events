@@ -97,9 +97,10 @@ def parse_image(cell_value):
 
 def parse_number(cell_value):
     try:
-        return float(cell_value)
+        float(cell_value)
     except:
         return ''
+    return cell_value
 
 
 def parse_long_text(cell_value):
@@ -267,7 +268,7 @@ def parse_excel(repo_id, dtable_name, custom=False):
     # parse
     excel_file = get_excel_file(repo_id, dtable_name)
     tables = []
-    wb = load_workbook(excel_file, read_only=True)
+    wb = load_workbook(excel_file, read_only=True, data_only=True)
     for sheet in wb:
         if sheet.max_row is None or sheet.max_column is None:
             continue
@@ -505,7 +506,7 @@ def parse_append_excel_csv_upload_file_to_json(repo_id, file_name, username, dta
         tables = parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name)
     else:
         excel_file = get_excel_file(repo_id, file_name)
-        wb = load_workbook(excel_file, read_only=True)
+        wb = load_workbook(excel_file, read_only=True, data_only=True)
         sheet = wb.get_sheet_by_name(wb.sheetnames[0])
         columns = get_columns_from_dtable_server(username, dtable_uuid, table_name)
 
@@ -704,7 +705,7 @@ def parse_update_excel_file(repo_id, file_name, username, dtable_uuid, table_nam
     # parse
     excel_file = get_excel_file(repo_id, file_name)
     tables = []
-    wb = load_workbook(excel_file, read_only=True)
+    wb = load_workbook(excel_file, read_only=True, data_only=True)
     sheet = wb.get_sheet_by_name(wb.sheetnames[0])
     dtable_io_logger.info(
         'parse sheet: %s, rows: %d, columns: %d' % (sheet.title, sheet.max_row, sheet.max_column))
@@ -893,7 +894,7 @@ def parse_row(column_type, cell_value):
         return None
     elif column_type == 'image':
         return parse_image(cell_value)
-    elif column_type == 'single_select':
+    elif column_type == 'single-select':
         return str(cell_value)
     elif column_type == 'link':
         return None
@@ -901,8 +902,8 @@ def parse_row(column_type, cell_value):
         return None
     elif column_type == 'geolocation':
         return None
-    elif column_type in ('collaborator', 'creator', 'last_modifier', 'ctime', 'mtime', 'formula',
-                         'link_formula', 'auto_number'):
+    elif column_type in ('collaborator', 'creator', 'last-modifier', 'ctime', 'mtime', 'formula',
+                         'link-formula', 'auto-number'):
         return None
     else:
         return str(cell_value)
