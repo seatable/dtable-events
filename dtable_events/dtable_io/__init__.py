@@ -126,7 +126,7 @@ def get_dtable_export_content(username, repo_id, dtable_uuid, asset_dir_id, conf
 
 
 def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage,
-                             can_use_automation_rules, can_use_workflows, owner, config):
+                             can_use_automation_rules, can_use_workflows, owner, lang, config):
     """
     post files at /tmp/<dtable_uuid>/dtable_zip_extracted/ to file server
     unzip django uploaded tmp file is suppose to be done in dtable-web api.
@@ -141,7 +141,7 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
 
     dtable_io_logger.info('Prepare dtable json file and post it at file server.')
     try:
-        dtable_content = post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage)
+        dtable_content = post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage, lang)
     except Exception as e:
         dtable_io_logger.error('post dtable json failed. ERROR: {}'.format(e))
 

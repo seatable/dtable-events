@@ -315,7 +315,7 @@ def convert_dtable_import_file_url(dtable_content, workspace_id, dtable_uuid):
     return dtable_content
 
 
-def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage):
+def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage, lang):
     """
     used to import dtable
     prepare dtable json file and post it at file server
@@ -339,7 +339,7 @@ def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_n
         content = ''
     if not content:
         try:
-            storage_backend.create_empty_dtable(dtable_uuid, username, in_storage, repo_id, dtable_file_name)
+            storage_backend.create_empty_dtable(dtable_uuid, username, in_storage, lang, repo_id, dtable_file_name)
         except Exception as e:
             raise e
         return
