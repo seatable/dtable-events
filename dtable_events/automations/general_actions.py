@@ -81,9 +81,9 @@ def format_time_by_offset(offset, format_length):
     cur_datetime = datetime.now()
     cur_datetime_offset = cur_datetime + timedelta(days=offset)
     if format_length == 2:
-        return cur_datetime_offset.strftime('%Y-$m-%d %H:%M')
+        return cur_datetime_offset.strftime('%Y-%m-%d %H:%M')
     elif format_length == 1:
-        return cur_datetime_offset.strftime('%Y-$m-%d')
+        return cur_datetime_offset.strftime('%Y-%m-%d')
 
 
 def parse_column_value(column, value):
@@ -94,7 +94,7 @@ def parse_column_value(column, value):
                 return option.get('name')
     elif column.get('type') == ColumnTypes.MULTIPLE_SELECT:
         m_select_options = column.get('data', {}).get('options', [])
-        if isinstance(m_select_options, list):
+        if isinstance(value, list):
             parse_value_list = []
             for option in m_select_options:
                 if option.get('id') in value:
@@ -315,7 +315,7 @@ class BaseAction:
                         if set_type == 'specific_value':
                             time_value = time_dict.get('value')
                             filter_updates[col_name] = time_value
-                        elif set_type == 'relative_data':
+                        elif set_type == 'relative_date':
                             offset = time_dict.get('offset')
                             filter_updates[col_name] = format_time_by_offset(int(offset), format_length)
                     except:
