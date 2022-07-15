@@ -182,8 +182,9 @@ class UpdateAction(BaseAction):
     def do_action(self):
         if not self._can_do_action():
             return
+        table_name = self.auto_rule.table_info['name']
         try:
-            self.auto_rule.dtable_server_api.update_row(self.auto_rule.table_info['name'], self.data['row']['_id'], self.update_data['row'])
+            self.auto_rule.dtable_server_api.update_row(table_name, self.data['row']['_id'], self.update_data['row'])
         except Exception as e:
             logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
@@ -228,9 +229,9 @@ class LockRowAction(BaseAction):
     def do_action(self):
         if not self._can_do_action():
             return
-
+        table_name = self.auto_rule.table_info['name']
         try:
-            self.auto_rule.dtable_server_api.lock_rows(self.auto_rule.table_info['name'], self.update_data.get('row_ids'))
+            self.auto_rule.dtable_server_api.lock_rows(table_name, self.update_data.get('row_ids'))
         except Exception as e:
             logger.error('lock dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
@@ -316,8 +317,9 @@ class AddRowAction(BaseAction):
     def do_action(self):
         if not self._can_do_action():
             return
+        table_name = self.auto_rule.table_info['name']
         try:
-            self.auto_rule.dtable_server_api.append_row(self.auto_rule.table_info['name'], self.row_data['row'])
+            self.auto_rule.dtable_server_api.append_row(table_name, self.row_data['row'])
         except Exception as e:
             logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
@@ -1210,7 +1212,8 @@ class AddRecordToOtherTableAction(BaseAction):
         return True
 
     def do_action(self):
-        if not self._can_do_action():
+        table_name = self.get_table_name(self.dst_table_id)
+        if not self._can_do_action() or not table_name:
             return
 
         try:

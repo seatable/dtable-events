@@ -1,7 +1,7 @@
 import json
 import logging
 
-from dtable_events.automations.general_actions import BaseContext, NotifyAction, SendEmailAction, \
+from dtable_events.automations.general_actions import AddRecordToOtherTableAction, BaseContext, NotifyAction, SendEmailAction, \
     SendWechatAction, SendDingtalkAction, UpdateAction, AddRowAction, LockRecordAction, LinkRecordsAction, \
     RunPythonScriptAction
 from dtable_events.db import init_db_session_class
@@ -117,8 +117,7 @@ def do_workflow_actions(task_id, node_id, config):
                         row_id
                     ).do_action()
                 elif action_info.get('type') == 'lock_record':
-                    kwargs = {'row_id': row_id}
-                    LockRecordAction(context, **kwargs).do_action()
+                    LockRecordAction(context, row_id=row_id).do_action()
                 elif action_info.get('type') == 'link_records':
                     link_id = action_info.get('link_id')
                     linked_table_id = action_info.get('linked_table_id')
@@ -146,6 +145,15 @@ def do_workflow_actions(task_id, node_id, config):
                         converted_row=converted_row,
                         operate_from=RunPythonScriptAction.OPERATE_FROM_WORKFLOW,
                         operator=workflow_token
+                    ).do_action()
+                elif action_info.get('type') == 'add_record_to_other_table':
+                    row = action_info.get('row')
+                    dst_table_id = action_info.get('dst_table_id')
+                    logger.debug('row: %s dst_table_id: %s', row, dst_table_id)
+                    AddRecordToOtherTableAction(
+                        context,
+                        dst_table_id,
+                        row
                     ).do_action()
             except Exception as e:
                 logger.exception(e)

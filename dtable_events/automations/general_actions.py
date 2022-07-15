@@ -3,9 +3,8 @@ import logging
 import re
 import time
 import os
-from urllib import parse
 from uuid import UUID
-from datetime import datetime, date, timedelta
+from datetime import datetime, timedelta
 
 import jwt
 import requests
@@ -16,6 +15,7 @@ from dtable_events.notification_rules.notification_rules_utils import _fill_msg_
     send_notification
 from dtable_events.utils import is_valid_email, get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes
+from dtable_events.utils.dtable_server_api import DTableServerAPI
 
 
 logger = logging.getLogger(__name__)
@@ -112,18 +112,20 @@ def is_valid_username(user):
     return is_valid_email(user)
 
 
-class ContextException(Exception):
+class ContextInvalid(Exception):
     pass
 
 
 class BaseContext:
 
     def __init__(self, dtable_uuid, table_id, db_session, view_id=None, caller='dtable-events'):
-        self.dtable_uuid = dtable_uuid
+        self.dtable_uuid = str(UUID(dtable_uuid))
         self.table_id = table_id
         self.view_id = view_id
         self.db_session = db_session
         self.caller = caller
+
+        self.dtable_server_api = DTableServerAPI(caller, self.dtable_uuid, get_inner_dtable_server_url())
 
         self._dtable_metadata = None
 
@@ -164,12 +166,10 @@ class BaseContext:
     def dtable_metadata(self):
         if self._dtable_metadata:
             return self._dtable_metadata
-        url = get_inner_dtable_server_url().strip('/') + '/api/v1/dtables/%s/metadata/' % str(UUID(self.dtable_uuid))
-        try:
-            resp = requests.get(url, headers=self.headers)
-            return resp.json()['metadata']
-        except:
-            raise ContextException()
+        self._dtable_metadata = self.dtable_server_api.get_metadata()
+        if not self._dtable_metadata:
+            raise ContextInvalid('get metadata error')
+        return self._dtable_metadata
 
     @property
     def table(self):
@@ -178,8 +178,10 @@ class BaseContext:
         for table in self.dtable_metadata['tables']:
             if table['_id'] == self.table_id:
                 self._table = table
-                return self._table
-        return None
+                break
+        if not self._table:
+            raise ContextInvalid('dtable: %s self.table: %s not found' % (self.dtable_uuid, self.table_id))
+        return self._table
 
     @property
     def view(self):
@@ -190,8 +192,10 @@ class BaseContext:
         for view in self.table['views']:
             if view['_id'] == self.view_id:
                 self._view = view
-                return self._view
-        return None
+                break
+        if not self._view:
+            raise ContextInvalid('dtable: %s self.table: %s self.view: %s not found' % (self.dtable_uuid, self.table_id, self.view_id))
+        return self._view
 
     @property
     def can_run_python(self):
@@ -244,23 +248,20 @@ class BaseContext:
         return temp_api_token
 
     def get_converted_row(self, table_id, row_id):
-        url = get_inner_dtable_server_url().strip('/') + '/api/v1/dtables/%(dtable_uuid)s/rows/%(row_id)s/?from=dtable_events' % {
-            'dtable_uuid': str(UUID(self.dtable_uuid)),
-            'row_id': row_id
-        }
-        params = {
-            'table_id': table_id,
-            'convert_link_id': True
-        }
+        table = self.get_table_by_id(table_id)
+        logger.debug('table_id: %s table_name: %s row_id: %s', table and table['name'], table_id, row_id)
+        if not table:
+            logger.error('dtable: %s table: %s not found', self.dtable_uuid, table_id)
+            return None
         try:
-            resp = requests.get(url, params=params, headers=self.headers)
-            if resp.status_code != 200:
-                logger.error('request dtable: %s table: %s row: %s error status code: %s', self.dtable_uuid, table_id, row_id, resp.status_code)
+            converted_row = self.dtable_server_api.get_row(table['name'], row_id)
+            if not converted_row:
+                logger.error('dtable: %s table: %s row: %s not found or parse error', self.dtable_uuid, table_id, row_id)
                 return None
         except Exception as e:
-            logger.error('request dtable: %s table: %s row: %s error: %s', self.dtable_uuid, table_id, row_id, e)
+            logger.error('dtable: %s table: %s row: %s error: %s', self.dtable_uuid, table_id, row_id, e)
             return None
-        return resp.json()
+        return converted_row
 
 
 class ActionInvalid(Exception):
@@ -281,6 +282,7 @@ class BaseAction:
 
     def __init__(self, context: BaseContext):
         self.context = context
+        self.table = self.context.table
 
     def generate_real_msg(self, msg, converted_row):
         if not converted_row:
@@ -295,9 +297,9 @@ class BaseAction:
     def batch_generate_real_msgs(self, msg, converted_rows):
         return [self.generate_real_msg(msg, converted_row) for converted_row in converted_rows]
 
-    def generate_filter_updates(self, add_or_updates):
+    def generate_filter_updates(self, add_or_updates, table):
         filter_updates = {}
-        for col in self.context.table['columns']:
+        for col in table['columns']:
             if col['type'] not in self.VALID_COLUMN_TYPES:
                 continue
             col_name = col['name']
@@ -547,19 +549,11 @@ class AddRowAction(BaseAction):
         super().__init__(context)
         if not new_row:
             raise ActionInvalid('new_row invalid')
-        self.add_url = self.ADD_ROW_URL_FORMAT % {'dtable_uuid': str(UUID(self.context.dtable_uuid))}
-        self.row_data = {
-            'row': {},
-            'table_name': self.context.table['name']
-        }
-        self.row_data['row'] = self.generate_filter_updates(new_row)
+        self.row = self.generate_filter_updates(new_row, self.context.table)
 
     def do_action(self):
-        logger.info('add self.row_data: %s', self.row_data)
         try:
-            resp = requests.post(self.add_url, headers=self.context.headers, json=self.row_data)
-            if resp.status_code != 200:
-                logger.error('add row dtable: %s error status code: %s', self.context.dtable_uuid, resp.status_code)
+            self.context.dtable_server_api.append_row(self.table['name'], self.row)
         except Exception as e:
             logger.error('add row dtable: %s error: %s', self.context.dtable_uuid, e)
 
@@ -586,24 +580,17 @@ class UpdateAction(BaseAction):
     def __init__(self, context: BaseContext, updates, row_id):
         super().__init__(context)
         self.update_url = self.UPDATE_ROW_URL_FORMAT % {'dtable_uuid': str(UUID(self.context.dtable_uuid))}
-        self.row_data = {
-            'row': {},
-            'table_name': self.context.table['name'],
-            'row_id': row_id
-        }
-        self.row_data['row'] = self.generate_filter_updates(updates)
+        self.row_id = row_id
+        self.row_data = self.generate_filter_updates(updates, self.context.table)
 
     def do_action(self):
-        logger.info('update self.row_data: %s', self.row_data)
-        if not self.row_data['row']:
+        logger.debug('update dtable: %s row_id: %s self.row_data: %s', self.context.dtable_uuid, self.row_id, self.row_data)
+        if not self.row_data:
             return
         try:
-            resp = requests.put(self.update_url, headers=self.context.headers, json=self.row_data)
-            if resp.status_code != 200:
-                logger.error('update row dtable: %s error status code: %s', self.context.dtable_uuid, resp.status_code)
+            self.context.dtable_server_api.update_row(self.table['name'], self.row_id, self.row_data)
         except Exception as e:
-            logger.error('update row dtable: %s error: %s', self.context.dtable_uuid, e)
-
+            logger.error('update dtable: %s error: %s', self.context.dtable_uuid, e)
 
 class LockRecordAction(BaseAction):
 
@@ -617,12 +604,9 @@ class LockRecordAction(BaseAction):
         if not row_id and not all(filters, filter_conjunction):
             raise ActionInvalid('row_id or (filters, filter_conjunction) invalid')
         self.lock_url = self.LOCK_URL_FORMAT % {'dtable_uuid': str(UUID(self.context.dtable_uuid))}
-        self.update_data = {
-            'table_name': self.context.table['name'],
-            'row_ids': []
-        }
+        self.row_ids = []
         if row_id:
-            self.update_data['row_ids'].append(row_id)
+            self.row_ids.append(row_id)
         else:
             view_filters = self.context.view.get('filters', [])
             view_filter_conjunction = self.context.view.get('filter_conjunction', 'And')
@@ -638,35 +622,31 @@ class LockRecordAction(BaseAction):
                     'filters': condition_filters,
                     'filter_conjunction': filter_conjunction
                 })
-            filter_url = self.FILTER_ROWS_URL_FORMAT % {'dtable_uuid': str(UUID(self.context.dtable_uuid))}
             data = {
                 'table_id': self.context.table_id,
                 'filter_conditions': {
                     'filter_groups': filter_groups,
-                    'group_conjunction': 'And',
-                    'sorts': [
-                        {'column_key': '_mtime', 'sort_type': 'down'}
-                    ]
+                    'group_conjunction': 'And'
                 },
                 'limit': 500
             }
             try:
-                resp = requests.post(filter_url, headers=self.context.headers, json=data)
-                if resp.status_code == 200:
-                    rows_data = resp.json().get('rows', [])
-                    self.update_data['row_ids'].extend([row['_id'] for row in rows_data])
-                else:
-                    logger.error('filter dtable: %s table: %s data: %s error status code: %s', self.context.dtable_uuid, self.context.table_id, data, resp.status_code)
+                response = self.context.dtable_server_api.internal_filter_rows(data)
+                rows_data = response['rows']
+                logger.debug('Number of locking dtable row: %s, dtable_uuid: %s, details: %s' % (
+                    len(rows_data),
+                    self.context.dtable_uuid,
+                    json.dumps(data)
+                ))
+                self.row_ids.extend([row['_id'] for row in rows_data])
             except Exception as e:
                 logger.error('filter dtable: %s table: %s data: %s error: %s', self.context.dtable_uuid, self.context.table_id, data, e)
 
     def do_action(self):
-        if not self.update_data['row_ids']:
+        if not self.row_ids:
             return
         try:
-            resp = requests.put(self.lock_url, headers=self.context.headers, json=self.update_data)
-            if resp.status_code != 200:
-                logger.error('lock dtable: %s table: %s rows error status code: %s', self.context.dtable_uuid, self.context.table_id, resp.status_code)
+            self.context.dtable_server_api.lock_rows(self.table['name'], self.row_ids)
         except Exception as e:
             logger.error('lock dtable: %s table: %s rows error: %s', self.context.dtable_uuid, self.context.table_id, e)
 
@@ -702,21 +682,19 @@ class LinkRecordsAction(BaseAction):
                 'table_id': linked_table_id,
                 'filter_conditions': {
                     'filter_groups': filter_groups,
-                    'group_conjunction': 'And',
-                    'sorts': [
-                        {'column_key': '_mtime', 'sort_type': 'down'}
-                    ]
+                    'group_conjunction': 'And'
                 },
                 'limit': 500
             }
-            filter_url = self.FILTER_ROWS_URL_FORMAT % {'dtable_uuid': str(UUID(self.context.dtable_uuid))}
             try:
-                resp = requests.post(filter_url, headers=self.context.headers, json=json_data)
-                if resp.status_code != 200:
-                    logger.error('filter dtable: %s data: %s error status code: %s', self.context.dtable_uuid, json_data, resp.status_code)
-                else:
-                    rows = resp.json()['rows']
-                    self.linked_table_row_ids.extend([row['_id'] for row in rows])
+                response = self.context.dtable_server_api.internal_filter_rows(json_data)
+                rows_data = response['rows']
+                logger.debug('Number of dtable link records filter rows: %s, dtable_uuid: %s, details: %s' % (
+                    len(rows_data),
+                    self.context.dtable_uuid,
+                    json.dumps(json_data)
+                ))
+                self.linked_table_row_ids.extend([row['_id'] for row in rows_data])
             except Exception as e:
                 logger.error('filter dtable: %s data: %s error: %s', self.context.dtable_uuid, json_data, e)
 
@@ -768,19 +746,9 @@ class LinkRecordsAction(BaseAction):
     def do_action(self):
         if not self.linked_table_row_ids:
             return
-        link_url = self.LINK_URL_FORMAT % {'dtable_uuid': str(UUID(self.context.dtable_uuid))}
-        data = {
-            'row_id': self.converted_row['_id'],
-            'link_id': self.link_id,
-            'table_id': self.context.table_id,
-            'other_table_id': self.linked_table_id,
-            'other_rows_ids': self.linked_table_row_ids
-        }
         try:
-            resp = requests.put(link_url, headers=self.context.headers, json=data)
-            if resp.status_code != 200:
-                logger.error('link dtable: %s error status code: %s', self.context.dtable_uuid, resp.status_code)
-        except Exception as e:
+            self.context.dtable_server_api.update_link(self.link_id, self.context.table_id, self.linked_table_id, self.converted_row['_id'], self.linked_table_row_ids)
+        except:
             logger.error('link dtable: %s error: %s', self.context.dtable_uuid, e)
 
 
@@ -888,3 +856,39 @@ class RunPythonScriptAction(BaseAction):
                 logger.error('dtable: %s run script: %s error status code: %s', self.context.dtable_uuid, self.script_name, resp.status_code)
         except Exception as e:
             logger.error('dtable: %s run script: %s error: %s', self.context.dtable_uuid, self.script_name, e)
+
+
+class AddRecordToOtherTableAction(BaseAction):
+
+    VALID_COLUMN_TYPES = [
+        ColumnTypes.TEXT,
+        ColumnTypes.DATE,
+        ColumnTypes.LONG_TEXT,
+        ColumnTypes.CHECKBOX,
+        ColumnTypes.SINGLE_SELECT,
+        ColumnTypes.MULTIPLE_SELECT,
+        ColumnTypes.URL,
+        ColumnTypes.DURATION,
+        ColumnTypes.NUMBER,
+        ColumnTypes.COLLABORATOR,
+        ColumnTypes.EMAIL,
+        ColumnTypes.RATE,
+    ]
+
+    ADD_ROW_URL_FORMAT = get_inner_dtable_server_url().strip('/') + '/api/v1/dtables/%(dtable_uuid)s/rows/?from=dtable_events'
+
+    def __init__(self, context: BaseContext, dst_table_id, new_row):
+        super().__init__(context)
+        if not new_row:
+            raise ActionInvalid('new_row invalid')
+        dst_table = self.context.get_table_by_id(dst_table_id)
+        if not dst_table:
+            raise ActionInvalid('dtable: %s table: %s not found' % (self.context.dtable_uuid, dst_table_id))
+        self.dst_table = dst_table
+        self.row = self.generate_filter_updates(new_row, dst_table)
+
+    def do_action(self):
+        try:
+            self.context.dtable_server_api.append_row(self.dst_table['name'], self.row)
+        except Exception as e:
+            logger.error('add row dtable: %s error: %s', self.context.dtable_uuid, e)
