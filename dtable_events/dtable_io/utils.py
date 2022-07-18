@@ -686,6 +686,7 @@ def get_columns_from_dtable_server(username, dtable_uuid, table_name):
 
 def get_csv_file(repo_id, file_name):
     from dtable_events.dtable_io import dtable_io_logger
+    import chardet
 
     file_path = EXCEL_DIR_PATH + file_name + '.csv'
     obj_id = seafile_api.get_file_id_by_path(repo_id, file_path)
@@ -693,12 +694,18 @@ def get_csv_file(repo_id, file_name):
         repo_id, obj_id, 'download', '', use_onetime=True
     )
     url = gen_inner_file_get_url(token, file_name + '.csv')
-    content = requests.get(url).content.decode('utf-8-sig')
+    content = requests.get(url).content
+
+    encoding = chardet.detect(content)['encoding']
+    if encoding:
+        content = content.decode(encoding)
+    else:
+        raise Exception('failed to decode file: %s' % file_name)
 
     file_size = sys.getsizeof(content)
     dtable_io_logger.info('csv file size: %d KB' % (file_size >> 10))
-    from io import StringIO
-    return StringIO(content)
+
+    return io.StringIO(content)
 
 
 def get_rows_from_dtable_server(username, dtable_uuid, table_name):
