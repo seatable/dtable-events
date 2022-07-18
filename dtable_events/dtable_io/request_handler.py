@@ -45,13 +45,14 @@ def add_export_task():
 
     username = request.args.get('username')
     repo_id = request.args.get('repo_id')
+    workspace_id = request.args.get('workspace_id')
     table_name = request.args.get('table_name')
     dtable_uuid = request.args.get('dtable_uuid')
     ignore_asset = parse_bool(request.args.get('ignore_asset', default=False))
 
     try:
         task_id = task_manager.add_export_task(
-            username, repo_id, dtable_uuid, table_name, ignore_asset)
+            username, repo_id, workspace_id, dtable_uuid, table_name, ignore_asset)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))

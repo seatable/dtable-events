@@ -35,7 +35,7 @@ def clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path):
     if os.path.exists(tmp_zip_path):
         os.remove(tmp_zip_path)
 
-def get_dtable_export_content(username, repo_id, dtable_uuid, asset_dir_id, config):
+def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asset_dir_id, config):
     """
     1. prepare file content at /tmp/dtable-io/<dtable_id>/dtable_asset/...
     2. make zip file
@@ -62,7 +62,7 @@ def get_dtable_export_content(username, repo_id, dtable_uuid, asset_dir_id, conf
     # 1. create 'content.json' from 'xxx.dtable'
     dtable_io_logger.info('Create content.json file.')
     try:
-        prepare_dtable_json_from_memory(dtable_uuid, username)
+        prepare_dtable_json_from_memory(workspace_id, dtable_uuid, username)
     except Exception as e:
         dtable_io_logger.error('prepare dtable json failed. ERROR: {}'.format(e))
         raise Exception('prepare dtable json failed. ERROR: {}'.format(e))
