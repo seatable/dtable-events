@@ -381,8 +381,8 @@ def parse_dtable_csv(repo_id, dtable_name):
     max_row = len(csv_rows)
     max_column = len(csv_head)
 
-    if max_row > 10000:
-        max_row = 10000
+    if max_row > 50000:
+        max_row = 50000
     if max_column > 500:
         max_column = 500
 
@@ -816,8 +816,8 @@ def parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name):
         'parse csv: %s, rows: %d, columns: %d' % (file_name, csv_row_num, csv_column_num))
 
     max_row = csv_row_num
-    if csv_row_num > 10000:
-        max_row = 10000  # rows limit
+    if csv_row_num > 50000:
+        max_row = 50000  # rows limit
 
     dtable_io_logger.info(
         'got table: %s, rows: %d, columns: %d' % (file_name, len(rows), max_column))
