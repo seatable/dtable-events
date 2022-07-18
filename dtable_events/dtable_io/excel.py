@@ -208,6 +208,10 @@ def parse_column_type(value_list):
             type_list.append(column_type)
 
         max_column_type = max(type_list, key=type_list.count) if type_list else 'text'
+
+        if max_column_type == 'number' and len(set(type_list)) != 1:
+            max_column_type = 'text'
+
         column_data = None
         if max_column_type == 'multiple-select':
             multiple_list = []
