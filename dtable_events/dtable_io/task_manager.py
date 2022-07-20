@@ -1,11 +1,55 @@
-import time
+import logging
 import os
 import queue
+import sys
 import threading
+import time
 from threading import Lock
 
 
 from seaserv import seafile_api
+
+
+central_conf_dir = os.environ.get('SEAFILE_CENTRAL_CONF_DIR', '')
+dtable_web_service_url = "http://127.0.0.1:8000"
+dtable_server_url = "http://127.0.0.1:5000"
+if central_conf_dir:
+    try:
+        if os.path.exists(central_conf_dir):
+            sys.path.insert(0, central_conf_dir)
+            import dtable_web_settings as seahub_settings
+            DTABLE_WEB_SERVICE_URL = getattr(seahub_settings, 'DTABLE_WEB_SERVICE_URL')
+            DTABLE_PRIVATE_KEY = getattr(seahub_settings, 'DTABLE_PRIVATE_KEY')
+            DTABLE_SERVER_URL = getattr(seahub_settings, 'DTABLE_SERVER_URL')
+            ENABLE_DTABLE_SERVER_CLUSTER = getattr(seahub_settings, 'ENABLE_DTABLE_SERVER_CLUSTER', False)
+            DTABLE_PROXY_SERVER_URL = getattr(seahub_settings, 'DTABLE_PROXY_SERVER_URL', '')
+            SESSION_COOKIE_NAME = getattr(seahub_settings, 'SESSION_COOKIE_NAME', 'sessionid')
+            dtable_web_service_url = DTABLE_WEB_SERVICE_URL
+            dtable_private_key = DTABLE_PRIVATE_KEY
+            dtable_server_url = DTABLE_SERVER_URL
+            enable_dtable_server_cluster = ENABLE_DTABLE_SERVER_CLUSTER
+            dtable_proxy_server_url = DTABLE_PROXY_SERVER_URL
+            session_cookie_name = SESSION_COOKIE_NAME
+    except ImportError:
+        dtable_web_seahub_dir = os.path.join(os.environ.get('DTABLE_WEB_DIR', ''), 'seahub')
+        if os.path.exists(dtable_web_seahub_dir):
+            sys.path.insert(0, dtable_web_seahub_dir)
+            import local_settings as seahub_settings
+            DTABLE_WEB_SERVICE_URL = getattr(seahub_settings, 'DTABLE_WEB_SERVICE_URL')
+            DTABLE_PRIVATE_KEY = getattr(seahub_settings, 'DTABLE_PRIVATE_KEY')
+            DTABLE_SERVER_URL = getattr(seahub_settings, 'DTABLE_SERVER_URL')
+            ENABLE_DTABLE_SERVER_CLUSTER = getattr(seahub_settings, 'ENABLE_DTABLE_SERVER_CLUSTER', False)
+            DTABLE_PROXY_SERVER_URL = getattr(seahub_settings, 'DTABLE_PROXY_SERVER_URL', '')
+            SESSION_COOKIE_NAME = getattr(seahub_settings, 'SESSION_COOKIE_NAME', 'sessionid')
+            dtable_web_service_url = DTABLE_WEB_SERVICE_URL
+            dtable_private_key = DTABLE_PRIVATE_KEY 
+            dtable_server_url = DTABLE_SERVER_URL
+            enable_dtable_server_cluster = ENABLE_DTABLE_SERVER_CLUSTER
+            dtable_proxy_server_url = DTABLE_PROXY_SERVER_URL
+            session_cookie_name = SESSION_COOKIE_NAME
+    except Exception as e:
+        logging.error(f'import settings from SEAFILE_CENTRAL_CONF_DIR/dtable_web_settings.py failed {e}')
+        raise RuntimeError("Can not import dtable_web settings: %s" % e)
 
 
 class TaskManager(object):
@@ -13,25 +57,25 @@ class TaskManager(object):
     def __init__(self):
         self.tasks_map = {}
         self.tasks_queue = queue.Queue(10)
-        self.conf = None
         self.config = None
         self.current_task_info = {}
         self.threads = []
         self.dataset_sync_ids = set()
         self.dataset_sync_ids_lock = Lock()
-
-    def init(self, workers, dtable_private_key, dtable_web_service_url, file_server_port, dtable_server_url, enable_dtable_server_cluster, dtable_proxy_server_url, io_task_timeout, session_cookie_name, config):
         self.conf = {
             'dtable_private_key': dtable_private_key,
             'dtable_web_service_url': dtable_web_service_url,
-            'file_server_port': file_server_port,
             'dtable_server_url': dtable_server_url,
             'enable_dtable_server_cluster': enable_dtable_server_cluster,
             'dtable_proxy_server_url': dtable_proxy_server_url,
-            'io_task_timeout': io_task_timeout,
-            'workers': workers,
             'session_cookie_name': session_cookie_name
         }
+
+    def init(self, workers, file_server_port, io_task_timeout, config):
+        self.conf['file_server_port'] = file_server_port
+        self.conf['io_task_timeout'] = io_task_timeout
+        self.conf['workers'] = workers
+
         self.config = config
 
     def is_valid_task_id(self, task_id):
