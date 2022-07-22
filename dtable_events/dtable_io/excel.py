@@ -283,6 +283,7 @@ def parse_excel(repo_id, dtable_name, custom=False):
         if not sheet_rows:
             continue
 
+        # the sheet has some rows, but sheet.max_row maybe get None
         max_row = sheet.max_row if isinstance(sheet.max_row, int) else len(sheet_rows)
         max_column = sheet.max_column if isinstance(sheet.max_column, int) else len(sheet_rows[0])
         if not max_row or not max_row:
@@ -537,6 +538,7 @@ def parse_append_excel_csv_upload_file_to_json(repo_id, file_name, username, dta
             upload_excel_json_file(repo_id, file_name, content)
             return
 
+        # the sheet has some rows, but sheet.max_row maybe get None
         max_row = sheet.max_row if isinstance(sheet.max_row, int) else len(sheet_rows)
         max_column = sheet.max_column if isinstance(sheet.max_column, int) else len(sheet_rows[0])
 
@@ -730,6 +732,7 @@ def parse_update_excel_file(repo_id, file_name, username, dtable_uuid, table_nam
         upload_excel_json_file(repo_id, file_name, content)
         return
 
+    # the sheet has some rows, but sheet.max_row maybe get None
     max_row = sheet.max_row if isinstance(sheet.max_row, int) else len(sheet_rows)
     max_column = sheet.max_column if isinstance(sheet.max_column, int) else len(sheet_rows[0])
 
