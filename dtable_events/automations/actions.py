@@ -5,6 +5,7 @@ import time
 import os
 from urllib import parse
 from uuid import UUID
+from copy import deepcopy
 from datetime import datetime, date, timedelta
 
 import jwt
@@ -12,6 +13,7 @@ import requests
 
 from dtable_events.automations.models import BoundThirdPartyAccounts
 from dtable_events.cache import redis_cache
+from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg, batch_send_email_msg
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, \
     SEATABLE_FAAS_AUTH_TOKEN, SEATABLE_FAAS_URL
 from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg
@@ -55,6 +57,46 @@ def get_third_party_account(session, account_id):
 def email2list(email_str, split_pattern='[,，]'):
     email_list = [value.strip() for value in re.split(split_pattern, email_str) if value.strip()]
     return email_list
+
+
+def check_row_conditions(trigger, auto_rule):
+    filters = trigger.get('filters', [])
+    filter_conjunction = trigger.get('filter_conjunction', 'And')
+    table_id = auto_rule.table_id
+    view_info = auto_rule.view_info
+    view_filters = view_info.get('filters', [])
+    view_filter_conjunction = view_info.get('filter_conjunction', 'And')
+    filter_groups = []
+
+    if view_filters:
+        filter_groups.append({'filters': view_filters, 'filter_conjunction': view_filter_conjunction})
+
+    if filters:
+        # remove the duplicate filter which may already exist in view filter
+        trigger_filters = [trigger_filter for trigger_filter in filters if trigger_filter not in view_filters]
+        if trigger_filters:
+            filter_groups.append({'filters': trigger_filters, 'filter_conjunction': filter_conjunction})
+
+    json_data = {
+        'table_id': table_id,
+        'filter_conditions': {
+            'filter_groups':filter_groups,
+            'group_conjunction': 'And'
+        },
+        'limit': 500
+    }
+    try:
+        response_data = auto_rule.dtable_server_api.internal_filter_rows(json_data)
+        rows_data = response_data.get('rows')
+        logger.debug('Number of filter rows by auto-rules: %s, dtable_uuid: %s, details: %s' % (
+            len(rows_data),
+            auto_rule.dtable_uuid,
+            json.dumps(json_data)
+        ))
+        return rows_data or []
+    except Exception as e:
+        logger.error('get dtable: %s ,filter rows, error: %s', auto_rule.dtable_uuid, e)
+        return []
 
 
 class BaseAction:
@@ -267,7 +309,7 @@ class LockRowAction(BaseAction):
             self.update_data['row_ids'].append(row_id)
 
         if self.auto_rule.run_condition in (PER_DAY, PER_WEEK, PER_MONTH):
-            rows_data = self._check_row_conditions()
+            rows_data = check_row_conditions(self.trigger, self.auto_rule)
             for row in rows_data:
                 self.update_data['row_ids'].append(row.get('_id'))
 
@@ -505,13 +547,68 @@ class NotifyAction(BaseAction):
         except Exception as e:
             logger.error('send users: %s notifications error: %s', e)
 
+    def condition_cron_notify(self):
+        table_id, view_id = self.auto_rule.table_id, self.auto_rule.view_id
+        dtable_uuid = self.auto_rule.dtable_uuid
+
+        rows_data = check_row_conditions(self.auto_rule.trigger, self.auto_rule)[:50]
+        col_key_dict = {col.get('key'): col for col in self.auto_rule.view_columns}
+
+        user_msg_list = []
+        for row in rows_data:
+            converted_row = {col_key_dict.get(key).get('name') if col_key_dict.get(key) else key:
+                             self.parse_column_value(col_key_dict.get(key), row.get(key)) if col_key_dict.get(key) else row.get(key)
+                             for key in row}
+            msg = self.msg
+            if self.column_blanks:
+                msg = self._fill_msg_blanks(converted_row)
+
+            detail = {
+                'table_id': table_id,
+                'view_id': view_id,
+                'condition': self.auto_rule.trigger.get('condition'),
+                'rule_id': self.auto_rule.rule_id,
+                'rule_name': self.auto_rule.rule_name,
+                'msg': msg,
+                'row_id_list': [converted_row['_id']],
+            }
+
+            users = self.users
+            if self.users_column_key:
+                user_column = self.get_user_column_by_key()
+                if user_column:
+                    users_column_name = user_column.get('name')
+                    users_from_column = converted_row.get(users_column_name, [])
+                    if not users_from_column:
+                        users_from_column = []
+                    if not isinstance(users_from_column, list):
+                        users_from_column = [users_from_column, ]
+                    users = list(set(self.users + users_from_column))
+                else:
+                    logger.warning('automation rule: %s notify action user column: %s invalid', self.auto_rule.rule_id, self.users_column_key)
+            for user in users:
+                if not self.is_valid_username(user):
+                    continue
+                user_msg_list.append({
+                    'to_user': user,
+                    'msg_type': 'notification_rules',
+                    'detail': detail,
+                    })
+        try:
+            send_notification(dtable_uuid, user_msg_list, self.auto_rule.access_token)
+        except Exception as e:
+            logger.error('send users: %s notifications error: %s', e)
+
     def do_action(self):
         if self.auto_rule.run_condition == PER_UPDATE:
             self.per_update_notify()
-            self.auto_rule.set_done_actions()
         elif self.auto_rule.run_condition in [PER_DAY, PER_WEEK, PER_MONTH]:
-            self.cron_notify()
-            self.auto_rule.set_done_actions()
+            if self.auto_rule.trigger.get('condition') == CONDITION_PERIODICALLY_BY_CONDITION:
+                self.condition_cron_notify()
+            else:
+                self.cron_notify()
+        self.auto_rule.set_done_actions()
+
 
 class SendWechatAction(BaseAction):
 
@@ -528,7 +625,6 @@ class SendWechatAction(BaseAction):
         self.col_name_dict = {}
 
         self._init_notify(msg)
-
 
     def _init_notify(self, msg):
         account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id)
@@ -561,15 +657,34 @@ class SendWechatAction(BaseAction):
         except Exception as e:
             logger.error('send wechat error: %s', e)
 
+    def condition_cron_notify(self):
+        rows_data = check_row_conditions(self.auto_rule.trigger, self.auto_rule)[:20]
+        col_key_dict = {col.get('key'): col for col in self.auto_rule.view_columns}
+
+        for row in rows_data:
+            converted_row = {col_key_dict.get(key).get('name') if col_key_dict.get(key) else key:
+                             self.parse_column_value(col_key_dict.get(key), row.get(key)) if col_key_dict.get(key) else row.get(key)
+                             for key in row}
+            msg = self.msg
+            if self.column_blanks:
+                msg = self._fill_msg_blanks(converted_row)
+            try:
+                send_wechat_msg(self.webhook_url, msg, self.msg_type)
+                time.sleep(0.01)
+            except Exception as e:
+                logger.error('send wechat error: %s', e)
+
     def do_action(self):
         if not self.auto_rule.current_valid:
             return
         if self.auto_rule.run_condition == PER_UPDATE:
             self.per_update_notify()
-            self.auto_rule.set_done_actions()
         elif self.auto_rule.run_condition in [PER_DAY, PER_WEEK]:
-            self.cron_notify()
-            self.auto_rule.set_done_actions()
+            if self.auto_rule.trigger.get('condition') == CONDITION_PERIODICALLY_BY_CONDITION:
+                self.condition_cron_notify()
+            else:
+                self.cron_notify()
+        self.auto_rule.set_done_actions()
 
 
 class SendDingtalkAction(BaseAction):
@@ -588,7 +703,6 @@ class SendDingtalkAction(BaseAction):
         self.col_name_dict = {}
 
         self._init_notify(msg)
-
 
     def _init_notify(self, msg):
         account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id)
@@ -613,27 +727,45 @@ class SendDingtalkAction(BaseAction):
         try:
             send_dingtalk_msg(self.webhook_url, msg, self.msg_type, self.msg_title)
         except Exception as e:
-            logger.error('send wechat error: %s', e)
+            logger.error('send dingtalk error: %s', e)
 
     def cron_notify(self):
         try:
             send_dingtalk_msg(self.webhook_url, self.msg, self.msg_type, self.msg_title)
         except Exception as e:
-            logger.error('send wechat error: %s', e)
+            logger.error('send dingtalk error: %s', e)
+
+    def condition_cron_notify(self):
+        rows_data = check_row_conditions(self.auto_rule.trigger, self.auto_rule)[:20]
+        col_key_dict = {col.get('key'): col for col in self.auto_rule.view_columns}
+
+        for row in rows_data:
+            converted_row = {col_key_dict.get(key).get('name') if col_key_dict.get(key) else key:
+                             self.parse_column_value(col_key_dict.get(key), row.get(key)) if col_key_dict.get(key) else row.get(key)
+                             for key in row}
+            msg = self.msg
+            if self.column_blanks:
+                msg = self._fill_msg_blanks(converted_row)
+            try:
+                send_dingtalk_msg(self.webhook_url, msg, self.msg_type, self.msg_title)
+                time.sleep(0.01)
+            except Exception as e:
+                logger.error('send dingtalk error: %s', e)
 
     def do_action(self):
         if not self.auto_rule.current_valid:
             return
         if self.auto_rule.run_condition == PER_UPDATE:
             self.per_update_notify()
-            self.auto_rule.set_done_actions()
         elif self.auto_rule.run_condition in [PER_DAY, PER_WEEK]:
-            self.cron_notify()
-            self.auto_rule.set_done_actions()
+            if self.auto_rule.trigger.get('condition') == CONDITION_PERIODICALLY_BY_CONDITION:
+                self.condition_cron_notify()
+            else:
+                self.cron_notify()
+        self.auto_rule.set_done_actions()
 
 
 class SendEmailAction(BaseAction):
-
 
     def is_valid_email(self, email):
         """A heavy email format validation.
@@ -656,7 +788,6 @@ class SendEmailAction(BaseAction):
 
         # auth info
         self.auth_info = {}
-
 
         self.column_blanks = []
         self.column_blanks_send_to = []
@@ -709,11 +840,10 @@ class SendEmailAction(BaseAction):
             'email_host': email_host,
             'email_port': int(email_port),
             'host_user': host_user,
-            'password' : password
+            'password': password
         }
 
     def _fill_msg_blanks(self, row, text, blanks):
-
         col_name_dict = self.col_name_dict
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
         return fill_msg_blanks(text, blanks, col_name_dict, row, db_session, dtable_metadata)
@@ -755,15 +885,55 @@ class SendEmailAction(BaseAction):
         except Exception as e:
             logger.error('send email error: %s', e)
 
+    def condition_cron_notify(self):
+        rows_data = check_row_conditions(self.auto_rule.trigger, self.auto_rule)[:50]
+        col_key_dict = {col.get('key'): col for col in self.auto_rule.view_columns}
+        send_info_list = []
+        for row in rows_data:
+            converted_row = {col_key_dict.get(key).get('name') if col_key_dict.get(key) else key:
+                             self.parse_column_value(col_key_dict.get(key), row.get(key)) if col_key_dict.get(key) else row.get(key)
+                             for key in row}
+            send_info = deepcopy(self.send_info)
+            msg = send_info.get('message', '')
+            send_to_list = send_info.get('send_to', [])
+            copy_to_list = send_info.get('copy_to', [])
+            if self.column_blanks:
+                msg = self._fill_msg_blanks(converted_row, msg, self.column_blanks)
+            if self.column_blanks_send_to:
+                send_to_list = [self._fill_msg_blanks(converted_row, send_to, self.column_blanks_send_to) for send_to in send_to_list]
+            if self.column_blanks_copy_to:
+                copy_to_list = [self._fill_msg_blanks(converted_row, copy_to, self.column_blanks_copy_to) for copy_to in copy_to_list]
+            send_info.update({
+                'message': msg,
+                'send_to': [send_to for send_to in send_to_list if self.is_valid_email(send_to)],
+                'copy_to': [copy_to for copy_to in copy_to_list if self.is_valid_email(copy_to)],
+            })
+
+            send_info_list.append(send_info)
+
+        step = 10
+        for i in range(0, len(send_info_list), step):
+            try:
+                batch_send_email_msg(
+                    auth_info=self.auth_info,
+                    send_info_list=send_info_list[i: i+step],
+                    username='automation-rules',  # username send by automation rules,
+                    db_session=self.auto_rule.db_session
+                )
+            except Exception as e:
+                logger.error('batch send email error: %s', e)
+
     def do_action(self):
         if not self.auto_rule.current_valid:
             return
         if self.auto_rule.run_condition == PER_UPDATE:
             self.per_update_notify()
-            self.auto_rule.set_done_actions()
         elif self.auto_rule.run_condition in [PER_DAY, PER_WEEK]:
-            self.cron_notify()
-            self.auto_rule.set_done_actions()
+            if self.auto_rule.trigger.get('condition') == CONDITION_PERIODICALLY_BY_CONDITION:
+                self.condition_cron_notify()
+            else:
+                self.cron_notify()
+        self.auto_rule.set_done_actions()
 
 
 class RunPythonScriptAction(BaseAction):

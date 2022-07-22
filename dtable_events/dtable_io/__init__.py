@@ -5,6 +5,9 @@ import shutil
 import time
 
 import requests
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
@@ -24,7 +27,7 @@ from dtable_events.dtable_io.excel import parse_excel_csv_to_json, import_excel_
     parse_update_excel_upload_excel_to_json, parse_update_csv_upload_csv_to_json, parse_and_import_excel_csv_to_dtable, \
     parse_and_import_excel_csv_to_table, parse_and_update_file_to_table
 from dtable_events.dtable_io.task_manager import task_manager
-from dtable_events.statistics.db import save_email_sending_records
+from dtable_events.statistics.db import save_email_sending_records, batch_save_email_sending_records
 from urllib import parse
 
 dtable_io_logger = setup_logger('dtable_events_io.log')
@@ -459,11 +462,8 @@ def send_dingtalk_msg(webhook_url, msg, msg_type="text", msg_title=None):
         dtable_message_logger.info('Dingtalk sending success!')
     return result
 
-def send_email_msg(auth_info, send_info, username, config=None, db_session=None):
-    import smtplib
-    from email.mime.multipart import MIMEMultipart
-    from email.mime.text import MIMEText
 
+def send_email_msg(auth_info, send_info, username, config=None, db_session=None):
     # auth info
     email_host = auth_info.get('email_host')
     email_port = int(auth_info.get('email_port'))
@@ -541,6 +541,92 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
     finally:
         session.close()
     return result
+
+
+def batch_send_email_msg(auth_info, send_info_list, username, config=None, db_session=None):
+    """
+    for personal user of email, this function only support sending 10 emails per time
+    """
+    # auth info
+    email_host = auth_info.get('email_host')
+    email_port = int(auth_info.get('email_port'))
+    host_user = auth_info.get('host_user')
+    password = auth_info.get('password')
+
+    try:
+        smtp = smtplib.SMTP(email_host, int(email_port), timeout=30)
+    except Exception as e:
+        dtable_message_logger.warning(
+            'Email server configured failed. host: %s, port: %s, error: %s' % (email_host, email_port, e))
+        return
+
+    try:
+        smtp.starttls()
+        smtp.login(host_user, password)
+    except Exception as e:
+        dtable_message_logger.warning(
+            'Login smtp failed, host user: %s, error: %s' % (host_user, e))
+        return
+
+    send_state_list = []
+    for send_info in send_info_list:
+        success = False
+        msg = send_info.get('message', '')
+        html_msg = send_info.get('html_message', '')
+        send_to = send_info.get('send_to', [])
+        subject = send_info.get('subject', '')
+        source = send_info.get('source', '')
+        copy_to = send_info.get('copy_to', [])
+        reply_to = send_info.get('reply_to', '')
+        file_download_urls = send_info.get('file_download_urls', None)
+
+        if not msg and not html_msg:
+            dtable_message_logger.warning('Email message invalid')
+            continue
+
+        msg_obj = MIMEMultipart()
+        msg_obj['Subject'] = subject
+        msg_obj['From'] = source or host_user
+        msg_obj['To'] = ",".join(send_to)
+        msg_obj['Cc'] = copy_to and ",".join(copy_to) or ""
+        msg_obj['Reply-to'] = reply_to
+
+        if msg:
+            plain_content_body = MIMEText(msg)
+            msg_obj.attach(plain_content_body)
+
+        if html_msg:
+            html_content_body = MIMEText(html_msg, 'html')
+            msg_obj.attach(html_content_body)
+
+        if file_download_urls:
+            for file_name, file_url in file_download_urls.items():
+                response = requests.get(file_url)
+                attach_file = MIMEText(response.content, 'base64', 'utf-8')
+                attach_file["Content-Type"] = 'application/octet-stream'
+                attach_file["Content-Disposition"] = 'attachment;filename*=UTF-8\'\'' + parse.quote(file_name)
+                msg_obj.attach(attach_file)
+
+        try:
+            recevers = copy_to and send_to + copy_to or send_to
+            smtp.sendmail(host_user, recevers, msg_obj.as_string())
+            success = True
+        except Exception as e:
+            dtable_message_logger.warning('Email sending failed. email: %s, error: %s' % (host_user, e))
+        else:
+            dtable_message_logger.info('Email sending success!')
+        send_state_list.append(success)
+        time.sleep(0.5)
+
+    smtp.quit()
+
+    session = db_session or init_db_session_class(config)()
+    try:
+        batch_save_email_sending_records(session, username, email_host, send_state_list)
+    except Exception as e:
+        dtable_message_logger.error('Batch save email sending log error: %s' % e)
+    finally:
+        session.close()
 
 
 def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token, session_id):

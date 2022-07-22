@@ -74,6 +74,12 @@ def save_email_sending_records(session, username, host, success):
     session.add(new_log)
     session.commit()
 
+def batch_save_email_sending_records(session, username, host, send_state_list):
+    timestamp = datetime.utcnow()
+    email_log_list = [EmailSendingLog(username, timestamp, host, send_state) for send_state in send_state_list]
+    session.bulk_save_objects(email_log_list)
+    session.commit()
+
 def get_email_sending_logs(session, start, end):
     if start < 0:
         logger.error('start must be non-negative')
