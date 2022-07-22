@@ -275,16 +275,22 @@ def parse_excel(repo_id, dtable_name, custom=False):
     tables = []
     wb = load_workbook(excel_file, read_only=True, data_only=True)
     for sheet in wb:
-        if sheet.max_row is None or sheet.max_column is None:
-            continue
-        dtable_io_logger.info(
-            'parse sheet: %s, rows: %d, columns: %d' % (sheet.title, sheet.max_row, sheet.max_column))
         try:
             sheet_rows = list(sheet.rows)
         except Exception as e:
             raise Exception('Excel format error')
-        max_row = len(sheet_rows)
-        max_column = sheet.max_column
+
+        if not sheet_rows:
+            continue
+
+        max_row = sheet.max_row if isinstance(sheet.max_row, int) else len(sheet_rows)
+        max_column = sheet.max_column if isinstance(sheet.max_column, int) else len(sheet_rows[0])
+        if not max_row or not max_row:
+            continue
+
+        dtable_io_logger.info(
+            'parse sheet: %s, rows: %d, columns: %d' % (sheet.title, max_row, max_row))
+
         if max_row > 50000:
             max_row = 50000  # rows limit
         if max_column > 500:
@@ -515,7 +521,8 @@ def parse_append_excel_csv_upload_file_to_json(repo_id, file_name, username, dta
         sheet = wb.get_sheet_by_name(wb.sheetnames[0])
         columns = get_columns_from_dtable_server(username, dtable_uuid, table_name)
 
-        if sheet.max_row is None or sheet.max_column is None:
+        sheet_rows = list(sheet.rows)
+        if not sheet_rows:
             wb.close()
             # upload empty json to file server
             table = {
@@ -530,30 +537,16 @@ def parse_append_excel_csv_upload_file_to_json(repo_id, file_name, username, dta
             upload_excel_json_file(repo_id, file_name, content)
             return
 
-        dtable_io_logger.info(
-            'parse sheet: %s, rows: %d, columns: %d' % (sheet.title, sheet.max_row, sheet.max_column))
+        max_row = sheet.max_row if isinstance(sheet.max_row, int) else len(sheet_rows)
+        max_column = sheet.max_column if isinstance(sheet.max_column, int) else len(sheet_rows[0])
 
-        sheet_rows = list(sheet.rows)
-        max_row = len(sheet_rows)
-        max_column = sheet.max_column
+        dtable_io_logger.info(
+            'parse sheet: %s, rows: %d, columns: %d' % (sheet.title, max_row, max_column))
+
         if max_row > 50000:
             max_row = 50000  # rows limit
         if max_column > 500:
             max_column = 500  # columns limit
-        if max_row == 0:
-            wb.close()
-            # upload empty json to file server
-            table = {
-                'name': table_name,
-                'rows': [],
-                'columns': columns,
-                'max_row': max_row,
-                'max_column': max_column,
-            }
-            tables.append(table)
-            content = json.dumps(tables)
-            upload_excel_json_file(repo_id, file_name, content)
-            return
 
         if max_column > len(columns):
             max_column = len(columns)
@@ -718,31 +711,35 @@ def parse_update_excel_file(repo_id, file_name, username, dtable_uuid, table_nam
     tables = []
     wb = load_workbook(excel_file, read_only=True, data_only=True)
     sheet = wb.get_sheet_by_name(wb.sheetnames[0])
-    dtable_io_logger.info(
-        'parse sheet: %s, rows: %d, columns: %d' % (sheet.title, sheet.max_row, sheet.max_column))
 
     sheet_rows = list(sheet.rows)
     columns = get_columns_from_dtable_server(username, dtable_uuid, table_name)
-    max_row = len(sheet_rows)
-    max_column = sheet.max_column
-    if max_row > 50000:
-        max_row = 50000  # rows limit
-    if max_column > 500:
-        max_column = 500  # columns limit
-    if max_row == 0:
+
+    if not sheet_rows:
         wb.close()
         # upload empty json to file server
         table = {
             'name': table_name,
             'rows': [],
             'columns': columns,
-            'max_row': max_row,
-            'max_column': max_column,
+            'max_row': 0,
+            'max_column': 0,
         }
         tables.append(table)
         content = json.dumps(tables)
         upload_excel_json_file(repo_id, file_name, content)
         return
+
+    max_row = sheet.max_row if isinstance(sheet.max_row, int) else len(sheet_rows)
+    max_column = sheet.max_column if isinstance(sheet.max_column, int) else len(sheet_rows[0])
+
+    dtable_io_logger.info(
+        'parse sheet: %s, rows: %d, columns: %d' % (sheet.title, max_row, max_column))
+
+    if max_row > 50000:
+        max_row = 50000  # rows limit
+    if max_column > 500:
+        max_column = 500  # columns limit
 
     if max_column > len(columns):
         max_column = len(columns)
