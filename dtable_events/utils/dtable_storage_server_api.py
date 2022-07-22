@@ -55,13 +55,6 @@ class DTableStorageServerAPI(object):
                 return None
         return data
 
-    def create_empty_dtable(self, dtable_uuid):
-        dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
-        url = self.server_url + '/dtables/' + dtable_uuid
-        response = requests.put(url, timeout=TIMEOUT)
-        data = parse_response(response)
-        return data
-
     def save_dtable(self, dtable_uuid, json_string):
         dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
         url = self.server_url + '/dtables/' + dtable_uuid
