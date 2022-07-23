@@ -630,22 +630,23 @@ def delete_excel_file(username, repo_id, file_name):
     filenames = [file_name + '.xlsx', file_name + '.json']
     seafile_api.del_file(repo_id, EXCEL_DIR_PATH, json.dumps(filenames), username)
 
-def upload_excel_json_to_dtable_server(username, dtable_uuid, json_file):
+def upload_excel_json_to_dtable_server(username, dtable_uuid, json_file, lang):
     api_url = get_inner_dtable_server_url()
-    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/import-excel/?from=dtable_events'
+    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/import-excel/?from=dtable_events&lang=' + lang
     dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
     headers = {'Authorization': 'Token ' + dtable_server_access_token}
 
     files = {
         'excel_json': json_file
     }
+
     res = requests.post(url, headers=headers, files=files)
     if res.status_code != 200:
         raise ConnectionError('failed to import excel json %s %s' % (dtable_uuid, res.text))
 
-def upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, json_file):
+def upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, json_file, lang):
     api_url = get_inner_dtable_server_url()
-    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/import-excel-add-table/?from=dtable_events'
+    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/import-excel-add-table/?from=dtable_events&lang=' + lang
     dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
     headers = {'Authorization': 'Token ' + dtable_server_access_token}
 

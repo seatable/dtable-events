@@ -144,10 +144,11 @@ def add_import_excel_csv_task():
     workspace_id = request.args.get('workspace_id')
     dtable_uuid = request.args.get('dtable_uuid')
     dtable_name = request.args.get('dtable_name')
+    lang = request.args.get('lang')
 
     try:
         task_id = task_manager.add_import_excel_csv_task(
-            username, repo_id, workspace_id, dtable_uuid, dtable_name)
+            username, repo_id, workspace_id, dtable_uuid, dtable_name, lang)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -173,10 +174,11 @@ def add_import_excel_csv_add_table_task():
     workspace_id = request.args.get('workspace_id')
     dtable_uuid = request.args.get('dtable_uuid')
     dtable_name = request.args.get('dtable_name')
+    lang = request.args.get('lang')
 
     try:
         task_id = task_manager.add_import_excel_csv_add_table_task(
-            username, repo_id, workspace_id, dtable_uuid, dtable_name)
+            username, repo_id, workspace_id, dtable_uuid, dtable_name, lang)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))

@@ -238,25 +238,25 @@ def parse_excel_csv(username, repo_id, workspace_id, dtable_name, file_type, cus
     else:
         dtable_io_logger.info('parse excel %s.xlsx success!' % dtable_name)
 
-def import_excel_csv(username, repo_id, workspace_id, dtable_uuid, dtable_name, config):
+def import_excel_csv(username, repo_id, workspace_id, dtable_uuid, dtable_name, lang, config):
     """
     upload excel or csv json file to dtable-server
     """
     dtable_io_logger.info('Start import excel or csv: {}.'.format(dtable_uuid))
     try:
-        import_excel_csv_by_dtable_server(username, repo_id, dtable_uuid, dtable_name)
+        import_excel_csv_by_dtable_server(username, repo_id, dtable_uuid, dtable_name, lang)
     except Exception as e:
         dtable_io_logger.error('import excel or csv failed. ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('import excel or csv %s success!' % dtable_name)
 
-def import_excel_csv_add_table(username, repo_id, workspace_id, dtable_uuid, dtable_name, config):
+def import_excel_csv_add_table(username, repo_id, workspace_id, dtable_uuid, dtable_name, lang, config):
     """
     add table, upload excel or csv json file to dtable-server
     """
     dtable_io_logger.info('Start import excel or csv add table: {}.'.format(dtable_uuid))
     try:
-        import_excel_csv_add_table_by_dtable_server(username, repo_id, dtable_uuid, dtable_name)
+        import_excel_csv_add_table_by_dtable_server(username, repo_id, dtable_uuid, dtable_name, lang)
     except Exception as e:
         dtable_io_logger.error('import excel or csv add table failed. ERROR: {}'.format(e))
     else:

@@ -471,7 +471,7 @@ def parse_excel_csv_to_json(repo_id, dtable_name, file_type, custom=False):
     upload_excel_json_file(repo_id, dtable_name, content)
 
 
-def import_excel_csv_by_dtable_server(username, repo_id, dtable_uuid, dtable_name):
+def import_excel_csv_by_dtable_server(username, repo_id, dtable_uuid, dtable_name, lang):
     from dtable_events.dtable_io.utils import get_excel_json_file, \
         upload_excel_json_to_dtable_server, delete_file
 
@@ -480,10 +480,10 @@ def import_excel_csv_by_dtable_server(username, repo_id, dtable_uuid, dtable_nam
     # delete excel、csv、json file
     delete_file(username, repo_id, dtable_name)
     # upload json file to dtable-server
-    upload_excel_json_to_dtable_server(username, dtable_uuid, json_file)
+    upload_excel_json_to_dtable_server(username, dtable_uuid, json_file, lang)
 
 
-def import_excel_csv_add_table_by_dtable_server(username, repo_id, dtable_uuid, dtable_name):
+def import_excel_csv_add_table_by_dtable_server(username, repo_id, dtable_uuid, dtable_name, lang):
     from dtable_events.dtable_io.utils import get_excel_json_file, \
         upload_excel_json_add_table_to_dtable_server, delete_file
 
@@ -492,7 +492,7 @@ def import_excel_csv_add_table_by_dtable_server(username, repo_id, dtable_uuid, 
     # delete excel、csv、json file
     delete_file(username, repo_id, dtable_name)
     # upload json file to dtable-server
-    upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, json_file)
+    upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, json_file, lang)
 
 
 def append_parsed_file_by_dtable_server(username, repo_id, dtable_uuid, file_name, table_name):
