@@ -557,10 +557,11 @@ def add_run_auto_rule_task():
     trigger = data.get('trigger')
     dtable_uuid = data.get('dtable_uuid')
     actions = data.get('actions')
+    automation_rule_id = data.get('automation_rule_id')
 
     try:
         task_id = task_manager.add_run_auto_rule_task(
-            username, org_id, dtable_uuid, run_condition, trigger, actions)
+            automation_rule_id, username, org_id, dtable_uuid, run_condition, trigger, actions)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))

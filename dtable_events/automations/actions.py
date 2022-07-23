@@ -1136,6 +1136,99 @@ class AddRecordToOtherTableAction(BaseAction):
             self.auto_rule.set_done_actions()
 
 
+class TriggerWorkflowAction(BaseAction):
+
+    VALID_COLUMN_TYPES = [
+        ColumnTypes.TEXT,
+        ColumnTypes.DATE,
+        ColumnTypes.LONG_TEXT,
+        ColumnTypes.CHECKBOX,
+        ColumnTypes.SINGLE_SELECT,
+        ColumnTypes.MULTIPLE_SELECT,
+        ColumnTypes.URL,
+        ColumnTypes.DURATION,
+        ColumnTypes.NUMBER,
+        ColumnTypes.COLLABORATOR,
+        ColumnTypes.EMAIL,
+        ColumnTypes.RATE,
+    ]
+
+    def __init__(self, auto_rule, row, token):
+        super().__init__(auto_rule, None)
+        self.row = row
+        self.row_data = {
+            'row': {}
+        }
+        self.token = token
+        self._init_updates()
+
+    def format_time_by_offset(self, offset, format_length):
+        cur_datetime = datetime.now()
+        cur_datetime_offset = cur_datetime + timedelta(days=offset)
+        if format_length == 2:
+            return cur_datetime_offset.strftime("%Y-%m-%d %H:%M")
+        if format_length == 1:
+            return cur_datetime_offset.strftime("%Y-%m-%d")
+
+    def _init_updates(self):
+        # filter columns in view and type of column is in VALID_COLUMN_TYPES
+        filtered_updates = {}
+        for col in self.auto_rule.view_columns:
+            if 'key' in col and col.get('type') in self.VALID_COLUMN_TYPES:
+                col_name = col.get('name')
+                col_type = col.get('type')
+                col_key = col.get('key')
+                if col_key in self.row.keys():
+                    if col_type == ColumnTypes.DATE:
+                        time_format = col.get('data', {}).get('format', '')
+                        format_length = len(time_format.split(" "))
+                        try:
+                            time_dict = self.row.get(col_key)
+                            if not time_dict:
+                                continue
+                            set_type = time_dict.get('set_type')
+                            if set_type == 'specific_value':
+                                time_value = time_dict.get('value')
+                                filtered_updates[col_name] = time_value
+                            elif set_type == 'relative_date':
+                                offset = time_dict.get('offset')
+                                filtered_updates[col_name] = self.format_time_by_offset(int(offset), format_length)
+                        except Exception as e:
+                            logger.error(e)
+                            filtered_updates[col_name] = self.row.get(col_key)
+                    else:
+                        filtered_updates[col_name] = self.parse_column_value(col, self.row.get(col_key))
+        self.row_data['row'] = filtered_updates
+
+    def do_action(self):
+        if not self.row_data['row']:
+            return
+
+        try:
+            logger.debug('rule: %s new workflow: %s task row data: %s', self.auto_rule.rule_id, self.token, self.row_data)
+            resp_data = self.auto_rule.dtable_server_api.append_row(self.auto_rule.table_info['name'], self.row_data['row'])
+            row_id = resp_data['_id']
+            logger.debug('rule: %s new workflow: %s task row_id: %s', self.auto_rule.rule_id, self.token, row_id)
+        except Exception as e:
+            logger.error('rule: %s submit workflow: %s append row dtable: %s, error: %s', self.auto_rule.rule_id, self.token, self.auto_rule.dtable_uuid, e)
+            return
+
+        internal_submit_workflow_url = DTABLE_WEB_SERVICE_URL.strip('/') + '/api/v2.1/workflows/%s/internal-task-submit/' % self.token
+        data = {
+            'row_id': row_id,
+            'replace': 'true',
+            'submit_from': 'Automation Rule',
+            'automation_rule_id': self.auto_rule.rule_id
+        }
+        logger.debug('trigger workflow data: %s', data)
+        try:
+            resp = requests.post(internal_submit_workflow_url, data=data)
+            if resp.status_code != 200:
+                logger.error('rule: %s row_id: %s new workflow: %s task error status code: %s content: %s', self.auto_rule.rule_id, row_id, self.token, resp.status_code, resp.content)
+        except Exception as e:
+            logger.error('submit workflow: %s row_id: %s error: %s', self.token, row_id, e)
+
+
 class RuleInvalidException(Exception):
     """
     Exception which indicates rule need to be set is_valid=Fasle
@@ -1401,6 +1494,11 @@ class AutomationRule:
                     row = action_info.get('row')
                     dst_table_id = action_info.get('dst_table_id')
                     AddRecordToOtherTableAction(self, self.data, row, dst_table_id).do_action()
+
+                elif action_info.get('type') == 'trigger_workflow':
+                    token = action_info.get('token')
+                    row = action_info.get('row')
+                    TriggerWorkflowAction(self, row, token).do_action()
 
             except RuleInvalidException as e:
                 logger.error('auto rule: %s, invalid error: %s', self.rule_id, e)
