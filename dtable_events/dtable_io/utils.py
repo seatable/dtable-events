@@ -573,6 +573,8 @@ def download_files_to_path(username, repo_id, dtable_uuid, files, path, files_ma
         file_name = os.path.basename(file)
         if files_map and files_map.get(file, None):
             file_name = files_map.get(file)
+
+        file_name = file_name.replace('/', ':')
         file_url = gen_inner_file_get_url(token, file_name)
         content = requests.get(file_url).content
         filename_by_path = os.path.join(path, file_name)
