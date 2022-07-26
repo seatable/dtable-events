@@ -327,18 +327,14 @@ def parse_excel(repo_id, dtable_name, custom=False):
 
 def parse_dtable_csv_columns(sheet_rows, max_column):
     head_row = sheet_rows[0]
-    value_rows = sheet_rows[1:]
 
     columns = []
     for index in range(max_column):
         name = head_row[index].strip()
         column_name = str(name) if name else 'Field' + str(index + 1)
-        value_list = [row[index] for row in value_rows]
-        column_type, column_data = parse_column_type(value_list)
         column = {
             'name': column_name.replace('\ufeff', '').strip(),
-            'type': column_type,
-            'data': column_data,
+            'type': 'text'
         }
         columns.append(column)
 
