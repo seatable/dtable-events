@@ -1,15 +1,14 @@
 import re
 import json
-from datetime import datetime, time
-
-from openpyxl import load_workbook
 import csv
-
 import logging
 import os
 import sys
 import openpyxl
 from openpyxl.styles import PatternFill
+from openpyxl import load_workbook
+from copy import deepcopy
+from datetime import datetime, time
 from dtable_events.utils import utc_to_tz
 from dtable_events.utils.constants import ColumnTypes
 
@@ -383,7 +382,8 @@ def parse_dtable_csv(repo_id, dtable_name):
     # parse
     csv_file = get_csv_file(repo_id, dtable_name)
     tables = []
-    csv_rows = [row for row in csv.reader(csv_file)]
+    delimiter = guess_delimiter(deepcopy(csv_file))
+    csv_rows = [row for row in csv.reader(csv_file, delimiter=delimiter)]
     csv_head = csv_rows[0]
     max_row = len(csv_rows)
     max_column = len(csv_head)
@@ -840,11 +840,25 @@ def parse_update_csv_upload_csv_to_json(repo_id, file_name, username, dtable_uui
     upload_excel_json_file(repo_id, file_name, json.dumps(content))
 
 
+def guess_delimiter(csv_file):
+    line = csv_file.readline()
+
+    if not line:
+        return ','
+    comma_count = line.count(',')
+    semicolon_count = line.count(';')
+    delimiter = comma_count >= semicolon_count and ',' or ';'
+
+    return delimiter
+
+
 def parse_csv_rows(csv_file, columns, max_column):
     from dtable_events.dtable_io import dtable_io_logger
 
     rows = []
-    csv_rows = [row for row in csv.reader(csv_file)]
+    delimiter = guess_delimiter(deepcopy(csv_file))
+    csv_rows = [row for row in csv.reader(csv_file, delimiter=delimiter)]
+
     if not csv_rows:
         return rows, 0, 0, 0
 
