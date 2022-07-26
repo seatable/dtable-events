@@ -82,12 +82,14 @@ def add_import_task():
     in_storage = parse_bool(request.args.get('in_storage'))
     can_use_automation_rules = parse_bool(request.args.get('can_use_automation_rules'))
     can_use_workflows = parse_bool(request.args.get('can_use_workflows'))
+    can_use_external_apps = parse_bool(request.args.get('can_use_external_apps'))
     owner = request.args.get('owner')
+    org_id = request.args.get('org_id')
 
     try:
         task_id = task_manager.add_import_task(
             username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage, can_use_automation_rules,
-            can_use_workflows, owner)
+            can_use_workflows, can_use_external_apps, owner, org_id)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))

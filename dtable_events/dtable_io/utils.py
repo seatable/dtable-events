@@ -259,6 +259,22 @@ def copy_src_workflows_to_json(dtable_uuid, tmp_file_path, db_session):
             fp.write(json.dumps(src_workflows_json))
 
 
+def copy_src_external_app_to_json(dtable_uuid, tmp_file_path, db_session):
+    if not db_session:
+        return
+    sql = """SELECT `app_config` FROM dtable_external_apps WHERE dtable_uuid=:dtable_uuid"""
+    src_external_apps = db_session.execute(sql, {'dtable_uuid': ''.join(dtable_uuid.split('-'))})
+    src_external_apps_json = []
+    for src_external_app in src_external_apps:
+        external_app = {
+            'app_config': src_external_app[0]
+        }
+        src_external_apps_json.append(external_app)
+    if src_external_apps_json:
+        with open(os.path.join(tmp_file_path, 'external_apps.json'), 'w+') as fp:
+            fp.write(json.dumps(src_external_apps_json))
+
+
 def convert_dtable_import_file_url(dtable_content, workspace_id, dtable_uuid):
     """ notice that this function receive a python dict and return a python dict
         json related operations are excluded
@@ -505,6 +521,22 @@ def add_a_workflow_to_db(username, workflow, workspace_id, dtable_uuid, owner, d
     db_session.commit()
 
 
+def add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, org_id):
+    sql = """INSERT INTO dtable_external_apps (`token`,`dtable_uuid`,`app_type`, `app_config`, `creator`, `created_at`, `org_id`) 
+                VALUES (:token, :dtable_uuid, :app_type, :app_config, :creator, :created_at, :org_id)"""
+
+    db_session.execute(sql, {
+        'token': str(uuid.uuid4()),
+        'dtable_uuid': ''.join(dtable_uuid.split('-')),
+        'app_type': json.loads(external_app['app_config']).get('app_type'),
+        'app_config': external_app['app_config'],
+        'creator': username,
+        'created_at': datetime.datetime.utcnow(),
+        'org_id': org_id
+        })
+    db_session.commit()
+
+
 def create_forms_from_src_dtable(workspace_id, dtable_uuid, db_session):
     if not db_session:
         return
@@ -549,6 +581,22 @@ def create_workflows_from_src_dtable(username, workspace_id, dtable_uuid, owner,
         if 'workflow_config' not in workflow:
             continue
         add_a_workflow_to_db(username, workflow, workspace_id, dtable_uuid, owner, db_session)
+
+
+def create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_id):
+    if not db_session:
+        return
+    external_apps_json_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted/', 'external_apps.json')
+    if not os.path.exists(external_apps_json_path):
+        return
+    with open(external_apps_json_path, 'r') as fp:
+        external_apps_json = fp.read()
+    external_apps = json.loads(external_apps_json)
+
+    for external_app in external_apps:
+        if 'app_config' not in external_app:
+            continue
+        add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, org_id)
 
 
 def download_files_to_path(username, repo_id, dtable_uuid, files, path, files_map=None):

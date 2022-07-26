@@ -14,7 +14,8 @@ from dtable_events.dtable_io.utils import setup_logger, \
     download_files_to_path, create_forms_from_src_dtable, copy_src_forms_to_json, \
     prepare_dtable_json_from_memory, update_page_design_static_image, \
     copy_src_auto_rules_to_json, create_auto_rules_from_src_dtable, sync_app_users_to_table, \
-    copy_src_workflows_to_json, create_workflows_from_src_dtable
+    copy_src_workflows_to_json, create_workflows_from_src_dtable, copy_src_external_app_to_json,\
+    create_external_apps_from_src_dtable
 from dtable_events.db import init_db_session_class
 from dtable_events.dtable_io.excel import parse_excel_csv_to_json, import_excel_csv_by_dtable_server, \
     append_parsed_file_by_dtable_server, parse_append_excel_csv_upload_file_to_json, \
@@ -106,6 +107,16 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
         if db_session:
             db_session.close()
 
+    # 5. copy external app
+    try:
+        copy_src_external_app_to_json(dtable_uuid, tmp_file_path, db_session)
+    except Exception as e:
+        dtable_io_logger.error('copy external apps failed. ERROR: {}'.format(e))
+        raise Exception('copy external apps failed. ERROR: {}'.format(e))
+    finally:
+        if db_session:
+            db_session.close()
+
     """
     /tmp/dtable-io/<dtable_uuid>/dtable_asset/
                                     |- asset/
@@ -126,7 +137,7 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
 
 
 def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage,
-                             can_use_automation_rules, can_use_workflows, owner, config):
+                             can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id, config):
     """
     post files at /tmp/<dtable_uuid>/dtable_zip_extracted/ to file server
     unzip django uploaded tmp file is suppose to be done in dtable-web api.
@@ -176,6 +187,16 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
             create_workflows_from_src_dtable(username, workspace_id, dtable_uuid, owner, db_session)
         except Exception as e:
             dtable_io_logger.error('create workflows failed. ERROR: {}'.format(e))
+        finally:
+            if db_session:
+                db_session.close()
+
+    if can_use_external_apps:
+        dtable_io_logger.info('create external apps from src dtable.')
+        try:
+            create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_id)
+        except Exception as e:
+            dtable_io_logger.error('create external apps failed. ERROR: {}'.format(e))
         finally:
             if db_session:
                 db_session.close()
