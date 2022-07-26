@@ -1222,7 +1222,8 @@ class TriggerWorkflowAction(BaseAction):
         }
         logger.debug('trigger workflow data: %s', data)
         try:
-            resp = requests.post(internal_submit_workflow_url, data=data)
+            header_token = 'Token ' + jwt.encode({'token': self.token}, DTABLE_PRIVATE_KEY, 'HS256')
+            resp = requests.post(internal_submit_workflow_url, data=data, headers={'Authorization': header_token})
             if resp.status_code != 200:
                 logger.error('rule: %s row_id: %s new workflow: %s task error status code: %s content: %s', self.auto_rule.rule_id, row_id, self.token, resp.status_code, resp.content)
         except Exception as e:
