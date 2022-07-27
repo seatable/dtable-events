@@ -7,33 +7,10 @@ from copy import deepcopy
 
 import requests
 from dateutil import parser
-
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils import get_inner_dtable_server_url
 
 logger = logging.getLogger(__name__)
-
-# DTABLE_WEB_DIR
-dtable_web_dir = os.environ.get('DTABLE_WEB_DIR', '')
-if not dtable_web_dir:
-    logging.critical('dtable_web_dir is not set')
-    raise RuntimeError('dtable_web_dir is not set')
-if not os.path.exists(dtable_web_dir):
-    logging.critical('dtable_web_dir %s does not exist' % dtable_web_dir)
-    raise RuntimeError('dtable_web_dir does not exist.')
-
-sys.path.insert(0, dtable_web_dir)
-
-try:
-    import seahub.settings as seahub_settings
-    DTABLE_PRIVATE_KEY = getattr(seahub_settings, 'DTABLE_PRIVATE_KEY')
-    DTABLE_SERVER_URL = getattr(seahub_settings, 'DTABLE_SERVER_URL')
-    ENABLE_DTABLE_SERVER_CLUSTER = getattr(seahub_settings, 'ENABLE_DTABLE_SERVER_CLUSTER', False)
-    DTABLE_PROXY_SERVER_URL = getattr(seahub_settings, 'DTABLE_PROXY_SERVER_URL', '')
-    SESSION_COOKIE_NAME = getattr(seahub_settings, 'SESSION_COOKIE_NAME', 'sessionid')
-except ImportError as e:
-    logger.critical("Can not import dtable_web settings: %s." % e)
-    raise RuntimeError("Can not import dtable_web settings: %s" % e)
 
 dtable_server_url = get_inner_dtable_server_url()
 

@@ -1,8 +1,46 @@
 # -*- coding: utf-8 -*-
-import logging
 import configparser
+import logging
+import os
+import sys
 
 logger = logging.getLogger(__name__)
+
+
+# DTABLE_WEB_DIR
+dtable_web_dir = os.environ.get('DTABLE_WEB_DIR', '')
+if not dtable_web_dir:
+    logging.critical('dtable_web_dir is not set')
+    raise RuntimeError('dtable_web_dir is not set')
+if not os.path.exists(dtable_web_dir):
+    logging.critical('dtable_web_dir %s does not exist' % dtable_web_dir)
+    raise RuntimeError('dtable_web_dir does not exist.')
+
+sys.path.insert(0, dtable_web_dir)
+
+try:
+    import seahub.settings as seahub_settings
+    DTABLE_WEB_SERVICE_URL = getattr(seahub_settings, 'DTABLE_WEB_SERVICE_URL')
+    DTABLE_PRIVATE_KEY = getattr(seahub_settings, 'DTABLE_PRIVATE_KEY')
+    DTABLE_SERVER_URL = getattr(seahub_settings, 'DTABLE_SERVER_URL')
+    ENABLE_DTABLE_SERVER_CLUSTER = getattr(seahub_settings, 'ENABLE_DTABLE_SERVER_CLUSTER', False)
+    DTABLE_PROXY_SERVER_URL = getattr(seahub_settings, 'DTABLE_PROXY_SERVER_URL', '')
+    FILE_SERVER_ROOT = getattr(seahub_settings, 'FILE_SERVER_ROOT', 'http://127.0.0.1:8082')
+    SEATABLE_FAAS_AUTH_TOKEN = getattr(seahub_settings, 'SEATABLE_FAAS_AUTH_TOKEN')
+    SEATABLE_FAAS_URL = getattr(seahub_settings, 'SEATABLE_FAAS_URL')
+    SECRET_KEY = getattr(seahub_settings, 'SECRET_KEY')
+    SESSION_COOKIE_NAME = getattr(seahub_settings, 'SESSION_COOKIE_NAME', 'sessionid')
+    EXPORT2EXCEL_DEFAULT_STRING = getattr(seahub_settings, 'EXPORT2EXCEL_DEFAULT_STRING', 'illegal character in excel')
+    TIME_ZONE = getattr(seahub_settings, 'TIME_ZONE', 'UTC')
+    INNER_DTABLE_DB_URL = getattr(seahub_settings, 'INNER_DTABLE_DB_URL')
+    ENABLE_WEIXIN = getattr(seahub_settings, 'ENABLE_WEIXIN', False)
+    ENABLE_WORK_WEIXIN = getattr(seahub_settings, 'ENABLE_WORK_WEIXIN', False)
+    ENABLE_DINGTALK = getattr(seahub_settings, 'ENABLE_DINGTALK', False)
+    USE_INNER_DTABLE_SERVER = getattr(seahub_settings, 'USE_INNER_DTABLE_SERVER', True)
+    INNER_DTABLE_SERVER_URL = getattr(seahub_settings, 'INNER_DTABLE_SERVER_URL', 'http://127.0.0.1:5000/')
+except Exception as e:
+    logger.critical("Can not import dtable_web settings: %s." % e)
+    raise RuntimeError("Can not import dtable_web settings: %s" % e)
 
 
 def get_config(config_file):

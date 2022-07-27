@@ -9,39 +9,11 @@ from openpyxl.styles import PatternFill
 from openpyxl import load_workbook
 from copy import deepcopy
 from datetime import datetime, time
+from dtable_events.app.config import EXPORT2EXCEL_DEFAULT_STRING, TIME_ZONE
 from dtable_events.utils import utc_to_tz
 from dtable_events.utils.constants import ColumnTypes
 
-# DTABLE_WEB_DIR
-dtable_web_dir = os.environ.get('DTABLE_WEB_DIR', '')
-if not dtable_web_dir:
-    logging.critical('dtable_web_dir is not set')
-    raise RuntimeError('dtable_web_dir is not set')
-if not os.path.exists(dtable_web_dir):
-    logging.critical('dtable_web_dir %s does not exist' % dtable_web_dir)
-    raise RuntimeError('dtable_web_dir does not exist')
-
-sys.path.insert(0, dtable_web_dir)
-try:
-    from seahub.settings import EXPORT2EXCEL_DEFAULT_STRING
-except ImportError as err:
-    EXPORT2EXCEL_DEFAULT_STRING = 'illegal character in excel'
-    logging.warning('Can not import seahub.settings: %s.' % err)
-
-# CONF DIR
-central_conf_dir, timezone = os.environ.get('SEAFILE_CENTRAL_CONF_DIR', ''), 'UTC'
-if central_conf_dir:
-    sys.path.insert(0, central_conf_dir)
-    try:
-        import dtable_web_settings
-        timezone = getattr(dtable_web_settings, 'TIME_ZONE', 'UTC')
-    except Exception as e:
-        logging.error('import dtable_web_settings error: %s', e)
-    else:
-        del dtable_web_settings
-else:
-    logging.error('no conf dir SEAFILE_CENTRAL_CONF_DIR find')
-
+timezone = TIME_ZONE
 VIRTUAL_ID_EMAIL_DOMAIN = '@auth.local'
 
 first_grouped_row_fill = PatternFill(fill_type='solid', fgColor='ffa18b')

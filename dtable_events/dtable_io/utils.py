@@ -21,6 +21,7 @@ from uuid import UUID
 from django.utils.http import urlquote
 from seaserv import seafile_api
 
+from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL
 from dtable_events.dtable_io.external_app import APP_USERS_COUMNS_TYPE_MAP, match_user_info, update_app_sync, \
     get_row_ids_for_delete, get_app_users
 from dtable_events.dtable_io.task_manager import task_manager
@@ -69,7 +70,6 @@ def gen_inner_file_upload_url(token, op, replace=False):
 
 
 def get_dtable_server_token(username, dtable_uuid):
-    DTABLE_PRIVATE_KEY = str(task_manager.conf['dtable_private_key'])
     payload = {
         'exp': int(time.time()) + 60,
         'dtable_uuid': dtable_uuid,
@@ -273,7 +273,7 @@ def convert_dtable_import_file_url(dtable_content, workspace_id, dtable_uuid):
     tables = dtable_content.get('tables', [])
 
     # handle different url in settings.py
-    dtable_web_service_url = task_manager.conf['dtable_web_service_url'].rstrip('/')
+    dtable_web_service_url = DTABLE_WEB_SERVICE_URL.rstrip('/')
 
     for table in tables:
         rows = table.get('rows', [])
@@ -772,7 +772,6 @@ def get_metadata_from_dtable_server(dtable_uuid, username, permission):
     # generate json web token
     # internal usage exp 60 seconds, username = request.user.username
 
-    DTABLE_PRIVATE_KEY = str(task_manager.conf['dtable_private_key'])
     api_url = get_inner_dtable_server_url()
     url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/metadata/?from=dtable_events'
 
@@ -794,7 +793,6 @@ def get_metadata_from_dtable_server(dtable_uuid, username, permission):
 
 
 def get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission, table_name, view_name):
-    DTABLE_PRIVATE_KEY = str(task_manager.conf['dtable_private_key'])
     api_url = get_inner_dtable_server_url()
     url = api_url.rstrip('/') + '/api/v1/internal/dtables/' + dtable_uuid + '/view-rows/?from=dtable_events'
 
@@ -879,8 +877,7 @@ def convert_db_rows(metadata, results):
 
 
 def get_related_nicknames_from_dtable(dtable_uuid, username, permission):
-    DTABLE_PRIVATE_KEY = str(task_manager.conf['dtable_private_key'])
-    url = task_manager.conf['dtable_web_service_url'].strip('/') + '/api/v2.1/dtables/%s/related-users/' % dtable_uuid
+    url = DTABLE_WEB_SERVICE_URL.strip('/') + '/api/v2.1/dtables/%s/related-users/' % dtable_uuid
 
     payload = {
         'exp': int(time.time()) + 60,
@@ -899,8 +896,7 @@ def get_related_nicknames_from_dtable(dtable_uuid, username, permission):
 
 
 def get_nicknames_from_dtable(user_id_list):
-    DTABLE_PRIVATE_KEY = str(task_manager.conf['dtable_private_key'])
-    url = task_manager.conf['dtable_web_service_url'].strip('/') + '/api/v2.1/users-common-info/'
+    url = DTABLE_WEB_SERVICE_URL.strip('/') + '/api/v2.1/users-common-info/'
 
     payload = {
         'exp': int(time.time()) + 60

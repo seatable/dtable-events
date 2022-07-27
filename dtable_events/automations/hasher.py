@@ -6,19 +6,7 @@ try:
 except ImportError:
     AES = None
 
-dtable_web_dir = os.environ.get('DTABLE_WEB_DIR', '')
-if not dtable_web_dir:
-    logging.critical('dtable_web_dir is not set')
-    raise RuntimeError('dtable_web_dir is not set')
-if not os.path.exists(dtable_web_dir):
-    logging.critical('dtable_web_dir %s does not exist' % dtable_web_dir)
-    raise RuntimeError('dtable_web_dir does not exist')
-logger = logging.getLogger(__name__)
-try:
-    import seahub.settings as seahub_settings
-except ImportError as e:
-    logger.critical("Can not import dtable_web settings: %s." % e)
-    raise RuntimeError("Can not import dtable_web settings: %s" % e)
+from dtable_events.app.config import SECRET_KEY
 
 class AESPasswordDecodeError(Exception):
     pass
@@ -44,7 +32,7 @@ class AESPasswordHasher:
 
     def __init__(self, secret=None):
         if not secret:
-            secret = seahub_settings.SECRET_KEY[:BLOCK_SIZE]
+            secret = SECRET_KEY[:BLOCK_SIZE]
         self.cipher = AES.new(secret.encode('utf-8'), AES.MODE_ECB)
 
     def decode(self, encoded):

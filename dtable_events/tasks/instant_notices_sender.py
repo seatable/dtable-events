@@ -4,9 +4,9 @@ import sys
 import logging
 from threading import Thread, Event
 
+from dtable_events.app.config import ENABLE_WEIXIN, ENABLE_WORK_WEIXIN, ENABLE_DINGTALK
 from dtable_events.utils import get_python_executable, parse_bool, \
      parse_interval, get_opt_from_conf_or_env, run
-
 
 # DTABLE_WEB_DIR
 dtable_web_dir = os.environ.get('DTABLE_WEB_DIR', '')
@@ -16,17 +16,6 @@ if not dtable_web_dir:
 if not os.path.exists(dtable_web_dir):
     logging.critical('dtable_web_dir %s does not exist' % dtable_web_dir)
     raise RuntimeError('dtable_web_dir does not exist')
-
-sys.path.insert(0, dtable_web_dir)
-try:
-    from seahub.settings import ENABLE_WEIXIN
-    from seahub.settings import ENABLE_WORK_WEIXIN
-    from seahub.settings import ENABLE_DINGTALK
-except ImportError as err:
-    ENABLE_WEIXIN = False
-    ENABLE_WORK_WEIXIN = False
-    ENABLE_DINGTALK = False
-    logging.warning('Can not import seahub.settings: %s.' % err)
 
 __all__ = [
     'InstantNoticeSender',

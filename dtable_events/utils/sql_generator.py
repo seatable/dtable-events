@@ -1,32 +1,17 @@
 import jwt
 import time
 import logging
-import os
 import requests
 import re
 from datetime import datetime, timedelta
 
 from dateutil.relativedelta import relativedelta
 
+from dtable_events.app.config import DTABLE_PRIVATE_KEY, INNER_DTABLE_DB_URL
 from dtable_events.utils import uuid_str_to_36_chars
 from dtable_events.utils.constants import FilterPredicateTypes, FormulaResultType, FilterTermModifier, ColumnTypes, DurationFormatsType
 
 logger = logging.getLogger(__name__)
-#DTABLE_WEB_DIR
-dtable_web_dir = os.environ.get('DTABLE_WEB_DIR', '')
-if not dtable_web_dir:
-    logging.critical('dtable_web_dir is not set')
-    raise RuntimeError('dtable_web_dir is not set')
-if not os.path.exists(dtable_web_dir):
-    logging.critical('dtable_web_dir %s does not exist' % dtable_web_dir)
-    raise RuntimeError('dtable_web_dir does not exist')
-try:
-    import seahub.settings as seahub_settings
-    DTABLE_PRIVATE_KEY = getattr(seahub_settings, 'DTABLE_PRIVATE_KEY')
-    INNER_DTABLE_DB_URL = getattr(seahub_settings, 'INNER_DTABLE_DB_URL')
-except ImportError as e:
-    logger.critical("Can not import dtable_web settings: %s." % e)
-    raise RuntimeError("Can not import dtable_web settings: %s" % e)
 
 class Operator(object):
 

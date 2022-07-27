@@ -4,6 +4,7 @@ import logging
 
 from flask import Flask, request, make_response
 
+from dtable_events.app.config import DTABLE_PRIVATE_KEY
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.dtable_io.task_message_manager import message_task_manager
 
@@ -20,7 +21,7 @@ def check_auth_token(req):
     if not token:
         return False, 'Token invalid.'
 
-    private_key = task_manager.conf['dtable_private_key']
+    private_key = DTABLE_PRIVATE_KEY
     try:
         jwt.decode(token, private_key, algorithms=['HS256'])
     except (jwt.ExpiredSignatureError, jwt.InvalidSignatureError) as e:

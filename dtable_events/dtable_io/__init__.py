@@ -9,6 +9,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 
+from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, SESSION_COOKIE_NAME
 from dtable_events.dtable_io.utils import setup_logger, \
     prepare_asset_file_folder, post_dtable_json, post_asset_files, \
     download_files_to_path, create_forms_from_src_dtable, copy_src_forms_to_json, \
@@ -186,7 +187,7 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
             page_design_settings = plugin_settings.get('page-design', [])
             page_design_content_json_tmp_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'page-design')
             # handle different url in settings.py
-            dtable_web_service_url = task_manager.conf['dtable_web_service_url'].rstrip('/')
+            dtable_web_service_url = DTABLE_WEB_SERVICE_URL
             file_server_port = task_manager.conf['file_server_port']
             update_page_design_static_image(page_design_settings, repo_id, workspace_id, dtable_uuid, page_design_content_json_tmp_path, dtable_web_service_url, file_server_port, username)
     except Exception as e:
@@ -523,9 +524,9 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
 
 def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token, session_id):
     if not row_id:
-        url = task_manager.conf['dtable_web_service_url'].strip('/') + '/dtable/%s/page-design/%s/' % (dtable_uuid, page_id)
+        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/' % (dtable_uuid, page_id)
     if row_id:
-        url = task_manager.conf['dtable_web_service_url'].strip('/') + '/dtable/%s/page-design/%s/row/%s/' % (dtable_uuid, page_id, row_id)
+        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/row/%s/' % (dtable_uuid, page_id, row_id)
     url += '?access-token=%s&need_convert=%s' % (access_token, 0)
     target_dir = '/tmp/dtable-io/convert-page-to-pdf'
     if not os.path.isdir(target_dir):
@@ -541,9 +542,9 @@ def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token, session_id):
 
     driver = webdriver.Chrome('/usr/local/bin/chromedriver', options=webdriver_options)
 
-    driver.get(task_manager.conf['dtable_web_service_url'])
+    driver.get(DTABLE_WEB_SERVICE_URL)
     cookies = [{
-        'name': task_manager.conf['session_cookie_name'],
+        'name': SESSION_COOKIE_NAME,
         'value': session_id
     }]
     for cookie in cookies:

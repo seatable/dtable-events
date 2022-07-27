@@ -1,38 +1,17 @@
 import os
-import sys
 import logging
 from datetime import datetime, timedelta
 from threading import Thread
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 
-from dtable_events.notification_rules.notification_rules_utils import trigger_near_deadline_notification_rule
+from dtable_events.app.config import TIME_ZONE
 from dtable_events.db import init_db_session_class
+from dtable_events.notification_rules.notification_rules_utils import trigger_near_deadline_notification_rule
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool
 
 
-# DTABLE_WEB_DIR
-dtable_web_dir = os.environ.get('DTABLE_WEB_DIR', '')
-if not dtable_web_dir:
-    logging.critical('dtable_web_dir is not set')
-    raise RuntimeError('dtable_web_dir is not set')
-if not os.path.exists(dtable_web_dir):
-    logging.critical('dtable_web_dir %s does not exist' % dtable_web_dir)
-    raise RuntimeError('dtable_web_dir does not exist')
-
-# CONF DIR
-central_conf_dir, timezone = os.environ.get('SEAFILE_CENTRAL_CONF_DIR', ''), 'UTC'
-if central_conf_dir:
-    sys.path.insert(0, central_conf_dir)
-    try:
-        import dtable_web_settings
-        timezone = getattr(dtable_web_settings, 'TIME_ZONE', 'UTC')
-    except Exception as e:
-        logging.error('import dtable_web_settings error: %s', e)
-    else:
-        del dtable_web_settings
-else:
-    logging.error('no conf dir SEAFILE_CENTRAL_CONF_DIR find')
+timezone = TIME_ZONE
 
 
 __all__ = [

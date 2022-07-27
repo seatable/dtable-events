@@ -10,26 +10,8 @@ import jwt
 import requests
 from apscheduler.schedulers.blocking import BlockingScheduler
 
+from dtable_events.app.config import INNER_DTABLE_DB_URL, DTABLE_PRIVATE_KEY
 from dtable_events.db import init_db_session_class
-
-
-# DTABLE_WEB_DIR
-dtable_web_dir = os.environ.get('DTABLE_WEB_DIR', '')
-if not dtable_web_dir:
-    logging.critical('dtable_web_dir is not set')
-    raise RuntimeError('dtable_web_dir is not set')
-if not os.path.exists(dtable_web_dir):
-    logging.critical('dtable_web_dir %s does not exist' % dtable_web_dir)
-    raise RuntimeError('dtable_web_dir does not exist')
-sys.path.insert(0, dtable_web_dir)
-
-try:
-    from seahub.settings import INNER_DTABLE_DB_URL
-    from seahub.settings import DTABLE_PRIVATE_KEY
-except ImportError as err:
-    INNER_DTABLE_DB_URL = ''
-    DTABLE_PRIVATE_KEY = ''
-    logging.warning('Can not import seahub.settings: %s.' % err)
 
 __all__ = [
     'BigDataStorageStatsWorker',

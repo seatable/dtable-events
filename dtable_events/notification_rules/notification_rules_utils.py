@@ -2,40 +2,17 @@
 import logging
 import time
 import json
-import os
 from datetime import datetime, date, timedelta
 import requests
 import jwt
-import sys
 import re
-import pytz
 
+from dtable_events.app.config import DTABLE_PRIVATE_KEY
+from dtable_events.cache import redis_cache as cache
 from dtable_events.utils import is_valid_email, uuid_str_to_36_chars, get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes
-from dtable_events.cache import redis_cache as cache
 
 logger = logging.getLogger(__name__)
-
-
-# DTABLE_WEB_DIR
-dtable_web_dir = os.environ.get('DTABLE_WEB_DIR', '')
-if not dtable_web_dir:
-    logging.critical('dtable_web_dir is not set')
-    raise RuntimeError('dtable_web_dir is not set')
-if not os.path.exists(dtable_web_dir):
-    logging.critical('dtable_web_dir %s does not exist' % dtable_web_dir)
-    raise RuntimeError('dtable_web_dir does not exist')
-
-sys.path.insert(0, dtable_web_dir)
-try:
-    import seahub.settings as seahub_settings
-    DTABLE_PRIVATE_KEY = getattr(seahub_settings, 'DTABLE_PRIVATE_KEY')
-    DTABLE_SERVER_URL = getattr(seahub_settings, 'DTABLE_SERVER_URL')
-    ENABLE_DTABLE_SERVER_CLUSTER = getattr(seahub_settings, 'ENABLE_DTABLE_SERVER_CLUSTER', False)
-    DTABLE_PROXY_SERVER_URL = getattr(seahub_settings, 'DTABLE_PROXY_SERVER_URL', '')
-except ImportError as e:
-    logger.critical("Can not import dtable_web settings: %s." % e)
-    raise RuntimeError("Can not import dtable_web settings: %s" % e)
 
 
 CONDITION_ROWS_MODIFIED = 'rows_modified'
