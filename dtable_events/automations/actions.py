@@ -1160,7 +1160,7 @@ class TriggerWorkflowAction(BaseAction):
             'row': {}
         }
         self.token = token
-        if self.auto_rule.trigger_condition['trigger_condition'] != CONDITION_PERIODICALLY:
+        if self.auto_rule.trigger.get('condition') != CONDITION_PERIODICALLY:
             return
         self._init_updates()
 
