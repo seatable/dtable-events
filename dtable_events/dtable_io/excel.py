@@ -1,15 +1,14 @@
 import re
 import json
-from datetime import datetime, time
-
-from openpyxl import load_workbook
 import csv
-
 import logging
 import os
 import sys
 import openpyxl
 from openpyxl.styles import PatternFill
+from openpyxl import load_workbook
+from copy import deepcopy
+from datetime import datetime, time
 from dtable_events.utils import utc_to_tz
 from dtable_events.utils.constants import ColumnTypes
 
@@ -328,18 +327,14 @@ def parse_excel(repo_id, dtable_name, custom=False):
 
 def parse_dtable_csv_columns(sheet_rows, max_column):
     head_row = sheet_rows[0]
-    value_rows = sheet_rows[1:]
 
     columns = []
     for index in range(max_column):
         name = head_row[index].strip()
         column_name = str(name) if name else 'Field' + str(index + 1)
-        value_list = [row[index] for row in value_rows]
-        column_type, column_data = parse_column_type(value_list)
         column = {
             'name': column_name.replace('\ufeff', '').strip(),
-            'type': column_type,
-            'data': column_data,
+            'type': 'text'
         }
         columns.append(column)
 
@@ -383,7 +378,8 @@ def parse_dtable_csv(repo_id, dtable_name):
     # parse
     csv_file = get_csv_file(repo_id, dtable_name)
     tables = []
-    csv_rows = [row for row in csv.reader(csv_file)]
+    delimiter = guess_delimiter(deepcopy(csv_file))
+    csv_rows = [row for row in csv.reader(csv_file, delimiter=delimiter)]
     csv_head = csv_rows[0]
     max_row = len(csv_rows)
     max_column = len(csv_head)
@@ -471,7 +467,7 @@ def parse_excel_csv_to_json(repo_id, dtable_name, file_type, custom=False):
     upload_excel_json_file(repo_id, dtable_name, content)
 
 
-def import_excel_csv_by_dtable_server(username, repo_id, dtable_uuid, dtable_name):
+def import_excel_csv_by_dtable_server(username, repo_id, dtable_uuid, dtable_name, lang):
     from dtable_events.dtable_io.utils import get_excel_json_file, \
         upload_excel_json_to_dtable_server, delete_file
 
@@ -480,10 +476,10 @@ def import_excel_csv_by_dtable_server(username, repo_id, dtable_uuid, dtable_nam
     # delete excel、csv、json file
     delete_file(username, repo_id, dtable_name)
     # upload json file to dtable-server
-    upload_excel_json_to_dtable_server(username, dtable_uuid, json_file)
+    upload_excel_json_to_dtable_server(username, dtable_uuid, json_file, lang)
 
 
-def import_excel_csv_add_table_by_dtable_server(username, repo_id, dtable_uuid, dtable_name):
+def import_excel_csv_add_table_by_dtable_server(username, repo_id, dtable_uuid, dtable_name, lang):
     from dtable_events.dtable_io.utils import get_excel_json_file, \
         upload_excel_json_add_table_to_dtable_server, delete_file
 
@@ -492,7 +488,7 @@ def import_excel_csv_add_table_by_dtable_server(username, repo_id, dtable_uuid, 
     # delete excel、csv、json file
     delete_file(username, repo_id, dtable_name)
     # upload json file to dtable-server
-    upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, json_file)
+    upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, json_file, lang)
 
 
 def append_parsed_file_by_dtable_server(username, repo_id, dtable_uuid, file_name, table_name):
@@ -840,11 +836,25 @@ def parse_update_csv_upload_csv_to_json(repo_id, file_name, username, dtable_uui
     upload_excel_json_file(repo_id, file_name, json.dumps(content))
 
 
+def guess_delimiter(csv_file):
+    line = csv_file.readline()
+
+    if not line:
+        return ','
+    comma_count = line.count(',')
+    semicolon_count = line.count(';')
+    delimiter = comma_count >= semicolon_count and ',' or ';'
+
+    return delimiter
+
+
 def parse_csv_rows(csv_file, columns, max_column):
     from dtable_events.dtable_io import dtable_io_logger
 
     rows = []
-    csv_rows = [row for row in csv.reader(csv_file)]
+    delimiter = guess_delimiter(deepcopy(csv_file))
+    csv_rows = [row for row in csv.reader(csv_file, delimiter=delimiter)]
+
     if not csv_rows:
         return rows, 0, 0, 0
 
