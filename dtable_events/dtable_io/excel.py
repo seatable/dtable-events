@@ -147,7 +147,7 @@ def parse_excel_rows(sheet_rows, columns, head_index, max_column):
         row_data = {}
         for index in range(max_column):
             try:
-                cell_value = row[index].value
+                cell_value = get_excel_cell_value(row, index)
                 column_name = columns[index]['name']
                 column_type = columns[index]['type']
                 if cell_value is None:
@@ -231,6 +231,13 @@ def parse_column_type(value_list):
         return 'text', None
 
 
+def get_excel_cell_value(row, index):
+    try:
+        return row[index].value
+    except:
+        return None
+
+
 def parse_excel_columns(sheet_rows, head_index, max_column):
     if head_index == -1:
         empty_cell = EmptyCell()
@@ -239,12 +246,12 @@ def parse_excel_columns(sheet_rows, head_index, max_column):
     else:
         head_row = sheet_rows[head_index]
         value_rows = sheet_rows[head_index + 1:]
-
     columns = []
+
     for index in range(max_column):
-        name = head_row[index].value
+        name = get_excel_cell_value(head_row, index)
         column_name = str(name) if name else 'Field' + str(index + 1)
-        value_list = [row[index].value for row in value_rows]
+        value_list = [get_excel_cell_value(row, index) for row in value_rows]
         column_type, column_data = parse_column_type(value_list)
         column = {
             'name': column_name.replace('\ufeff', '').strip(),
@@ -330,7 +337,7 @@ def parse_dtable_csv_columns(sheet_rows, max_column):
 
     columns = []
     for index in range(max_column):
-        name = head_row[index].strip()
+        name = get_csv_cell_value(head_row, index)
         column_name = str(name) if name else 'Field' + str(index + 1)
         column = {
             'name': column_name.replace('\ufeff', '').strip(),
@@ -339,6 +346,13 @@ def parse_dtable_csv_columns(sheet_rows, max_column):
         columns.append(column)
 
     return columns
+
+
+def get_csv_cell_value(row, index):
+    try:
+        return row[index].strip()
+    except:
+        return None
 
 
 def parse_dtable_csv_rows(sheet_rows, columns, max_column):
@@ -350,7 +364,7 @@ def parse_dtable_csv_rows(sheet_rows, columns, max_column):
         row_data = {}
         for index in range(max_column):
             try:
-                cell_value = row[index]
+                cell_value = get_csv_cell_value(row, index)
                 column_name = columns[index]['name']
                 column_type = columns[index]['type']
                 if cell_value is None:
@@ -584,7 +598,7 @@ def parse_append_excel_rows(sheet_rows, columns, column_lenght):
                 continue
             row_index = head_dict.get(column_name)
             try:
-                cell_value = row[row_index].value
+                cell_value = get_excel_cell_value(row, row_index)
                 column_type = columns[index]['type']
                 if cell_value is None:
                     continue
@@ -783,7 +797,7 @@ def parse_update_excel_rows(sheet_rows, columns, column_length):
                 continue
             row_index = head_dict.get(column_name)
             try:
-                cell_value = row[row_index].value
+                cell_value = get_excel_cell_value(row, row_index)
                 column_type = columns[index]['type']
                 if cell_value is None:
                     row_data[column_name] = None
@@ -877,7 +891,7 @@ def parse_csv_rows(csv_file, columns, max_column):
             if row_index is None:
                 continue
             try:
-                cell_value = csv_row[row_index].strip()
+                cell_value = get_csv_cell_value(csv_row, row_index)
                 column_type = columns[index]['type']
                 if cell_value is None:
                     row_data[column_name] = None
@@ -1044,12 +1058,12 @@ def parse_formula_number(cell_data, column_data):
     :param column_data: info of formula column
     """
     src_format = column_data.get('format')
-    value = cell_data
+    value = str(cell_data)
     number_format = '0'
     if src_format in ['euro', 'dollar', 'yuan']:
-        value = cell_data[1:]
+        value = value[1:]
     elif src_format == 'percent':
-        value = cell_data[:-1]
+        value = value[:-1]
     value = convert_formula_number(value, column_data)
 
     if src_format == 'number':
