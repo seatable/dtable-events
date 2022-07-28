@@ -135,8 +135,9 @@ class UpdateAction(BaseAction):
         self.update_data = {
             'row': {},
             'table_name': self.auto_rule.table_info['name'],
-            'row_id':''
+            'row_id': ''
         }
+        self.col_name_dict = {}
         self._init_updates()
 
     def format_time_by_offset(self, offset, format_length):
@@ -147,7 +148,15 @@ class UpdateAction(BaseAction):
         if format_length == 1:
             return cur_datetime_offset.strftime("%Y-%m-%d")
 
+    def _fill_msg_blanks(self, row, text, blanks):
+        col_name_dict = self.col_name_dict
+        dtable_uuid, db_session, dtable_metadata = self.auto_rule.dtable_uuid, self.auto_rule.db_session, self.auto_rule.dtable_metadata
+        return fill_msg_blanks(dtable_uuid, text, blanks, col_name_dict, row, db_session, dtable_metadata)
+
     def _init_updates(self):
+        src_row = self.data['converted_row']
+        self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
+
         # filter columns in view and type of column is in VALID_COLUMN_TYPES
         filtered_updates = {}
         if self.auto_rule.run_condition == PER_UPDATE:
@@ -173,7 +182,12 @@ class UpdateAction(BaseAction):
                                 logger.error(e)
                                 filtered_updates[col_name] = self.updates.get(col_key)
                         else:
-                            filtered_updates[col_name] = self.parse_column_value(col, self.updates.get(col_key))
+                            cell_value = self.updates.get(col_key)
+                            if isinstance(cell_value, str):
+                                blanks = set(re.findall(r'\{([^{]*?)\}', cell_value))
+                                column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
+                                cell_value = self._fill_msg_blanks(src_row, cell_value, column_blanks)
+                            filtered_updates[col_name] = self.parse_column_value(col, cell_value)
             row_id = self.data['row']['_id']
             self.update_data['row'] = filtered_updates
             self.update_data['row_id'] = row_id
