@@ -151,7 +151,7 @@ class UpdateAction(BaseAction):
         # filter columns in view and type of column is in VALID_COLUMN_TYPES
         filtered_updates = {}
         if self.auto_rule.run_condition == PER_UPDATE:
-            for col in self.auto_rule.view_columns:
+            for col in self.auto_rule.table_info['columns']:
                 if 'key' in col and col.get('type') in self.VALID_COLUMN_TYPES:
                     col_name = col.get('name')
                     col_key = col.get('key')
@@ -184,7 +184,7 @@ class UpdateAction(BaseAction):
         if self.auto_rule.run_condition == PER_UPDATE:
             # if columns in self.updates was updated, forbidden action!!!
             updated_column_keys = self.data.get('updated_column_keys', [])
-            to_update_keys = [col['key'] for col in self.auto_rule.view_columns if col['name'] in self.updates]
+            to_update_keys = [col['key'] for col in self.auto_rule.table_info['columns'] if col['name'] in self.updates]
             for key in updated_column_keys:
                 if key in to_update_keys:
                     return False
@@ -333,7 +333,7 @@ class AddRowAction(BaseAction):
     def _init_updates(self):
         # filter columns in view and type of column is in VALID_COLUMN_TYPES
         filtered_updates = {}
-        for col in self.auto_rule.view_columns:
+        for col in self.auto_rule.table_info['columns']:
             if 'key' in col and col.get('type') in self.VALID_COLUMN_TYPES:
                 col_name = col.get('name')
                 col_type = col.get('type')
@@ -423,7 +423,7 @@ class NotifyAction(BaseAction):
 
     def _init_notify(self, msg):
         blanks = set(re.findall(r'\{([^{]*?)\}', msg))
-        self.col_name_dict = {col.get('name'): col for col in self.auto_rule.view_columns}
+        self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
         self.column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
 
     def _fill_msg_blanks(self, row):
@@ -531,7 +531,7 @@ class SendWechatAction(BaseAction):
             self.auto_rule.set_invalid()
             return
         blanks = set(re.findall(r'\{([^{]*?)\}', msg))
-        self.col_name_dict = {col.get('name'): col for col in self.auto_rule.view_columns}
+        self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
         self.column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
         self.webhook_url = account_dict.get('detail', {}).get('webhook_url', '')
 
@@ -591,7 +591,7 @@ class SendDingtalkAction(BaseAction):
             self.auto_rule.set_invalid()
             return
         blanks = set(re.findall(r'\{([^{]*?)\}', msg))
-        self.col_name_dict = {col.get('name'): col for col in self.auto_rule.view_columns}
+        self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
         self.column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
         self.webhook_url = account_dict.get('detail', {}).get('webhook_url', '')
 
@@ -689,7 +689,7 @@ class SendEmailAction(BaseAction):
             self.auto_rule.set_invalid()
             return
 
-        self.col_name_dict = {col.get('name'): col for col in self.auto_rule.view_columns}
+        self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
         self._init_notify_msg()
         self._init_notify_send_to()
         self._init_notify_copy_to()
@@ -1075,7 +1075,7 @@ class AddRecordToOtherTableAction(BaseAction):
 
     def _init_append_rows(self):
         src_row = self.data['converted_row']
-        self.col_name_dict = {col.get('name'): col for col in self.auto_rule.view_columns}
+        self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
 
         for row_id in self.row:
             cell_value = self.row.get(row_id)
