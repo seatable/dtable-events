@@ -267,7 +267,7 @@ def copy_src_external_app_to_json(dtable_uuid, tmp_file_path, db_session):
     src_external_apps_json = []
     for src_external_app in src_external_apps:
         external_app = {
-            'app_config': src_external_app[0]
+            'app_config': json.loads(src_external_app[0])
         }
         src_external_apps_json.append(external_app)
     if src_external_apps_json:
@@ -528,8 +528,8 @@ def add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, o
     db_session.execute(sql, {
         'token': str(uuid.uuid4()),
         'dtable_uuid': ''.join(dtable_uuid.split('-')),
-        'app_type': json.loads(external_app['app_config']).get('app_type'),
-        'app_config': external_app['app_config'],
+        'app_type': external_app['app_config'].get('app_type'),
+        'app_config': json.dumps(external_app['app_config']),
         'creator': username,
         'created_at': datetime.datetime.utcnow(),
         'org_id': org_id
