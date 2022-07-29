@@ -156,6 +156,7 @@ class UpdateAction(BaseAction):
     def _init_updates(self):
         src_row = self.data['converted_row']
         self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
+        can_cite_column = not (self.auto_rule.trigger.get('condition') == CONDITION_ROWS_ADDED)
 
         # filter columns in view and type of column is in VALID_COLUMN_TYPES
         filtered_updates = {}
@@ -183,7 +184,7 @@ class UpdateAction(BaseAction):
                                 filtered_updates[col_name] = self.updates.get(col_key)
                         else:
                             cell_value = self.updates.get(col_key)
-                            if isinstance(cell_value, str):
+                            if can_cite_column and isinstance(cell_value, str):
                                 blanks = set(re.findall(r'\{([^{]*?)\}', cell_value))
                                 column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
                                 cell_value = self._fill_msg_blanks(src_row, cell_value, column_blanks)
