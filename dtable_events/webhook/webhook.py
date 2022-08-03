@@ -73,7 +73,14 @@ class Webhooker(object):
                     headers = job.get('request_headers')
                     response = requests.post(job['url'], json=body, headers=headers, timeout=30)
                 except Exception as e:
-                    logger.error('request error: %s', e)
+                    if isinstance(e, requests.exceptions.MissingSchema):
+                        logger.warning('request webhook url: %s miss schema error: %s', job['url'], e)
+                    elif isinstance(e, requests.exceptions.ConnectionError):
+                        logger.warning('request webhook url: %s connection error: %s', job['url'], e)
+                    elif isinstance(e, requests.exceptions.Timeout):
+                        logger.warning('request webhook url: %s timeout error: %s', job['url'], e)
+                    else:
+                        logger.error('request webhook url: %s error: %s', job['url'], e)
                     webhook_job = WebhookJobs(job['webhook_id'], job['created_at'], datetime.now(), FAILURE,
                                               job['url'], job['request_headers'], job['request_body'], None, None)
                     session.add(webhook_job)
