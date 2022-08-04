@@ -7,10 +7,12 @@ import requests
 import jwt
 import re
 
-from dtable_events.app.config import DTABLE_PRIVATE_KEY
+from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL
 from dtable_events.cache import redis_cache as cache
 from dtable_events.utils import is_valid_email, uuid_str_to_36_chars, get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes
+from dtable_events.utils.dtable_server_api import DTableServerAPI
+from dtable_events.utils.dtable_web_api import DTableWebAPI
 
 logger = logging.getLogger(__name__)
 
@@ -77,29 +79,6 @@ def scan_triggered_notification_rules(event_data, db_session):
     db_session.commit()
 
 
-def list_users_by_column_name(dtable_uuid, table_id, view_id, row_id, column_name, dtable_server_access_token):
-    api_url =  get_inner_dtable_server_url()
-    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/rows/' + row_id + '/?from=dtable_events'
-    headers = {'Authorization': 'Token ' + dtable_server_access_token}
-    params = {
-        'table_id': table_id,
-        'view_id': view_id,
-        # 'convert': True,
-    }
-    res = requests.get(url, headers=headers, params=params)
-
-    if res.status_code != 200:
-        logger.error(f'dtable {dtable_uuid} failed to list_users_by_column_name {res.text}')
-
-    rowdict = json.loads(res.content)
-    user_list = rowdict.get(column_name, [])
-    if not user_list:
-        return []
-    if isinstance(user_list, str):
-        return [user_list]
-    return user_list
-
-
 def send_notification(dtable_uuid, user_msg_list, dtable_server_access_token):
     api_url = get_inner_dtable_server_url()
     url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/notifications-batch/?from=dtable_events'
@@ -153,23 +132,6 @@ def list_rows_near_deadline(dtable_uuid, table_id, view_id, date_column_name, al
     return rows
 
 
-def get_table_view_columns(dtable_uuid, table_id, view_id, dtable_server_access_token):
-    api_url = get_inner_dtable_server_url()
-    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/columns/?from=dtable_events'
-    headers = {'Authorization': 'Token ' + dtable_server_access_token}
-    query_params = {
-        'table_id': table_id,
-        'view_id': view_id
-    }
-    try:
-        response = requests.get(url, params=query_params, headers=headers)
-        columns = response.json()['columns']
-    except Exception as e:
-        logger.error('dtable_uuid: %s, table_id: %s, view_id: %s request columns error: %s', dtable_uuid, table_id, view_id, e)
-        return []
-    return columns
-
-
 def get_nickname_by_usernames(usernames, db_session):
     """
     fetch nicknames by usernames from db / cache
@@ -204,15 +166,6 @@ def get_nickname_by_usernames(usernames, db_session):
     return users_dict
 
 
-def _get_dtable_metadata(dtable_uuid):
-    api_url = get_inner_dtable_server_url()
-    access_token = get_dtable_server_token(dtable_uuid)
-    metadata_url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/metadata/?from=dtable_events'
-    headers = {'Authorization': 'Token ' + access_token}
-    response = requests.get(metadata_url, headers=headers)
-    return response.json().get('metadata')
-
-
 def _get_geolocation_infos(cell_value_dict):
     if not isinstance(cell_value_dict, dict):
         return ''
@@ -244,7 +197,7 @@ def _get_geolocation_infos(cell_value_dict):
 
     return info_list and " ".join(info_list) or ''
 
-def _fill_msg_blanks(dtable_uuid, msg, column_blanks, col_name_dict, row, db_session, dtable_metadata=None):
+def _fill_msg_blanks(msg, column_blanks, col_name_dict, row, db_session, dtable_metadata):
     for blank in column_blanks:
         if col_name_dict[blank]['type'] in [
             ColumnTypes.TEXT,
@@ -324,12 +277,6 @@ def _fill_msg_blanks(dtable_uuid, msg, column_blanks, col_name_dict, row, db_ses
             # judge whether result_type of formula is like collaborator or not.
             display_column_key, linked_table_id = formula_data.get('display_column_key'), formula_data.get('linked_table_id')
             target_column_type = None
-            if not dtable_metadata:
-                try:
-                    dtable_metadata = _get_dtable_metadata(dtable_uuid)
-                except Exception as e:
-                    logger.error('request dtable metadata in fill msg error: %s', e)
-                    continue
             for table in dtable_metadata.get('tables', []):
                 if table.get('_id') == linked_table_id:
                     columns = table.get('columns', [])
@@ -380,13 +327,13 @@ def _get_column_blanks(blanks, columns):
     return column_blanks, col_name_dict
 
 
-def gen_notification_msg_with_row(dtable_uuid, msg, row, column_blanks, col_name_dict, db_session, dtable_metadata=None):
+def gen_notification_msg_with_row(msg, row, column_blanks, col_name_dict, db_session, dtable_metadata=None):
     if not msg:
         return msg
     if not column_blanks:
         return msg
 
-    return _fill_msg_blanks(dtable_uuid, msg, column_blanks, col_name_dict, row, db_session, dtable_metadata=dtable_metadata)
+    return _fill_msg_blanks(msg, column_blanks, col_name_dict, row, db_session, dtable_metadata=dtable_metadata)
 
 
 def _get_column_by_key(dtable_metadata, table_id, column_key):
@@ -424,11 +371,40 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
     if message_table_id != table_id:
         return
 
+    dtable_server_api = DTableServerAPI('notification-rule', dtable_uuid, get_inner_dtable_server_url())
+    dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+    dtable_metadata = dtable_server_api.get_metadata()
+    target_table, target_view = None, None
+    for table in dtable_metadata['tables']:
+        if table['_id'] == table_id:
+            target_table = table
+            break
+    if not target_table:
+        deal_invalid_rule(rule_id, db_session)
+        return
+    for view in target_table['views']:
+        if view['_id'] == view_id:
+            target_view = view
+            break
+    if not target_view:
+        deal_invalid_rule(rule_id, db_session)
+        return
+
+    related_users_dict = {user['email']: user for user in dtable_web_api.get_related_users(dtable_uuid)}
+    temp_users = []
+    for user in users:
+        if user and user not in related_users_dict:
+            logger.error('notify rule: %s has invalid user: %s', rule_id, user)
+            deal_invalid_rule(rule_id, db_session)
+            return
+        if user:
+            temp_users.append(user)
+    users = temp_users
     user_msg_list = []
 
     blanks, column_blanks, col_name_dict = set(re.findall(r'\{([^{]*?)\}', msg)), None, None
     if blanks:
-        columns = get_table_view_columns(dtable_uuid, table_id, view_id, dtable_server_access_token)
+        columns = target_table['columns']
         column_blanks, col_name_dict = _get_column_blanks(blanks, columns)
 
     if op_type == 'modify_row' and trigger['condition'] == CONDITION_ROWS_MODIFIED:
@@ -441,12 +417,11 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
             'condition': CONDITION_ROWS_MODIFIED,
             'rule_id': rule.id,
             'rule_name': rule_name,
-            'msg': gen_notification_msg_with_row(dtable_uuid, msg, converted_row, column_blanks, col_name_dict, db_session),
+            'msg': gen_notification_msg_with_row(msg, converted_row, column_blanks, col_name_dict, db_session),
             'row_id_list': [row['_id']],
         }
 
         if users_column_key:
-            dtable_metadata = _get_dtable_metadata(dtable_uuid)
             user_column = _get_column_by_key(dtable_metadata, table_id, users_column_key)
             if user_column:
                 users_column_name = user_column.get('name')
@@ -455,7 +430,7 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
                     users_from_column = []
                 if not isinstance(users_from_column, list):
                     users_from_column = [users_from_column, ]
-                users = list(set(users + users_from_column))
+                users = list(set(users + [user for user in users_from_column if user in related_users_dict]))
             else:
                 logger.warning('notification rule: %s notify user column: %s invalid', rule_id, users_column_key)
 
@@ -477,19 +452,21 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
             'condition': CONDITION_FILTERS_SATISFY,
             'rule_id': rule.id,
             'rule_name': rule_name,
-            'msg': gen_notification_msg_with_row(dtable_uuid, msg, converted_row, column_blanks, col_name_dict, db_session),
+            'msg': gen_notification_msg_with_row(msg, converted_row, column_blanks, col_name_dict, db_session),
             'row_id_list': [row['_id']],
         }
         if users_column_key:
-            dtable_metadata = _get_dtable_metadata(dtable_uuid)
             user_column = _get_column_by_key(dtable_metadata, table_id, users_column_key)
-            users_column_name = user_column.get('name')
-            users_from_column = converted_row.get(users_column_name, [])
-            if not users_from_column:
-                users_from_column = []
-            if not isinstance(users_from_column, list):
-                users_from_column = [users_from_column, ]
-            users = list(set(users + users_from_column))
+            if user_column:
+                users_column_name = user_column.get('name')
+                users_from_column = converted_row.get(users_column_name, [])
+                if not users_from_column:
+                    users_from_column = []
+                if not isinstance(users_from_column, list):
+                    users_from_column = [users_from_column, ]
+                users = list(set(users + users_from_column))
+            else:
+                logger.warning('notification rule: %s notify user column: %s invalid', rule_id, users_column_key)
 
         for user in users:
             if not is_valid_email(user):
@@ -525,6 +502,25 @@ def trigger_near_deadline_notification_rule(rule, db_session):
     if trigger['condition'] != CONDITION_NEAR_DEADLINE:
         return
 
+    dtable_server_api = DTableServerAPI('notification-rule', dtable_uuid, get_inner_dtable_server_url())
+    dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+    dtable_metadata = dtable_server_api.get_metadata()
+    target_table, target_view = None, None
+    for table in dtable_metadata['tables']:
+        if table['_id'] == table_id:
+            target_table = table
+            break
+    if not target_table:
+        deal_invalid_rule(rule_id, db_session)
+        return
+    for view in target_table['views']:
+        if view['_id'] == view_id:
+            target_view = view
+            break
+    if not target_view:
+        deal_invalid_rule(rule_id, db_session)
+        return
+
     date_column_name = trigger['date_column_name']
     alarm_days = trigger['alarm_days']
     table_id = trigger['table_id']
@@ -543,6 +539,17 @@ def trigger_near_deadline_notification_rule(rule, db_session):
         if cur_hour != 12:
             return
 
+    related_users_dict = {user['email']: user for user in dtable_web_api.get_related_users(dtable_uuid)}
+    temp_users = []
+    for user in users:
+        if user and user not in related_users_dict:
+            logger.error('notify rule: %s has invalid user: %s', rule_id, user)
+            deal_invalid_rule(rule_id, db_session)
+            return
+        if user:
+            temp_users.append(user)
+    users = temp_users
+
     dtable_server_access_token = get_dtable_server_token(dtable_uuid)
     try:
         rows_near_deadline = list_rows_near_deadline(dtable_uuid, table_id, view_id, date_column_name, alarm_days, dtable_server_access_token, rule_id, db_session)
@@ -555,18 +562,25 @@ def trigger_near_deadline_notification_rule(rule, db_session):
 
     blanks, column_blanks, col_name_dict = set(re.findall(r'\{([^{]*?)\}', msg)), None, None
     if blanks:
-        columns = get_table_view_columns(dtable_uuid, table_id, view_id, dtable_server_access_token)
+        columns = target_table['columns']
         column_blanks, col_name_dict = _get_column_blanks(blanks, columns)
 
-    dtable_metadata = _get_dtable_metadata(dtable_uuid)
     for row in rows_near_deadline[:25]:
         row_id = row['_id']
 
         if users_column_key:
             user_column = _get_column_by_key(dtable_metadata, table_id, users_column_key)
-            users_column_name = user_column.get('name')
-            users_from_cell = list_users_by_column_name(dtable_uuid, table_id, view_id, row_id, users_column_name, dtable_server_access_token)
-            to_users = list(set(users + users_from_cell))
+            if user_column:
+                temp_users_from_cell = row.get(user_column['name'], [])
+                if isinstance(temp_users_from_cell, list):
+                    users_from_cell = temp_users_from_cell
+                elif isinstance(temp_users_from_cell, str):
+                    users_from_cell = [temp_users_from_cell]
+                else:
+                    users_from_cell = []
+                to_users = list(set(users + [user for user in users_from_cell if user in related_users_dict]))
+            else:
+                logger.warning('notification rule: %s notify user column: %s invalid', rule_id, users_column_key)
         else:
             to_users = users
 
@@ -576,7 +590,7 @@ def trigger_near_deadline_notification_rule(rule, db_session):
             'condition': CONDITION_NEAR_DEADLINE,
             'rule_id': rule.id,
             'rule_name': rule_name,
-            'msg': gen_notification_msg_with_row(dtable_uuid, msg, row, column_blanks, col_name_dict, db_session, dtable_metadata=dtable_metadata),
+            'msg': gen_notification_msg_with_row(msg, row, column_blanks, col_name_dict, db_session, dtable_metadata=dtable_metadata),
             'row_id_list': [row_id],
         }
 

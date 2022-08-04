@@ -20,6 +20,7 @@ from dtable_events.notification_rules.notification_rules_utils import _fill_msg_
 from dtable_events.utils import utc_to_tz, uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI, WrongFilterException
+from dtable_events.utils.dtable_web_api import DTableWebAPI
 
 
 logger = logging.getLogger(__name__)
@@ -130,8 +131,8 @@ class UpdateAction(BaseAction):
 
     def _fill_msg_blanks(self, row, text, blanks):
         col_name_dict = self.col_name_dict
-        dtable_uuid, db_session, dtable_metadata = self.auto_rule.dtable_uuid, self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks(dtable_uuid, text, blanks, col_name_dict, row, db_session, dtable_metadata)
+        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
+        return fill_msg_blanks(text, blanks, col_name_dict, row, db_session, dtable_metadata)
 
     def _init_updates(self):
         src_row = self.data['converted_row']
@@ -387,12 +388,18 @@ class NotifyAction(BaseAction):
         super().__init__(auto_rule, data)
         self.action_type = 'notify'
         self.msg = msg
-        self.users = users
+        temp_users = []
+        for user in users:
+            if user and user not in self.auto_rule.related_users_dict:
+                error_msg = 'rule: %s notify action has invalid user: %s' % (self.auto_rule.rule_id, user)
+                raise RuleInvalidException(error_msg)
+            if user:
+                temp_users.append(user)
+        self.users = temp_users
         self.users_column_key = users_column_key
 
         self.column_blanks = []
         self.col_name_dict = {}
-
 
         self._init_notify(msg)
 
@@ -426,8 +433,8 @@ class NotifyAction(BaseAction):
 
     def _fill_msg_blanks(self, row):
         msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
-        dtable_uuid, db_session, dtable_metadata = self.auto_rule.dtable_uuid, self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks(dtable_uuid, msg, column_blanks, col_name_dict, row, db_session, dtable_metadata)
+        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
+        return fill_msg_blanks(msg, column_blanks, col_name_dict, row, db_session, dtable_metadata)
 
     def per_update_notify(self):
         dtable_uuid, row, raw_row = self.auto_rule.dtable_uuid, self.data['converted_row'], self.data['row']
@@ -458,7 +465,7 @@ class NotifyAction(BaseAction):
                     users_from_column = []
                 if not isinstance(users_from_column, list):
                     users_from_column = [users_from_column, ]
-                users = list(set(self.users + users_from_column))
+                users = list(set(self.users + [user for user in users_from_column if user in self.auto_rule.related_users_dict]))
             else:
                 logger.warning('automation rule: %s notify action user column: %s invalid', self.auto_rule.rule_id, self.users_column_key)
         for user in users:
@@ -535,8 +542,8 @@ class SendWechatAction(BaseAction):
 
     def _fill_msg_blanks(self, row):
         msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
-        dtable_uuid, db_session, dtable_metadata = self.auto_rule.dtable_uuid, self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks(dtable_uuid, msg, column_blanks, col_name_dict, row, db_session, dtable_metadata)
+        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
+        return fill_msg_blanks(msg, column_blanks, col_name_dict, row, db_session, dtable_metadata)
 
     def per_update_notify(self):
         row = self.data['converted_row']
@@ -595,8 +602,8 @@ class SendDingtalkAction(BaseAction):
 
     def _fill_msg_blanks(self, row):
         msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
-        dtable_uuid, db_session, dtable_metadata = self.auto_rule.dtable_uuid, self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks(dtable_uuid, msg, column_blanks, col_name_dict, row, db_session, dtable_metadata)
+        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
+        return fill_msg_blanks(msg, column_blanks, col_name_dict, row, db_session, dtable_metadata)
 
     def per_update_notify(self):
         row = self.data['converted_row']
@@ -708,8 +715,8 @@ class SendEmailAction(BaseAction):
     def _fill_msg_blanks(self, row, text, blanks):
 
         col_name_dict = self.col_name_dict
-        dtable_uuid, db_session, dtable_metadata = self.auto_rule.dtable_uuid, self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks(dtable_uuid, text, blanks, col_name_dict, row, db_session, dtable_metadata)
+        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
+        return fill_msg_blanks(text, blanks, col_name_dict, row, db_session, dtable_metadata)
 
     def per_update_notify(self):
         row = self.data['converted_row']
@@ -1064,8 +1071,8 @@ class AddRecordToOtherTableAction(BaseAction):
 
     def _fill_msg_blanks(self, row, text, blanks):
         col_name_dict = self.col_name_dict
-        dtable_uuid, db_session, dtable_metadata = self.auto_rule.dtable_uuid, self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks(dtable_uuid, text, blanks, col_name_dict, row, db_session, dtable_metadata)
+        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
+        return fill_msg_blanks(text, blanks, col_name_dict, row, db_session, dtable_metadata)
 
     def format_time_by_offset(self, offset, format_length):
         cur_datetime = datetime.now()
@@ -1258,6 +1265,7 @@ class AutomationRule:
         self.db_session = db_session
 
         self.dtable_server_api = DTableServerAPI('Automation Rule', str(UUID(self.dtable_uuid)), get_inner_dtable_server_url())
+        self.dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
 
         self.table_id = None
         self.view_id = None
@@ -1269,6 +1277,8 @@ class AutomationRule:
         self._view_columns = None
         self.can_run_python = None
         self.scripts_running_limit = None
+        self._related_users = None
+        self._related_users_dict = None
 
         self.cache_key = 'AUTOMATION_RULE:%s' % self.rule_id
         self.task_run_seccess = True
@@ -1366,6 +1376,22 @@ class AutomationRule:
         if not self._view_info:
             raise RuleInvalidException('view not found')
         return self._view_info
+
+    @property
+    def related_users(self):
+        if not self._related_users:
+            try:
+                self._related_users = self.dtable_web_api.get_related_users(self.dtable_uuid)
+            except Exception as e:
+                logger.error('rule: %s uuid: %srequest related users error: %s', self.rule_id, self.dtable_uuid, e)
+                raise RuleInvalidException('rule: %s uuid: %srequest related users error: %s' % (self.rule_id, self.dtable_uuid, e))
+        return self._related_users
+
+    @property
+    def related_users_dict(self):
+        if not self._related_users_dict:
+            self._related_users_dict = {user['email']: user for user in self.related_users}
+        return self._related_users_dict
 
 
     def get_temp_api_token(self, username=None, app_name=None):
