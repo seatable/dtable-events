@@ -454,9 +454,10 @@ def add_wechat_sending_task():
 
     webhook_url = data.get('webhook_url')
     msg = data.get('msg')
+    msg_type = data.get('msg_type')
 
     try:
-        task_id = message_task_manager.add_wechat_sending_task(webhook_url, msg)
+        task_id = message_task_manager.add_wechat_sending_task(webhook_url, msg, msg_type)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))

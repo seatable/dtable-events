@@ -80,10 +80,10 @@ class TaskMessageManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
-    def add_wechat_sending_task(self, webhook_url, msg ):
+    def add_wechat_sending_task(self, webhook_url, msg, msg_type):
         from dtable_events.dtable_io import send_wechat_msg
         task_id = str(int(time.time() * 1000))
-        task = (send_wechat_msg, (webhook_url, msg))
+        task = (send_wechat_msg, (webhook_url, msg, msg_type))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         return task_id
