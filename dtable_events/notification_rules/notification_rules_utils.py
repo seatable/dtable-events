@@ -95,6 +95,7 @@ def scan_triggered_notification_rules(event_data, db_session):
         try:
             trigger_notification_rule(rule, table_id, row, converted_row, dtable_server_access_token, db_session, op_type)
         except Exception as e:
+            logger.exception(e)
             logger.error(f'check rule failed. {rule}, error: {e}')
     db_session.commit()
 

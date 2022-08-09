@@ -134,7 +134,7 @@ class DTableServerAPI(object):
         response = requests.delete(url, json=json_data, headers=self.headers)
         return parse_response(response)
 
-    def internal_filter_rows(self, json_data):
+    def internal_filter_rows(self, json_data, return_response=False):
         """
         for example:
             json_data = {
@@ -149,6 +149,8 @@ class DTableServerAPI(object):
         logger.debug('internal filter rows json_data: %s', json_data)
         url = self.dtable_server_url + '/api/v1/internal/dtables/' + self.dtable_uuid + '/filter-rows/?from=dtable_events'
         response = requests.post(url, json=json_data, headers=self.headers)
+        if return_response:
+            return response
         return parse_response(response)
 
     def lock_rows(self, table_name, row_ids):

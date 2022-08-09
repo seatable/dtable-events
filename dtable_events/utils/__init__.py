@@ -175,7 +175,9 @@ def uuid_str_to_32_chars(dtable_uuid):
         return dtable_uuid
 
 def is_valid_email(email):
-    return True if EMAIL_RE.match(email) is not None else False
+    if email and (isinstance(email, str) or isinstance(email, bytes)):
+        return EMAIL_RE.match(email) is not None
+    return False
 
 def get_inner_dtable_server_url():
     """ only for api
