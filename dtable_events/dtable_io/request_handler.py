@@ -680,9 +680,10 @@ def add_import_excel_csv_to_dtable_task():
     dtable_name = request.args.get('dtable_name')
     dtable_uuid = request.args.get('dtable_uuid')
     file_type = request.args.get('file_type')
+    lang = request.args.get('lang')
 
     try:
-        task_id = task_manager.add_import_excel_csv_to_dtable_task(username, repo_id, workspace_id, dtable_name, dtable_uuid, file_type)
+        task_id = task_manager.add_import_excel_csv_to_dtable_task(username, repo_id, workspace_id, dtable_name, dtable_uuid, file_type, lang)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -709,9 +710,10 @@ def add_import_excel_to_table_task():
     file_name = request.args.get('file_name')
     dtable_uuid = request.args.get('dtable_uuid')
     file_type = request.args.get('file_type')
+    lang = request.args.get('lang')
 
     try:
-        task_id = task_manager.add_import_excel_csv_to_table_task(username, repo_id, workspace_id, file_name, dtable_uuid, file_type)
+        task_id = task_manager.add_import_excel_csv_to_table_task(username, repo_id, workspace_id, file_name, dtable_uuid, file_type, lang)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))

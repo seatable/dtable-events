@@ -345,13 +345,13 @@ def update_csv_upload_csv(username, repo_id, file_name, dtable_uuid, table_name)
         dtable_io_logger.info('parse update csv %s.csv success!' % file_name)
 
 
-def import_excel_csv_to_dtable(username, repo_id, workspace_id, dtable_name, dtable_uuid, file_type):
+def import_excel_csv_to_dtable(username, repo_id, workspace_id, dtable_name, dtable_uuid, file_type, lang):
     """
     parse excel csv to json, then import excel csv to dtable
     """
     dtable_io_logger.info('Start import excel or csv: %s.%s to dtable.' % (dtable_name, file_type))
     try:
-        parse_and_import_excel_csv_to_dtable(repo_id, dtable_name, dtable_uuid, username, file_type)
+        parse_and_import_excel_csv_to_dtable(repo_id, dtable_name, dtable_uuid, username, file_type, lang)
     except Exception as e:
         dtable_io_logger.exception('import excel or csv to dtable failed. ERROR: {}'.format(e))
         if str(e.args[0]) == 'Excel format error':
@@ -360,13 +360,13 @@ def import_excel_csv_to_dtable(username, repo_id, workspace_id, dtable_name, dta
         dtable_io_logger.info('import excel or csv %s.%s to dtable success!' % (dtable_name, file_type))
 
 
-def import_excel_csv_to_table(username, repo_id, workspace_id, file_name, dtable_uuid, file_type):
+def import_excel_csv_to_table(username, repo_id, workspace_id, file_name, dtable_uuid, file_type, lang):
     """
     parse excel or csv to json, then import excel or csv to table
     """
     dtable_io_logger.info('Start import excel or csv: %s.%s to table.' % (file_name, file_type))
     try:
-        parse_and_import_excel_csv_to_table(repo_id, file_name, dtable_uuid, username, file_type)
+        parse_and_import_excel_csv_to_table(repo_id, file_name, dtable_uuid, username, file_type, lang)
     except Exception as e:
         dtable_io_logger.exception('import excel or csv to table failed. ERROR: {}'.format(e))
         if str(e.args[0]) == 'Excel format error':

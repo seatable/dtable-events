@@ -420,7 +420,7 @@ def parse_dtable_csv(repo_id, dtable_name):
     return json.dumps(tables)
 
 
-def parse_and_import_excel_csv_to_dtable(repo_id, dtable_name, dtable_uuid, username, file_type):
+def parse_and_import_excel_csv_to_dtable(repo_id, dtable_name, dtable_uuid, username, file_type, lang):
     from dtable_events.dtable_io.utils import upload_excel_json_to_dtable_server, delete_file
 
     if file_type == 'xlsx':
@@ -430,10 +430,10 @@ def parse_and_import_excel_csv_to_dtable(repo_id, dtable_name, dtable_uuid, user
     # delete excel、csv、json  file
     delete_file(username, repo_id, dtable_name)
     # import json file to dtable-server
-    upload_excel_json_to_dtable_server(username, dtable_uuid, content)
+    upload_excel_json_to_dtable_server(username, dtable_uuid, content, lang)
 
 
-def parse_and_import_excel_csv_to_table(repo_id, file_name, dtable_uuid, username, file_type):
+def parse_and_import_excel_csv_to_table(repo_id, file_name, dtable_uuid, username, file_type, lang):
     from dtable_events.dtable_io.utils import upload_excel_json_add_table_to_dtable_server, delete_file
 
     if file_type == 'xlsx':
@@ -443,7 +443,7 @@ def parse_and_import_excel_csv_to_table(repo_id, file_name, dtable_uuid, usernam
     # delete excel、csv、json  file
     delete_file(username, repo_id, file_name)
     # import json file to dtable-server
-    upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, content)
+    upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, content, lang)
 
 
 def parse_and_update_file_to_table(repo_id, file_name, username, dtable_uuid, table_name, selected_columns, file_type):

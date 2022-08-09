@@ -235,20 +235,20 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
-    def add_import_excel_csv_to_dtable_task(self, username, repo_id, workspace_id, dtable_name, dtable_uuid, file_type):
+    def add_import_excel_csv_to_dtable_task(self, username, repo_id, workspace_id, dtable_name, dtable_uuid, file_type, lang):
         from dtable_events.dtable_io import import_excel_csv_to_dtable
 
         task_id = str(int(time.time()*1000))
-        task = (import_excel_csv_to_dtable, (username, repo_id, workspace_id, dtable_name, dtable_uuid, file_type))
+        task = (import_excel_csv_to_dtable, (username, repo_id, workspace_id, dtable_name, dtable_uuid, file_type, lang))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         return task_id
 
-    def add_import_excel_csv_to_table_task(self, username, repo_id, workspace_id, file_name, dtable_uuid, file_type):
+    def add_import_excel_csv_to_table_task(self, username, repo_id, workspace_id, file_name, dtable_uuid, file_type, lang):
         from dtable_events.dtable_io import import_excel_csv_to_table
 
         task_id = str(int(time.time()*1000))
-        task = (import_excel_csv_to_table, (username, repo_id, workspace_id, file_name, dtable_uuid, file_type))
+        task = (import_excel_csv_to_table, (username, repo_id, workspace_id, file_name, dtable_uuid, file_type, lang))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         return task_id
