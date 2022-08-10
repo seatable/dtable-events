@@ -3,16 +3,7 @@ import logging
 from threading import Thread, Event
 
 from dtable_events.utils import get_opt_from_conf_or_env, get_python_executable, run, parse_bool
-
-
-# DTABLE_WEB_DIR
-dtable_web_dir = os.environ.get('DTABLE_WEB_DIR', '')
-if not dtable_web_dir:
-    logging.critical('dtable_web_dir is not set')
-    raise RuntimeError('dtable_web_dir is not set')
-if not os.path.exists(dtable_web_dir):
-    logging.critical('dtable_web_dir %s does not exist' % dtable_web_dir)
-    raise RuntimeError('dtable_web_dir does not exist')
+from dtable_events.app.config import dtable_web_dir
 
 __all__ = [
     'DTableRowsCounter',
