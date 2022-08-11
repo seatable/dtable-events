@@ -17,7 +17,7 @@ from dtable_events.notification_rules.notification_rules_utils import _fill_msg_
     send_notification
 from dtable_events.utils import utc_to_tz, uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes
-from dtable_events.utils.dtable_server_api import DTableServerAPI
+from dtable_events.utils.dtable_server_api import DTableServerAPI, WrongFilterException
 
 
 logger = logging.getLogger(__name__)
@@ -263,26 +263,13 @@ class LockRowAction(BaseAction):
             'limit': 500
         }
         try:
-            response = self.auto_rule.dtable_server_api.internal_filter_rows(json_data, return_response=True)
+            response_data = self.auto_rule.dtable_server_api.internal_filter_rows(json_data)
+        except WrongFilterException:
+            raise RuleInvalidException('wrong filter in filters in lock-row')
         except Exception as e:
             logger.error('request filter rows error: %s', e)
             return []
 
-        if response.status_code >= 400:
-            logger.error('request filter rows error status code: %s text: %s', response.status_code, response.text)
-            try:
-                error_json = response.json()
-            except:
-                pass
-            else:
-                if error_json.get('error_type') == 'wrong_filter_in_filters':
-                    raise RuleInvalidException('wrong filter in filters in lock-row')
-
-        try:
-            response_data = response.json()
-        except Exception as e:
-            logger.error('parse response data error: %s', e)
-            return []
         rows_data = response_data.get('rows') or []
         logger.debug('Number of linking dtable rows by auto-rules: %s, dtable_uuid: %s, details: %s' % (
             rows_data and len(rows_data) or 0,
@@ -997,26 +984,13 @@ class LinkRecordsAction(BaseAction):
             'limit': 500
         }
         try:
-            response = self.auto_rule.dtable_server_api.internal_filter_rows(json_data, return_response=True)
+            response_data = self.auto_rule.dtable_server_api.internal_filter_rows(json_data)
+        except WrongFilterException:
+            raise RuleInvalidException('wrong filter in filters in link-records')
         except Exception as e:
             logger.error('request filter rows error: %s', e)
             return []
 
-        if response.status_code >= 400:
-            logger.error('request filter rows error status code: %s text: %s', response.status_code, response.text)
-            try:
-                error_json = response.json()
-            except:
-                pass
-            else:
-                if error_json.get('error_type') == 'wrong_filter_in_filters':
-                    raise RuleInvalidException('wrong filter in filters in link-records')
-
-        try:
-            response_data = response.json()
-        except Exception as e:
-            logger.error('parse response data error: %s', e)
-            return []
         rows_data = response_data.get('rows') or []
         logger.debug('Number of linking dtable rows by auto-rules: %s, dtable_uuid: %s, details: %s' % (
             rows_data and len(rows_data) or 0,
