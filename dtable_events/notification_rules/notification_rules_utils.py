@@ -464,7 +464,7 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
                     users_from_column = []
                 if not isinstance(users_from_column, list):
                     users_from_column = [users_from_column, ]
-                users = list(set(users + users_from_column))
+                users = list(set(users + [user for user in users_from_column if user in related_users_dict]))
             else:
                 logger.warning('notification rule: %s notify user column: %s invalid', rule_id, users_column_key)
 
