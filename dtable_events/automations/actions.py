@@ -264,13 +264,13 @@ class LockRowAction(BaseAction):
         }
         try:
             response_data = self.auto_rule.dtable_server_api.internal_filter_rows(json_data)
+            rows_data = response_data.get('rows') or []
         except WrongFilterException:
             raise RuleInvalidException('wrong filter in filters in lock-row')
         except Exception as e:
             logger.error('request filter rows error: %s', e)
             return []
 
-        rows_data = response_data.get('rows') or []
         logger.debug('Number of linking dtable rows by auto-rules: %s, dtable_uuid: %s, details: %s' % (
             rows_data and len(rows_data) or 0,
             self.auto_rule.dtable_uuid,
@@ -985,13 +985,13 @@ class LinkRecordsAction(BaseAction):
         }
         try:
             response_data = self.auto_rule.dtable_server_api.internal_filter_rows(json_data)
+            rows_data = response_data.get('rows') or []
         except WrongFilterException:
             raise RuleInvalidException('wrong filter in filters in link-records')
         except Exception as e:
             logger.error('request filter rows error: %s', e)
             return []
 
-        rows_data = response_data.get('rows') or []
         logger.debug('Number of linking dtable rows by auto-rules: %s, dtable_uuid: %s, details: %s' % (
             rows_data and len(rows_data) or 0,
             self.auto_rule.dtable_uuid,
