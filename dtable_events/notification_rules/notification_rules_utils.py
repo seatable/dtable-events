@@ -417,7 +417,7 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
             'condition': CONDITION_ROWS_MODIFIED,
             'rule_id': rule.id,
             'rule_name': rule_name,
-            'msg': gen_notification_msg_with_row(msg, converted_row, column_blanks, col_name_dict, db_session),
+            'msg': gen_notification_msg_with_row(msg, converted_row, column_blanks, col_name_dict, db_session, dtable_metadata=dtable_metadata),
             'row_id_list': [row['_id']],
         }
 
@@ -452,7 +452,7 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
             'condition': CONDITION_FILTERS_SATISFY,
             'rule_id': rule.id,
             'rule_name': rule_name,
-            'msg': gen_notification_msg_with_row(msg, converted_row, column_blanks, col_name_dict, db_session),
+            'msg': gen_notification_msg_with_row(msg, converted_row, column_blanks, col_name_dict, db_session, dtable_metadata=dtable_metadata),
             'row_id_list': [row['_id']],
         }
         if users_column_key:
