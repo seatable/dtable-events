@@ -1,13 +1,8 @@
 import json
 import logging
-import os
-import sys
-import time
 from datetime import datetime, timedelta
 from threading import Thread
 
-import jwt
-import requests
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from dtable_events import init_db_session_class
@@ -15,26 +10,7 @@ from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_t
 from dtable_events.data_sync.data_sync_utils import set_data_sync_invalid, sync_email, check_imap_account, \
     get_third_party_account
 from dtable_events.utils.dtable_server_api import DTableServerAPI
-
-
-# DTABLE_WEB_DIR
-dtable_web_dir = os.environ.get('DTABLE_WEB_DIR', '')
-if not dtable_web_dir:
-    logging.critical('dtable_web_dir is not set')
-    raise RuntimeError('dtable_web_dir is not set')
-if not os.path.exists(dtable_web_dir):
-    logging.critical('dtable_web_dir %s does not exist' % dtable_web_dir)
-    raise RuntimeError('dtable_web_dir does not exist.')
-
-sys.path.insert(0, dtable_web_dir)
-
-try:
-    import seahub.settings as seahub_settings
-    INNER_DTABLE_DB_URL = getattr(seahub_settings, 'INNER_DTABLE_DB_URL')
-    DTABLE_WEB_SERVICE_URL = getattr(seahub_settings, 'DTABLE_WEB_SERVICE_URL')
-except ImportError as e:
-    logging.critical("Can not import dtable_web settings: %s." % e)
-    raise RuntimeError("Can not import dtable_web settings: %s" % e)
+from dtable_events.app.config import INNER_DTABLE_DB_URL, DTABLE_WEB_SERVICE_URL
 
 logger = logging.getLogger(__name__)
 

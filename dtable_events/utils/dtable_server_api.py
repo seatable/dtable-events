@@ -8,24 +8,16 @@ from uuid import UUID
 from datetime import datetime
 from seaserv import seafile_api
 from dtable_events.dtable_io.utils import get_dtable_server_token
+from dtable_events.app.config import FILE_SERVER_ROOT
 
 logger = logging.getLogger(__name__)
+
+UPLOAD_IMG_RELATIVE_PATH = 'images'
+UPLOAD_FILE_RELATIVE_PATH = 'files'
 
 
 class WrongFilterException(Exception):
     pass
-
-
-try:
-    import seahub.settings as seahub_settings
-    FILE_SERVER_ROOT = getattr(seahub_settings, 'FILE_SERVER_ROOT', 'http://127.0.0.1:8082')
-except ImportError as e:
-    logger.critical("Can not import dtable_web settings: %s." % e)
-    raise RuntimeError("Can not import dtable_web settings: %s" % e)
-
-
-UPLOAD_IMG_RELATIVE_PATH = 'images'
-UPLOAD_FILE_RELATIVE_PATH = 'files'
 
 
 def parse_response(response):
