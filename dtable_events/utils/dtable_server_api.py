@@ -146,7 +146,7 @@ class DTableServerAPI(object):
         response = requests.delete(url, json=json_data, headers=self.headers)
         return parse_response(response)
 
-    def internal_filter_rows(self, json_data, return_response=False):
+    def internal_filter_rows(self, json_data):
         """
         for example:
             json_data = {
