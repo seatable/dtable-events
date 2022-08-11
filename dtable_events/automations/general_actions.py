@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 import jwt
 import requests
 
+from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, SEATABLE_FAAS_AUTH_TOKEN, \
+    SEATABLE_FAAS_URL
 from dtable_events.automations.models import BoundThirdPartyAccounts
 from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg
 from dtable_events.notification_rules.notification_rules_utils import _fill_msg_blanks as fill_msg_blanks, \
@@ -19,28 +21,6 @@ from dtable_events.utils.dtable_server_api import DTableServerAPI
 
 
 logger = logging.getLogger(__name__)
-
-# DTABLE_WEB_DIR
-dtable_web_dir = os.environ.get('DTABLE_WEB_DIR', '')
-if not dtable_web_dir:
-    logging.critical('dtable_web_dir is not set')
-    raise RuntimeError('dtable_web_dir is not set')
-if not os.path.exists(dtable_web_dir):
-    logging.critical('dtable_web_dir %s does not exist' % dtable_web_dir)
-    raise RuntimeError('dtable_web_dir does not exist')
-try:
-    import seahub.settings as seahub_settings
-    DTABLE_WEB_SERVICE_URL = getattr(seahub_settings, 'DTABLE_WEB_SERVICE_URL')
-    DTABLE_PRIVATE_KEY = getattr(seahub_settings, 'DTABLE_PRIVATE_KEY')
-    DTABLE_SERVER_URL = getattr(seahub_settings, 'DTABLE_SERVER_URL')
-    ENABLE_DTABLE_SERVER_CLUSTER = getattr(seahub_settings, 'ENABLE_DTABLE_SERVER_CLUSTER', False)
-    DTABLE_PROXY_SERVER_URL = getattr(seahub_settings, 'DTABLE_PROXY_SERVER_URL', '')
-    FILE_SERVER_ROOT = getattr(seahub_settings, 'FILE_SERVER_ROOT', 'http://127.0.0.1:8082')
-    SEATABLE_FAAS_AUTH_TOKEN = getattr(seahub_settings, 'SEATABLE_FAAS_AUTH_TOKEN')
-    SEATABLE_FAAS_URL = getattr(seahub_settings, 'SEATABLE_FAAS_URL')
-except ImportError as e:
-    logger.critical("Can not import dtable_web settings: %s." % e)
-    raise RuntimeError("Can not import dtable_web settings: %s" % e)
 
 PER_DAY = 'per_day'
 PER_WEEK = 'per_week'
@@ -128,15 +108,13 @@ class BaseContext:
         self.dtable_server_api = DTableServerAPI(caller, self.dtable_uuid, get_inner_dtable_server_url())
 
         self._dtable_metadata = None
-
         self._table = None
-
         self._access_token = None
         self._headers = None
-
         self._view = None
-
         self._columns_dict = None
+        self._related_users = None
+        self._related_users_dict = None
 
         self._can_run_python = None
         self._scripts_running_limit = None
@@ -184,6 +162,13 @@ class BaseContext:
         return self._table
 
     @property
+    def columns_dict(self):
+        if self._columns_dict:
+            return self._columns_dict
+        self._columns_dict = {col['key']: col for col in self.table['columns']}
+        return self._columns_dict
+
+    @property
     def view(self):
         if self._view:
             return self._view
@@ -196,6 +181,20 @@ class BaseContext:
         if not self._view:
             raise ContextInvalid('dtable: %s self.table: %s self.view: %s not found' % (self.dtable_uuid, self.table_id, self.view_id))
         return self._view
+
+    @property
+    def related_users(self):
+        if not self._related_users:
+            url = '%(server_url)s/api/v2.1/dtables/%(dtable_uuid)s/related-users/' % {
+                'server_url': DTABLE_WEB_SERVICE_URL.strip('/'),
+                'dtable_uuid': self.dtable_uuid
+            }
+            self._related_users = ['']
+        return self._related_users
+
+    @property
+    def related_users_dict(self):
+        pass
 
     @property
     def can_run_python(self):
@@ -212,13 +211,6 @@ class BaseContext:
     @scripts_running_limit.setter
     def scripts_running_limit(self, limit):
         self._scripts_running_limit = limit
-
-    @property
-    def columns_dict(self):
-        if self._columns_dict:
-            return self._columns_dict
-        self._columns_dict = {col['key']: col for col in self.table['columns']}
-        return self._columns_dict
 
     def get_table_by_id(self, table_id):
         for table in self.dtable_metadata['tables']:
@@ -269,12 +261,6 @@ class ActionInvalid(Exception):
 
 
 class BaseAction:
-
-    LINK_URL_FORMAT = get_inner_dtable_server_url().strip('/') + '/api/v1/dtables/%(dtable_uuid)s/links/?from=dtable_events'
-    LOCK_URL_FORMAT = get_inner_dtable_server_url().strip('/') + '/api/v1/dtables/%(dtable_uuid)s/lock-rows/?from=dtable_events'
-    FILTER_ROWS_URL_FORMAT = get_inner_dtable_server_url().strip('/') + '/api/v1/internal/dtables/%(dtable_uuid)s/filter-rows/?from=dtable_events'
-    UPDATE_ROW_URL_FORMAT = get_inner_dtable_server_url().strip('/') + '/api/v1/dtables/%(dtable_uuid)s/rows/?from=dtable_events'
-    ADD_ROW_URL_FORMAT = get_inner_dtable_server_url().strip('/') + '/api/v1/dtables/%(dtable_uuid)s/rows/?from=dtable_events'
 
     RUN_SCRIPT_URL = SEATABLE_FAAS_URL.strip('/') + '/run-script/'
 
@@ -543,8 +529,6 @@ class AddRowAction(BaseAction):
         ColumnTypes.RATE,
     ]
 
-    ADD_ROW_URL_FORMAT = get_inner_dtable_server_url().strip('/') + '/api/v1/dtables/%(dtable_uuid)s/rows/?from=dtable_events'
-
     def __init__(self, context: BaseContext, new_row):
         super().__init__(context)
         if not new_row:
@@ -575,11 +559,8 @@ class UpdateAction(BaseAction):
         ColumnTypes.RATE,
     ]
 
-    UPDATE_ROW_URL_FORMAT = get_inner_dtable_server_url().strip('/') + '/api/v1/dtables/%(dtable_uuid)s/rows/?from=dtable_events'
-
     def __init__(self, context: BaseContext, updates, row_id):
         super().__init__(context)
-        self.update_url = self.UPDATE_ROW_URL_FORMAT % {'dtable_uuid': str(UUID(self.context.dtable_uuid))}
         self.row_id = row_id
         self.row_data = self.generate_filter_updates(updates, self.context.table)
 
@@ -594,8 +575,6 @@ class UpdateAction(BaseAction):
 
 class LockRecordAction(BaseAction):
 
-    LOCK_URL_FORMAT = get_inner_dtable_server_url().strip('/') + '/api/v1/dtables/%(dtable_uuid)s/lock-rows/?from=dtable_events'
-    FILTER_ROWS_URL_FORMAT = get_inner_dtable_server_url().strip('/') + '/api/v1/internal/dtables/%(dtable_uuid)s/filter-rows/?from=dtable_events'
 
     def __init__(self, context: BaseContext, row_id=None, filters=None, filter_conjunction=None):
         super().__init__(context)
@@ -603,7 +582,6 @@ class LockRecordAction(BaseAction):
             raise ActionInvalid('row_id invalid or view: %s not found' % self.context.view_id)
         if not row_id and not all(filters, filter_conjunction):
             raise ActionInvalid('row_id or (filters, filter_conjunction) invalid')
-        self.lock_url = self.LOCK_URL_FORMAT % {'dtable_uuid': str(UUID(self.context.dtable_uuid))}
         self.row_ids = []
         if row_id:
             self.row_ids.append(row_id)
@@ -652,8 +630,6 @@ class LockRecordAction(BaseAction):
 
 
 class LinkRecordsAction(BaseAction):
-
-    LINK_URL_FORMAT = get_inner_dtable_server_url().strip('/') + '/api/v1/dtables/%(dtable_uuid)s/links/?from=dtable_events'
 
     COLUMN_FILTER_PREDICATE_MAPPING = {
         ColumnTypes.TEXT: "is",
@@ -874,8 +850,6 @@ class AddRecordToOtherTableAction(BaseAction):
         ColumnTypes.EMAIL,
         ColumnTypes.RATE,
     ]
-
-    ADD_ROW_URL_FORMAT = get_inner_dtable_server_url().strip('/') + '/api/v1/dtables/%(dtable_uuid)s/rows/?from=dtable_events'
 
     def __init__(self, context: BaseContext, dst_table_id, new_row):
         super().__init__(context)
