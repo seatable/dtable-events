@@ -1,10 +1,12 @@
+import logging
 from imapclient import IMAPClient
 from email.parser import Parser
 from email.header import decode_header
 from datetime import datetime, timedelta
 from email.utils import parseaddr, parsedate_to_datetime
 from tzlocal import get_localzone
-from dtable_events.dtable_io import dtable_io_logger
+
+logger = logging.getLogger(__name__)
 
 
 class ImapMail(object):
@@ -21,7 +23,7 @@ class ImapMail(object):
         self.server = IMAPClient(self.serveraddress, self.port, timeout=self.timeout, ssl_context=self.ssl_context)
         if '163.com' in self.serveraddress:
             self.server.id_({"name": "IMAPClient", "version": "2.1.0"})
-        dtable_io_logger.info('connected success')
+        logger.info('connected success')
 
     def login(self):
         self.server.login(self.user, self.passwd)
@@ -42,12 +44,12 @@ class ImapMail(object):
                 content = part.get_payload(decode=True).decode(charset)
             except LookupError:
                 content = part.get_payload()
-                dtable_io_logger.info('unknown encoding: %s' % charset)
+                logger.info('unknown encoding: %s' % charset)
             except UnicodeDecodeError:
                 content = part.get_payload()
-                dtable_io_logger.info('%s can\'t decode unicode' % charset)
+                logger.info('%s can\'t decode unicode' % charset)
             except Exception as e:
-                dtable_io_logger.error(e)
+                logger.error(e)
         else:
             content = part.get_payload()
         return content
@@ -135,9 +137,9 @@ class ImapMail(object):
             return
 
         if not header_info['From']:
-            dtable_io_logger.warning('account: %s message: %s no sender!', self.user, mail)
+            logger.warning('account: %s message: %s no sender!', self.user, mail)
         if not header_info['To']:
-            dtable_io_logger.warning('account: %s message: %s no recipient!', self.user, mail)
+            logger.warning('account: %s message: %s no recipient!', self.user, mail)
         plain_content, html_content = self.get_content(msg)
         file_list, content_info = self.get_attachments(msg)
         email_dict['Content'] = plain_content
@@ -160,11 +162,11 @@ class ImapMail(object):
         send_date = datetime.strptime(send_date, '%Y-%m-%d').date()
         total_email_list = []
         for send_box in ['INBOX', 'Sent Items']:
-            dtable_io_logger.debug('start to get user: %s emails from box: %s', self.user, send_box)
+            logger.debug('start to get user: %s emails from box: %s', self.user, send_box)
             try:
                 self.server.select_folder(send_box, readonly=True)
             except Exception as e:
-                dtable_io_logger.warning('user: %s select email folder: %s error: %s', self.user, send_box, e)
+                logger.warning('user: %s select email folder: %s error: %s', self.user, send_box, e)
                 continue
             results = self.get_email_results(send_date, mode=mode)
             for mail in results:
@@ -173,8 +175,8 @@ class ImapMail(object):
                     if email_dict:
                         total_email_list.append(email_dict)
                 except Exception as e:
-                    dtable_io_logger.exception(e)
-                    dtable_io_logger.error('parse email error: %s', e)
+                    logger.exception(e)
+                    logger.error('parse email error: %s', e)
         return total_email_list
 
     def close(self):
