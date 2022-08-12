@@ -84,18 +84,22 @@ def check_row_conditions(trigger, auto_rule):
         },
         'limit': 500
     }
+
     try:
         response_data = auto_rule.dtable_server_api.internal_filter_rows(json_data)
         rows_data = response_data.get('rows')
-        logger.debug('Number of filter rows by auto-rules: %s, dtable_uuid: %s, details: %s' % (
-            len(rows_data),
-            auto_rule.dtable_uuid,
-            json.dumps(json_data)
-        ))
-        return rows_data or []
+    except WrongFilterException:
+        raise RuleInvalidException('wrong filter in filters in lock-row')
     except Exception as e:
-        logger.error('get dtable: %s ,filter rows, error: %s', auto_rule.dtable_uuid, e)
+        logger.error('request filter rows error: %s', e)
         return []
+    logger.debug('Number of filter rows by auto-rules: %s, dtable_uuid: %s, details: %s' % (
+        len(rows_data),
+        auto_rule.dtable_uuid,
+        json.dumps(json_data)
+    ))
+
+    return rows_data or []
 
 
 class BaseAction:
