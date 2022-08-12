@@ -13,10 +13,9 @@ import requests
 
 from dtable_events.automations.models import BoundThirdPartyAccounts
 from dtable_events.cache import redis_cache
-from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg, batch_send_email_msg
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, \
     SEATABLE_FAAS_AUTH_TOKEN, SEATABLE_FAAS_URL
-from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg
+from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg, batch_send_email_msg
 from dtable_events.notification_rules.notification_rules_utils import _fill_msg_blanks as fill_msg_blanks, \
     send_notification
 from dtable_events.utils import utc_to_tz, uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url
@@ -258,49 +257,6 @@ class LockRowAction(BaseAction):
         }
         self.trigger = trigger
         self._init_updates()
-
-    def _check_row_conditions(self):
-        filters = self.trigger.get('filters', [])
-        filter_conjunction = self.trigger.get('filter_conjunction', 'And')
-        table_id = self.auto_rule.table_id
-        view_info = self.auto_rule.view_info
-        view_filters = view_info.get('filters', [])
-        view_filter_conjunction = view_info.get('filter_conjunction', 'And')
-        filter_groups = []
-
-        if view_filters:
-            filter_groups.append({'filters': view_filters, 'filter_conjunction': view_filter_conjunction})
-
-        if filters:
-            # remove the duplicate filter which may already exist in view filter
-            trigger_filters = [trigger_filter for trigger_filter in filters if trigger_filter not in view_filters]
-            if trigger_filters:
-                filter_groups.append({'filters': trigger_filters, 'filter_conjunction': filter_conjunction})
-
-        json_data = {
-            'table_id': table_id,
-            'filter_conditions': {
-                'filter_groups':filter_groups,
-                'group_conjunction': 'And'
-            },
-            'limit': 500
-        }
-        try:
-            response_data = self.auto_rule.dtable_server_api.internal_filter_rows(json_data)
-            rows_data = response_data.get('rows') or []
-        except WrongFilterException:
-            raise RuleInvalidException('wrong filter in filters in lock-row')
-        except Exception as e:
-            logger.error('request filter rows error: %s', e)
-            return []
-
-        logger.debug('Number of linking dtable rows by auto-rules: %s, dtable_uuid: %s, details: %s' % (
-            rows_data and len(rows_data) or 0,
-            self.auto_rule.dtable_uuid,
-            json.dumps(json_data)
-        ))
-
-        return rows_data or []
 
     def _init_updates(self):
         # filter columns in view and type of column is in VALID_COLUMN_TYPES
