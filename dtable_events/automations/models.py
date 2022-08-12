@@ -53,3 +53,15 @@ class BoundThirdPartyAccounts(Base):
             'detail': _decrypt_detail(detail_dict)
         }
         return res
+
+
+def get_third_party_account(session, account_id):
+    account_query = session.query(BoundThirdPartyAccounts).filter(
+        BoundThirdPartyAccounts.id == account_id
+    )
+    account = account_query.first()
+    if account:
+        return account.to_dict()
+    else:
+        logger.warning("Third party account %s does not exists." % account_id)
+        return None

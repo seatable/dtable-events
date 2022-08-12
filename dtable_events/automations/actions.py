@@ -10,7 +10,7 @@ from datetime import datetime, date, timedelta
 import jwt
 import requests
 
-from dtable_events.automations.models import BoundThirdPartyAccounts
+from dtable_events.automations.models import get_third_party_account
 from dtable_events.cache import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, \
     SEATABLE_FAAS_AUTH_TOKEN, SEATABLE_FAAS_URL
@@ -40,16 +40,6 @@ MESSAGE_TYPE_AUTOMATION_RULE = 'automation_rule'
 
 MINUTE_TIMEOUT = 60
 
-def get_third_party_account(session, account_id):
-    account_query = session.query(BoundThirdPartyAccounts).filter(
-        BoundThirdPartyAccounts.id == account_id
-    )
-    account = account_query.first()
-    if account:
-        return account.to_dict()
-    else:
-        logger.warning("Third party account %s does not exists." % account_id)
-        return None
 
 def email2list(email_str, split_pattern='[,，]'):
     email_list = [value.strip() for value in re.split(split_pattern, email_str) if value.strip()]

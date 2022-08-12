@@ -7,10 +7,11 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 
 from dtable_events import init_db_session_class
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars, get_inner_dtable_server_url
-from dtable_events.data_sync.data_sync_utils import set_data_sync_invalid, sync_email, check_imap_account, \
-    get_third_party_account
+from dtable_events.data_sync.data_sync_utils import set_data_sync_invalid, sync_email, check_imap_account
 from dtable_events.utils.dtable_server_api import DTableServerAPI
+from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.app.config import INNER_DTABLE_DB_URL, DTABLE_WEB_SERVICE_URL
+from dtable_events.automations.models import get_third_party_account
 
 logger = logging.getLogger(__name__)
 
@@ -100,13 +101,15 @@ def check_data_syncs(db_session):
             if error_msg:
                 set_data_sync_invalid(data_sync_id, db_session)
                 logging.error(error_msg)
+                return
 
             dtable_server_api = DTableServerAPI('Data Sync', dtable_uuid, api_url,
-                                                dtable_db_url=INNER_DTABLE_DB_URL,
                                                 server_url=DTABLE_WEB_SERVICE_URL,
                                                 repo_id=repo_id,
                                                 workspace_id=workspace_id
                                                 )
+
+            dtable_db_api = DTableDBAPI('Data Sync', dtable_uuid, INNER_DTABLE_DB_URL)
 
             metadata = dtable_server_api.get_metadata()
 
@@ -141,6 +144,7 @@ def check_data_syncs(db_session):
                 'email_table_name': email_table_name,
                 'link_table_name': link_table_name,
                 'dtable_server_api': dtable_server_api,
+                'dtable_db_api': dtable_db_api,
                 'imap': imap,
             }
 

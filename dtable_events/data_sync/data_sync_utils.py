@@ -74,16 +74,16 @@ def fixed_sql_query(seatable, sql):
         return []
 
 
-def query_table_rows(seatable, table_name, fields='*', conditions='', all=True, limit=None):
+def query_table_rows(dtable_db_api, table_name, fields='*', conditions='', all=True, limit=None):
     where_conditions = f"where {conditions}" if conditions else ''
     if all:
-        result = fixed_sql_query(seatable, f"select count(*) from `{table_name}` {where_conditions}")[0]
+        result = fixed_sql_query(dtable_db_api, f"select count(*) from `{table_name}` {where_conditions}")[0]
         limit = result['COUNT(*)']
         if limit == 0:
             return []
     else:
         limit = 100 if not limit else limit
-    return fixed_sql_query(seatable, f"select {fields} from `{table_name}` {where_conditions} limit {limit}")
+    return fixed_sql_query(dtable_db_api, f"select {fields} from `{table_name}` {where_conditions} limit {limit}")
 
 
 def str_2_datetime(s: str):
@@ -98,13 +98,13 @@ def str_2_datetime(s: str):
     raise Exception(f"date {s} can't be transfered to datetime")
 
 
-def update_email_thread_ids(seatable, email_table_name, send_date, email_list):
+def update_email_thread_ids(dtable_db_api, email_table_name, send_date, email_list):
     """
     return: email list, [email1, email2...], email is with thread id
     """
     # get email rows in last 30 days and generate message-thread dict {`Message ID`: `Thread ID`}
     last_month_day = (str_2_datetime(send_date) - timedelta(days=30)).strftime('%Y-%m-%d')
-    email_rows = query_table_rows(seatable, email_table_name,
+    email_rows = query_table_rows(dtable_db_api, email_table_name,
                                   fields='`Message ID`, `Thread ID`',
                                   conditions=f"Date>='{last_month_day}'")
     message2thread = {email['Message ID']: email['Thread ID'] for email in email_rows}
@@ -120,7 +120,7 @@ def update_email_thread_ids(seatable, email_table_name, send_date, email_list):
         for i in range(0, len(no_thread_reply_message_ids), step):
             message_ids_str = ', '.join([f"'{message_id}'" for message_id in no_thread_reply_message_ids[i: i+step]])
             conditions = f"`Message ID`in ({message_ids_str})"
-            earlier_email_rows = query_table_rows(seatable, email_table_name,
+            earlier_email_rows = query_table_rows(dtable_db_api, email_table_name,
                                                   fields='`Message ID`, `Thread ID`',
                                                   conditions=conditions,
                                                   all=False,
@@ -180,13 +180,13 @@ def update_email_thread_ids(seatable, email_table_name, send_date, email_list):
     return email_list, new_thread_rows, to_be_updated_thread_dict
 
 
-def fill_email_list_with_row_id(seatable, email_table_name, email_list):
+def fill_email_list_with_row_id(dtable_db_api, email_table_name, email_list):
     step = 100
     message_id_row_id_dict = {}  # {message_id: row._id}
     for i in range(0, len(email_list), step):
         message_ids_str = ', '.join([f"'{email['Message ID']}'" for email in email_list[i: i+step]])
         conditions = f'`Message ID` in ({message_ids_str})'
-        email_rows = query_table_rows(seatable, email_table_name,
+        email_rows = query_table_rows(dtable_db_api, email_table_name,
                                       fields='`_id`, `Message ID`',
                                       conditions=conditions,
                                       all=False,
@@ -205,7 +205,7 @@ def get_thread_email_ids(thread_row_emails):
     return [email['row_id'] for email in thread_row_emails]
 
 
-def update_threads(seatable, email_table_name, link_table_name, email_list, to_be_updated_thread_dict):
+def update_threads(seatable, dtable_db_api, email_table_name, link_table_name, email_list, to_be_updated_thread_dict):
     """
     update thread table
     email_list: list of email
@@ -217,7 +217,7 @@ def update_threads(seatable, email_table_name, link_table_name, email_list, to_b
     for i in range(0, len(to_be_updated_thread_ids), step):
         thread_ids_str = ', '.join([f"'{thread_id}'" for thread_id in to_be_updated_thread_ids[i: i+step]])
         conditions = f"`Thread ID` in ({thread_ids_str})"
-        thread_rows = query_table_rows(seatable, link_table_name,
+        thread_rows = query_table_rows(dtable_db_api, link_table_name,
                                        fields='`Thread ID`, `_id`, `Emails`',
                                        conditions=conditions,
                                        all=False,
@@ -235,7 +235,7 @@ def update_threads(seatable, email_table_name, link_table_name, email_list, to_b
     seatable.batch_update_rows(link_table_name, to_be_updated_last_updated_rows)
 
     # fill email in email_list with row id
-    email_list = fill_email_list_with_row_id(seatable, email_table_name, email_list)
+    email_list = fill_email_list_with_row_id(dtable_db_api, email_table_name, email_list)
     email_dict = {email['Message ID']: email for email in email_list}
     # add link
     link_id = seatable.get_column_link_id(link_table_name, 'Emails', view_name=None)
@@ -258,7 +258,7 @@ def update_threads(seatable, email_table_name, link_table_name, email_list, to_b
     seatable.batch_update_links(link_id, link_table_id, email_table_id, row_id_list, other_rows_ids_map)
 
 
-def update_emails(seatable, email_table_name, email_list):
+def update_emails(seatable, dtable_db_api, email_table_name, email_list):
     """
     update email table
     email_list: list of email
@@ -272,7 +272,7 @@ def update_emails(seatable, email_table_name, email_list):
     for i in range(0, len(to_be_updated_message_ids), step):
         message_ids_str = ', '.join([f"'{message_id}'" for message_id in to_be_updated_message_ids[i: i + step]])
         conditions = f"`Message ID` in ({message_ids_str})"
-        email_rows = query_table_rows(seatable, email_table_name,
+        email_rows = query_table_rows(dtable_db_api, email_table_name,
                                       fields='`Message ID`, `_id`',
                                       conditions=conditions,
                                       all=False,
@@ -337,6 +337,7 @@ def sync_email(context):
     email_table_name = context['email_table_name']
     link_table_name = context['link_table_name']
     dtable_server_api = context['dtable_server_api']
+    dtable_db_api = context['dtable_db_api']
     imap = context['imap']
     mode = 'SINCE'
 
@@ -358,7 +359,7 @@ def sync_email(context):
 
     try:
         # update thread id of emails
-        email_list, new_thread_rows, to_be_updated_thread_dict = update_email_thread_ids(seatable, email_table_name,
+        email_list, new_thread_rows, to_be_updated_thread_dict = update_email_thread_ids(dtable_db_api, email_table_name,
                                                                                          send_date, email_list)
         logger.info(f'email: {email_user}, need to be inserted {len(email_list)} emails')
         logger.info(f'email: {email_user}, need to be inserted {len(new_thread_rows)} thread rows')
@@ -374,7 +375,7 @@ def sync_email(context):
         # wait several seconds for dtable-db
         time.sleep(2)
         # update attachment
-        update_emails(seatable, email_table_name, email_list)
+        update_emails(seatable, dtable_db_api, email_table_name, email_list)
         # insert new thread rows
         if new_thread_rows:
             seatable.batch_append_rows(link_table_name, new_thread_rows)
@@ -383,7 +384,7 @@ def sync_email(context):
         time.sleep(3)
 
         # update threads Last Updated and Emails
-        update_threads(seatable, email_table_name, link_table_name, email_list, to_be_updated_thread_dict)
+        update_threads(seatable, dtable_db_api, email_table_name, link_table_name, email_list, to_be_updated_thread_dict)
     except Exception as e:
         logger.exception(e)
         logger.error('email: %s sync and update link error: %s', email_user, e)
@@ -394,15 +395,3 @@ def set_data_sync_invalid(data_sync_id, db_session):
 
     db_session.execute(sql, {'data_sync_id': data_sync_id})
     db_session.commit()
-
-
-def get_third_party_account(session, account_id):
-    account_query = session.query(BoundThirdPartyAccounts).filter(
-        BoundThirdPartyAccounts.id == account_id
-    )
-    account = account_query.first()
-    if account:
-        return account.to_dict()
-    else:
-        logger.warning("Third party account %s does not exists." % account_id)
-        return None

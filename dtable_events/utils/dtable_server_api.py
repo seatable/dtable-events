@@ -38,92 +38,6 @@ def parse_response(response):
             pass
 
 
-def is_single_multiple_structure(column):
-    column_type = column['type']
-    if column_type in ('single-select', 'multiple-select'):
-        options = column.get('data', {}).get('options', [])
-        return True, options
-    if column_type in ('link', 'link-formula'):
-        array_type = column.get('data', {}).get('array_type')
-        if array_type in ('single-select', 'multiple-select'):
-            options = column.get('data', {}).get('array_data', {}).get('options', [])
-            return True, options
-    return False, []
-
-
-def convert_db_rows(metadata, results):
-    """ Convert dtable-db rows data to readable rows data
-
-    :param metadata: list
-    :param results: list
-    :return: list
-    """
-    if not results:
-        return []
-    converted_results = []
-    column_map = {column['key']: column for column in metadata}
-    select_map = {}
-    for column in metadata:
-            is_sm_structure, column_options = is_single_multiple_structure(column)
-            if is_sm_structure:
-                column_data = column['data']
-                if not column_data:
-                    continue
-                column_key = column['key']
-                select_map[column_key] = {
-                    select['id']: select['name'] for select in column_options}
-
-    for result in results:
-        item = {}
-        for column_key, value in result.items():
-            if column_key in column_map:
-                column = column_map[column_key]
-                column_name = column['name']
-                column_type = column['type']
-                s_map = select_map.get(column_key)
-                if column_type == 'single-select' and value and s_map:
-                    item[column_name] = s_map.get(value, value)
-                elif column_type == 'multiple-select' and value and s_map:
-                    item[column_name] = [s_map.get(s, s) for s in value]
-                elif column_type == 'link' and value and s_map:
-                    new_data = []
-                    for s in value:
-                        old_display_value = s.get('display_value')
-                        if isinstance(old_display_value, list):
-                            s['display_value'] = old_display_value and [s_map.get(v, v) for v in old_display_value] or []
-                        else:
-                            s['display_value'] = s_map.get(old_display_value, old_display_value)
-                        new_data.append(s)
-                    item[column_name] = new_data
-                elif column_type == 'link-formula' and value and s_map:
-                    if isinstance(value[0], list):
-                        item[column_name] = [[s_map.get(v, v) for v in s] for s in value]
-                    else:
-                        item[column_name] = [s_map.get(s, s) for s in value]
-
-                elif column_type == 'date':
-                    try:
-                        if value:
-                            date_value = datetime.fromisoformat(value)
-                            date_format = column['data']['format']
-                            if date_format == 'YYYY-MM-DD':
-                                value = date_value.strftime('%Y-%m-%d')
-                            else:
-                                value = date_value.strftime('%Y-%m-%d %H:%M:%S')
-                        else:
-                            value = None
-                    except Exception as e:
-                        print('[Warning] format date:', e)
-                    item[column_name] = value
-                else:
-                    item[column_name] = value
-            else:
-                item[column_key] = value
-        converted_results.append(item)
-
-    return converted_results
-
-
 def get_fileserver_root():
     """ Construct seafile fileserver address and port.
 
@@ -143,13 +57,12 @@ def gen_file_upload_url(token, op, replace=False):
 class DTableServerAPI(object):
     # simple version of python sdk without authorization for base or table manipulation
 
-    def __init__(self, username, dtable_uuid, dtable_server_url, server_url=None, dtable_db_url=None, repo_id=None, workspace_id=None):
+    def __init__(self, username, dtable_uuid, dtable_server_url, server_url=None, repo_id=None, workspace_id=None):
         self.username = username
         self.dtable_uuid = dtable_uuid
         self.headers = None
         self.dtable_server_url = dtable_server_url.rstrip('/')
         self.server_url = server_url.rstrip('/') if server_url else None
-        self.dtable_db_url = dtable_db_url.rstrip('/') if dtable_db_url else None
         self.repo_id = repo_id
         self.workspace_id = workspace_id
         self._init()
@@ -300,28 +213,6 @@ class DTableServerAPI(object):
         }
         response = requests.put(url, json=json_data, headers=self.headers)
         return parse_response(response)
-
-    def query(self, sql, convert=True):
-        """
-        :param sql: str
-        :param convert: bool
-        :return: list
-        """
-        if not sql:
-            raise ValueError('sql can not be empty.')
-        url = self.dtable_db_url + '/api/v1/query/' + self.dtable_uuid + '/?from=dtable_events'
-        json_data = {'sql': sql}
-        response = requests.post(url, json=json_data, headers=self.headers)
-        data = parse_response(response)
-        if not data.get('success'):
-            raise Exception(data.get('error_message'))
-        metadata = data.get('metadata')
-        results = data.get('results')
-        if convert:
-            converted_results = convert_db_rows(metadata, results)
-            return converted_results
-        else:
-            return results
 
     def get_column_link_id(self, table_name, column_name, view_name=None):
         columns = self.list_columns(table_name, view_name)
