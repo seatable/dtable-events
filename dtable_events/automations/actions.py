@@ -58,50 +58,6 @@ def email2list(email_str, split_pattern='[,，]'):
     return email_list
 
 
-def check_row_conditions(trigger, auto_rule):
-    filters = trigger.get('filters', [])
-    filter_conjunction = trigger.get('filter_conjunction', 'And')
-    table_id = auto_rule.table_id
-    view_info = auto_rule.view_info
-    view_filters = view_info.get('filters', [])
-    view_filter_conjunction = view_info.get('filter_conjunction', 'And')
-    filter_groups = []
-
-    if view_filters:
-        filter_groups.append({'filters': view_filters, 'filter_conjunction': view_filter_conjunction})
-
-    if filters:
-        # remove the duplicate filter which may already exist in view filter
-        trigger_filters = [trigger_filter for trigger_filter in filters if trigger_filter not in view_filters]
-        if trigger_filters:
-            filter_groups.append({'filters': trigger_filters, 'filter_conjunction': filter_conjunction})
-
-    json_data = {
-        'table_id': table_id,
-        'filter_conditions': {
-            'filter_groups':filter_groups,
-            'group_conjunction': 'And'
-        },
-        'limit': 500
-    }
-
-    try:
-        response_data = auto_rule.dtable_server_api.internal_filter_rows(json_data)
-        rows_data = response_data.get('rows')
-    except WrongFilterException:
-        raise RuleInvalidException('wrong filter in rule: %s trigger filters', auto_rule.rule_id)
-    except Exception as e:
-        logger.error('request filter rows error: %s', e)
-        return []
-    logger.debug('Number of filter rows by auto-rules: %s, dtable_uuid: %s, details: %s' % (
-        len(rows_data),
-        auto_rule.dtable_uuid,
-        json.dumps(json_data)
-    ))
-
-    return rows_data or []
-
-
 class BaseAction:
 
     def __init__(self, auto_rule, data=None):
@@ -269,7 +225,7 @@ class LockRowAction(BaseAction):
             self.update_data['row_ids'].append(row_id)
 
         if self.auto_rule.run_condition in (PER_DAY, PER_WEEK, PER_MONTH):
-            rows_data = check_row_conditions(self.trigger, self.auto_rule)
+            rows_data = self.auto_rule.get_trigger_conditions_rows()[:50]
             for row in rows_data:
                 self.update_data['row_ids'].append(row.get('_id'))
 
@@ -511,7 +467,7 @@ class NotifyAction(BaseAction):
         table_id, view_id = self.auto_rule.table_id, self.auto_rule.view_id
         dtable_uuid = self.auto_rule.dtable_uuid
 
-        rows_data = check_row_conditions(self.auto_rule.trigger, self.auto_rule)[:50]
+        rows_data = self.auto_rule.get_trigger_conditions_rows()[:50]
         col_key_dict = {col.get('key'): col for col in self.auto_rule.view_columns}
 
         user_msg_list = []
@@ -618,7 +574,7 @@ class SendWechatAction(BaseAction):
             logger.error('send wechat error: %s', e)
 
     def condition_cron_notify(self):
-        rows_data = check_row_conditions(self.auto_rule.trigger, self.auto_rule)[:20]
+        rows_data = self.auto_rule.get_trigger_conditions_rows()[:20]
         col_key_dict = {col.get('key'): col for col in self.auto_rule.view_columns}
 
         for row in rows_data:
@@ -696,7 +652,7 @@ class SendDingtalkAction(BaseAction):
             logger.error('send dingtalk error: %s', e)
 
     def condition_cron_notify(self):
-        rows_data = check_row_conditions(self.auto_rule.trigger, self.auto_rule)[:20]
+        rows_data = self.auto_rule.get_trigger_conditions_rows()[:20]
         col_key_dict = {col.get('key'): col for col in self.auto_rule.view_columns}
 
         for row in rows_data:
@@ -846,7 +802,7 @@ class SendEmailAction(BaseAction):
             logger.error('send email error: %s', e)
 
     def condition_cron_notify(self):
-        rows_data = check_row_conditions(self.auto_rule.trigger, self.auto_rule)[:50]
+        rows_data = self.auto_rule.get_trigger_conditions_rows()[:50]
         col_key_dict = {col.get('key'): col for col in self.auto_rule.view_columns}
         send_info_list = []
         for row in rows_data:
@@ -1109,7 +1065,8 @@ class LinkRecordsAction(BaseAction):
             logger.error('request filter rows error: %s', e)
             return []
 
-        logger.debug('Number of linking dtable rows by auto-rules: %s, dtable_uuid: %s, details: %s' % (
+        logger.debug('Number of linking dtable rows by auto-rule %s is: %s, dtable_uuid: %s, details: %s' % (
+            self.auto_rule.rule_id,
             rows_data and len(rows_data) or 0,
             self.auto_rule.dtable_uuid,
             json.dumps(json_data)
@@ -1409,6 +1366,7 @@ class AutomationRule:
         self.scripts_running_limit = None
         self._related_users = None
         self._related_users_dict = None
+        self._trigger_conditions_rows = None
 
         self.cache_key = 'AUTOMATION_RULE:%s' % self.rule_id
         self.task_run_seccess = True
@@ -1535,6 +1493,53 @@ class AutomationRule:
             payload['app_name'] = app_name
         temp_api_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
         return temp_api_token
+
+    def get_trigger_conditions_rows(self):
+        if self._trigger_conditions_rows is not None:
+            return self._trigger_conditions_rows
+        filters = self.trigger.get('filters', [])
+        filter_conjunction = self.trigger.get('filter_conjunction', 'And')
+        table_id = self.table_id
+        view_info = self.view_info
+        view_filters = view_info.get('filters', [])
+        view_filter_conjunction = view_info.get('filter_conjunction', 'And')
+        filter_groups = []
+
+        if view_filters:
+            filter_groups.append({'filters': view_filters, 'filter_conjunction': view_filter_conjunction})
+
+        if filters:
+            # remove the duplicate filter which may already exist in view filter
+            trigger_filters = [trigger_filter for trigger_filter in filters if trigger_filter not in view_filters]
+            if trigger_filters:
+                filter_groups.append({'filters': trigger_filters, 'filter_conjunction': filter_conjunction})
+
+        json_data = {
+            'table_id': table_id,
+            'filter_conditions': {
+                'filter_groups':filter_groups,
+                'group_conjunction': 'And'
+            },
+            'limit': 500
+        }
+
+        try:
+            response_data = self.dtable_server_api.internal_filter_rows(json_data)
+            rows_data = response_data.get('rows') or []
+        except WrongFilterException:
+            raise RuleInvalidException('wrong filter in rule: %s trigger filters', self.rule_id)
+        except Exception as e:
+            logger.error('request filter rows error: %s', e)
+            self._trigger_conditions_rows = []
+            return self._trigger_conditions_rows
+        logger.debug('Number of filter rows by auto-rule %s is: %s, dtable_uuid: %s, details: %s' % (
+            self.rule_id,
+            len(rows_data),
+            self.dtable_uuid,
+            json.dumps(json_data)
+        ))
+        self._trigger_conditions_rows = rows_data
+        return self._trigger_conditions_rows
 
     def can_do_actions(self):
         if self.trigger.get('condition') not in (CONDITION_FILTERS_SATISFY, CONDITION_PERIODICALLY, CONDITION_ROWS_ADDED, CONDITION_PERIODICALLY_BY_CONDITION):
