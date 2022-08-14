@@ -8,8 +8,12 @@ from datetime import datetime
 from uuid import uuid4
 from imapclient.exceptions import LoginError
 
+from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL
+from dtable_events.automations.models import get_third_party_account
 from dtable_events.data_sync.imap_mail import ImapMail
-from dtable_events.automations.models import BoundThirdPartyAccounts
+from dtable_events.utils import get_inner_dtable_server_url
+from dtable_events.utils.dtable_db_api import DTableDBAPI
+from dtable_events.utils.dtable_server_api import DTableServerAPI
 
 
 logger = logging.getLogger(__name__)
@@ -395,3 +399,94 @@ def set_data_sync_invalid(data_sync_id, db_session):
 
     db_session.execute(sql, {'data_sync_id': data_sync_id})
     db_session.commit()
+
+
+def run_sync_emails(context):
+    data_sync_id = context['data_sync_id']
+    dtable_uuid = context['dtable_uuid']
+    detail = context['detail']
+    repo_id = context['repo_id']
+    workspace_id = context['workspace_id']
+    db_session = context['db_session']
+
+    api_url = get_inner_dtable_server_url()
+
+    account_id = detail.get('third_account_id')
+    email_table_id = detail.get('email_table_id')
+    link_table_id = detail.get('link_table_id')
+
+    if not all([account_id, email_table_id, link_table_id]):
+        set_data_sync_invalid(data_sync_id, db_session)
+        logger.error('account settings invalid.')
+        return
+
+    account = get_third_party_account(db_session, account_id)
+    account_type = account.get('account_type')
+    account_detail = account.get('detail')
+    if not account or account_type != 'email' or not account_detail:
+        set_data_sync_invalid(data_sync_id, db_session)
+        logger.error('third party account not found.')
+        return
+
+    imap_host = account_detail.get('imap_host')
+    imap_port = account_detail.get('imap_port')
+    email_user = account_detail.get('host_user')
+    email_password = account_detail.get('password')
+    if not all([imap_host, imap_port, email_user, email_password]):
+        set_data_sync_invalid(data_sync_id, db_session)
+        logger.error('third party account invalid.')
+        return
+
+    imap, error_msg = check_imap_account(imap_host, email_user, email_password, port=imap_port, return_imap=True)
+
+    if error_msg:
+        set_data_sync_invalid(data_sync_id, db_session)
+        logger.error(error_msg)
+        return
+
+    dtable_server_api = DTableServerAPI('Data Sync', dtable_uuid, api_url,
+                                        server_url=DTABLE_WEB_SERVICE_URL,
+                                        repo_id=repo_id,
+                                        workspace_id=workspace_id
+                                        )
+
+    dtable_db_api = DTableDBAPI('Data Sync', dtable_uuid, INNER_DTABLE_DB_URL)
+
+    metadata = dtable_server_api.get_metadata()
+
+    email_table_name = ''
+    link_table_name = ''
+
+    tables = metadata.get('tables', [])
+    for table in tables:
+        if not email_table_name and table.get('_id') == email_table_id:
+            email_table_name = table.get('name')
+        if not link_table_name and table.get('_id') == link_table_id:
+            link_table_name = table.get('name')
+        if email_table_name and link_table_name:
+            break
+
+    if not email_table_name or not link_table_name:
+        set_data_sync_invalid(data_sync_id, db_session)
+        logger.error('email table or link table invalid.')
+        return
+
+    send_date = str(datetime.today().date())
+
+    if str(datetime.today().hour) == '0':
+        send_date = str((datetime.today() - timedelta(days=1)).date())
+
+    sync_info = {
+        'imap_host': imap_host,
+        'imap_port': imap_port,
+        'email_user': email_user,
+        'email_password': email_password,
+        'send_date': send_date,
+        'email_table_name': email_table_name,
+        'link_table_name': link_table_name,
+        'dtable_server_api': dtable_server_api,
+        'dtable_db_api': dtable_db_api,
+        'imap': imap,
+    }
+
+    sync_email(sync_info)
