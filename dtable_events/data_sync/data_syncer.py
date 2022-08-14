@@ -11,8 +11,6 @@ from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_t
 from dtable_events.data_sync.data_sync_utils import run_sync_emails, set_data_sync_invalid, sync_email, check_imap_account
 from dtable_events.automations.models import get_third_party_account
 
-logger = logging.getLogger(__name__)
-
 
 class DataSyncer(object):
 
@@ -69,7 +67,8 @@ def run_sync_task(context):
         if context['sync_type'] == 'email':
             run_sync_emails(context)
     except Exception as e:
-        logging
+        logging.exception(e)
+        logging.error('run sync task error context: %s', context)
 
 
 def check_data_syncs(db_session, max_workers):
@@ -77,9 +76,15 @@ def check_data_syncs(db_session, max_workers):
 
     executor = ThreadPoolExecutor(max_workers=max_workers)
 
-    sync_infos = []
-    for data_sync in data_sync_list:
-        sync_infos.append({
+    step = 1000
+    tasks = []
+    while True:
+        try:
+            data_sync = next(data_sync_list)
+        except:
+            wait(tasks, return_when=ALL_COMPLETED)
+            break
+        sync_info = {
             'data_sync_id': data_sync[0],
             'dtable_uuid': uuid_str_to_36_chars(data_sync[1]),
             'sync_type': data_sync[2],
@@ -87,15 +92,12 @@ def check_data_syncs(db_session, max_workers):
             'repo_id': data_sync[4],
             'workspace_id': data_sync[5],
             'db_session': db_session
-        })
-
-        if len(sync_infos) == max_workers:
-            tasks = [executor.submit(run_sync_task, sync_info) for sync_info in sync_infos]
+        }
+        tasks.append(executor.submit(run_sync_task, sync_info))
+        if len(tasks) == step:
             wait(tasks, return_when=ALL_COMPLETED)
-            sync_infos = []
-    if sync_infos:
-        tasks = [executor.submit(run_sync_task, sync_info) for sync_info in sync_infos]
-        wait(tasks, return_when=ALL_COMPLETED)
+            tasks = []
+    logging.info('all tasks done')
 
 
 class DataSyncerTimer(Thread):
@@ -103,6 +105,14 @@ class DataSyncerTimer(Thread):
         super(DataSyncerTimer, self).__init__()
         self.db_session_class = db_session_class
         self.max_workers = max_workers
+
+        db_session = self.db_session_class()
+        try:
+            check_data_syncs(db_session, self.max_workers)
+        except Exception as e:
+            logging.exception('check periodical data syncs error: %s', e)
+        finally:
+            db_session.close()
 
     def run(self):
         sched = BlockingScheduler()
@@ -114,7 +124,7 @@ class DataSyncerTimer(Thread):
             try:
                 check_data_syncs(db_session, self.max_workers)
             except Exception as e:
-                logger.exception('check periodical data syncs error: %s', e)
+                logging.exception('check periodical data syncs error: %s', e)
             finally:
                 db_session.close()
 
