@@ -891,4 +891,3 @@ def add_app_users_sync_task():
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
-

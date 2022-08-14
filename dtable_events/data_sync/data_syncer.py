@@ -7,9 +7,8 @@ from concurrent.futures import ThreadPoolExecutor, ALL_COMPLETED, wait
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from dtable_events import init_db_session_class
-from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars, get_inner_dtable_server_url
-from dtable_events.data_sync.data_sync_utils import run_sync_emails, set_data_sync_invalid, sync_email, check_imap_account
-from dtable_events.automations.models import get_third_party_account
+from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars
+from dtable_events.data_sync.data_sync_utils import run_sync_emails
 
 
 class DataSyncer(object):
@@ -105,14 +104,6 @@ class DataSyncerTimer(Thread):
         super(DataSyncerTimer, self).__init__()
         self.db_session_class = db_session_class
         self.max_workers = max_workers
-
-        db_session = self.db_session_class()
-        try:
-            check_data_syncs(db_session, self.max_workers)
-        except Exception as e:
-            logging.exception('check periodical data syncs error: %s', e)
-        finally:
-            db_session.close()
 
     def run(self):
         sched = BlockingScheduler()
