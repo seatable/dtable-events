@@ -7,4 +7,3 @@ gevent
 Flask
 python-dateutil
 imapclient
-seatable-api
