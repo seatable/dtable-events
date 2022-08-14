@@ -89,7 +89,7 @@ def check_row_conditions(trigger, auto_rule):
         response_data = auto_rule.dtable_server_api.internal_filter_rows(json_data)
         rows_data = response_data.get('rows')
     except WrongFilterException:
-        raise RuleInvalidException('wrong filter in filters in lock-row')
+        raise RuleInvalidException('wrong filter in rule: %s trigger filters', auto_rule.rule_id)
     except Exception as e:
         logger.error('request filter rows error: %s', e)
         return []
