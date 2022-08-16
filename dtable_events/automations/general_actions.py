@@ -3,6 +3,7 @@ import logging
 import re
 import time
 import os
+from copy import deepcopy
 from uuid import UUID
 from datetime import datetime, timedelta
 
@@ -18,6 +19,7 @@ from dtable_events.notification_rules.notification_rules_utils import _fill_msg_
 from dtable_events.utils import is_valid_email, get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI, NotFoundException
+from dtable_events.utils.dtable_web_api import DTableWebAPI
 
 
 logger = logging.getLogger(__name__)
@@ -118,6 +120,7 @@ class BaseContext:
         self.caller = caller
 
         self.dtable_server_api = DTableServerAPI(caller, self.dtable_uuid, get_inner_dtable_server_url())
+        self.dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
 
         self._dtable_metadata = None
         self._table = None
@@ -138,7 +141,8 @@ class BaseContext:
         return {
             'dtable_metadata': self.dtable_metadata,
             'table': self.table,
-            'view': self.view
+            'view': self.view,
+            'related_users': self.related_users
         }
 
     @property
@@ -212,16 +216,14 @@ class BaseContext:
     @property
     def related_users(self):
         if not self._related_users:
-            url = '%(server_url)s/api/v2.1/dtables/%(dtable_uuid)s/related-users/' % {
-                'server_url': DTABLE_WEB_SERVICE_URL.strip('/'),
-                'dtable_uuid': self.dtable_uuid
-            }
-            self._related_users = ['']
+            self._related_users = self.dtable_web_api.get_related_users(self.dtable_uuid, self.caller)
         return self._related_users
 
     @property
     def related_users_dict(self):
-        pass
+        if not self._related_users_dict:
+            self._related_users_dict = {user['email']: user for user in self.related_users}
+        return self._related_users_dict
 
     @property
     def can_run_python(self):
@@ -287,6 +289,10 @@ class ActionInvalid(Exception):
     pass
 
 
+class RelatedUserInvalid(ActionInvalid):
+    pass
+
+
 class BaseAction:
 
     RUN_SCRIPT_URL = SEATABLE_FAAS_URL.strip('/') + '/run-script/'
@@ -305,7 +311,12 @@ class BaseAction:
         column_blanks = [blank for blank in blanks if blank in col_name_dict]
         if not column_blanks:
             return msg
-        return fill_msg_blanks(msg, column_blanks, col_name_dict, converted_row, self.context.db_session, self.context.dtable_metadata)
+        try:
+            return fill_msg_blanks(msg, column_blanks, col_name_dict, converted_row, self.context.db_session, self.context.dtable_metadata)
+        except Exception as e:
+            logger.exception(e)
+            logger.error('msg: %s col_name_dict: %s column_blanks: %s fill error: %s', msg, col_name_dict, column_blanks, e)
+            return msg
 
     def batch_generate_real_msgs(self, msg, converted_rows):
         return [self.generate_real_msg(msg, converted_row) for converted_row in converted_rows]
@@ -338,9 +349,6 @@ class BaseAction:
                     filter_updates[col_name] = parse_column_value(col, add_or_updates.get(col_key))
         return filter_updates
 
-    def do_action(self):
-        pass
-
 
 class NotifyAction(BaseAction):
 
@@ -350,20 +358,22 @@ class NotifyAction(BaseAction):
 
     MSG_TYPES_DICT = {
         NOTIFY_TYPE_NOTIFICATION_RULE: 'notification_rules',
-        NOTIFY_TYPE_AUTOMATION_RULE: 'automation_rules',
+        NOTIFY_TYPE_AUTOMATION_RULE: 'notification_rules',
         NOTIFY_TYPE_WORKFLOW: 'workflows'
     }
 
-    def __init__(self, context: BaseContext, users, msg, notify_type, converted_row=None,
-                users_column_key=None, condition=None, rule_id=None, rule_name=None,
+    def __init__(self, context: BaseContext, users, msg, notify_type, users_column_key=None,
+                condition=None, rule_id=None, rule_name=None,
                 workflow_token=None, workflow_name=None, workflow_task_id=None):
         super().__init__(context)
-        self.users = users
+        for user in users:
+            if user and user not in context.related_users_dict:
+                raise RelatedUserInvalid('user %s not in %s related users' % (user, self.context.dtable_uuid))
+        self.users = [user for user in users]
         self.notify_type = notify_type
         self.users_column_key = users_column_key
         self.users_column = self.context.columns_dict.get(self.users_column_key)
         self.msg = msg
-        self.converted_row = converted_row
         if notify_type == self.NOTIFY_TYPE_NOTIFICATION_RULE:
             if not condition:
                 raise ActionInvalid('condition invalid')
@@ -376,8 +386,7 @@ class NotifyAction(BaseAction):
                 'view_id': context.view_id,
                 'condition': condition,
                 'rule_id': rule_id,
-                'rule_name': rule_name,
-                'row_id_list': [converted_row['_id']] if converted_row else []
+                'rule_name': rule_name
             }
         elif notify_type == self.NOTIFY_TYPE_AUTOMATION_RULE:
             if not condition:
@@ -391,8 +400,7 @@ class NotifyAction(BaseAction):
                 'view_id': context.view_id,
                 'condition': condition,
                 'rule_id': rule_id,
-                'rule_name': rule_name,
-                'row_id_list': [converted_row['_id']] if converted_row else []
+                'rule_name': rule_name
             }
         elif notify_type == self.NOTIFY_TYPE_WORKFLOW:
             if not workflow_token:
@@ -405,41 +413,54 @@ class NotifyAction(BaseAction):
                 'table_id': context.table_id,
                 'workflow_token': workflow_token,
                 'workflow_name': workflow_name,
-                'workflow_task_id': workflow_task_id,
-                'row_id': converted_row['_id'] if converted_row else None
+                'workflow_task_id': workflow_task_id
             }
         else:
-            raise ActionInvalid()
+            raise ActionInvalid('notify_type: %s invalid' % notify_type)
 
-    def get_users(self):
+    def get_users(self, converted_row):
         result_users = []
         result_users.extend(self.users or [])
-        if self.converted_row and self.users_column_key in self.converted_row:
-            users_cell_value = self.converted_row[self.users_column_key]
+        if converted_row and self.users_column_key in converted_row:
+            users_cell_value = converted_row[self.users_column_key]
             if isinstance(users_cell_value, list):
                 result_users.extend(users_cell_value)
             elif isinstance(users_cell_value, str):
                 result_users.append(users_cell_value)
-        return [user for user in set(result_users) if is_valid_username(user)]
+        return [user for user in set(result_users) if is_valid_username(user) and user in self.context.related_users_dict]
 
-    def do_action(self):
-        if not self.users and not self.users_column:
-            return
-
+    def send_to_users(self, to_users, detail, msg_type):
+        user_msg_list = []
+        for user in to_users:
+            user_msg_list.append({
+                'to_user': user,
+                'msg_type': msg_type,
+                'detail': detail
+            })
         try:
-            self.detail['msg'] = self.generate_real_msg(self.msg, self.converted_row)
-            users = self.get_users()
-            user_msg_list = []
-            for user in users:
-                user_msg_list.append({
-                    'to_user': user,
-                    'msg_type': self.MSG_TYPES_DICT[self.notify_type],
-                    'detail': self.detail
-                })
             send_notification(self.context.dtable_uuid, user_msg_list, self.context.access_token)
         except Exception as e:
             logger.exception(e)
-            logger.error('msg detail: %s send users: %s notifications error: %s', self.detail, users, e)
+            logger.error('msg detail: %s send users: %s notifications error: %s', detail, to_users, e)
+
+    def do_action_without_row(self):
+        if not self.users and not self.users_column:
+            return
+        detail = deepcopy(self.detail)
+        detail['msg'] = self.msg
+        self.send_to_users(self.users, detail, self.MSG_TYPES_DICT[self.notify_type])
+
+    def do_action_with_row(self, converted_row):
+        if not self.users and not self.users_column:
+            return
+        users = self.get_users(converted_row)
+        detail = deepcopy(self.detail)
+        if self.notify_type in [self.NOTIFY_TYPE_AUTOMATION_RULE, self.NOTIFY_TYPE_NOTIFICATION_RULE]:
+            detail['row_id_list'] = [converted_row['_id']]
+        elif self.notify_type == self.NOTIFY_TYPE_WORKFLOW:
+            detail['row_id'] = converted_row['_id']
+        detail['msg'] = self.generate_real_msg(self.msg, converted_row)
+        self.send_to_users(users, detail, self.MSG_TYPES_DICT[self.notify_type])
 
 
 class SendEmailAction(BaseAction):
@@ -447,19 +468,21 @@ class SendEmailAction(BaseAction):
     SEND_FROM_AUTOMATION_RULES = 'automation-rules'
     SEND_FROM_WORKFLOW = 'workflow'
 
-    def __init__(self, context: BaseContext, account_id, subject, msg, send_to, copy_to, send_from, converted_row=None):
+    def __init__(self, context: BaseContext, account_id, subject, msg, send_to, copy_to, send_from):
         super().__init__(context)
         self.account_dict = get_third_party_account(self.context.db_session, account_id)
+        if not self.account_dict:
+            raise ActionInvalid('account_id: %s not found' % account_id)
         self.msg = msg
-        self.converted_row = converted_row
         self.send_to_list = [email for email in email2list(send_to) if is_valid_username(email)]
         self.copy_to_list = [email for email in email2list(copy_to) if is_valid_username(email)]
         self.send_from = send_from
         self.subject = subject
 
-    def do_action(self):
-        if not self.account_dict:
-            return
+    def do_action_without_row(self):
+        return self.do_action_with_row(None)
+
+    def do_action_with_row(self, converted_row):
         account_detail = self.account_dict.get('detail', {})
         auth_info = {
             'email_host': account_detail.get('email_host', ''),
@@ -473,7 +496,7 @@ class SendEmailAction(BaseAction):
             'subject': self.subject
         }
         try:
-            send_info['message'] = self.generate_real_msg(self.msg, self.converted_row)
+            send_info['message'] = self.generate_real_msg(self.msg, converted_row)
             send_email_msg(
                 auth_info=auth_info,
                 send_info=send_info,
@@ -487,22 +510,24 @@ class SendEmailAction(BaseAction):
 
 class SendWechatAction(BaseAction):
 
-    def __init__(self, context: BaseContext, account_id, msg, msg_type, converted_row=None):
+    def __init__(self, context: BaseContext, account_id, msg, msg_type):
         super().__init__(context)
         self.account_dict = get_third_party_account(self.context.db_session, account_id)
+        if not self.account_dict:
+            raise ActionInvalid('account_id: %s not found' % account_id)
         self.msg = msg
         self.msg_type = msg_type
-        self.converted_row = converted_row
 
-    def do_action(self):
-        if not self.account_dict:
-            return
+    def do_action_without_row(self):
+        return self.do_action_with_row(None)
+
+    def do_action_with_row(self, converted_row):
         webhook_url = self.account_dict.get('detail', {}).get('webhook_url', '')
         if not webhook_url:
             logger.warning('account: %s no webhook_url', self.account_dict)
             return
         try:
-            real_msg = self.generate_real_msg(self.msg, self.converted_row)
+            real_msg = self.generate_real_msg(self.msg, converted_row)
             send_wechat_msg(webhook_url, real_msg, self.msg_type)
         except Exception as e:
             logger.exception(e)
@@ -511,22 +536,24 @@ class SendWechatAction(BaseAction):
 
 class SendDingtalkAction(BaseAction):
 
-    def __init__(self, context: BaseContext, account_id, msg, msg_type, msg_title, converted_row=None):
+    def __init__(self, context: BaseContext, account_id, msg, msg_type, msg_title):
         super().__init__(context)
         self.msg = msg
         self.msg_type = msg_type
         self.msg_title = msg_title
         self.account_dict = get_third_party_account(self.context.db_session, account_id)
-        self.converted_row = converted_row
-
-    def do_action(self):
         if not self.account_dict:
-            return
+            raise ActionInvalid('account_id: %s not found' % account_id)
+
+    def do_action_without_row(self):
+        return self.do_action_with_row(None)
+
+    def do_action_with_row(self, converted_row):
         webhook_url = self.account_dict.get('detail', {}).get('webhook_url', '')
         if not webhook_url:
             return
         try:
-            real_msg = self.generate_real_msg(self.msg, self.converted_row)
+            real_msg = self.generate_real_msg(self.msg, converted_row)
             send_dingtalk_msg(webhook_url, real_msg, self.msg_type, self.msg_title)
         except Exception as e:
             logger.exception(e)
@@ -556,7 +583,7 @@ class AddRowAction(BaseAction):
             raise ActionInvalid('new_row invalid')
         self.row = self.generate_filter_updates(new_row, self.context.table)
 
-    def do_action(self):
+    def do_action_without_row(self):
         try:
             self.context.dtable_server_api.append_row(self.table['name'], self.row)
         except Exception as e:
@@ -580,74 +607,34 @@ class UpdateAction(BaseAction):
         ColumnTypes.RATE,
     ]
 
-    def __init__(self, context: BaseContext, updates, row_id):
+    def __init__(self, context: BaseContext, updates):
         super().__init__(context)
-        self.row_id = row_id
         self.row_data = self.generate_filter_updates(updates, self.context.table)
 
-    def do_action(self):
-        logger.debug('update dtable: %s row_id: %s self.row_data: %s', self.context.dtable_uuid, self.row_id, self.row_data)
+    def do_action_with_row(self, converted_row):
+        row_id = converted_row['_id']
+        logger.debug('update dtable: %s row_id: %s self.row_data: %s', self.context.dtable_uuid, row_id, self.row_data)
         if not self.row_data:
             return
         try:
-            self.context.dtable_server_api.update_row(self.table['name'], self.row_id, self.row_data)
+            self.context.dtable_server_api.update_row(self.table['name'], row_id, self.row_data)
         except Exception as e:
             logger.error('update dtable: %s error: %s', self.context.dtable_uuid, e)
 
+
 class LockRecordAction(BaseAction):
 
-
-    def __init__(self, context: BaseContext, row_id=None, filters=None, filter_conjunction=None):
+    def __init__(self, context: BaseContext):
         super().__init__(context)
-        if not row_id and not self.context.view:
-            raise ActionInvalid('row_id invalid or view: %s not found' % self.context.view_id)
-        if not row_id and not all(filters, filter_conjunction):
-            raise ActionInvalid('row_id or (filters, filter_conjunction) invalid')
-        self.row_ids = []
-        if row_id:
-            self.row_ids.append(row_id)
-        else:
-            view_filters = self.context.view.get('filters', [])
-            view_filter_conjunction = self.context.view.get('filter_conjunction', 'And')
-            filter_groups = []
-            if view_filters:
-                filter_groups.append({
-                    'filters': view_filters,
-                    'filter_conjunction': view_filter_conjunction
-                })
-            condition_filters = [tmp_filters for tmp_filters in filters if filters not in view_filters]
-            if condition_filters:
-                filter_groups.append({
-                    'filters': condition_filters,
-                    'filter_conjunction': filter_conjunction
-                })
-            data = {
-                'table_id': self.context.table_id,
-                'filter_conditions': {
-                    'filter_groups': filter_groups,
-                    'group_conjunction': 'And'
-                },
-                'limit': 500
-            }
-            try:
-                response = self.context.dtable_server_api.internal_filter_rows(data)
-                rows_data = response['rows']
-                logger.debug('Number of locking dtable row: %s, dtable_uuid: %s, details: %s' % (
-                    len(rows_data),
-                    self.context.dtable_uuid,
-                    json.dumps(data)
-                ))
-                self.row_ids.extend([row['_id'] for row in rows_data])
-            except Exception as e:
-                logger.error('filter dtable: %s table: %s data: %s error: %s', self.context.dtable_uuid, self.context.table_id, data, e)
 
-    def do_action(self):
-        if not self.row_ids:
-            return
+    def do_action_with_row_ids(self, row_ids):
         try:
-            self.context.dtable_server_api.lock_rows(self.table['name'], self.row_ids)
+            self.context.dtable_server_api.lock_rows(self.table['name'], row_ids)
         except Exception as e:
             logger.error('lock dtable: %s table: %s rows error: %s', self.context.dtable_uuid, self.context.table_id, e)
+
+    def do_action_with_row(self, converted_row):
+        self.do_action_with_row_ids([converted_row['_id']])
 
 
 class LinkRecordsAction(BaseAction):
@@ -667,33 +654,11 @@ class LinkRecordsAction(BaseAction):
         ColumnTypes.RATE: "equal",
     }
 
-    def __init__(self, context: BaseContext, link_id, linked_table_id, match_conditions, converted_row):
+    def __init__(self, context: BaseContext, link_id, linked_table_id, match_conditions):
         super().__init__(context)
-        self.converted_row = converted_row
         self.link_id = link_id
         self.linked_table_id = linked_table_id
-        self.linked_table_row_ids = []
-        filter_groups = self._format_filter_groups(match_conditions, linked_table_id, converted_row)
-        if filter_groups:
-            json_data = {
-                'table_id': linked_table_id,
-                'filter_conditions': {
-                    'filter_groups': filter_groups,
-                    'group_conjunction': 'And'
-                },
-                'limit': 500
-            }
-            try:
-                response = self.context.dtable_server_api.internal_filter_rows(json_data)
-                rows_data = response['rows']
-                logger.debug('Number of dtable link records filter rows: %s, dtable_uuid: %s, details: %s' % (
-                    len(rows_data),
-                    self.context.dtable_uuid,
-                    json.dumps(json_data)
-                ))
-                self.linked_table_row_ids.extend([row['_id'] for row in rows_data])
-            except Exception as e:
-                logger.error('filter dtable: %s data: %s error: %s', self.context.dtable_uuid, json_data, e)
+        self.match_conditions = match_conditions
 
     def parse_column_value_back(self, column, value):
         if column.get('type') == ColumnTypes.SINGLE_SELECT:
@@ -740,12 +705,35 @@ class LinkRecordsAction(BaseAction):
             filters.append(filter_item)
         return filters and [{'filters': filters, 'filter_conjunction': 'And'}] or []
 
-    def do_action(self):
-        if not self.linked_table_row_ids:
+    def do_action_with_row(self, converted_row):
+        linked_table_row_ids = []
+        filter_groups = self._format_filter_groups(self.match_conditions, self.linked_table_id, converted_row)
+        if filter_groups:
+            json_data = {
+                'table_id': self.linked_table_id,
+                'filter_conditions': {
+                    'filter_groups': filter_groups,
+                    'group_conjunction': 'And'
+                },
+                'limit': 500
+            }
+            try:
+                response = self.context.dtable_server_api.internal_filter_rows(json_data)
+                rows_data = response['rows']
+                logger.debug('Number of dtable link records filter rows: %s, dtable_uuid: %s, details: %s' % (
+                    len(rows_data),
+                    self.context.dtable_uuid,
+                    json.dumps(json_data)
+                ))
+                linked_table_row_ids.extend([row['_id'] for row in rows_data])
+            except Exception as e:
+                logger.error('filter dtable: %s data: %s error: %s', self.context.dtable_uuid, json_data, e)
+                return
+        if not linked_table_row_ids:
             return
         try:
-            self.context.dtable_server_api.update_link(self.link_id, self.context.table_id, self.linked_table_id, self.converted_row['_id'], self.linked_table_row_ids)
-        except:
+            self.context.dtable_server_api.update_link(self.link_id, self.context.table_id, self.linked_table_id, converted_row['_id'], linked_table_row_ids)
+        except Exception as e:
             logger.error('link dtable: %s error: %s', self.context.dtable_uuid, e)
 
 
@@ -755,18 +743,17 @@ class RunPythonScriptAction(BaseAction):
     OPERATE_FROM_WORKFLOW = 'workflow'
 
     def __init__(self, context: BaseContext, script_name, workspace_id, owner, org_id, repo_id,
-                converted_row=None, operate_from=None, operator=None):
+                 operate_from=None, operator=None):
         super().__init__(context)
         self.script_name = script_name
         self.workspace_id = workspace_id
         self.owner = owner
         self.org_id = org_id
         self.repo_id = repo_id
-        self.converted_row = converted_row
         self.operate_from = operate_from
         self.operator = operator
 
-    def _can_do_action(self):
+    def can_run_python(self):
         if not SEATABLE_FAAS_URL:
             return False
         if self.context.can_run_python is not None:
@@ -802,7 +789,7 @@ class RunPythonScriptAction(BaseAction):
         self.context.can_run_python = can_run_python
         return can_run_python
 
-    def _get_scripts_running_limit(self):
+    def get_scripts_running_limit(self):
         if self.context.scripts_running_limit is not None:
             return self.context.scripts_running_limit
         if self.org_id != -1:
@@ -825,15 +812,18 @@ class RunPythonScriptAction(BaseAction):
         self.context.scripts_running_limit = scripts_running_limit
         return scripts_running_limit
 
-    def do_action(self):
-        if not self._can_do_action():
+    def do_action_without_row(self):
+        return self.do_action_with_row(None)
+
+    def do_action_with_row(self, converted_row):
+        if not self.can_run_python():
             return
         context_data = {
             'table': self.context.table['name']
         }
-        if self.converted_row:
-            context_data['row'] = self.converted_row
-        scripts_running_limit = self._get_scripts_running_limit()
+        if converted_row:
+            context_data['row'] = converted_row
+        scripts_running_limit = self.get_scripts_running_limit()
 
         # request faas url
         headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
@@ -882,7 +872,7 @@ class AddRecordToOtherTableAction(BaseAction):
         self.dst_table = dst_table
         self.row = self.generate_filter_updates(new_row, dst_table)
 
-    def do_action(self):
+    def do_action_without_row(self):
         try:
             self.context.dtable_server_api.append_row(self.dst_table['name'], self.row)
         except Exception as e:
