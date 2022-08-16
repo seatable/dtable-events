@@ -16,6 +16,7 @@ from dtable_events.webhook.webhook import Webhooker
 from dtable_events.common_dataset.common_dataset_syncer import CommonDatasetSyncer
 from dtable_events.tasks.big_data_storage_stats_worker import BigDataStorageStatsWorker
 from dtable_events.data_sync.data_syncer import DataSyncer
+from dtable_events.workflow.workflow_actions import WorkflowActionsHandler
 
 
 class App(object):
@@ -33,6 +34,7 @@ class App(object):
             self._automation_rule_handler = AutomationRuleHandler(config)
             self._user_activity_counter = UserActivityCounter(config)
             self._dtable_real_time_rows_counter = DTableRealTimeRowsCounter(config)
+            self._workflow_actions_handler = WorkflowActionsHandler(config)
             self._webhooker = Webhooker(config)
             # cron jobs
             self._instant_notices_sender = InstantNoticeSender(config)
@@ -57,6 +59,7 @@ class App(object):
             self._automation_rule_handler.start()            # always True
             self._user_activity_counter.start()              # always True
             self._dtable_real_time_rows_counter.start()      # default True
+            self._workflow_actions_handler.start()           # always True
             self._webhooker.start()                          # always True
             # cron jobs
             self._instant_notices_sender.start()             # default True

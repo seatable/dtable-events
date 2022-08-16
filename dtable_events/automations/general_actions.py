@@ -17,7 +17,7 @@ from dtable_events.notification_rules.notification_rules_utils import _fill_msg_
     send_notification
 from dtable_events.utils import is_valid_email, get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes
-from dtable_events.utils.dtable_server_api import DTableServerAPI
+from dtable_events.utils.dtable_server_api import DTableServerAPI, NotFoundException
 
 
 logger = logging.getLogger(__name__)
@@ -96,6 +96,18 @@ class ContextInvalid(Exception):
     pass
 
 
+class MetadataInvalid(ContextInvalid):
+    pass
+
+
+class TableInvalid(ContextInvalid):
+    pass
+
+
+class ViewInvalid(ContextInvalid):
+    pass
+
+
 class BaseContext:
 
     def __init__(self, dtable_uuid, table_id, db_session, view_id=None, caller='dtable-events'):
@@ -118,6 +130,16 @@ class BaseContext:
 
         self._can_run_python = None
         self._scripts_running_limit = None
+
+        # load metadata table and view
+        self.get_dtable_resources()
+
+    def get_dtable_resources(self):
+        return {
+            'dtable_metadata': self.dtable_metadata,
+            'table': self.table,
+            'view': self.view
+        }
 
     @property
     def access_token(self):
@@ -144,7 +166,10 @@ class BaseContext:
     def dtable_metadata(self):
         if self._dtable_metadata:
             return self._dtable_metadata
-        self._dtable_metadata = self.dtable_server_api.get_metadata()
+        try:
+            self._dtable_metadata = self.dtable_server_api.get_metadata()
+        except NotFoundException:
+            raise MetadataInvalid('dtable: %s metadata not found' % self.dtable_uuid)
         if not self._dtable_metadata:
             raise ContextInvalid('get metadata error')
         return self._dtable_metadata
@@ -158,7 +183,7 @@ class BaseContext:
                 self._table = table
                 break
         if not self._table:
-            raise ContextInvalid('dtable: %s self.table: %s not found' % (self.dtable_uuid, self.table_id))
+            raise TableInvalid('dtable: %s self.table: %s not found' % (self.dtable_uuid, self.table_id))
         return self._table
 
     @property
@@ -170,6 +195,8 @@ class BaseContext:
 
     @property
     def view(self):
+        if not self.view_id:
+            return None
         if self._view:
             return self._view
         if not self.view_id:
@@ -179,7 +206,7 @@ class BaseContext:
                 self._view = view
                 break
         if not self._view:
-            raise ContextInvalid('dtable: %s self.table: %s self.view: %s not found' % (self.dtable_uuid, self.table_id, self.view_id))
+            raise ViewInvalid('dtable: %s self.table: %s self.view: %s not found' % (self.dtable_uuid, self.table_id, self.view_id))
         return self._view
 
     @property
@@ -278,7 +305,7 @@ class BaseAction:
         column_blanks = [blank for blank in blanks if blank in col_name_dict]
         if not column_blanks:
             return msg
-        return fill_msg_blanks(self.context.dtable_uuid, msg, column_blanks, col_name_dict, converted_row, self.context.db_session, self.context.dtable_metadata)
+        return fill_msg_blanks(msg, column_blanks, col_name_dict, converted_row, self.context.db_session, self.context.dtable_metadata)
 
     def batch_generate_real_msgs(self, msg, converted_rows):
         return [self.generate_real_msg(msg, converted_row) for converted_row in converted_rows]
@@ -304,7 +331,7 @@ class BaseAction:
                         elif set_type == 'relative_date':
                             offset = time_dict.get('offset')
                             filter_updates[col_name] = format_time_by_offset(int(offset), format_length)
-                    except:
+                    except Exception as e:
                         logger.error(e)
                         filter_updates[col_name] = add_or_updates.get(col_key)
                 else:
@@ -320,12 +347,6 @@ class NotifyAction(BaseAction):
     NOTIFY_TYPE_NOTIFICATION_RULE = 'notify_type_notification_rule'
     NOTIFY_TYPE_AUTOMATION_RULE = 'notify_type_automation_rule'
     NOTIFY_TYPE_WORKFLOW = 'notify_type_workflow'
-
-    NOTIFY_TYPES = [
-        NOTIFY_TYPE_NOTIFICATION_RULE,
-        NOTIFY_TYPE_AUTOMATION_RULE,
-        NOTIFY_TYPE_WORKFLOW
-    ]
 
     MSG_TYPES_DICT = {
         NOTIFY_TYPE_NOTIFICATION_RULE: 'notification_rules',

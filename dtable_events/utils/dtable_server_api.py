@@ -20,8 +20,14 @@ class WrongFilterException(Exception):
     pass
 
 
+class NotFoundException(Exception):
+    pass
+
+
 def parse_response(response):
     if response.status_code >= 400:
+        if response.status_code == 404:
+            raise NotFoundException()
         try:
             response_json = response.json()
         except:

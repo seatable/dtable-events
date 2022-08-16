@@ -1,6 +1,9 @@
 import json
 import logging
+import time
+from threading import Thread, Event
 
+from dtable_events.app.event_redis import RedisClient
 from dtable_events.automations.general_actions import AddRecordToOtherTableAction, BaseContext, NotifyAction, SendEmailAction, \
     SendWechatAction, SendDingtalkAction, UpdateAction, AddRowAction, LockRecordAction, LinkRecordsAction, \
     RunPythonScriptAction
@@ -9,8 +12,7 @@ from dtable_events.db import init_db_session_class
 logger = logging.getLogger(__name__)
 
 
-def do_workflow_actions(task_id, node_id, config):
-    db_session = init_db_session_class(config)()
+def do_workflow_actions(task_id, node_id, db_session):
     sql = '''
     SELECT dw.dtable_uuid, dw.token, dw.workflow_config, dwt.row_id FROM dtable_workflows dw
     JOIN dtable_workflow_tasks dwt ON dw.id = dwt.dtable_workflow_id
@@ -26,7 +28,11 @@ def do_workflow_actions(task_id, node_id, config):
         table_id = workflow_config.get('table_id')
         workflow_name = workflow_config.get('workflow_name')
         row_id = task_item.row_id
-        context = BaseContext(dtable_uuid, table_id, db_session, caller='workflow')
+        try:
+            context = BaseContext(dtable_uuid, table_id, db_session, caller='workflow')
+        except Exception as e:
+            logger.error('task: %s node: %s dtable_uuid: %s context error: %s', task_id, node_id, dtable_uuid, e)
+            return
         nodes = workflow_config.get('nodes', [])
         node = None
         for tmp_node in nodes:
@@ -163,3 +169,36 @@ def do_workflow_actions(task_id, node_id, config):
         logger.error('task: %s node: %s do actions error: %s', task_id, node_id, e)
     finally:
         db_session.close()
+
+
+class WorkflowActionsHandler(Thread):
+    def __init__(self, config):
+        Thread.__init__(self)
+        self._finished = Event()
+        self._db_session_class = init_db_session_class(config)
+        self._redis_client = RedisClient(config)
+    
+    def run(self):
+        logger.info('Starting handle workflow actions...')
+        subscriber = self._redis_client.get_subscriber('workflow-actions')
+
+        while not self._finished.is_set():
+            try:
+                message = subscriber.get_message()
+                if message is not None:
+                    sub_data = json.loads(message['data'])
+                    session = self._db_session_class()
+                    task_id = sub_data['task_id']
+                    node_id = sub_data['node_id']
+                    try:
+                        do_workflow_actions(task_id, node_id, session)
+                    except Exception as e:
+                        logger.exception(e)
+                        logger.error('do workflow action data: %s error: %s', sub_data, e)
+                    finally:
+                        session.close()
+                else:
+                    time.sleep(0.5)
+            except Exception as e:
+                logger.error('Failed get workflow-actions message: %s', e)
+                subscriber = self._redis_client.get_subscriber('workflow-actions')

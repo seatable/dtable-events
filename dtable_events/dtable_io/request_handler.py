@@ -891,28 +891,3 @@ def add_app_users_sync_task():
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
-
-
-@app.route('/add-workflow-actions-task', methods=['POST'])
-def add_workflow_actions_task():
-    is_valid, error = check_auth_token(request)
-    if not is_valid:
-        return make_response((error, 403))
-
-    if task_manager.tasks_queue.full():
-        return make_response(('dtable io server busy.', 400))
-
-    data = request.form
-    if not isinstance(data, dict):
-        return make_response(('Bad request', 400))
-
-    workflow_task_id = data.get('task_id')
-    node_id = data.get('node_id')
-
-    try:
-        task_id = task_manager.add_workflow_actions_task(workflow_task_id, node_id)
-    except Exception as e:
-        logger.error(e)
-        return make_response((e, 500))
-
-    return make_response(({'task_id': task_id}, 200))

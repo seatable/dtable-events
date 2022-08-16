@@ -292,16 +292,6 @@ class TaskManager(object):
 
         return task_id
 
-    def add_workflow_actions_task(self, workflow_task_id, node_id):
-        from dtable_events.workflow.workflow_actions import do_workflow_actions
-
-        task_id = str(int(time.time() * 1000))
-        task = (do_workflow_actions, (workflow_task_id, node_id, self.config))
-        self.tasks_queue.put(task_id)
-        self.tasks_map[task_id] = task
-
-        return task_id
-
     def threads_is_alive(self):
         info = {}
         for t in self.threads:
