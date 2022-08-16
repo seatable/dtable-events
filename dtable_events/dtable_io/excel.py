@@ -596,7 +596,7 @@ def get_update_row_data(excel_row, dtable_row, excel_col_name_to_type):
                 excel_cell_val = []
             excel_cell_val.sort()
             dtable_cell_val.sort()
-        elif column_type == 'date' and excel_cell_val:
+        elif column_type == 'date' and excel_cell_val and dtable_cell_val:
             # dtable row value like 2021-12-03 00:00 or 2021-12-03, excel row like 2021-12-03 00:00:00
             excel_cell_val = excel_cell_val[0:len(dtable_cell_val)]
         elif column_type == 'checkbox' and not excel_cell_val:
