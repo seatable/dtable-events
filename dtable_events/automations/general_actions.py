@@ -2,7 +2,6 @@ import json
 import logging
 import re
 import time
-import os
 from copy import deepcopy
 from uuid import UUID
 from datetime import datetime, timedelta
@@ -758,58 +757,23 @@ class RunPythonScriptAction(BaseAction):
             return False
         if self.context.can_run_python is not None:
             return self.context.can_run_python
-        permission_url = DTABLE_WEB_SERVICE_URL.strip('/') + '/api/v2.1/script-permissions/'
-        headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
-        if self.org_id != -1:
-            json_data = {'org_ids': [self.org_id]}
-        elif self.org_id == -1 and '@seafile_group' not in self.owner:
-            json_data = {'users': [self.owner]}
-        else:
-            return True
-        try:
-            resp = requests.get(permission_url, headers=headers, json=json_data)
-            if resp.status_code != 200:
-                logger.error('check run script permission error response: %s', resp.status_code)
-                return False
-            permission_dict = resp.json()
-        except Exception as e:
-            logger.error('check run script permission error: %s', e)
-            return False
 
-        # response dict like
-        # {
-        #   'user_script_permissions': {username1: {'can_run_python_script': True/False}}
-        #   'can_schedule_run_script': {org1: {'can_run_python_script': True/False}}
-        # }
         if self.org_id != -1:
-            can_run_python = permission_dict['org_script_permissions'][str(self.org_id)]['can_run_python_script']
+            can_run_python = self.context.can_run_python = self.context.dtable_web_api.can_org_run_python(self.org_id)
         else:
-            can_run_python = permission_dict['user_script_permissions'][self.owner]['can_run_python_script']
+            can_run_python = self.context.can_run_python = self.context.dtable_web_api.can_user_run_python(self.owner)
 
-        self.context.can_run_python = can_run_python
         return can_run_python
 
     def get_scripts_running_limit(self):
         if self.context.scripts_running_limit is not None:
             return self.context.scripts_running_limit
+
         if self.org_id != -1:
-            params = {'org_id': self.org_id}
-        elif self.org_id == -1 and '@seafile_group' not in self.owner:
-            params = {'username': self.owner}
+            scripts_running_limit = self.context.scripts_running_limit = self.context.dtable_web_api.get_org_scripts_running_limit(self.org_id)
         else:
-            return -1
-        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/api/v2.1/scripts-running-limit/'
-        headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
-        try:
-            resp = requests.get(url, headers=headers, params=params)
-            if resp.status_code != 200:
-                logger.error('get scripts running limit error response: %s', resp.status_code)
-                return 0
-            scripts_running_limit = resp.json()['scripts_running_limit']
-        except Exception as e:
-            logger.error('get script running limit error: %s', e)
-            return 0
-        self.context.scripts_running_limit = scripts_running_limit
+            scripts_running_limit = self.context.scripts_running_limit = self.context.dtable_web_api.get_user_scripts_running_limit(self.owner)
+
         return scripts_running_limit
 
     def do_action_without_row(self):
@@ -840,7 +804,7 @@ class RunPythonScriptAction(BaseAction):
                 'operator': self.operator
             }, headers=headers, timeout=10)
             if resp.status_code != 200:
-                logger.error('dtable: %s run script: %s error status code: %s', self.context.dtable_uuid, self.script_name, resp.status_code)
+                logger.warning('dtable: %s run script: %s error status code: %s content: %s', self.context.dtable_uuid, self.script_name, resp.status_code, resp.content)
         except Exception as e:
             logger.error('dtable: %s run script: %s error: %s', self.context.dtable_uuid, self.script_name, e)
 
