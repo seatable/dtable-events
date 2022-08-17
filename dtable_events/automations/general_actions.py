@@ -365,10 +365,7 @@ class NotifyAction(BaseAction):
                 condition=None, rule_id=None, rule_name=None,
                 workflow_token=None, workflow_name=None, workflow_task_id=None):
         super().__init__(context)
-        for user in users:
-            if user and user not in context.related_users_dict:
-                raise RelatedUserInvalid('user %s not in %s related users' % (user, self.context.dtable_uuid))
-        self.users = [user for user in users]
+        self.users = users
         self.notify_type = notify_type
         self.users_column_key = users_column_key
         self.users_column = self.context.columns_dict.get(self.users_column_key)
@@ -416,6 +413,18 @@ class NotifyAction(BaseAction):
             }
         else:
             raise ActionInvalid('notify_type: %s invalid' % notify_type)
+
+        self.validate_users()
+
+    def validate_users(self):
+        users = []
+        for user in self.users:
+            if user in self.context.related_users_dict:
+                users.append(user)
+                continue
+            if self.notify_type in [self.NOTIFY_TYPE_AUTOMATION_RULE, self.NOTIFY_TYPE_NOTIFICATION_RULE]:
+                raise RelatedUserInvalid('user %s not in %s related users' % (user, self.context.dtable_uuid))
+        self.users = users
 
     def get_users(self, converted_row):
         result_users = []
