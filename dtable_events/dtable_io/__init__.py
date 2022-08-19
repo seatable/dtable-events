@@ -9,6 +9,7 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from selenium import webdriver
+from urllib import parse
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -28,7 +29,7 @@ from dtable_events.dtable_io.excel import parse_excel_csv_to_json, import_excel_
     parse_and_import_excel_csv_to_table, parse_and_update_file_to_table
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.statistics.db import save_email_sending_records, batch_save_email_sending_records
-from urllib import parse
+from dtable_events.data_sync.data_sync_utils import run_sync_emails
 
 dtable_io_logger = setup_logger('dtable_events_io.log')
 dtable_message_logger = setup_logger('dtable_events_message.log')
@@ -897,6 +898,22 @@ def app_user_sync(dtable_uuid, app_name, app_id, table_name, table_id, username,
         dtable_io_logger.exception('app user sync ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('app %s user sync success!' % app_name)
+    finally:
+        if db_session:
+            db_session.close()
+
+
+def email_sync(context, config):
+    dtable_io_logger.info('Start sync email to dtable %s, email table %s.' % (context.get('dtable_uuid'), context.get('detail',{}).get('email_table_id')))
+    db_session = init_db_session_class(config)()
+    context['db_session'] = db_session
+
+    try:
+        run_sync_emails(context)
+    except Exception as e:
+        dtable_io_logger.exception('sync email ERROR: {}'.format(e))
+    else:
+        dtable_io_logger.info('sync email success, sync_id: %s' % context.get('data_sync_id'))
     finally:
         if db_session:
             db_session.close()

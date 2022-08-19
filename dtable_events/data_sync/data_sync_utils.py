@@ -353,11 +353,11 @@ def sync_email(context):
                             key=lambda x: str_2_datetime(x['Date']))
         if not email_list:
             logger.info('email: %s send_date: %s mode: %s get 0 email(s)', email_user, send_date, mode)
-            return
+            return {'success': True}
     except socket.timeout as e:
         logger.exception(e)
         logger.error('email: %s get emails timeout: %s', email_user, e)
-        return
+        return {'success': False}
 
     logger.info(f'email: {email_user} fetch {len(email_list)} emails')
 
@@ -369,7 +369,7 @@ def sync_email(context):
         logger.info(f'email: {email_user}, need to be inserted {len(new_thread_rows)} thread rows')
 
         if not email_list:
-            return
+            return {'success': True}
 
         # upload attachments
         email_list = upload_attachments(seatable, email_list)
@@ -392,12 +392,22 @@ def sync_email(context):
     except Exception as e:
         logger.exception(e)
         logger.error('email: %s sync and update link error: %s', email_user, e)
+        return {'success': False}
+
+    return {'success': True}
 
 
 def set_data_sync_invalid(data_sync_id, db_session):
     sql = "UPDATE dtable_data_syncs SET is_valid=0 WHERE id =:data_sync_id"
 
     db_session.execute(sql, {'data_sync_id': data_sync_id})
+    db_session.commit()
+
+
+def update_sync_time(data_sync_id, db_session):
+    sql = "UPDATE dtable_data_syncs SET last_sync_time=:last_sync_time WHERE id =:data_sync_id"
+
+    db_session.execute(sql, {'data_sync_id': data_sync_id, 'last_sync_time': datetime.now()})
     db_session.commit()
 
 
@@ -409,6 +419,9 @@ def run_sync_emails(context):
     workspace_id = context['workspace_id']
     db_session = context['db_session']
 
+    send_date = context.get('send_date')
+    username = context.get('username', 'Data Sync')
+
     api_url = get_inner_dtable_server_url()
 
     account_id = detail.get('third_account_id')
@@ -419,6 +432,18 @@ def run_sync_emails(context):
         set_data_sync_invalid(data_sync_id, db_session)
         logger.error('account settings invalid.')
         return
+
+    if not send_date:
+        send_date = str(datetime.today().date())
+        if str(datetime.today().hour) == '0':
+            send_date = str((datetime.today() - timedelta(days=1)).date())
+    else:
+        try:
+            if datetime.strptime(send_date, '%Y-%m-%d').date() > datetime.today().date():
+                return
+        except:
+            logger.error('send_date invalid.')
+            return
 
     account = get_third_party_account(db_session, account_id)
     account_type = account.get('account_type')
@@ -444,13 +469,13 @@ def run_sync_emails(context):
         logger.error(error_msg)
         return
 
-    dtable_server_api = DTableServerAPI('Data Sync', dtable_uuid, api_url,
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, api_url,
                                         server_url=DTABLE_WEB_SERVICE_URL,
                                         repo_id=repo_id,
                                         workspace_id=workspace_id
                                         )
 
-    dtable_db_api = DTableDBAPI('Data Sync', dtable_uuid, INNER_DTABLE_DB_URL)
+    dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
 
     metadata = dtable_server_api.get_metadata()
 
@@ -471,11 +496,6 @@ def run_sync_emails(context):
         logger.error('email table or link table invalid.')
         return
 
-    send_date = str(datetime.today().date())
-
-    if str(datetime.today().hour) == '0':
-        send_date = str((datetime.today() - timedelta(days=1)).date())
-
     sync_info = {
         'imap_host': imap_host,
         'imap_port': imap_port,
@@ -489,4 +509,8 @@ def run_sync_emails(context):
         'imap': imap,
     }
 
-    sync_email(sync_info)
+    sync_result = sync_email(sync_info)
+
+    # update last sync time
+    if sync_result.get('success'):
+        update_sync_time(data_sync_id, db_session)
