@@ -1,9 +1,10 @@
 import json
 import logging
 
+import jwt
 import requests
 
-from dtable_events.app.config import SEATABLE_FAAS_AUTH_TOKEN
+from dtable_events.app.config import SEATABLE_FAAS_AUTH_TOKEN, DTABLE_PRIVATE_KEY
 from dtable_events.dtable_io.utils import get_dtable_server_token
 from dtable_events.utils import uuid_str_to_36_chars
 
@@ -30,7 +31,7 @@ class DTableWebAPI:
     def get_related_users(self, dtable_uuid, username='dtable-events'):
         logger.debug('get related users dtable_uuid: %s, username: %s', dtable_uuid, username)
         dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
-        url = '%(server_url)s/api/v2.1/dtables/%(dtable_uuid)s/related-users/' % {
+        url = '%(server_url)s/api/v2.1/dtables/%(dtable_uuid)s/related-users/?from=dtable_events' % {
             'server_url': self.dtable_web_service_url,
             'dtable_uuid': dtable_uuid
         }
@@ -41,7 +42,7 @@ class DTableWebAPI:
 
     def can_user_run_python(self, user):
         logger.debug('can user run python user: %s', user)
-        url = '%(server_url)s/api/v2.1/script-permissions/' % {
+        url = '%(server_url)s/api/v2.1/script-permissions/?from=dtable_events' % {
             'server_url': self.dtable_web_service_url
         }
         headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
@@ -64,7 +65,7 @@ class DTableWebAPI:
 
     def can_org_run_python(self, org_id):
         logger.debug('can org run python org_id: %s', org_id)
-        url = '%(server_url)s/api/v2.1/script-permissions/' % {
+        url = '%(server_url)s/api/v2.1/script-permissions/?from=dtable_events' % {
             'server_url': self.dtable_web_service_url
         }
         headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
@@ -82,7 +83,7 @@ class DTableWebAPI:
 
     def get_user_scripts_running_limit(self, user):
         logger.debug('get user scripts running limit user: %s', user)
-        url = '%(server_url)s/api/v2.1/scripts-running-limit/' % {
+        url = '%(server_url)s/api/v2.1/scripts-running-limit/?from=dtable_events' % {
             'server_url': self.dtable_web_service_url
         }
         headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
@@ -100,7 +101,7 @@ class DTableWebAPI:
 
     def get_org_scripts_running_limit(self, org_id):
         logger.debug('get org scripts running limit user: %s', org_id)
-        url = '%(server_url)s/api/v2.1/scripts-running-limit/' % {
+        url = '%(server_url)s/api/v2.1/scripts-running-limit/?from=dtable_events' % {
             'server_url': self.dtable_web_service_url
         }
         headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
@@ -115,3 +116,17 @@ class DTableWebAPI:
             logger.error('get script running limit error: %s', e)
             return 0
         return scripts_running_limit
+
+    def internal_add_notification(self, to_users, msg_type, detail):
+        logger.debug('internal add notification to users: %s detail: %s', to_users, detail)
+        url = '%(server_url)s/api/v2.1/internal-notifications/?from=dtable_events' % {
+            'server_url': self.dtable_web_service_url
+        }
+        token = jwt.encode({}, DTABLE_PRIVATE_KEY, algorithm='HS256')
+        headers = {'Authorization': 'Token ' + token}
+        resp = requests.post(url, json={
+            'detail': detail,
+            'to_users': to_users,
+            'type': msg_type
+        }, headers=headers)
+        return parse_response(resp)
