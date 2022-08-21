@@ -93,7 +93,7 @@ class WorkflowSchedulesScannerTimer(Thread):
     def run(self):
         sched = BlockingScheduler()
         # fire per 15 mins
-        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='*')
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='0,15,30,45')
         def timed_job():
             logging.info('Starts to scan workflow schedules...')
 
