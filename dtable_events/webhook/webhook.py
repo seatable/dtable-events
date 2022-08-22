@@ -48,7 +48,7 @@ class Webhooker(object):
                     try:
                         event = {'data': data, 'event': 'update'}
                         dtable_uuid = data.get('dtable_uuid')
-                        hooks = session.query(Webhooks).filter(Webhooks.dtable_uuid == dtable_uuid).all()
+                        hooks = session.query(Webhooks).filter(Webhooks.dtable_uuid == dtable_uuid, Webhooks.is_valid == 1).all()
                         for hook in hooks:
                             request_body = hook.gen_request_body(event)
                             request_headers = hook.gen_request_headers(request_body)
@@ -63,17 +63,28 @@ class Webhooker(object):
                 logger.error('webhook sub from redis error: %s', e)
                 self._subscriber = self._redis_client.get_subscriber('table-events')
 
+    def invalidate_webhook(self, webhook_id, db_session):
+        sql = "UPDATE webhooks SET is_valid=0 WHERE id=:webhook_id"
+        try:
+            db_session.execute(sql, {'webhook_id': webhook_id})
+            db_session.commit()
+        except Exception as e:
+            logger.error('invalidate webhhok: %s error: %s', webhook_id, e)
+
     def trigger_jobs(self):
         while True:
             try:
                 job = self.job_queue.get()
                 session = self._db_session_class()
+                need_invalidate = False
                 try:
                     body = job.get('request_body')
                     headers = job.get('request_headers')
                     response = requests.post(job['url'], json=body, headers=headers, timeout=30)
                 except Exception as e:
-                    logger.error('request error: %s', e)
+                    logger.warning('request webhook url: %s error: %s', job['url'], e)
+                    need_invalidate = True
+
                     webhook_job = WebhookJobs(job['webhook_id'], job['created_at'], datetime.now(), FAILURE,
                                               job['url'], job['request_headers'], job['request_body'], None, None)
                     session.add(webhook_job)
@@ -87,7 +98,10 @@ class Webhooker(object):
                             job['request_headers'], job['request_body'], response.status_code, response.text)
                         session.add(webhook_job)
                         session.commit()
+                        need_invalidate = True
                 finally:
+                    if need_invalidate:
+                        self.invalidate_webhook(job['webhook_id'], session)
                     session.close()
             except Exception as e:
                 logger.error('trigger job error: %s' % e)

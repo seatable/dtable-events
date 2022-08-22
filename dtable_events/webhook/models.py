@@ -25,6 +25,7 @@ class Webhooks(Base):
     settings = Column(Text)
     creator = Column(String(255), nullable=False)
     created_at = Column(DateTime, server_default=text('current_timestamp(6)'))
+    is_valid = Column(TINYINT, default=1)
 
     @property
     def hook_settings(self):
