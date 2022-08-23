@@ -619,6 +619,7 @@ def import_or_sync(import_sync_context):
             if error:
                 return {
                     'dst_table_id': None,
+                    'error_type': 'generate_synced_columns_error',
                     'error_msg': str(error),  # generally, this error is caused by client
                     'task_status_code': 400
                 }

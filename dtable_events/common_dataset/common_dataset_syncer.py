@@ -242,6 +242,8 @@ def check_common_dataset(db_session):
         else:
             if result.get('error_msg'):
                 logger.error(result['error_msg'])
+                if result.get('error_type') == 'generate_synced_columns_error':
+                    set_common_dataset_sync_invalid(dataset_sync_id, db_session)
                 continue
 
         dataset_update_map[dataset_sync_id] = dtable_src_version
