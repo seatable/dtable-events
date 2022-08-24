@@ -1153,6 +1153,14 @@ def add_nickname_to_cell(unknown_user_set, unknown_cell_list):
             c[0].value = email2nickname.get(c[1], '')
 
 
+def parse_dtable_long_text(cell_value):
+    if not isinstance(cell_value, str):
+        return ''
+    if cell_value.find('\n\n') == -1:
+        return cell_value
+    return parse_dtable_long_text(cell_value.replace('\n\n', '\n'))
+
+
 def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list):
     for col_num in range(len(row)):
         c = ws.cell(row = row_num + 1, column = col_num + 1)
@@ -1223,6 +1231,8 @@ def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unkn
             c.value, c.number_format = parse_formula_number(row[col_num], head[col_num][2])
         elif head[col_num][1] == ColumnTypes.LINK:
             c.value = parse_link(head[col_num], row[col_num], email2nickname)
+        elif head[col_num][1] == ColumnTypes.LONG_TEXT:
+            c.value = parse_dtable_long_text(row[col_num])
         else:
             c.value = cell_data2str(row[col_num])
 
