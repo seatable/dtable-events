@@ -7,7 +7,6 @@ from urllib import parse
 from uuid import UUID
 from copy import deepcopy
 from datetime import datetime, date, timedelta
-import warnings
 
 import jwt
 import requests
