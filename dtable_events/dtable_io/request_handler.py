@@ -405,11 +405,11 @@ def transfer_dtable_asset_files():
     if not is_valid:
         return make_response((error, 403))
 
-    if big_data_task_manager.tasks_queue.full():
+    if task_manager.tasks_queue.full():
         from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
-                                 % (big_data_task_manager.tasks_queue.qsize(), big_data_task_manager.current_task_info,
-                                    big_data_task_manager.threads_is_alive()))
+                                 % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
+                                    task_manager.threads_is_alive()))
         return make_response(('dtable io server busy.', 400))
 
     data = request.form
