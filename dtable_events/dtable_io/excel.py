@@ -45,7 +45,7 @@ IMAGE_REG_1 = r'^<img src="(\S+)" .+\/>'
 IMAGE_REG_2 = r'^!\[\]\((\S+)\)'
 
 UPDATE_TYPE_LIST = ['number', 'single-select', 'url', 'email', 'text', 'date', 'duration', 'rate', 'checkbox',
-                    'multiple-select']
+                    'multiple-select', 'collaborator']
 
 
 class EmptyCell(object):
@@ -420,12 +420,16 @@ def parse_and_import_excel_csv_to_table(repo_id, file_name, dtable_uuid, usernam
 
 def parse_and_update_file_to_table(repo_id, file_name, username, dtable_uuid, table_name, selected_columns, file_type):
     from dtable_events.dtable_io.utils import update_rows_by_dtable_server, delete_file, \
-        get_rows_from_dtable_server, update_append_excel_json_to_dtable_server, get_columns_from_dtable_server
+        get_rows_from_dtable_server, update_append_excel_json_to_dtable_server, get_columns_from_dtable_server, \
+        get_related_nicknames_from_dtable
+
+    related_users = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
+    contact_email_to_email = {user.get('contact_email'): user.get('email') for user in related_users}
 
     if file_type == 'xlsx':
-        file_rows = parse_update_excel_file(repo_id, file_name, username, dtable_uuid, table_name)
+        file_rows = parse_update_excel_file(repo_id, file_name, username, dtable_uuid, table_name, contact_email_to_email)
     else:
-        file_rows = parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name)
+        file_rows = parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name, contact_email_to_email)
 
     file_rows = file_rows[0].get('rows', [])
     dtable_rows = get_rows_from_dtable_server(username, dtable_uuid, table_name)
@@ -491,13 +495,15 @@ def append_parsed_file_by_dtable_server(username, repo_id, dtable_uuid, file_nam
 
 def parse_append_excel_csv_upload_file_to_json(repo_id, file_name, username, dtable_uuid, table_name, file_type):
     from dtable_events.dtable_io.utils import get_excel_file, \
-        upload_excel_json_file, get_columns_from_dtable_server
+        upload_excel_json_file, get_columns_from_dtable_server, get_related_nicknames_from_dtable
     from dtable_events.dtable_io import dtable_io_logger
 
     # parse
     tables = []
+    related_users = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
+    contact_email_to_email = {user.get('contact_email'): user.get('email') for user in related_users}
     if file_type == 'csv':
-        tables = parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name)
+        tables = parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name, contact_email_to_email)
     else:
         excel_file = get_excel_file(repo_id, file_name)
         wb = load_workbook(excel_file, read_only=True, data_only=True)
@@ -534,7 +540,8 @@ def parse_append_excel_csv_upload_file_to_json(repo_id, file_name, username, dta
 
         if max_column > len(columns):
             max_column = len(columns)
-        rows = parse_append_excel_rows(sheet_rows, columns, len(columns))
+
+        rows = parse_append_excel_rows(sheet_rows, columns, len(columns), contact_email_to_email)
 
         dtable_io_logger.info(
             'got table: %s, rows: %d, columns: %d' % (sheet.title, len(rows), max_column))
@@ -554,7 +561,7 @@ def parse_append_excel_csv_upload_file_to_json(repo_id, file_name, username, dta
     upload_excel_json_file(repo_id, file_name, content)
 
 
-def parse_append_excel_rows(sheet_rows, columns, column_lenght):
+def parse_append_excel_rows(sheet_rows, columns, column_lenght, contact_email_to_email):
     from dtable_events.dtable_io import dtable_io_logger
 
     value_rows = sheet_rows[1:]
@@ -574,7 +581,7 @@ def parse_append_excel_rows(sheet_rows, columns, column_lenght):
                 column_type = columns[index]['type']
                 if cell_value is None:
                     continue
-                row_data[column_name] = parse_row(column_type, cell_value)
+                row_data[column_name] = parse_row(column_type, cell_value, contact_email_to_email)
             except Exception as e:
                 dtable_io_logger.exception(e)
                 row_data[column_name] = None
@@ -589,7 +596,7 @@ def get_update_row_data(excel_row, dtable_row, excel_col_name_to_type):
         excel_cell_val = excel_row.get(col_name, '')
         dtable_cell_val = dtable_row.get(col_name, '')
         column_type = excel_col_name_to_type.get(col_name)
-        if column_type == 'multiple-select':
+        if column_type == 'multiple-select' or column_type == 'collaborator':
             if not dtable_cell_val:
                 dtable_cell_val = []
             if not excel_cell_val:
@@ -664,7 +671,7 @@ def get_insert_update_rows(dtable_col_name_to_type, excel_rows, dtable_rows, key
     update_rows = []
     insert_rows = []
     excel_col_name_to_type = {col_name: dtable_col_name_to_type.get(col_name) for col_name in excel_rows[0].keys()
-                             if dtable_col_name_to_type.get(col_name) in UPDATE_TYPE_LIST}
+                              if dtable_col_name_to_type.get(col_name) in UPDATE_TYPE_LIST}
 
     dtable_row_data = get_dtable_row_data(dtable_rows, key_columns, excel_col_name_to_type)
     keys_of_excel_rows = {}
@@ -685,7 +692,7 @@ def get_insert_update_rows(dtable_col_name_to_type, excel_rows, dtable_rows, key
     return insert_rows, update_rows
 
 
-def parse_update_excel_file(repo_id, file_name, username, dtable_uuid, table_name):
+def parse_update_excel_file(repo_id, file_name, username, dtable_uuid, table_name, contact_email_to_email):
     from dtable_events.dtable_io.utils import get_excel_file, \
         upload_excel_json_file, get_columns_from_dtable_server
     from dtable_events.dtable_io import dtable_io_logger
@@ -728,7 +735,7 @@ def parse_update_excel_file(repo_id, file_name, username, dtable_uuid, table_nam
 
     if max_column > len(columns):
         max_column = len(columns)
-    rows = parse_update_excel_rows(sheet_rows, columns, len(columns))
+    rows = parse_update_excel_rows(sheet_rows, columns, len(columns), contact_email_to_email)
 
     dtable_io_logger.info(
         'got table: %s, rows: %d, columns: %d' % (sheet.title, len(rows), max_column))
@@ -747,13 +754,16 @@ def parse_update_excel_file(repo_id, file_name, username, dtable_uuid, table_nam
 
 
 def parse_update_excel_upload_excel_to_json(repo_id, file_name, username, dtable_uuid, table_name):
-    from dtable_events.dtable_io.utils import upload_excel_json_file
+    from dtable_events.dtable_io.utils import upload_excel_json_file, get_related_nicknames_from_dtable
 
-    content = parse_update_excel_file(repo_id, file_name, username, dtable_uuid, table_name)
+    related_users = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
+    contact_email_to_email = {user.get('contact_email'): user.get('email') for user in related_users}
+
+    content = parse_update_excel_file(repo_id, file_name, username, dtable_uuid, table_name, contact_email_to_email)
     upload_excel_json_file(repo_id, file_name, json.dumps(content))
 
 
-def parse_update_excel_rows(sheet_rows, columns, column_length):
+def parse_update_excel_rows(sheet_rows, columns, column_length, contact_email_to_email):
     from dtable_events.dtable_io import dtable_io_logger
 
     value_rows = sheet_rows[1:]
@@ -774,7 +784,7 @@ def parse_update_excel_rows(sheet_rows, columns, column_length):
                 if cell_value is None:
                     row_data[column_name] = None
                     continue
-                row_data[column_name] = parse_row(column_type, cell_value)
+                row_data[column_name] = parse_row(column_type, cell_value, contact_email_to_email)
             except Exception as e:
                 dtable_io_logger.exception(e)
                 row_data[column_name] = None
@@ -783,7 +793,7 @@ def parse_update_excel_rows(sheet_rows, columns, column_length):
     return rows
 
 
-def parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name):
+def parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name, contact_email_to_email):
     from dtable_events.dtable_io.utils import get_csv_file, get_columns_from_dtable_server
     from dtable_events.dtable_io import dtable_io_logger
 
@@ -793,7 +803,7 @@ def parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name):
     columns = get_columns_from_dtable_server(username, dtable_uuid, table_name)
 
     max_column = 500  # columns limit
-    rows, max_column, csv_row_num, csv_column_num = parse_csv_rows(csv_file, columns, max_column)
+    rows, max_column, csv_row_num, csv_column_num = parse_csv_rows(csv_file, columns, max_column, contact_email_to_email)
     dtable_io_logger.info(
         'parse csv: %s, rows: %d, columns: %d' % (file_name, csv_row_num, csv_column_num))
 
@@ -816,9 +826,11 @@ def parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name):
 
 
 def parse_update_csv_upload_csv_to_json(repo_id, file_name, username, dtable_uuid, table_name):
-    from dtable_events.dtable_io.utils import upload_excel_json_file
+    from dtable_events.dtable_io.utils import upload_excel_json_file, get_related_nicknames_from_dtable
 
-    content = parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name)
+    related_users = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
+    contact_email_to_email = {user.get('contact_email'): user.get('email') for user in related_users}
+    content = parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name, contact_email_to_email)
     upload_excel_json_file(repo_id, file_name, json.dumps(content))
 
 
@@ -834,7 +846,7 @@ def guess_delimiter(csv_file):
     return delimiter
 
 
-def parse_csv_rows(csv_file, columns, max_column):
+def parse_csv_rows(csv_file, columns, max_column, contact_email_to_email):
     from dtable_events.dtable_io import dtable_io_logger
 
     rows = []
@@ -868,7 +880,7 @@ def parse_csv_rows(csv_file, columns, max_column):
                 if cell_value is None:
                     row_data[column_name] = None
                     continue
-                parsed_value = parse_row(column_type, cell_value)
+                parsed_value = parse_row(column_type, cell_value, contact_email_to_email)
                 row_data[column_name] = parsed_value
             except Exception as e:
                 dtable_io_logger.exception(e)
@@ -878,7 +890,7 @@ def parse_csv_rows(csv_file, columns, max_column):
     return rows, max_column, csv_row_num, csv_column_num
 
 
-def parse_row(column_type, cell_value):
+def parse_row(column_type, cell_value, contact_email_to_email):
     if isinstance(cell_value, datetime):  # JSON serializable
         cell_value = str(cell_value)
     if isinstance(cell_value, str):
@@ -909,11 +921,20 @@ def parse_row(column_type, cell_value):
         return None
     elif column_type == 'geolocation':
         return None
-    elif column_type in ('collaborator', 'creator', 'last-modifier', 'ctime', 'mtime', 'formula',
-                         'link-formula', 'auto-number'):
+    elif column_type in ('creator', 'last-modifier', 'ctime', 'mtime', 'formula', 'link-formula', 'auto-number'):
         return None
+    elif column_type == 'collaborator':
+        cell_value = parse_collaborator(cell_value, contact_email_to_email)
+        return cell_value
     else:
         return str(cell_value)
+
+
+def parse_collaborator(cell_value, contact_email_to_email):
+    if not isinstance(cell_value, str):
+        return []
+    users = cell_value.split(',')
+    return [contact_email_to_email.get(user.strip()) for user in users if contact_email_to_email.get(user.strip())]
 
 
 def get_summary(summary, summary_col_info, column_name):
