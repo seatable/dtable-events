@@ -729,7 +729,7 @@ def append_excel_json_to_dtable_server(username, dtable_uuid, json_file, table_n
 
 def get_columns_from_dtable_server(username, dtable_uuid, table_name):
     api_url = get_inner_dtable_server_url()
-    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/columns/?from=dtable_events&table_name=' + table_name
+    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/columns/?from=dtable_events&table_name=' + urlquote(table_name)
     dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
     headers = {'Authorization': 'Token ' + dtable_server_access_token}
 
@@ -758,7 +758,7 @@ def get_csv_file(repo_id, file_name):
 
 def get_rows_from_dtable_server(username, dtable_uuid, table_name):
     api_url = get_inner_dtable_server_url()
-    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/rows/?' + 'table_name=' + table_name + \
+    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/rows/?table_name=' + urlquote(table_name) + \
           '&convert_link_id=true&from=dtable_events'
     dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
     headers = {'Authorization': 'Token ' + dtable_server_access_token}
