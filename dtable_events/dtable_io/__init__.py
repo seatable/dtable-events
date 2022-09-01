@@ -1,4 +1,5 @@
 import base64
+from datetime import datetime, timedelta
 import json
 import os
 import shutil
@@ -463,6 +464,42 @@ def send_dingtalk_msg(webhook_url, msg, msg_type="text", msg_title=None):
         dtable_message_logger.info('Dingtalk sending success!')
     return result
 
+def send_sms_msg(dtable_uuid, username, org_id, phone, template_name, msg_dict, config):
+    from dtable_events.utils.sms_message_clients import AliyunSmsMessageClient
+    result = {}
+    db_session = init_db_session_class(config)()
+    ctime_sql = "SELECT ctime FROM sms_message_log WHERE dtable_uuid=:dtable_uuid OR username=:username ORDER BY ctime DESC limit 1"
+    ctime_result = db_session.execute(ctime_sql, {
+            'dtable_uuid': dtable_uuid,
+            'username': username,
+        })
+    ctime_result_list = [dict(zip(result.keys(), result)) for result in ctime_result]
+    if ctime_result_list and ctime_result_list[0].get('ctime') + timedelta(hours=1) > datetime.utcnow() :
+        result['err_msg'] = 'SMS sending interval is less than 1 hour.'
+        return result
+
+    # message max length
+    for k, v in msg_dict.items():
+        msg_dict[k] = v[:20]
+
+    try:
+        AliyunSmsMessageClient().send_message(phone, template_name, msg_dict)
+        insert_sql = "INSERT INTO sms_message_log (dtable_uuid, username, org_id, phone, ctime, content) VALUES (:dtable_uuid, :username, :org_id, :phone, :ctime, :content)"
+        insert_result = db_session.execute(insert_sql, {
+                'dtable_uuid': dtable_uuid,
+                'username': username,
+                'org_id': org_id,
+                'phone': phone,
+                'ctime': datetime.utcnow(),
+                'content': json.dumps({'template_name': template_name, 'msg_dict': msg_dict}),
+            })
+        db_session.commit()
+    except Exception as e:
+        dtable_message_logger.error('SMS sending failed. ERROR: {}'.format(e))
+        result['err_msg'] = 'SMS send failed.'
+    else:
+        dtable_message_logger.info('SMS sending success!')
+    return result
 
 def send_email_msg(auth_info, send_info, username, config=None, db_session=None):
     # auth info
