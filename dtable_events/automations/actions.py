@@ -1404,12 +1404,7 @@ class AutomationRule:
     @property
     def dtable_metadata(self):
         if not self._dtable_metadata:
-            try:
-                self._dtable_metadata = self.dtable_server_api.get_metadata()
-            except:
-                raise RuleInvalidException('request metadata error')
-            if not self._dtable_metadata:
-                raise RuleInvalidException('request metadata parse error')
+            self._dtable_metadata = self.dtable_server_api.get_metadata()
         return self._dtable_metadata
 
     @property
@@ -1420,12 +1415,7 @@ class AutomationRule:
         if not self._view_columns:
             table_name = self.table_info['name']
             view_name = self.view_info['name']
-            try:
-                self._view_columns = self.dtable_server_api.list_columns(table_name, view_name=view_name)
-            except:
-                raise RuleInvalidException('request view columns error')
-            if not self._view_columns:
-                raise RuleInvalidException('request view columns parse error')
+            self._view_columns = self.dtable_server_api.list_columns(table_name, view_name=view_name)
         return self._view_columns
 
     @property
@@ -1667,7 +1657,7 @@ class AutomationRule:
             except Exception as e:
                 logger.exception(e)
                 self.task_run_seccess = False
-                logger.error('rule: %s, do actions error: %s', self.rule_id, e)
+                logger.error('rule: %s, do action: %s error: %s', self.rule_id, action_info, e)
 
         if self.done_actions and not with_test:
             self.update_last_trigger_time()
