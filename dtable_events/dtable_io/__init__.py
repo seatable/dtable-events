@@ -8,12 +8,13 @@ import requests
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formataddr, parseaddr
 from selenium import webdriver
 from urllib import parse
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 
-from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, SESSION_COOKIE_NAME
+from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, SESSION_COOKIE_NAME, INNER_DTABLE_DB_URL
 from dtable_events.dtable_io.utils import setup_logger, \
     prepare_asset_file_folder, post_dtable_json, post_asset_files, \
     download_files_to_path, create_forms_from_src_dtable, copy_src_forms_to_json, \
@@ -29,7 +30,10 @@ from dtable_events.dtable_io.excel import parse_excel_csv_to_json, import_excel_
     parse_and_import_excel_csv_to_table, parse_and_update_file_to_table
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.statistics.db import save_email_sending_records, batch_save_email_sending_records
-from dtable_events.data_sync.data_sync_utils import run_sync_emails
+from dtable_events.data_sync.data_sync_utils import run_sync_emails, sync_email, check_imap_account
+from dtable_events.utils import get_inner_dtable_server_url
+from dtable_events.utils.dtable_db_api import DTableDBAPI
+from dtable_events.utils.dtable_server_api import DTableServerAPI
 
 dtable_io_logger = setup_logger('dtable_events_io.log')
 dtable_message_logger = setup_logger('dtable_events_message.log')
@@ -468,7 +472,7 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
     # auth info
     email_host = auth_info.get('email_host')
     email_port = int(auth_info.get('email_port'))
-    host_user = auth_info.get('host_user')
+    host_user = auth_info.get('host_user', '')
     password = auth_info.get('password')
 
     # send info
@@ -480,6 +484,12 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
     copy_to = send_info.get('copy_to', [])
     reply_to = send_info.get('reply_to', '')
     file_download_urls = send_info.get('file_download_urls', None)
+    message_id = send_info.get('message_id', '')
+
+    send_to = [formataddr(parseaddr(to)) for to in send_to]
+    copy_to = [formataddr(parseaddr(to)) for to in copy_to]
+    if source:
+        source = formataddr(parseaddr(source))
 
     result = {}
     if not msg and not html_msg:
@@ -490,8 +500,11 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
     msg_obj['Subject'] = subject
     msg_obj['From'] = source or host_user
     msg_obj['To'] = ",".join(send_to)
-    msg_obj['Cc'] = copy_to and ",".join(copy_to) or ""
+    msg_obj['Cc'] = ",".join(copy_to)
     msg_obj['Reply-to'] = reply_to
+
+    if message_id:
+        msg_obj['Message-ID'] = message_id
 
     if msg:
         plain_content_body = MIMEText(msg)
@@ -524,7 +537,7 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
         recevers = copy_to and send_to + copy_to or send_to
         smtp.sendmail(host_user, recevers, msg_obj.as_string())
         success = True
-    except Exception as e :
+    except Exception as e:
         dtable_message_logger.warning(
             'Email sending failed. email: %s, error: %s' % (host_user, e))
         result['err_msg'] = 'Email server username or password invalid'
@@ -917,3 +930,40 @@ def email_sync(context, config):
     finally:
         if db_session:
             db_session.close()
+
+
+def pull_email(context):
+    dtable_io_logger.info('Start pull email to dtable %s, email table %s.' % (context.get('dtable_uuid'), context.get('email_table_name')))
+
+    api_url = get_inner_dtable_server_url()
+
+    username = context.get('username')
+    dtable_uuid = context.get('dtable_uuid')
+    repo_id = context.get('repo_id')
+    workspace_id = context.get('workspace_id')
+    imap_host = context.get('imap_host')
+    email_user = context.get('email_user')
+    email_password = context.get('email_password')
+    imap_port = context.get('imap_port')
+
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, api_url, server_url=DTABLE_WEB_SERVICE_URL,
+                                        repo_id=repo_id, workspace_id=workspace_id)
+
+    dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
+
+    imap, error_msg = check_imap_account(imap_host, email_user, email_password, port=imap_port, return_imap=True)
+
+    if error_msg:
+        dtable_io_logger.error('imap account error: %s' % error_msg)
+        return
+
+    context['dtable_server_api'] = dtable_server_api
+    context['dtable_db_api'] = dtable_db_api
+    context['imap'] = imap
+
+    try:
+        sync_email(context)
+    except Exception as e:
+        dtable_io_logger.exception('pull email ERROR: {}'.format(e))
+    else:
+        dtable_io_logger.info('pull email success, email user: %s' % context.get('email_user'))

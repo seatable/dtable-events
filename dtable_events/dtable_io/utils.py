@@ -71,7 +71,7 @@ def gen_inner_file_upload_url(token, op, replace=False):
 
 def get_dtable_server_token(username, dtable_uuid):
     payload = {
-        'exp': int(time.time()) + 60,
+        'exp': int(time.time()) + 300,
         'dtable_uuid': dtable_uuid,
         'username': username,
         'permission': 'rw',

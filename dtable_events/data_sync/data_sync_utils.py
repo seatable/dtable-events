@@ -49,7 +49,7 @@ def check_imap_account(imap_server, email_user, email_password, port=None, retur
         return imap, None
 
 
-def get_emails(send_date, imap_host, email_user, email_password, imap: ImapMail=None, port=None, mode='ON', timeout=None):
+def get_emails(send_date, imap_host, email_user, email_password, imap: ImapMail=None, port=None, mode='ON', timeout=None, message_id=None):
     """
     return: email list, [email1, email2...], email is without thread id
     """
@@ -61,7 +61,7 @@ def get_emails(send_date, imap_host, email_user, email_password, imap: ImapMail=
         logger.debug('imap_host: %s email_user: %s, password: %s login imap client successfully!', imap_host, email_user, email_password)
 
     try:
-        email_list = imap.get_email_list(send_date, mode=mode)
+        email_list = imap.get_email_list(send_date, mode=mode, message_id=message_id)
     except Exception as e:
         logger.exception(e)
     else:
@@ -342,14 +342,18 @@ def sync_email(context):
     link_table_name = context['link_table_name']
     dtable_server_api = context['dtable_server_api']
     dtable_db_api = context['dtable_db_api']
+    sync_mode = context.get('sync_mode')
+    message_id = context.get('message_id')
     imap = context['imap']
     mode = 'SINCE'
+    if sync_mode:
+        mode = 'SEARCH'
 
     seatable = dtable_server_api
 
     try:
         # get emails on send_date
-        email_list = sorted(get_emails(send_date, imap_host, email_user, email_password, imap=imap, port=imap_port, mode=mode),
+        email_list = sorted(get_emails(send_date, imap_host, email_user, email_password, imap=imap, port=imap_port, mode=mode, message_id=message_id),
                             key=lambda x: str_2_datetime(x['Date']))
         if not email_list:
             logger.info('email: %s send_date: %s mode: %s get 0 email(s)', email_user, send_date, mode)

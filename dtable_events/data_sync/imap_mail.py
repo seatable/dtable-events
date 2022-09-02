@@ -3,7 +3,7 @@ from imapclient import IMAPClient
 from email.parser import Parser
 from email.header import decode_header
 from datetime import datetime, timedelta
-from email.utils import parseaddr, parsedate_to_datetime
+from email.utils import parseaddr, parsedate_to_datetime, formataddr
 from tzlocal import get_localzone
 
 logger = logging.getLogger(__name__)
@@ -100,15 +100,14 @@ class ImapMail(object):
                 elif header == 'Date':
                     value = parsedate_to_datetime(value).astimezone(get_localzone()).isoformat().replace('T', ' ')[:-6]
                 elif header in ['From', 'To', 'CC']:
-                    value = ','.join([parseaddr(val)[1] for val in value.split(',')])
+                    value = ','.join([formataddr(parseaddr(val)) for val in value.split(',')])
                 elif header in ['Message-ID', 'In-Reply-To']:
-                    # remove '<' and '>'
-                    value = value.strip().lower()[1:-1]
+                    value = value.strip()
             header_info[header] = value
 
         return header_info
 
-    def get_email_results(self, send_date, mode='ON'):
+    def get_email_results(self, send_date, mode='ON', message_id=None):
         td = timedelta(days=1)
         before_send_date = send_date - td
         after_send_date = send_date + td
@@ -119,6 +118,13 @@ class ImapMail(object):
             return before_results + today_results + after_results
         elif mode == 'SINCE':
             return self.server.search(['SINCE', before_send_date])
+        elif mode == 'SEARCH':
+            criteria = '(HEADER Message-ID "%s")' % message_id
+            try:
+                return self.server.search(criteria)
+            except Exception as e:
+                logger.error('search email failed: %s', e)
+                return []
         return []
 
     def gen_email_dict(self, mail, send_date, mode, send_box):
@@ -158,7 +164,7 @@ class ImapMail(object):
 
         return email_dict
 
-    def get_email_list(self, send_date, mode='ON'):
+    def get_email_list(self, send_date, mode='ON', message_id=None):
         send_date = datetime.strptime(send_date, '%Y-%m-%d').date()
         total_email_list = []
         for send_box in ['INBOX', 'Sent Items']:
@@ -168,7 +174,7 @@ class ImapMail(object):
             except Exception as e:
                 logger.warning('user: %s select email folder: %s error: %s', self.user, send_box, e)
                 continue
-            results = self.get_email_results(send_date, mode=mode)
+            results = self.get_email_results(send_date, mode=mode, message_id=message_id)
             for mail in results:
                 try:
                     email_dict = self.gen_email_dict(mail, send_date, mode, send_box)

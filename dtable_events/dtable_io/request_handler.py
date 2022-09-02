@@ -532,6 +532,7 @@ def add_email_sending_task():
         'copy_to': copy_to,
         'reply_to': data.get('reply_to'),
         'file_download_urls': file_download_urls,
+        'message_id': data.get('message_id'),
     }
 
     try:
@@ -912,6 +913,31 @@ def sync_email():
 
     try:
         task_id = task_manager.add_sync_email_task(context)
+    except Exception as e:
+        logger.error(e)
+        return make_response((e, 500))
+
+    return make_response(({'task_id': task_id}, 200))
+
+
+@app.route('/pull-email', methods=['POST'])
+def pull_email():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+    if task_manager.tasks_queue.full():
+        from dtable_events.dtable_io import dtable_io_logger
+        dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
+                                 % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
+                                    task_manager.threads_is_alive()))
+        return make_response(('dtable io server busy.', 400))
+    try:
+        context = json.loads(request.data)
+    except:
+        return make_response(('pull email context invalid.', 400))
+
+    try:
+        task_id = task_manager.add_pull_email_task(context)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
