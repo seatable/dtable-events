@@ -533,6 +533,7 @@ def add_email_sending_task():
         'reply_to': data.get('reply_to'),
         'file_download_urls': file_download_urls,
         'message_id': data.get('message_id'),
+        'in_reply_to': data.get('in_reply_to'),
     }
 
     try:

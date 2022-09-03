@@ -3,7 +3,7 @@ from imapclient import IMAPClient
 from email.parser import Parser
 from email.header import decode_header
 from datetime import datetime, timedelta
-from email.utils import parseaddr, parsedate_to_datetime, formataddr
+from email.utils import parseaddr, parsedate_to_datetime
 from tzlocal import get_localzone
 
 logger = logging.getLogger(__name__)
@@ -90,6 +90,13 @@ class ImapMail(object):
                 content_info[filename] = content_id[1:-1]
         return file_list, content_info
 
+    def parse_addr(self, addr):
+        addr_info = parseaddr(addr)
+        nickname = self.decode_str(addr_info[0])
+        if not nickname:
+            nickname = addr_info[1].split('@')[0]
+        return nickname + ' <' + addr_info[1] + '>'
+
     def get_email_header(self, msg):
         header_info = {}
         for header in ['From', 'To', 'CC', 'Subject', 'Message-ID', 'In-Reply-To', 'Date']:
@@ -100,7 +107,7 @@ class ImapMail(object):
                 elif header == 'Date':
                     value = parsedate_to_datetime(value).astimezone(get_localzone()).isoformat().replace('T', ' ')[:-6]
                 elif header in ['From', 'To', 'CC']:
-                    value = ','.join([formataddr(parseaddr(val)) for val in value.split(',')])
+                    value = ','.join([self.parse_addr(val) for val in value.split(',')])
                 elif header in ['Message-ID', 'In-Reply-To']:
                     value = value.strip()
             header_info[header] = value
@@ -108,16 +115,17 @@ class ImapMail(object):
         return header_info
 
     def get_email_results(self, send_date, mode='ON', message_id=None):
-        td = timedelta(days=1)
-        before_send_date = send_date - td
-        after_send_date = send_date + td
-        if mode == 'ON':
-            today_results = self.server.search(['ON', send_date])
-            before_results = self.server.search(['ON', before_send_date])
-            after_results = self.server.search(['ON', after_send_date])
-            return before_results + today_results + after_results
-        elif mode == 'SINCE':
-            return self.server.search(['SINCE', before_send_date])
+        if mode in ['ON', 'SINCE']:
+            td = timedelta(days=1)
+            before_send_date = send_date - td
+            after_send_date = send_date + td
+            if mode == 'ON':
+                today_results = self.server.search(['ON', send_date])
+                before_results = self.server.search(['ON', before_send_date])
+                after_results = self.server.search(['ON', after_send_date])
+                return before_results + today_results + after_results
+            elif mode == 'SINCE':
+                return self.server.search(['SINCE', before_send_date])
         elif mode == 'SEARCH':
             criteria = '(HEADER Message-ID "%s")' % message_id
             try:
@@ -165,7 +173,8 @@ class ImapMail(object):
         return email_dict
 
     def get_email_list(self, send_date, mode='ON', message_id=None):
-        send_date = datetime.strptime(send_date, '%Y-%m-%d').date()
+        if send_date:
+            send_date = datetime.strptime(send_date, '%Y-%m-%d').date()
         total_email_list = []
         for send_box in ['INBOX', 'Sent Items']:
             logger.debug('start to get user: %s emails from box: %s', self.user, send_box)

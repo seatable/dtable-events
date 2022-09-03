@@ -337,7 +337,7 @@ def sync_email(context):
     email_user = context['email_user']
     email_password = context['email_password']
 
-    send_date = context['send_date']
+    send_date = context.get('send_date')
     email_table_name = context['email_table_name']
     link_table_name = context['link_table_name']
     dtable_server_api = context['dtable_server_api']
@@ -347,7 +347,7 @@ def sync_email(context):
     imap = context['imap']
     mode = 'SINCE'
     if sync_mode:
-        mode = 'SEARCH'
+        mode = sync_mode
 
     seatable = dtable_server_api
 

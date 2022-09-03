@@ -472,7 +472,7 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
     # auth info
     email_host = auth_info.get('email_host')
     email_port = int(auth_info.get('email_port'))
-    host_user = auth_info.get('host_user', '')
+    host_user = auth_info.get('host_user')
     password = auth_info.get('password')
 
     # send info
@@ -485,6 +485,7 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
     reply_to = send_info.get('reply_to', '')
     file_download_urls = send_info.get('file_download_urls', None)
     message_id = send_info.get('message_id', '')
+    in_reply_to = send_info.get('in_reply_to', '')
 
     send_to = [formataddr(parseaddr(to)) for to in send_to]
     copy_to = [formataddr(parseaddr(to)) for to in copy_to]
@@ -505,6 +506,9 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
 
     if message_id:
         msg_obj['Message-ID'] = message_id
+
+    if in_reply_to:
+        msg_obj['In-Reply-To'] = in_reply_to
 
     if msg:
         plain_content_body = MIMEText(msg)
