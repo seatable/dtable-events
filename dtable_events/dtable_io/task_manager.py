@@ -302,11 +302,11 @@ class TaskManager(object):
 
         return task_id
 
-    def add_pull_email_task(self, context):
-        from dtable_events.dtable_io import pull_email
+    def add_fetch_email_task(self, context):
+        from dtable_events.dtable_io import fetch_email
 
         task_id = str(int(time.time() * 1000))
-        task = (pull_email, (context,))
+        task = (fetch_email, (context,))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
 

@@ -342,12 +342,12 @@ def sync_email(context):
     link_table_name = context['link_table_name']
     dtable_server_api = context['dtable_server_api']
     dtable_db_api = context['dtable_db_api']
-    sync_mode = context.get('sync_mode')
+    mode = context.get('mode')
     message_id = context.get('message_id')
     imap = context['imap']
-    mode = 'SINCE'
-    if sync_mode:
-        mode = sync_mode
+
+    if not mode:
+        mode = 'SINCE'
 
     seatable = dtable_server_api
 

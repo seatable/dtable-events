@@ -921,8 +921,8 @@ def sync_email():
     return make_response(({'task_id': task_id}, 200))
 
 
-@app.route('/pull-email', methods=['POST'])
-def pull_email():
+@app.route('/fetch-email', methods=['POST'])
+def fetch_email():
     is_valid, error = check_auth_token(request)
     if not is_valid:
         return make_response((error, 403))
@@ -935,10 +935,10 @@ def pull_email():
     try:
         context = json.loads(request.data)
     except:
-        return make_response(('pull email context invalid.', 400))
+        return make_response(('fetch email context invalid.', 400))
 
     try:
-        task_id = task_manager.add_pull_email_task(context)
+        task_id = task_manager.add_fetch_email_task(context)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))

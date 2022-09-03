@@ -936,8 +936,8 @@ def email_sync(context, config):
             db_session.close()
 
 
-def pull_email(context):
-    dtable_io_logger.info('Start pull email to dtable %s, email table %s.' % (context.get('dtable_uuid'), context.get('email_table_name')))
+def fetch_email(context):
+    dtable_io_logger.info('Start fetch email to dtable %s, email table %s.' % (context.get('dtable_uuid'), context.get('email_table_name')))
 
     api_url = get_inner_dtable_server_url()
 
@@ -964,10 +964,11 @@ def pull_email(context):
     context['dtable_server_api'] = dtable_server_api
     context['dtable_db_api'] = dtable_db_api
     context['imap'] = imap
+    context['mode'] = 'SEARCH'
 
     try:
         sync_email(context)
     except Exception as e:
-        dtable_io_logger.exception('pull email ERROR: {}'.format(e))
+        dtable_io_logger.exception('fetch email ERROR: {}'.format(e))
     else:
-        dtable_io_logger.info('pull email success, email user: %s' % context.get('email_user'))
+        dtable_io_logger.info('fetch email success, email user: %s' % context.get('email_user'))
