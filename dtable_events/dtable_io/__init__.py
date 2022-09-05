@@ -30,7 +30,7 @@ from dtable_events.dtable_io.excel import parse_excel_csv_to_json, import_excel_
     parse_and_import_excel_csv_to_table, parse_and_update_file_to_table
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.statistics.db import save_email_sending_records, batch_save_email_sending_records
-from dtable_events.data_sync.data_sync_utils import run_sync_emails, sync_email, check_imap_account
+from dtable_events.data_sync.data_sync_utils import run_sync_emails, check_imap_account, sync_email_to_table
 from dtable_events.utils import get_inner_dtable_server_url
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.utils.dtable_server_api import DTableServerAPI
@@ -950,6 +950,11 @@ def fetch_email(context):
     email_password = context.get('email_password')
     imap_port = context.get('imap_port')
 
+    send_date = context.get('send_date')
+    email_table_name = context['email_table_name']
+    link_table_name = context['link_table_name']
+    message_id = context.get('message_id')
+
     dtable_server_api = DTableServerAPI(username, dtable_uuid, api_url, server_url=DTABLE_WEB_SERVICE_URL,
                                         repo_id=repo_id, workspace_id=workspace_id)
 
@@ -961,14 +966,16 @@ def fetch_email(context):
         dtable_io_logger.error('imap account error: %s' % error_msg)
         return
 
-    context['dtable_server_api'] = dtable_server_api
-    context['dtable_db_api'] = dtable_db_api
-    context['imap'] = imap
-    context['mode'] = 'SEARCH'
-
     try:
-        sync_email(context)
+        email = imap.search_email_by_message_id(message_id)
     except Exception as e:
         dtable_io_logger.exception('fetch email ERROR: {}'.format(e))
+        return
     else:
         dtable_io_logger.info('fetch email success, email user: %s' % context.get('email_user'))
+
+    try:
+        sync_email_to_table(dtable_server_api, dtable_db_api, email_table_name, link_table_name, send_date, [email])
+    except Exception as e:
+        dtable_io_logger.exception(e)
+        dtable_io_logger.error('email: %s sync and update link error: %s', email_user, e)
