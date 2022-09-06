@@ -157,7 +157,7 @@ class DTableDBAPI(object):
         else:
             return results
 
-    def query_and_metadata(self, sql, convert=True):
+    def query_and_metadata(self, sql, convert=True, server_only=True):
         """
         :param sql: str
         :param convert: bool
@@ -166,7 +166,7 @@ class DTableDBAPI(object):
         if not sql:
             raise ValueError('sql can not be empty.')
         url = self.dtable_db_url + '/api/v1/query/' + self.dtable_uuid + '/?from=dtable_events'
-        json_data = {'sql': sql}
+        json_data = {'sql': sql, 'server_only': server_only}
         response = requests.post(url, json=json_data, headers=self.headers)
         data = parse_response(response)
         if not data.get('success'):
