@@ -7,6 +7,7 @@ from flask import Flask, request, make_response
 from dtable_events.app.config import DTABLE_PRIVATE_KEY
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.dtable_io.task_message_manager import message_task_manager
+from dtable_events.dtable_io.task_data_sync_manager import data_sync_task_manager
 
 app = Flask(__name__)
 logger = logging.getLogger(__name__)
@@ -901,11 +902,7 @@ def sync_email():
     is_valid, error = check_auth_token(request)
     if not is_valid:
         return make_response((error, 403))
-    if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
-        dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
-                                 % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
-                                    task_manager.threads_is_alive()))
+    if data_sync_task_manager.tasks_queue.full():
         return make_response(('dtable io server busy.', 400))
     try:
         context = json.loads(request.data)
@@ -913,7 +910,7 @@ def sync_email():
         return make_response(('sync email context invalid.', 400))
 
     try:
-        task_id = task_manager.add_sync_email_task(context)
+        task_id = data_sync_task_manager.add_sync_email_task(context)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -926,11 +923,7 @@ def fetch_email():
     is_valid, error = check_auth_token(request)
     if not is_valid:
         return make_response((error, 403))
-    if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
-        dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
-                                 % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
-                                    task_manager.threads_is_alive()))
+    if data_sync_task_manager.tasks_queue.full():
         return make_response(('dtable io server busy.', 400))
     try:
         context = json.loads(request.data)
@@ -938,9 +931,29 @@ def fetch_email():
         return make_response(('fetch email context invalid.', 400))
 
     try:
-        task_id = task_manager.add_fetch_email_task(context)
+        task_id = data_sync_task_manager.add_fetch_email_task(context)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
+
+
+@app.route('/query-data-sync-status', methods=['GET'])
+def query_data_sync_status():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    task_id = request.args.get('task_id')
+    if not data_sync_task_manager.is_valid_task_id(task_id):
+        return make_response(('task_id invalid.', 400))
+
+    try:
+        is_finished = data_sync_task_manager.query_status(task_id)
+    except Exception as e:
+        logger.debug(e)
+        return make_response((e, 500))
+
+    resp = dict(is_finished=is_finished)
+    return make_response((resp, 200))
