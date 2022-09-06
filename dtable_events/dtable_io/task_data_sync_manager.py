@@ -9,8 +9,7 @@ class TaskDataSyncManager(object):
         self.tasks_map = {}
         self.tasks_queue = queue.Queue(10)
         self.config = None
-        self.current_task_info = None
-        self.t = None
+        self.current_task_info = {}
         self.conf = {}
 
     def init(self, workers, file_server_port, io_task_timeout, config):
@@ -64,8 +63,9 @@ class TaskDataSyncManager(object):
 
             try:
                 task = self.tasks_map[task_id]
-                self.current_task_info = task_id + ' ' + str(task[0])
-                dtable_data_sync_logger.info('Run task: %s' % self.current_task_info)
+                task_info = task_id + ' ' + str(task[0])
+                self.current_task_info[task_id] = task_info
+                dtable_data_sync_logger.info('Run task: %s' % task_info)
                 start_time = time.time()
 
                 # run
@@ -73,18 +73,20 @@ class TaskDataSyncManager(object):
                 self.tasks_map[task_id] = 'success'
 
                 finish_time = time.time()
-                dtable_data_sync_logger.info('Run task success: %s cost %ds \n' % (self.current_task_info, int(finish_time - start_time)))
-                self.current_task_info = None
+                dtable_data_sync_logger.info('Run task success: %s cost %ds \n' % (task_info, int(finish_time - start_time)))
+                self.current_task_info.pop(task_id, None)
             except Exception as e:
                 dtable_data_sync_logger.error('Failed to handle task %s, error: %s \n' % (task_id, e))
                 self.tasks_map.pop(task_id, None)
-                self.current_task_info = None
+                self.current_task_info.pop(task_id, None)
 
     def run(self):
-        t_name = 'DataSyncTaskManager Thread'
-        self.t = threading.Thread(target=self.handle_task, name=t_name)
-        self.t.setDaemon(True)
-        self.t.start()
+        thread_num = self.conf['workers']
+        for i in range(thread_num):
+            t_name = 'DataSyncTaskManager Thread-' + str(i)
+            t = threading.Thread(target=self.handle_task, name=t_name)
+            t.setDaemon(True)
+            t.start()
 
     def cancel_task(self, task_id):
         self.tasks_map.pop(task_id, None)

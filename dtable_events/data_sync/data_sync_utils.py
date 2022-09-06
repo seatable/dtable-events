@@ -445,7 +445,7 @@ def run_sync_emails(context):
         return
 
     try:
-        email_list = sorted(imap.search_emails_by_send_date(send_date, 'ON'), key=lambda x: str_2_datetime(x['Date']))
+        email_list = sorted(imap.search_emails_by_send_date(send_date, 'SINCE'), key=lambda x: str_2_datetime(x['Date']))
     except socket.timeout as e:
         logger.exception(e)
         logger.error('email: %s get emails timeout: %s', email_user, e)
