@@ -38,6 +38,7 @@ from dtable_events.utils.dtable_server_api import DTableServerAPI
 dtable_io_logger = setup_logger('dtable_events_io.log')
 dtable_message_logger = setup_logger('dtable_events_message.log')
 dtable_data_sync_logger = setup_logger('dtable_events_data_sync.log')
+dtable_email_fetch_logger = setup_logger('dtable_events_email_fetch.log')
 
 def clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path):
     # delete tmp files/dirs
@@ -938,7 +939,7 @@ def email_sync(context, config):
 
 
 def fetch_email(context):
-    dtable_data_sync_logger.info('Start fetch email to dtable %s, email table %s.' % (context.get('dtable_uuid'), context.get('email_table_name')))
+    dtable_email_fetch_logger.info('Start fetch email to dtable %s, email table %s.' % (context.get('dtable_uuid'), context.get('email_table_name')))
 
     api_url = get_inner_dtable_server_url()
 
@@ -964,19 +965,19 @@ def fetch_email(context):
     imap, error_msg = check_imap_account(imap_host, email_user, email_password, port=imap_port, return_imap=True)
 
     if error_msg:
-        dtable_data_sync_logger.error('imap account error: %s' % error_msg)
+        dtable_email_fetch_logger.error('imap account error: %s' % error_msg)
         return
 
     try:
         email = imap.search_email_by_message_id(message_id)
     except Exception as e:
-        dtable_data_sync_logger.exception('fetch email ERROR: {}'.format(e))
+        dtable_email_fetch_logger.exception('fetch email ERROR: {}'.format(e))
         return
     else:
-        dtable_data_sync_logger.info('fetch email success, email user: %s' % context.get('email_user'))
+        dtable_email_fetch_logger.info('fetch email success, email user: %s' % context.get('email_user'))
 
     try:
         sync_email_to_table(dtable_server_api, dtable_db_api, email_table_name, link_table_name, send_date, [email])
     except Exception as e:
-        dtable_data_sync_logger.exception(e)
-        dtable_data_sync_logger.error('email: %s sync and update link error: %s', email_user, e)
+        dtable_email_fetch_logger.exception(e)
+        dtable_email_fetch_logger.error('email: %s sync and update link error: %s', email_user, e)
