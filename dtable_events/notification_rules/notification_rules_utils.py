@@ -3,11 +3,10 @@ import json
 import logging
 import re
 import time
-from datetime import datetime, date, timedelta
+from datetime import datetime
 
 import jwt
 import requests
-from dateutil import parser
 
 from dtable_events import filter2sql
 from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL
@@ -17,7 +16,6 @@ from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 from dtable_events.utils.dtable_db_api import DTableDBAPI
-from dtable_events.utils.sql_generator import BaseSQLGenerator
 from dtable_events.notification_rules.message_formatters import create_formatter_params, formatter_map
 
 logger = logging.getLogger(__name__)
@@ -106,45 +104,6 @@ def deal_invalid_rule(rule_id, db_session):
         logger.error(e)
 
 
-class NearDeadlineSqlGenerator(BaseSQLGenerator):
-
-    def to_sql(self, date_column_name, alarm_days, by_group=False):
-        sql = "%s `%s`" % (
-            "SELECT * FROM",
-            self.table_name
-        )
-        if not by_group:
-            filter_clause = self._filter2sql()
-            sort_clause = self._sort2sql()
-            limit_clause = self._limit2sql()
-        else:
-            filter_clause = self._groupfilter2sql()
-            sort_clause = self._sort2sql(by_group=True)
-            limit_clause = self._limit2sql(by_group=True)
-
-        now_date = date.today()
-        now_plus_alarm_date = now_date + timedelta(days=int(alarm_days))
-        days_filter_snippet = "`%(date_column_name)s`>='%(now_date)s' AND `%(date_column_name)s`<='%(end_date)s'" % {
-            'date_column_name': date_column_name,
-            'now_date': str(now_date) + ' 00:00',
-            'end_date': str(now_plus_alarm_date) + ' 23:59'
-        }
-
-        if filter_clause:
-            filter_clause = 'WHERE (%s) AND (%s)' % (
-                filter_clause[len('WHERE '):],
-                days_filter_snippet
-            )
-            sql = "%s %s" % (sql, filter_clause)
-        else:
-            sql = "%s %s" % (sql, 'WHERE ' + days_filter_snippet)
-        if sort_clause:
-            sql = "%s %s" % (sql, sort_clause)
-        if limit_clause:
-            sql = "%s %s" % (sql, limit_clause)
-        return sql
-
-
 def list_rows_near_deadline_with_dtable_db(dtable_metadata, table_id, view_id, date_column_name, alarm_days, dtable_db_api):
     """
     return: rows -> list or None, metate -> dict or None
@@ -171,9 +130,28 @@ def list_rows_near_deadline_with_dtable_db(dtable_metadata, table_id, view_id, d
             item['filter_term'].append('')
         elif item.get('filter_predicate') == 'is_current_user_ID':
             item['filter_term'] = -1
-    filter_conditions['filters'] = filters
-    filter_conditions['filter_conjunction'] = filter_conjunction
-    sql = NearDeadlineSqlGenerator(table['name'], table['columns'], filter_conditions=filter_conditions).to_sql(date_column_name, alarm_days)
+    filter_conditions['filter_groups'] = [{
+        'filters': filters,
+        'filter_conjunction': filter_conjunction
+    }]
+    filter_conditions['filter_groups'].append({
+        'filters': [{
+                "column_name": date_column_name,
+                "filter_predicate": "is_before",
+                "filter_term": alarm_days + 1,
+                "filter_term_modifier": "number_of_days_from_now"
+            }, {
+                "column_name": date_column_name,
+                "filter_predicate": "is_after",
+                "filter_term": "",
+                "filter_term_modifier": "today"
+            }
+        ],
+        'filter_conjunction': 'And'
+    })
+    filter_conditions['group_conjunction'] = 'And'
+    sql = filter2sql(table['name'], table['columns'], filter_conditions, by_group=True)
+    logger.debug('sql: %s', sql)
     return dtable_db_api.query_and_metadata(sql, convert=False)
 
 
