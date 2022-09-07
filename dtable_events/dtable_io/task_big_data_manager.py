@@ -13,17 +13,13 @@ class TaskBigDataManager(object):
         self.current_task_info = None
         self.t = None
         self.threads = []
+        self.conf = {}
 
-    def init(self, workers, dtable_private_key, dtable_web_service_url, file_server_port, dtable_server_url,
-             io_task_timeout, config):
-        self.conf = {
-            'dtable_private_key': dtable_private_key,
-            'dtable_web_service_url': dtable_web_service_url,
-            'file_server_port': file_server_port,
-            'dtable_server_url': dtable_server_url,
-            'io_task_timeout': io_task_timeout,
-            'workers': workers,
-        }
+    def init(self, workers, file_server_port, io_task_timeout, config):
+        self.conf['file_server_port'] = file_server_port
+        self.conf['io_task_timeout'] = io_task_timeout
+        self.conf['workers'] = workers
+
         self.config = config
 
     def is_valid_task_id(self, task_id):

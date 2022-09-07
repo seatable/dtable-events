@@ -178,3 +178,18 @@ class DTableDBAPI(object):
             return converted_results, metadata
         else:
             return results, metadata
+
+    def insert_rows(self, table_name, rows):
+        api_url = "%s/api/v1/insert-rows/%s" % (
+            self.dtable_db_url.rstrip('/'),
+            self.dtable_uuid
+        )
+
+        params = {
+            "table_name": table_name,
+            "rows": rows
+        }
+        resp = requests.post(api_url, json=params, headers=self.headers)
+        if not resp.status_code == 200:
+            return resp.text, True
+        return resp.json(), False

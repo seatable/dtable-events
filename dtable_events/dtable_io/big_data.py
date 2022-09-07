@@ -1,35 +1,13 @@
-import jwt
 import openpyxl
-import logging
 import os
-import requests
-import datetime
-import json
 
 # DTABLE_WEB_DIR
 from dtable_events.dtable_io.excel import parse_row
+from dtable_events.utils import get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes
-
-dtable_web_dir = os.environ.get('DTABLE_WEB_DIR', '')
-if not dtable_web_dir:
-    logging.critical('dtable_web_dir is not set')
-    raise RuntimeError('dtable_web_dir is not set')
-if not os.path.exists(dtable_web_dir):
-    logging.critical('dtable_web_dir %s does not exist' % dtable_web_dir)
-    raise RuntimeError('dtable_web_dir does not exist')
-
-logger = logging.getLogger(__name__)
-
-
-try:
-    import seahub.settings as seahub_settings
-    DTABLE_WEB_SERVICE_URL = getattr(seahub_settings, 'DTABLE_WEB_SERVICE_URL')
-    DTABLE_PRIVATE_KEY = getattr(seahub_settings, 'DTABLE_PRIVATE_KEY')
-except ImportError as e:
-    logger.critical("Can not import dtable_web settings: %s." % e)
-    raise RuntimeError("Can not import dtable_web settings: %s" % e)
-
-
+from dtable_events.app.config import INNER_DTABLE_DB_URL
+from dtable_events.utils.dtable_db_api import DTableDBAPI
+from dtable_events.utils.dtable_server_api import DTableServerAPI
 
 AUTO_GENERATED_COLUMNS = [
     ColumnTypes.AUTO_NUMBER,
@@ -42,33 +20,10 @@ AUTO_GENERATED_COLUMNS = [
     ColumnTypes.LINK_FORMULA,
 ]
 
-class DBHandler(object):
-
-    def __init__(self, authed_base, table_name):
-        self.base = authed_base
-        self.table_name = table_name
-        self._ini()
-
-    def _ini(self):
-
-        self.db_url = self.base.dtable_db_url
-        self.headers = self.base.headers
-        self.dtable_uuid = self.base.dtable_uuid
-
-    def insert_rows(self, rows):
-        api_url = "%s/api/v1/insert-rows/%s" % (
-            self.db_url.rstrip('/'),
-            self.dtable_uuid
-        )
-
-        params = {
-            "table_name": self.table_name,
-            "rows": rows
-        }
-        resp = requests.post(api_url, json=params, headers=self.headers)
-        if not resp.status_code == 200:
-            return resp.text, True
-        return resp.json(), False
+ROW_EXCEED_ERROR_CODE = 1
+FILE_READ_ERROR_CODE = 2
+COLUMN_MATCH_ERROR_CODE = 3
+INTERNAL_ERROR_CODE = 5
 
 def match_columns(authed_base, table_name, target_columns):
     table_columns = authed_base.list_columns(table_name)
@@ -91,15 +46,14 @@ def import_excel_to_db(
         tasks_status_map,
 
 ):
-    from seatable_api import Base
     from dtable_events.dtable_io import dtable_io_logger
-    import time
 
     tasks_status_map[task_id] = {
         'status': 'initializing',
         'err_msg': '',
         'rows_imported': 0,
         'total_rows': 0,
+        'err_code': 0,
     }
     try:
         wb = openpyxl.load_workbook(file_path, read_only=True)
@@ -109,35 +63,35 @@ def import_excel_to_db(
         if total_rows > 100000:
             tasks_status_map[task_id]['err_msg'] = 'Number of rows (%s) exceeds 100,000 limit' % total_rows
             tasks_status_map[task_id]['status'] = 'terminated'
+            tasks_status_map[task_id]['err_code'] = ROW_EXCEED_ERROR_CODE
             os.remove(file_path)
             return
     except Exception as err:
         tasks_status_map[task_id]['err_msg'] = "file reading error: %s" % str(err)
         tasks_status_map[task_id]['status'] = 'terminated'
+        tasks_status_map[task_id]['err_code'] = FILE_READ_ERROR_CODE
         os.remove(file_path)
         return
 
     try:
-        api_token = jwt.encode({
-            'username': username,
-            'dtable_uuid': dtable_uuid,
-            'exp': time.time() + 60 * 10
-        }, DTABLE_PRIVATE_KEY, algorithm='HS256')
 
+        dtable_server_url = get_inner_dtable_server_url()
         excel_columns = [cell.value for cell in ws[1]]
-        base = Base(api_token, DTABLE_WEB_SERVICE_URL)
-        base.auth()
+
+        base = DTableServerAPI(username, dtable_uuid, dtable_server_url)
         column_matched, column_name, base_columns = match_columns(base, table_name, excel_columns)
         if not column_matched:
             tasks_status_map[task_id]['err_msg'] = 'Column %s does not match in excel' % column_name
             tasks_status_map[task_id]['status'] = 'terminated'
+            tasks_status_map[task_id]['err_code'] = COLUMN_MATCH_ERROR_CODE
             os.remove(file_path)
             return
 
-        db_handler = DBHandler(base, table_name)
+        db_handler = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
     except Exception as err:
         tasks_status_map[task_id]['err_msg'] = str(err)
         tasks_status_map[task_id]['status'] = 'terminated'
+        tasks_status_map[task_id]['err_code'] = INTERNAL_ERROR_CODE
         os.remove(file_path)
         return
 
@@ -161,11 +115,11 @@ def import_excel_to_db(
                 parsed_row_data = {}
                 for col_name, value in row_data.items():
                     col_type = column_name_type_map.get(col_name)
-                    parsed_row_data[col_name] = parse_row(col_type, value)
+                    parsed_row_data[col_name] = value and parse_row(col_type, value) or ''
                 slice.append(parsed_row_data)
                 if total_count + 1 == total_rows or len(slice) == 100:
                     tasks_status_map[task_id]['rows_imported'] = insert_count
-                    resp_content, err = db_handler.insert_rows(slice)
+                    resp_content, err = db_handler.insert_rows(table_name, slice)
                     if err:
                         err_flag = True
                         dtable_io_logger.error('row insterted error: %s' % (resp_content))
