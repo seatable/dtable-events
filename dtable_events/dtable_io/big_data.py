@@ -23,6 +23,7 @@ AUTO_GENERATED_COLUMNS = [
 ROW_EXCEED_ERROR_CODE = 1
 FILE_READ_ERROR_CODE = 2
 COLUMN_MATCH_ERROR_CODE = 3
+ROW_INSERT_ERROR_CODE = 4
 INTERNAL_ERROR_CODE = 5
 
 def match_columns(authed_base, table_name, target_columns):
@@ -107,7 +108,6 @@ def import_excel_to_db(
     column_name_type_map = {col.get('name'): col.get('type') for col in base_columns}
     index = 0
     for row in ws.rows:
-        err_flag = False
         try:
             if index > 0:
                 row_list = [r.value for r in row]
@@ -119,21 +119,18 @@ def import_excel_to_db(
                 slice.append(parsed_row_data)
                 if total_count + 1 == total_rows or len(slice) == 100:
                     tasks_status_map[task_id]['rows_imported'] = insert_count
-                    resp_content, err = db_handler.insert_rows(table_name, slice)
-                    if err:
-                        err_flag = True
-                        dtable_io_logger.error('row insterted error: %s' % (resp_content))
+                    db_handler.insert_rows(table_name, slice)
                     insert_count += len(slice)
                     slice = []
                 total_count += 1
             index += 1
         except Exception as err:
-            err_flag = True
+            tasks_status_map[task_id]['err_msg'] = 'Row inserted error'
+            tasks_status_map[task_id]['status'] = 'terminated'
+            tasks_status_map[task_id]['err_code'] = ROW_INSERT_ERROR_CODE
             dtable_io_logger.error(str(err))
-
-        if err_flag:
-            continue
-
+            os.remove(file_path)
+            return
 
     tasks_status_map[task_id]['status'] = status
     tasks_status_map[task_id]['rows_imported'] = insert_count

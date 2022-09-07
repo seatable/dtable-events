@@ -10,6 +10,10 @@ from dtable_events.utils import uuid_str_to_36_chars
 logger = logging.getLogger(__name__)
 
 
+
+class RowInsertedError(Exception):
+    pass
+
 def parse_response(response):
     if response.status_code >= 400:
         raise ConnectionError(response.status_code, response.text)
@@ -191,5 +195,5 @@ class DTableDBAPI(object):
         }
         resp = requests.post(api_url, json=params, headers=self.headers)
         if not resp.status_code == 200:
-            return resp.text, True
-        return resp.json(), False
+           raise RowInsertedError
+        return resp.json()
