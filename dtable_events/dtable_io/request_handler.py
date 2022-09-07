@@ -961,7 +961,7 @@ def fetch_email():
 
 
 @app.route('/query-email-fetch-status', methods=['GET'])
-def query_data_sync_status():
+def query_email_fetch_status():
     is_valid, error = check_auth_token(request)
     if not is_valid:
         return make_response((error, 403))
