@@ -920,6 +920,54 @@ def sync_email():
     return make_response(({'task_id': task_id}, 200))
 
 
+@app.route('/add-import-big-excel-task', methods=['POST'])
+def add_import_big_excel_task():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    if big_data_task_manager.tasks_queue.full():
+        from dtable_events.dtable_io import dtable_io_logger
+        dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
+                                 % (big_data_task_manager.tasks_queue.qsize(), big_data_task_manager.current_task_info,
+                                    big_data_task_manager.threads_is_alive()))
+        return make_response(('dtable io server busy.', 400))
+
+    data = request.form
+
+    username = data.get('username')
+    dtable_uuid = data.get('dtable_uuid')
+    file_path = data.get('file_path')
+    table_name = data.get('table_name')
+    try:
+        task_id = big_data_task_manager.add_import_big_excel_task(
+            username, dtable_uuid, table_name, file_path)
+    except Exception as e:
+        logger.error(e)
+        return make_response((e, 500))
+    return make_response(({'task_id': task_id}, 200))
+
+@app.route('/query-big-data-status', methods=['GET'])
+def query_big_data_status():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    task_id = request.args.get('task_id')
+    if not big_data_task_manager.is_valid_task_id(task_id):
+        return make_response(('task_id invalid.', 400))
+
+    try:
+        is_finished, result = big_data_task_manager.query_status(task_id)
+    except Exception as e:
+        logger.debug(e)  # task_id not found
+        return make_response((e, 500))
+
+    resp = dict(is_finished=is_finished)
+    resp['result'] = result if result else {}
+    return make_response((resp, 200))
+
+
 @app.route('/query-data-sync-status', methods=['GET'])
 def query_data_sync_status():
     is_valid, error = check_auth_token(request)
