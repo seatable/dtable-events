@@ -6,6 +6,7 @@ import os
 from urllib import parse
 from uuid import UUID
 from copy import deepcopy
+from dateutil import parser
 from datetime import datetime, date, timedelta
 
 import jwt
@@ -74,6 +75,15 @@ class BaseAction:
                         option_name = option.get('name')
                         parse_value_list.append(option_name)
                 return parse_value_list
+        elif column.get('type') == ColumnTypes.DATE:
+            date_value = parser.isoparse(value)
+            date_format = column['data']['format']
+            if date_format == 'YYYY-MM-DD':
+                return date_value.strftime('%Y-%m-%d')
+            return date_value.strftime('%Y-%m-%d %H:%M')
+        elif column.get('type') in [ColumnTypes.CTIME, ColumnTypes.MTIME]:
+            date_value = parser.isoparse(value)
+            return date_value.strftime('%Y-%m-%d %H:%M:%S')
         else:
             return value
 
