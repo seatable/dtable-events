@@ -112,12 +112,14 @@ def list_rows_near_deadline_with_dtable_db(dtable_metadata, table_id, view_id, d
     for tmp_table in dtable_metadata['tables']:
         if tmp_table['_id'] == table_id:
             table = tmp_table
-            for tmp_view in table.get('views', []):
-                if tmp_view['_id'] == view_id:
-                    view = tmp_view
-                    break
             break
-    if not table or not view:
+    if not table:
+        return [], None
+    for tmp_view in table.get('views', []):
+        if tmp_view['_id'] == view_id:
+            view = tmp_view
+            break
+    if not view:
         return [], None
     filters = view.get('filters', [])
     filter_conjunction = view.get('filter_conjunction', 'And')
@@ -125,13 +127,21 @@ def list_rows_near_deadline_with_dtable_db(dtable_metadata, table_id, view_id, d
         'start': 0,
         'limit': 25
     }
+    new_filters = []
     for item in filters:
         if item.get('filter_predicate') == 'include_me':
-            item['filter_term'].append('')
+            if filter_conjunction == 'And':
+                return [], None
+            else:
+                continue
         elif item.get('filter_predicate') == 'is_current_user_ID':
-            item['filter_term'] = -1
+            if filter_conjunction == 'And':
+                return [], None
+            else:
+                continue
+        new_filters.append(item)
     filter_conditions['filter_groups'] = [{
-        'filters': filters,
+        'filters': new_filters,
         'filter_conjunction': filter_conjunction
     }]
     filter_conditions['filter_groups'].append({
