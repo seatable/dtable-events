@@ -356,7 +356,7 @@ class FormulaMessageFormatter(BaseMessageFormatter):
             if array_type == FormulaResultType.STRING:
                 array_type = ColumnTypes.TEXT
             elif array_type == FormulaResultType.BOOL:
-                array_type == ColumnTypes.CHECKBOX
+                array_type = ColumnTypes.CHECKBOX
             formatter_class = formatter_map.get(array_type)
             if not formatter_class:
                     return '[]'
