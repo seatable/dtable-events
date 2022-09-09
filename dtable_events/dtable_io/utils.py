@@ -840,7 +840,7 @@ def get_metadata_from_dtable_server(dtable_uuid, username, permission):
     return json.loads(res.content)['metadata']
 
 
-def get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission, table_name, view_name):
+def get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission, table_name, view_name, start=None, limit=None):
     api_url = get_inner_dtable_server_url()
     url = api_url.rstrip('/') + '/api/v1/internal/dtables/' + dtable_uuid + '/view-rows/?from=dtable_events'
 
@@ -863,6 +863,11 @@ def get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, i
         'view_name': view_name,
         'convert_link_id': True,
     }
+
+    if start is not None:
+        query_param['start'] = start
+    if  limit is not None:
+        query_param['limit'] = limit
 
     res = requests.get(url, headers=headers, params=query_param)
 

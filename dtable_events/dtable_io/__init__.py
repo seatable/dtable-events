@@ -732,7 +732,7 @@ def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token, session_id):
         driver.quit()
 
 
-def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, permission, name):
+def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, permission, name, archive_view_export_row_limit):
     from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_view_rows_from_dtable_server, \
         convert_db_rows
     from dtable_events.dtable_io.excel import parse_grouped_rows, write_xls_with_type
@@ -794,14 +794,29 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
         if summary_configs.get(col.get('key')):
             summary_col_info.update({col.get('name'): summary_configs.get(col.get('key'))})
 
-    res_json = get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission,
-                                                table_name, view_name)
-
     if is_archive:
-        archive_rows = res_json.get('rows', [])
-        archive_metadata = res_json.get('metadata')
+        step = 10000
+        archive_view_export_row_limit = int(archive_view_export_row_limit)
+        archive_rows = []
+        archive_metadata = []
+        for i in range(0, archive_view_export_row_limit, step):
+            start = i
+            limit = step if (archive_view_export_row_limit - i > step) else (archive_view_export_row_limit - i)
+
+            res_json = get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission,
+                                                        table_name, view_name, start=start, limit=limit)
+            rows = res_json.get('rows', [])
+
+            archive_rows += rows
+            if i == 0:
+                archive_metadata = res_json.get('metadata')
+            if len(rows) < step:
+                break
+
         response_rows = convert_db_rows(archive_metadata, archive_rows)
     else:
+        res_json = get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission,
+                                                    table_name, view_name)
         response_rows = res_json.get('rows', [])
 
     if response_rows and ('rows' in response_rows[0] or 'subgroups' in response_rows[0]):
