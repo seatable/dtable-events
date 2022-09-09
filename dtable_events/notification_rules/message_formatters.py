@@ -351,7 +351,7 @@ class FormulaMessageFormatter(BaseMessageFormatter):
                 formatter_class = formatter_map.get(array_type)
                 if not formatter_class:
                     return '[]'
-                formatter_params = create_formatter_params(array_type, value=flat(value), db_session=db_session)
+                formatter_params = create_formatter_params(array_type, value=list(set(flat(value))), db_session=db_session)
                 return formatter_class({'data': array_data}).format_message(**formatter_params)
             if array_type == FormulaResultType.STRING:
                 array_type = ColumnTypes.TEXT
