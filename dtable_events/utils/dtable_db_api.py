@@ -127,7 +127,7 @@ class DTableDBAPI(object):
     def get_dtable_db_token(self):
         token = jwt.encode(
             payload={
-                'exp': int(time.time()) + 300,
+                'exp': int(time.time()) + 3600 * 12 * 24,
                 'dtable_uuid': self.dtable_uuid,
                 'username': self.username,
                 'permission': 'rw',
