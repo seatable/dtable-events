@@ -732,12 +732,30 @@ def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token, session_id):
         driver.quit()
 
 
+def parse_view_rows(response_rows, head_list, summary_col_info, cols_without_hidden):
+    from dtable_events.dtable_io.excel import parse_grouped_rows
+    if response_rows and ('rows' in response_rows[0] or 'subgroups' in response_rows[0]):
+        first_col_name = head_list[0][0]
+        result_rows, grouped_row_num_map = parse_grouped_rows(response_rows, first_col_name, summary_col_info)
+    else:
+        result_rows, grouped_row_num_map = response_rows, {}
+
+    data_list = []
+    for row_from_server in result_rows:
+        row = []
+        for col in cols_without_hidden:
+            cell_data = row_from_server.get(col['name'], '')
+            row.append(cell_data)
+        data_list.append(row)
+    return data_list, grouped_row_num_map
+
+
 def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, permission, name, archive_view_export_row_limit):
     from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_view_rows_from_dtable_server, \
         convert_db_rows
     from dtable_events.dtable_io.excel import parse_grouped_rows, write_xls_with_type
     from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
-
+    import openpyxl
     target_dir = '/tmp/dtable-io/export-view-to-excel/' + dtable_uuid
     if not os.path.isdir(target_dir):
         os.makedirs(target_dir)
@@ -794,55 +812,55 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
         if summary_configs.get(col.get('key')):
             summary_col_info.update({col.get('name'): summary_configs.get(col.get('key'))})
 
+    sheet_name = table_name + ('_' + view_name if view_name else '')
+    excel_name = name + '_' + table_name + ('_' + view_name if view_name else '') + '.xlsx'
+    target_path = os.path.join(target_dir, excel_name)
+    wb = openpyxl.Workbook(write_only=True)
+    ws = wb.create_sheet(sheet_name)
     if is_archive:
         step = 10000
         archive_view_export_row_limit = int(archive_view_export_row_limit)
-        archive_rows = []
         archive_metadata = []
+
         for i in range(0, archive_view_export_row_limit, step):
-            start = i
             limit = step if (archive_view_export_row_limit - i > step) else (archive_view_export_row_limit - i)
 
             res_json = get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission,
-                                                        table_name, view_name, start=start, limit=limit)
+                                                        table_name, view_name, start=i, limit=limit)
             rows = res_json.get('rows', [])
 
-            archive_rows += rows
             if i == 0:
                 archive_metadata = res_json.get('metadata')
+
+            response_rows = convert_db_rows(archive_metadata, rows)
+            data_list, grouped_row_num_map = parse_view_rows(response_rows, head_list, summary_col_info, cols_without_hidden)
+
+            row_num = i
+
+            try:
+                write_xls_with_type(head_list, data_list, grouped_row_num_map, email2nickname, ws, row_num)
+            except Exception as e:
+                dtable_io_logger.exception(e)
+                dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
+                return
+
             if len(rows) < step:
                 break
-
-        response_rows = convert_db_rows(archive_metadata, archive_rows)
+        wb.save(target_path)
     else:
         res_json = get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission,
                                                     table_name, view_name)
         response_rows = res_json.get('rows', [])
 
-    if response_rows and ('rows' in response_rows[0] or 'subgroups' in response_rows[0]):
-        first_col_name = head_list[0][0]
-        result_rows, grouped_row_num_map = parse_grouped_rows(response_rows, first_col_name, summary_col_info)
-    else:
-        result_rows, grouped_row_num_map = response_rows, {}
+        data_list, grouped_row_num_map = parse_view_rows(response_rows, head_list, summary_col_info, cols_without_hidden)
 
-    data_list = []
-    for row_from_server in result_rows:
-        row = []
-        for col in cols_without_hidden:
-            cell_data = row_from_server.get(col['name'], '')
-            row.append(cell_data)
-        data_list.append(row)
-
-    excel_name = name + '_' + table_name + ('_' + view_name if view_name else '') + '.xlsx'
-
-    try:
-        wb = write_xls_with_type(table_name + ('_' + view_name if view_name else ''), head_list, data_list,
-                                 grouped_row_num_map, email2nickname)
-    except Exception as e:
-        dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
-        return
-    target_path = os.path.join(target_dir, excel_name)
-    wb.save(target_path)
+        try:
+            write_xls_with_type(head_list, data_list, grouped_row_num_map, email2nickname, ws, 0)
+        except Exception as e:
+            dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
+            return
+        target_path = os.path.join(target_dir, excel_name)
+        wb.save(target_path)
 
 
 def convert_table_to_execl(dtable_uuid, table_id, username, permission, name):
@@ -850,6 +868,7 @@ def convert_table_to_execl(dtable_uuid, table_id, username, permission, name):
         convert_db_rows
     from dtable_events.dtable_io.excel import parse_grouped_rows, write_xls_with_type
     from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
+    import openpyxl
 
     target_dir = '/tmp/dtable-io/export-table-to-excel/' + dtable_uuid
     if not os.path.isdir(target_dir):
@@ -894,13 +913,16 @@ def convert_table_to_execl(dtable_uuid, table_id, username, permission, name):
             row.append(cell_data)
         data_list.append(row)
 
+    sheet_name = table_name
     excel_name = name + '_' + table_name + '.xlsx'
+    target_path = os.path.join(target_dir, excel_name)
+    wb = openpyxl.Workbook(write_only=True)
+    ws = wb.create_sheet(sheet_name)
     try:
-        wb = write_xls_with_type(table_name, head_list, data_list, {}, email2nickname)
+        write_xls_with_type(head_list, data_list, {}, email2nickname, ws, 0)
     except Exception as e:
         dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
         return
-    target_path = os.path.join(target_dir, excel_name)
     wb.save(target_path)
 
 def app_user_sync(dtable_uuid, app_name, app_id, table_name, table_id, username, config):

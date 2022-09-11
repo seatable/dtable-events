@@ -1162,32 +1162,28 @@ def parse_dtable_long_text(cell_value):
 
 
 def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list):
+    from openpyxl.cell import WriteOnlyCell
+    cell_list = []
     for col_num in range(len(row)):
-        c = ws.cell(row = row_num + 1, column = col_num + 1)
-        if row_num in grouped_row_num_map:
-            fill_num = grouped_row_num_map[row_num]
-            try:
-                c.fill = grouped_row_fills[fill_num]
-            except:
-                pass
 
         if not row[col_num] and not isinstance(row[col_num], int) and not isinstance(row[col_num], float):
-            continue
+            c = WriteOnlyCell(ws, value=None)
 
         # excel format see
         # https://support.office.com/en-us/article/Number-format-codes-5026bbd6-04bc-48cd-bf33-80f18b4eae68
-        if head[col_num][1] == ColumnTypes.NUMBER:
+        elif head[col_num][1] == ColumnTypes.NUMBER:
             # if value cannot convert to float or int, just pass, e.g. empty srt ''
             try:
                 if is_int_str(row[col_num]):
-                    c.value = int(row[col_num])
+                    c = WriteOnlyCell(ws, value=int(row[col_num]))
                 else:
-                    c.value = float(row[col_num])
+                    c = WriteOnlyCell(ws, value=float(row[col_num]))
             except Exception as e:
-                pass
-            c.number_format = gen_decimal_format(c.value)
+                c = WriteOnlyCell(ws, value=None)
+            else:
+                c.number_format = gen_decimal_format(row[col_num])
         elif head[col_num][1] == ColumnTypes.DATE:
-            c.value = _get_strtime_time(row[col_num])
+            c = WriteOnlyCell(ws, value=_get_strtime_time(row[col_num]))
             if head[col_num][2]:
                 c.number_format = head[col_num][2].get('format', '')
             else:
@@ -1197,9 +1193,9 @@ def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unkn
                 utc_time = datetime.strptime(row[col_num], '%Y-%m-%dT%H:%M:%S.%fZ')
             else:
                 utc_time = datetime.strptime(row[col_num], '%Y-%m-%dT%H:%M:%S.%f+00:00')
-            c.value = utc_to_tz(utc_time, timezone).strftime('%Y-%m-%d %H:%M:%S')
+            c = WriteOnlyCell(ws, value=utc_to_tz(utc_time, timezone).strftime('%Y-%m-%d %H:%M:%S'))
         elif head[col_num][1] == ColumnTypes.GEOLOCATION:
-            c.value = parse_geolocation(row[col_num])
+            c = WriteOnlyCell(ws, value=parse_geolocation(row[col_num]))
         elif head[col_num][1] == ColumnTypes.COLLABORATOR:
             nickname_list = []
             collaborator_email_list = []
@@ -1209,80 +1205,89 @@ def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unkn
                     collaborator_email_list.append(user)
                 else:
                     nickname_list.append(email2nickname.get(user, ''))
+            nicknames = ', '.join(nickname_list)
+            c = WriteOnlyCell(ws, value=nicknames)
             if collaborator_email_list:
                 unknown_cell_list.append((c, (nickname_list, collaborator_email_list), head[col_num][1]))
             c.value = ', '.join(nickname_list)
         elif head[col_num][1] == ColumnTypes.CREATOR:
+            c = WriteOnlyCell(ws, value=email2nickname.get(cell_data2str(row[col_num]), ''))
             if not email2nickname.get(cell_data2str(row[col_num]), ''):
                 unknown_user_set.add(cell_data2str(row[col_num]))
                 unknown_cell_list.append((c, cell_data2str(row[col_num]), head[col_num][1]))
-            c.value = email2nickname.get(cell_data2str(row[col_num]), '')
         elif head[col_num][1] == ColumnTypes.LAST_MODIFIER:
+            c = WriteOnlyCell(ws, value=email2nickname.get(cell_data2str(row[col_num]), ''))
             if not email2nickname.get(cell_data2str(row[col_num]), ''):
                 unknown_user_set.add(cell_data2str(row[col_num]))
                 unknown_cell_list.append((c, cell_data2str(row[col_num]), head[col_num][1]))
-            c.value = email2nickname.get(cell_data2str(row[col_num]), '')
         elif head[col_num][1] == ColumnTypes.LINK_FORMULA:
-            c.value = parse_link_formula(row[col_num], email2nickname)
+            c = WriteOnlyCell(ws, value=parse_link_formula(row[col_num], email2nickname))
         elif head[col_num][1] == ColumnTypes.MULTIPLE_SELECT:
-            c.value = parse_multiple_select_formula(row[col_num])
+            c = WriteOnlyCell(ws, value=parse_multiple_select_formula(row[col_num]))
         elif head[col_num][1] == ColumnTypes.FORMULA \
                 and isinstance(head[col_num][2], dict) and head[col_num][2].get('result_type') == 'number':
-            c.value, c.number_format = parse_formula_number(row[col_num], head[col_num][2])
+            formula_value, number_format = parse_formula_number(row[col_num], head[col_num][2])
+            c = WriteOnlyCell(ws, value=formula_value)
+            c.number_format = number_format
         elif head[col_num][1] == ColumnTypes.LINK:
-            c.value = parse_link(head[col_num], row[col_num], email2nickname)
+            c = WriteOnlyCell(ws, value=parse_link(head[col_num], row[col_num], email2nickname))
         elif head[col_num][1] == ColumnTypes.LONG_TEXT:
-            c.value = parse_dtable_long_text(row[col_num])
+            c = WriteOnlyCell(ws, value=parse_dtable_long_text(row[col_num]))
         else:
-            c.value = cell_data2str(row[col_num])
+            c = WriteOnlyCell(ws, value=cell_data2str(row[col_num]))
+        if row_num in grouped_row_num_map:
+            fill_num = grouped_row_num_map[row_num]
+            try:
+                c.fill = grouped_row_fills[fill_num]
+            except:
+                pass
+        cell_list.append(c)
+    return cell_list
 
 
-def write_xls_with_type(sheet_name, head, data_list, grouped_row_num_map, email2nickname):
+def write_xls_with_type(head, data_list, grouped_row_num_map, email2nickname, ws, row_num):
     """ write listed data into excel
         head is a list of tuples,
         e.g. head = [(col_name, col_type, col_date), (...), ...]
     """
     from dtable_events.dtable_io import dtable_io_logger
-    try:
-        wb = openpyxl.Workbook()
-        ws = wb.active
-    except Exception as e:
-        dtable_io_logger.error(e)
-        return None
+    from openpyxl.cell import WriteOnlyCell
 
-    ws.title = check_and_replace_sheet_name(sheet_name)
-
-    row_num = 0
-
-    # write table head
-    column_error_log_exists = False
-    for col_num in range(len(head)):
-        c = ws.cell(row = row_num + 1, column = col_num + 1)
-        try:
-            c.value = head[col_num][0]
-        except Exception as e:
-            if not column_error_log_exists:
-                dtable_io_logger.error('Error column in exporting excel: {}'.format(e))
-                column_error_log_exists = True
-            c.value = EXPORT2EXCEL_DEFAULT_STRING
+    if row_num == 0:
+        # write table head
+        column_error_log_exists = False
+        head_cell_list = []
+        for col_num in range(len(head)):
+            try:
+                c = WriteOnlyCell(ws, value=head[col_num][0])
+            except Exception as e:
+                if not column_error_log_exists:
+                    dtable_io_logger.error('Error column in exporting excel: {}'.format(e))
+                    column_error_log_exists = True
+                c = WriteOnlyCell(ws, value=EXPORT2EXCEL_DEFAULT_STRING)
+            head_cell_list.append(c)
+        ws.append(head_cell_list)
 
     # write table data
     row_error_log_exists = False
     unknown_user_set = set()
     unknown_cell_list = []
+    row_list = []
     for row in data_list:
         row_num += 1
         try:
-            handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list)
+            row_cells = handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list)
         except Exception as e:
             if not row_error_log_exists:
                 dtable_io_logger.error('Error row in exporting excel: {}'.format(e))
                 row_error_log_exists = True
             continue
+        row_list.append(row_cells)
+
     if unknown_cell_list:
         try:
             add_nickname_to_cell(unknown_user_set, unknown_cell_list)
         except Exception as e:
             dtable_io_logger.error('add nickname to cell error: {}'.format(e))
-
-    return wb
+    for row in row_list:
+        ws.append(row)
