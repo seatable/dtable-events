@@ -1056,7 +1056,8 @@ class LinkRecordsAction(BaseAction):
                 'filter_groups': filter_groups,
                 'group_conjunction': 'And'
             },
-            'limit': 500
+            'limit': 500,
+            'server_only': True
         }
         try:
             response_data = self.auto_rule.dtable_server_api.internal_filter_rows(json_data)
