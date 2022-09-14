@@ -199,7 +199,7 @@ def add_append_excel_csv_append_parsed_file_task():
 
     if task_manager.tasks_queue.full():
         from dtable_events.dtable_io import dtable_io_logger
-        dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
+        dtable_io_logger.info('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
         return make_response(('dtable io server busy.', 400))
@@ -228,7 +228,7 @@ def add_append_excel_csv_upload_file_task():
 
     if task_manager.tasks_queue.full():
         from dtable_events.dtable_io import dtable_io_logger
-        dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
+        dtable_io_logger.info('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
         return make_response(('dtable io server busy.', 400))

@@ -76,6 +76,8 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
     try:
         prepare_dtable_json_from_memory(workspace_id, dtable_uuid, username)
     except Exception as e:
+        if str(e.args[0]) == 'failed to connect dtable-server':
+            raise Exception('failed to connect dtable-server')
         dtable_io_logger.error('prepare dtable json failed. ERROR: {}'.format(e))
         raise Exception('prepare dtable json failed. ERROR: {}'.format(e))
 
@@ -278,6 +280,8 @@ def import_excel_csv(username, repo_id, workspace_id, dtable_uuid, dtable_name, 
     try:
         import_excel_csv_by_dtable_server(username, repo_id, dtable_uuid, dtable_name, lang)
     except Exception as e:
+        if str(e.args[0]) == 'failed to connect dtable-server':
+            raise Exception('failed to connect dtable-server')
         dtable_io_logger.error('import excel or csv failed. ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('import excel or csv %s success!' % dtable_name)
@@ -290,6 +294,8 @@ def import_excel_csv_add_table(username, repo_id, workspace_id, dtable_uuid, dta
     try:
         import_excel_csv_add_table_by_dtable_server(username, repo_id, dtable_uuid, dtable_name, lang)
     except Exception as e:
+        if str(e.args[0]) == 'failed to connect dtable-server':
+            raise Exception('failed to connect dtable-server')
         dtable_io_logger.error('import excel or csv add table failed. ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('import excel or csv %s add table success!' % dtable_name)
@@ -303,6 +309,8 @@ def append_excel_csv_append_parsed_file(username, repo_id, dtable_uuid, file_nam
     try:
         append_parsed_file_by_dtable_server(username, repo_id, dtable_uuid, file_name, table_name)
     except Exception as e:
+        if str(e.args[0]) == 'failed to connect dtable-server':
+            raise Exception('failed to connect dtable-server')
         dtable_io_logger.error('append excel or csv failed. ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('append excel or csv %s success!' % file_name)
@@ -315,6 +323,8 @@ def append_excel_csv_upload_file(username, repo_id, file_name, dtable_uuid, tabl
     try:
         parse_append_excel_csv_upload_file_to_json(repo_id, file_name, username, dtable_uuid, table_name, file_type)
     except Exception as e:
+        if str(e.args[0]) == 'failed to connect dtable-server':
+            raise Exception('failed to connect dtable-server')
         dtable_io_logger.exception('parse append excel or csv failed. ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('parse append excel or csv %s.%s success!' % (file_name, file_type))
@@ -327,6 +337,8 @@ def update_excel_csv_update_parsed_file(username, repo_id, dtable_uuid, file_nam
     try:
         update_parsed_file_by_dtable_server(username, repo_id, dtable_uuid, file_name, table_name, selected_columns)
     except Exception as e:
+        if str(e.args[0]) == 'failed to connect dtable-server':
+            raise Exception('failed to connect dtable-server')
         dtable_io_logger.error('update excel,csv failed. ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('update excel,csv %s success!' % file_name)
@@ -339,6 +351,8 @@ def update_excel_upload_excel(username, repo_id, file_name, dtable_uuid, table_n
     try:
         parse_update_excel_upload_excel_to_json(repo_id, file_name, username, dtable_uuid, table_name)
     except Exception as e:
+        if str(e.args[0]) == 'failed to connect dtable-server':
+            raise Exception('failed to connect dtable-server')
         dtable_io_logger.exception('parse update excel failed. ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('parse update excel %s.xlsx success!' % file_name)
@@ -351,6 +365,8 @@ def update_csv_upload_csv(username, repo_id, file_name, dtable_uuid, table_name)
     try:
         parse_update_csv_upload_csv_to_json(repo_id, file_name, username, dtable_uuid, table_name)
     except Exception as e:
+        if str(e.args[0]) == 'failed to connect dtable-server':
+            raise Exception('failed to connect dtable-server')
         dtable_io_logger.exception('parse update csv failed. ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('parse update csv %s.csv success!' % file_name)
@@ -364,6 +380,9 @@ def import_excel_csv_to_dtable(username, repo_id, workspace_id, dtable_name, dta
     try:
         parse_and_import_excel_csv_to_dtable(repo_id, dtable_name, dtable_uuid, username, file_type, lang)
     except Exception as e:
+        if str(e.args[0]) == 'failed to connect dtable-server':
+            raise Exception('failed to connect dtable-server')
+
         dtable_io_logger.exception('import excel or csv to dtable failed. ERROR: {}'.format(e))
         if str(e.args[0]) == 'Excel format error':
             raise Exception('Excel format error')
@@ -379,6 +398,8 @@ def import_excel_csv_to_table(username, repo_id, workspace_id, file_name, dtable
     try:
         parse_and_import_excel_csv_to_table(repo_id, file_name, dtable_uuid, username, file_type, lang)
     except Exception as e:
+        if str(e.args[0]) == 'failed to connect dtable-server':
+            raise Exception('failed to connect dtable-server')
         dtable_io_logger.exception('import excel or csv to table failed. ERROR: {}'.format(e))
         if str(e.args[0]) == 'Excel format error':
             raise Exception('Excel format error')
@@ -394,6 +415,8 @@ def update_table_via_excel_csv(username, repo_id, file_name, dtable_uuid, table_
     try:
         parse_and_update_file_to_table(repo_id, file_name, username, dtable_uuid, table_name, selected_columns, file_type)
     except Exception as e:
+        if str(e.args[0]) == 'failed to connect dtable-server':
+            raise Exception('failed to connect dtable-server')
         dtable_io_logger.exception('update file update to table failed. ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('update file %s.%s update to table success!' % (file_name, file_type))
@@ -768,11 +791,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
         return
     email2nickname = {nickname['email']: nickname['name'] for nickname in nicknames}
 
-    try:
-        metadata = get_metadata_from_dtable_server(dtable_uuid, username, permission)
-    except Exception as e:
-        dtable_io_logger.error('get metadata. ERROR: {}'.format(e))
-        return
+    metadata = get_metadata_from_dtable_server(dtable_uuid, username, permission)
 
     target_table = {}
     target_view = {}
@@ -866,11 +885,7 @@ def convert_table_to_execl(dtable_uuid, table_id, username, permission, name):
         return
     email2nickname = {nickname['email']: nickname['name'] for nickname in nicknames}
 
-    try:
-        metadata = get_metadata_from_dtable_server(dtable_uuid, username, permission)
-    except Exception as e:
-        dtable_io_logger.error('get metadata. ERROR: {}'.format(e))
-        return
+    metadata = get_metadata_from_dtable_server(dtable_uuid, username, permission)
 
     target_table = {}
     for table in metadata.get('tables', []):
