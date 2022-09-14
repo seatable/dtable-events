@@ -143,7 +143,10 @@ def prepare_dtable_json_from_memory(workspace_id, dtable_uuid, username):
     headers = {'Authorization': 'Token ' + dtable_server_access_token}
     api_url = get_inner_dtable_server_url()
     json_url = api_url.rstrip('/') + '/dtables/' + dtable_uuid + '/?from=dtable_events'
-    content_json = requests.get(json_url, headers=headers).content
+    try:
+        content_json = requests.get(json_url, headers=headers).content
+    except Exception as e:
+        raise Exception('failed to connect dtable-server')
     if content_json:
         try:
             json_content = json.loads(content_json)
@@ -688,7 +691,11 @@ def upload_excel_json_to_dtable_server(username, dtable_uuid, json_file, lang='e
         'excel_json': json_file
     }
 
-    res = requests.post(url, headers=headers, files=files)
+    try:
+        res = requests.post(url, headers=headers, files=files)
+    except Exception as e:
+        raise Exception('failed to connect dtable-server')
+
     if res.status_code != 200:
         raise ConnectionError('failed to import excel json %s %s' % (dtable_uuid, res.text))
 
@@ -701,7 +708,10 @@ def upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, json_fil
     files = {
         'excel_json': json_file
     }
-    res = requests.post(url, headers=headers, files=files)
+    try:
+        res = requests.post(url, headers=headers, files=files)
+    except Exception as e:
+        raise Exception('failed to connect dtable-server')
     if res.status_code != 200:
         raise ConnectionError('failed to import excel json %s %s' % (dtable_uuid, res.text))
 
@@ -721,7 +731,10 @@ def append_excel_json_to_dtable_server(username, dtable_uuid, json_file, table_n
             'table_name': table_name,
             'rows': rows,
         }
-        res = requests.post(url, headers=headers, json=json_data)
+        try:
+            res = requests.post(url, headers=headers, json=json_data)
+        except Exception as e:
+            raise Exception('failed to connect dtable-server')
         if res.status_code != 200:
             raise ConnectionError('failed to append excel json %s %s' % (dtable_uuid, res.text))
         time.sleep(0.5)
@@ -733,7 +746,10 @@ def get_columns_from_dtable_server(username, dtable_uuid, table_name):
     dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
     headers = {'Authorization': 'Token ' + dtable_server_access_token}
 
-    res = requests.get(url, headers=headers)
+    try:
+        res = requests.get(url, headers=headers)
+    except Exception as e:
+        raise Exception('failed to connect dtable-server')
     if res.status_code != 200:
         raise ConnectionError('failed to get columns %s %s' % (dtable_uuid, res.text))
     return json.loads(res.content.decode()).get('columns', [])
@@ -763,7 +779,11 @@ def get_rows_from_dtable_server(username, dtable_uuid, table_name):
     dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
     headers = {'Authorization': 'Token ' + dtable_server_access_token}
 
-    res = requests.get(url, headers=headers)
+    try:
+        res = requests.get(url, headers=headers)
+    except Exception as e:
+        raise Exception('failed to connect dtable-server')
+
     if res.status_code != 200:
         raise ConnectionError('failed to get rows %s %s' % (dtable_uuid, res.text))
     return json.loads(res.content.decode()).get('rows', [])
@@ -784,7 +804,10 @@ def update_rows_by_dtable_server(username, dtable_uuid, update_rows, table_name)
             'table_name': table_name,
             'updates': rows,
         }
-        res = requests.put(url, headers=headers, json=json_data)
+        try:
+            res = requests.put(url, headers=headers, json=json_data)
+        except Exception as e:
+            raise Exception('failed to connect dtable-server')
         if res.status_code != 200:
             raise ConnectionError('failed to update excel json %s %s' % (dtable_uuid, res.text))
         time.sleep(0.5)
@@ -805,7 +828,10 @@ def update_append_excel_json_to_dtable_server(username, dtable_uuid, rows_data, 
             'table_name': table_name,
             'rows': rows,
         }
-        res = requests.post(url, headers=headers, json=json_data)
+        try:
+            res = requests.post(url, headers=headers, json=json_data)
+        except Exception as e:
+            raise Exception('failed to connect dtable-server')
         if res.status_code != 200:
             raise ConnectionError('failed to append excel json %s %s' % (dtable_uuid, res.text))
         time.sleep(0.5)
@@ -830,11 +856,13 @@ def get_metadata_from_dtable_server(dtable_uuid, username, permission):
         'permission': permission,
     }
     access_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
-
     # 1. get cols from dtable-server
     headers = {'Authorization': 'Token ' + access_token}
-    res = requests.get(url, headers=headers)
 
+    try:
+        res = requests.get(url, headers=headers)
+    except Exception as e:
+        raise Exception('failed to connect dtable-server')
     if res.status_code != 200:
         raise ConnectionError('failed to get metadata %s %s' % (dtable_uuid, res.text))
     return json.loads(res.content)['metadata']
@@ -864,7 +892,10 @@ def get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, i
         'convert_link_id': True,
     }
 
-    res = requests.get(url, headers=headers, params=query_param)
+    try:
+        res = requests.get(url, headers=headers, params=query_param)
+    except Exception as e:
+        raise Exception('failed to connect dtable-server')
 
     if res.status_code != 200:
         raise Exception(res.json().get('error_msg'))

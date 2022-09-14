@@ -309,9 +309,8 @@ class TaskManager(object):
             except Exception as e:
                 dtable_io_logger.error(e)
                 continue
-
+            task = self.tasks_map[task_id]
             try:
-                task = self.tasks_map[task_id]
                 task_info = task_id + ' ' + str(task[0])
                 self.current_task_info[task_id] = task_info
                 dtable_io_logger.info('Run task: %s' % task_info)
@@ -327,9 +326,16 @@ class TaskManager(object):
             except Exception as e:
                 if str(e.args[0]) == 'the number of cells accessing the table exceeds the limit':
                     dtable_io_logger.warning('Failed to handle task %s, error: %s \n' % (task_id, e))
+                elif str(e.args[0]) == 'failed to connect dtable-server' and not self.tasks_queue.full():
+                    dtable_io_logger.warning('connect dtable-server failed')
+                    self.tasks_queue.put(task_id)
+                    self.tasks_map[task_id] = task
+                    time.sleep(2)
+                    continue
                 else:
                     dtable_io_logger.error('Failed to handle task %s, error: %s \n' % (task_id, e))
                 self.tasks_map[task_id] = 'error_' + str(e.args[0])
+
                 self.current_task_info.pop(task_id, None)
             finally:
                 if task[0].__name__ == 'sync_common_dataset':
