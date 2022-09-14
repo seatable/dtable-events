@@ -70,6 +70,8 @@ def sync_common_dataset(context, config):
         resp = requests.get(url, headers=dst_headers)
         dst_dtable_json = resp.json()
     except Exception as e:
+        if str(e.args[0]) == 'failed to connect dtable-server':
+            raise Exception('failed to connect dtable-server')
         dtable_io_logger.error('request dst dtable: %s error: %s', dst_dtable_uuid, e)
         return
 
@@ -116,6 +118,8 @@ def sync_common_dataset(context, config):
         dtable_metadata = requests.get(src_url, headers=src_headers)
         src_metadata = dtable_metadata.json()
     except Exception as e:
+        if str(e.args[0]) == 'failed to connect dtable-server':
+            raise Exception('failed to connect dtable-server')
         dtable_io_logger.error('get metadata error:  %s', e)
         return None, 'get metadata error: %s' % (e,)
 
@@ -196,6 +200,8 @@ def import_common_dataset(context, config):
         dtable_metadata = requests.get(url, headers=src_headers)
         src_metadata = dtable_metadata.json()
     except Exception as e:
+        if str(e.args[0]) == 'failed to connect dtable-server':
+            raise Exception('failed to connect dtable-server')
         dtable_io_logger.error('get metadata error:  %s', e)
         return None, 'get metadata error: %s' % (e,)
 
