@@ -585,7 +585,7 @@ def import_or_sync(import_sync_context):
             'limit': limit
         }
         try:
-            resp = requests.get(url, headers=src_headers, params=query_params)
+            resp = requests.get(url, headers=src_headers, params=query_params, timeout=180)
             if resp.status_code == 400:
                 try:
                     res_json = resp.json()
@@ -647,7 +647,7 @@ def import_or_sync(import_sync_context):
             } for col in to_be_appended_columns] if to_be_appended_columns else []
         }
         try:
-            resp = requests.post(url, headers=dst_headers, json=data)
+            resp = requests.post(url, headers=dst_headers, json=data, timeout=180)
             if resp.status_code != 200:
                 logger.error('create new table error status code: %s, resp text: %s', resp.status_code, resp.text)
                 error_msg = 'create table error'
@@ -687,7 +687,7 @@ def import_or_sync(import_sync_context):
                 } for col in to_be_appended_columns]
             }
             try:
-                resp = requests.post(url, headers=dst_headers, json=data)
+                resp = requests.post(url, headers=dst_headers, json=data, timeout=180)
                 if resp.status_code != 200:
                     logger.error('batch append columns to dst dtable: %s, table: %s error status code: %s text: %s', dst_dtable_uuid, dst_table_id, resp.status_code, resp.text)
                     return {
@@ -714,7 +714,7 @@ def import_or_sync(import_sync_context):
                 } for col in to_be_updated_columns]
             }
             try:
-                resp = requests.put(url, headers=dst_headers, json=data)
+                resp = requests.put(url, headers=dst_headers, json=data, timeout=180)
                 if resp.status_code != 200:
                     logger.error('batch update columns to dst dtable: %s, table: %s error status code: %s text: %s', dst_dtable_uuid, dst_table_id, resp.status_code, resp.text)
                     return {
@@ -747,7 +747,7 @@ def import_or_sync(import_sync_context):
             'need_convert_back': False
         }
         try:
-            resp = requests.put(url, headers=dst_headers, json=data)
+            resp = requests.put(url, headers=dst_headers, json=data, timeout=180)
             if resp.status_code != 200:
                 logger.error('sync dataset update rows dst dtable: %s dst table: %s error status code: %s content: %s', dst_dtable_uuid, dst_table_name, resp.status_code, resp.text)
                 return {
@@ -771,7 +771,7 @@ def import_or_sync(import_sync_context):
             'row_ids': to_be_deleted_row_ids[i: i+step]
         }
         try:
-            resp = requests.delete(url, headers=dst_headers, json=data)
+            resp = requests.delete(url, headers=dst_headers, json=data, timeout=180)
             if resp.status_code != 200:
                 logger.error('sync dataset delete rows dst dtable: %s dst table: %s error status code: %s, content: %s', dst_dtable_uuid, dst_table_name, resp.status_code, resp.text)
                 return {
@@ -796,7 +796,7 @@ def import_or_sync(import_sync_context):
             'need_convert_back': False
         }
         try:
-            resp = requests.post(url, headers=dst_headers, json=data)
+            resp = requests.post(url, headers=dst_headers, json=data, timeout=180)
             if resp.status_code != 200:
                 logger.error('sync dataset append rows dst dtable: %s dst table: %s error status code: %s', dst_dtable_uuid, dst_table_name, resp.status_code)
                 return {

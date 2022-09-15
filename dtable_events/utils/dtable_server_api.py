@@ -63,7 +63,7 @@ def gen_file_upload_url(token, op, replace=False):
 class DTableServerAPI(object):
     # simple version of python sdk without authorization for base or table manipulation
 
-    def __init__(self, username, dtable_uuid, dtable_server_url, server_url=None, repo_id=None, workspace_id=None):
+    def __init__(self, username, dtable_uuid, dtable_server_url, server_url=None, repo_id=None, workspace_id=None, timeout=180):
         self.username = username
         self.dtable_uuid = dtable_uuid
         self.headers = None
@@ -71,6 +71,7 @@ class DTableServerAPI(object):
         self.server_url = server_url.rstrip('/') if server_url else None
         self.repo_id = repo_id
         self.workspace_id = workspace_id
+        self.timeout = timeout
         self._init()
 
     def _init(self):
@@ -79,7 +80,7 @@ class DTableServerAPI(object):
 
     def get_metadata(self):
         url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/metadata/?from=dtable_events'
-        response = requests.get(url, headers=self.headers)
+        response = requests.get(url, headers=self.headers, timeout=self.timeout)
         data = parse_response(response)
         return data.get('metadata')
 
@@ -92,7 +93,7 @@ class DTableServerAPI(object):
         }
         if columns:
             json_data['columns'] = columns
-        response = requests.post(url, json=json_data, headers=self.headers)
+        response = requests.post(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
     def list_rows(self, table_name):
@@ -101,11 +102,11 @@ class DTableServerAPI(object):
         params = {
             'table_name': table_name,
         }
-        response = requests.get(url, params=params, headers=self.headers)
+        response = requests.get(url, params=params, headers=self.headers, timeout=self.timeout)
         data = parse_response(response)
         return data.get('rows')
 
-    def get_row(self, table_name, row_id, timeout=None):
+    def get_row(self, table_name, row_id):
         """
         :param table_name: str
         :param row_id: str
@@ -116,7 +117,7 @@ class DTableServerAPI(object):
         params = {
             'table_name': table_name,
         }
-        response = requests.get(url, params=params, headers=self.headers, timeout=timeout)
+        response = requests.get(url, params=params, headers=self.headers, timeout=self.timeout)
         data = parse_response(response)
         return data
 
@@ -126,7 +127,7 @@ class DTableServerAPI(object):
         params = {'table_name': table_name}
         if view_name:
             params['view_name'] = view_name
-        response = requests.get(url, params=params, headers=self.headers)
+        response = requests.get(url, params=params, headers=self.headers, timeout=self.timeout)
         data = parse_response(response)
         return data.get('columns')
 
@@ -140,7 +141,7 @@ class DTableServerAPI(object):
         }
         if column_data:
             json_data['column_data'] = column_data
-        response = requests.post(url, json=json_data, headers=self.headers)
+        response = requests.post(url, json=json_data, headers=self.headers, timeout=self.timeout)
         data = parse_response(response)
         return data
 
@@ -151,7 +152,7 @@ class DTableServerAPI(object):
             'table_name': table_name,
             'rows': rows_data,
         }
-        response = requests.post(url, json=json_data, headers=self.headers)
+        response = requests.post(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
     def append_row(self, table_name, row_data):
@@ -161,7 +162,7 @@ class DTableServerAPI(object):
             'table_name': table_name,
             'row': row_data
         }
-        response = requests.post(url, json=json_data, headers=self.headers)
+        response = requests.post(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
     def update_row(self, table_name, row_id, row_data):
@@ -172,7 +173,7 @@ class DTableServerAPI(object):
             'row_id': row_id,
             'row': row_data
         }
-        response = requests.put(url, json=json_data, headers=self.headers)
+        response = requests.put(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
     def batch_update_rows(self, table_name, rows_data):
@@ -182,7 +183,7 @@ class DTableServerAPI(object):
             'table_name': table_name,
             'updates': rows_data,
         }
-        response = requests.put(url, json=json_data, headers=self.headers)
+        response = requests.put(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
     def batch_delete_rows(self, table_name, row_ids):
@@ -192,7 +193,7 @@ class DTableServerAPI(object):
             'table_name': table_name,
             'row_ids': row_ids,
         }
-        response = requests.delete(url, json=json_data, headers=self.headers)
+        response = requests.delete(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
     def internal_filter_rows(self, json_data):
@@ -209,7 +210,7 @@ class DTableServerAPI(object):
         """
         logger.debug('internal filter rows json_data: %s', json_data)
         url = self.dtable_server_url + '/api/v1/internal/dtables/' + self.dtable_uuid + '/filter-rows/?from=dtable_events'
-        response = requests.post(url, json=json_data, headers=self.headers)
+        response = requests.post(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
     def lock_rows(self, table_name, row_ids):
@@ -219,7 +220,7 @@ class DTableServerAPI(object):
             'table_name': table_name,
             'row_ids': row_ids
         }
-        response = requests.put(url, json=json_data, headers=self.headers)
+        response = requests.put(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
     def update_link(self, link_id, table_id, other_table_id, row_id, other_rows_ids):
@@ -232,7 +233,7 @@ class DTableServerAPI(object):
             'other_table_id': other_table_id,
             'other_rows_ids': other_rows_ids
         }
-        response = requests.put(url, json=json_data, headers=self.headers)
+        response = requests.put(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
     def get_column_link_id(self, table_name, column_name, view_name=None):
@@ -259,7 +260,7 @@ class DTableServerAPI(object):
             'other_rows_ids_map': other_rows_ids_map,
         }
 
-        response = requests.put(url, json=json_data, headers=self.headers)
+        response = requests.put(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
     def get_file_upload_link(self):
