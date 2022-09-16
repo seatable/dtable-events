@@ -1514,7 +1514,8 @@ class AutomationRule:
                 'filter_groups':filter_groups,
                 'group_conjunction': 'And'
             },
-            'limit': 500
+            'limit': 500,
+            'server_only': True
         }
 
         try:
