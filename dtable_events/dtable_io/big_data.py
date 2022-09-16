@@ -1,7 +1,6 @@
 import openpyxl
 import os
 
-# DTABLE_WEB_DIR
 from dtable_events.dtable_io.excel import parse_row
 from dtable_events.utils import get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes
