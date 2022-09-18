@@ -771,16 +771,26 @@ class SendEmailAction(BaseAction):
         msg = self.send_info.get('message', '')
         send_to_list = self.send_info.get('send_to', [])
         copy_to_list = self.send_info.get('copy_to', [])
+        attachment_list = self.send_info.get('attachment_list', [])
+
+        file_download_urls = {}
         if self.column_blanks:
             msg = self._fill_msg_blanks(row, msg, self.column_blanks)
         if self.column_blanks_send_to:
             send_to_list = [self._fill_msg_blanks(row, send_to, self.column_blanks_send_to) for send_to in send_to_list]
         if self.column_blanks_copy_to:
             copy_to_list = [self._fill_msg_blanks(row, copy_to, self.column_blanks_copy_to) for copy_to in copy_to_list]
+        if attachment_list:
+            for file_column_id in attachment_list:
+                if self.data['row'].get(file_column_id):
+                    file_info = {file.get('name'): file.get('url') for file in self.data['row'].get(file_column_id, [])}
+                    file_download_urls.update(file_info)
+
         self.send_info.update({
             'message': msg,
             'send_to': [send_to for send_to in send_to_list if self.is_valid_email(send_to)],
             'copy_to': [copy_to for copy_to in copy_to_list if self.is_valid_email(copy_to)],
+            'file_download_urls': file_download_urls,
         })
         try:
             send_email_msg(
@@ -815,16 +825,25 @@ class SendEmailAction(BaseAction):
             msg = send_info.get('message', '')
             send_to_list = send_info.get('send_to', [])
             copy_to_list = send_info.get('copy_to', [])
+            attachment_list = send_info.get('attachment_list', [])
+            file_download_urls = {}
             if self.column_blanks:
                 msg = self._fill_msg_blanks(converted_row, msg, self.column_blanks)
             if self.column_blanks_send_to:
                 send_to_list = [self._fill_msg_blanks(converted_row, send_to, self.column_blanks_send_to) for send_to in send_to_list]
             if self.column_blanks_copy_to:
                 copy_to_list = [self._fill_msg_blanks(converted_row, copy_to, self.column_blanks_copy_to) for copy_to in copy_to_list]
+
+            if attachment_list:
+                for file_column_id in attachment_list:
+                    if row.get(file_column_id):
+                        file_info = {file.get('name'): file.get('url') for file in row.get(file_column_id, [])}
+                        file_download_urls.update(file_info)
             send_info.update({
                 'message': msg,
                 'send_to': [send_to for send_to in send_to_list if self.is_valid_email(send_to)],
                 'copy_to': [copy_to for copy_to in copy_to_list if self.is_valid_email(copy_to)],
+                'file_download_urls': file_download_urls,
             })
 
             send_info_list.append(send_info)
@@ -1627,12 +1646,14 @@ class AutomationRule:
                     subject = action_info.get('subject', '')
                     send_to_list = email2list(action_info.get('send_to', ''))
                     copy_to_list = email2list(action_info.get('copy_to', ''))
+                    attachment_list = email2list(action_info.get('attachments', ''))
 
                     send_info = {
                         'message': msg,
                         'send_to': send_to_list,
                         'copy_to': copy_to_list,
-                        'subject': subject
+                        'subject': subject,
+                        'attachment_list': attachment_list,
                     }
                     SendEmailAction(self, self.data, send_info, account_id).do_action()
 
