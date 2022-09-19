@@ -6,6 +6,7 @@ import os
 from urllib import parse
 from uuid import UUID
 from copy import deepcopy
+from dateutil import parser
 from datetime import datetime, date, timedelta
 
 import jwt
@@ -16,7 +17,7 @@ from dtable_events.cache import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, \
     SEATABLE_FAAS_AUTH_TOKEN, SEATABLE_FAAS_URL
 from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg, batch_send_email_msg
-from dtable_events.notification_rules.notification_rules_utils import _fill_msg_blanks as fill_msg_blanks, \
+from dtable_events.notification_rules.notification_rules_utils import fill_msg_blanks_with_converted_row as fill_msg_blanks, \
     send_notification
 from dtable_events.utils import utc_to_tz, uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes
@@ -41,6 +42,10 @@ CONDITION_PERIODICALLY_BY_CONDITION = 'run_periodically_by_condition'
 MESSAGE_TYPE_AUTOMATION_RULE = 'automation_rule'
 
 MINUTE_TIMEOUT = 60
+
+CONDITION_ROWS_LIMIT = 50
+WECHAT_CONDITION_ROWS_LIMIT = 20
+DINGTALK_CONDITION_ROWS_LIMIT = 20
 
 
 def email2list(email_str, split_pattern='[,，]'):
@@ -74,6 +79,15 @@ class BaseAction:
                         option_name = option.get('name')
                         parse_value_list.append(option_name)
                 return parse_value_list
+        elif column.get('type') == ColumnTypes.DATE:
+            date_value = parser.isoparse(value)
+            date_format = column['data']['format']
+            if date_format == 'YYYY-MM-DD':
+                return date_value.strftime('%Y-%m-%d')
+            return date_value.strftime('%Y-%m-%d %H:%M')
+        elif column.get('type') in [ColumnTypes.CTIME, ColumnTypes.MTIME]:
+            date_value = parser.isoparse(value)
+            return date_value.strftime('%Y-%m-%d %H:%M:%S')
         else:
             return value
 
@@ -216,7 +230,7 @@ class LockRowAction(BaseAction):
             self.update_data['row_ids'].append(row_id)
 
         if self.auto_rule.run_condition in (PER_DAY, PER_WEEK, PER_MONTH):
-            rows_data = self.auto_rule.get_trigger_conditions_rows()[:50]
+            rows_data = self.auto_rule.get_trigger_conditions_rows()[:CONDITION_ROWS_LIMIT]
             for row in rows_data:
                 self.update_data['row_ids'].append(row.get('_id'))
 
@@ -459,7 +473,7 @@ class NotifyAction(BaseAction):
         table_id, view_id = self.auto_rule.table_id, self.auto_rule.view_id
         dtable_uuid = self.auto_rule.dtable_uuid
 
-        rows_data = self.auto_rule.get_trigger_conditions_rows()[:50]
+        rows_data = self.auto_rule.get_trigger_conditions_rows()[:CONDITION_ROWS_LIMIT]
         col_key_dict = {col.get('key'): col for col in self.auto_rule.view_columns}
 
         user_msg_list = []
@@ -566,7 +580,7 @@ class SendWechatAction(BaseAction):
             logger.error('send wechat error: %s', e)
 
     def condition_cron_notify(self):
-        rows_data = self.auto_rule.get_trigger_conditions_rows()[:20]
+        rows_data = self.auto_rule.get_trigger_conditions_rows()[:WECHAT_CONDITION_ROWS_LIMIT]
         col_key_dict = {col.get('key'): col for col in self.auto_rule.view_columns}
 
         for row in rows_data:
@@ -644,7 +658,7 @@ class SendDingtalkAction(BaseAction):
             logger.error('send dingtalk error: %s', e)
 
     def condition_cron_notify(self):
-        rows_data = self.auto_rule.get_trigger_conditions_rows()[:20]
+        rows_data = self.auto_rule.get_trigger_conditions_rows()[:DINGTALK_CONDITION_ROWS_LIMIT]
         col_key_dict = {col.get('key'): col for col in self.auto_rule.view_columns}
 
         for row in rows_data:
@@ -794,7 +808,7 @@ class SendEmailAction(BaseAction):
             logger.error('send email error: %s', e)
 
     def condition_cron_notify(self):
-        rows_data = self.auto_rule.get_trigger_conditions_rows()[:50]
+        rows_data = self.auto_rule.get_trigger_conditions_rows()[:CONDITION_ROWS_LIMIT]
         col_key_dict = {col.get('key'): col for col in self.auto_rule.view_columns}
         send_info_list = []
         for row in rows_data:
@@ -1046,7 +1060,8 @@ class LinkRecordsAction(BaseAction):
                 'filter_groups': filter_groups,
                 'group_conjunction': 'And'
             },
-            'limit': 500
+            'limit': 500,
+            'server_only': True
         }
         try:
             response_data = self.auto_rule.dtable_server_api.internal_filter_rows(json_data)
@@ -1371,6 +1386,8 @@ class AutomationRule:
 
         self.per_minute_trigger_limit = per_minute_trigger_limit or 10
 
+        self.warnings = []
+
     def _load_trigger_and_actions(self, raw_trigger, raw_actions):
         self.trigger = json.loads(raw_trigger)
 
@@ -1404,12 +1421,7 @@ class AutomationRule:
     @property
     def dtable_metadata(self):
         if not self._dtable_metadata:
-            try:
-                self._dtable_metadata = self.dtable_server_api.get_metadata()
-            except:
-                raise RuleInvalidException('request metadata error')
-            if not self._dtable_metadata:
-                raise RuleInvalidException('request metadata parse error')
+            self._dtable_metadata = self.dtable_server_api.get_metadata()
         return self._dtable_metadata
 
     @property
@@ -1420,12 +1432,7 @@ class AutomationRule:
         if not self._view_columns:
             table_name = self.table_info['name']
             view_name = self.view_info['name']
-            try:
-                self._view_columns = self.dtable_server_api.list_columns(table_name, view_name=view_name)
-            except:
-                raise RuleInvalidException('request view columns error')
-            if not self._view_columns:
-                raise RuleInvalidException('request view columns parse error')
+            self._view_columns = self.dtable_server_api.list_columns(table_name, view_name=view_name)
         return self._view_columns
 
     @property
@@ -1513,7 +1520,8 @@ class AutomationRule:
                 'filter_groups':filter_groups,
                 'group_conjunction': 'And'
             },
-            'limit': 500
+            'limit': 500,
+            'server_only': True
         }
 
         try:
@@ -1532,7 +1540,15 @@ class AutomationRule:
             json.dumps(json_data)
         ))
         self._trigger_conditions_rows = rows_data
+        if len(self._trigger_conditions_rows) > 50:
+            self.append_warning({
+                'type': 'condition_rows_exceed',
+                'condition_rows_limit': CONDITION_ROWS_LIMIT
+            })
         return self._trigger_conditions_rows
+
+    def append_warning(self, warning_detail):
+        self.warnings.append(warning_detail)
 
     def can_do_actions(self):
         if self.trigger.get('condition') not in (CONDITION_FILTERS_SATISFY, CONDITION_PERIODICALLY, CONDITION_ROWS_ADDED, CONDITION_PERIODICALLY_BY_CONDITION):
@@ -1667,7 +1683,7 @@ class AutomationRule:
             except Exception as e:
                 logger.exception(e)
                 self.task_run_seccess = False
-                logger.error('rule: %s, do actions error: %s', self.rule_id, e)
+                logger.error('rule: %s, do action: %s error: %s', self.rule_id, action_info, e)
 
         if self.done_actions and not with_test:
             self.update_last_trigger_time()
@@ -1683,8 +1699,8 @@ class AutomationRule:
             return
         try:
             set_task_log_sql = """
-                INSERT INTO auto_rules_task_log (trigger_time, success, rule_id, run_condition, dtable_uuid, org_id, owner) VALUES
-                (:trigger_time, :success, :rule_id, :run_condition, :dtable_uuid, :org_id, :owner)
+                INSERT INTO auto_rules_task_log (trigger_time, success, rule_id, run_condition, dtable_uuid, org_id, owner, warnings) VALUES
+                (:trigger_time, :success, :rule_id, :run_condition, :dtable_uuid, :org_id, :owner, :warnings)
             """
             if self.run_condition in (PER_DAY, PER_WEEK, PER_MONTH, PER_UPDATE):
                 self.db_session.execute(set_task_log_sql, {
@@ -1695,6 +1711,7 @@ class AutomationRule:
                     'dtable_uuid': self.dtable_uuid,
                     'org_id': self.org_id,
                     'owner': self.creator,
+                    'warnings': json.dumps(self.warnings) if self.warnings else None
                 })
                 self.db_session.commit()
         except Exception as e:

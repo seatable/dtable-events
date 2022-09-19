@@ -19,6 +19,15 @@ from dtable_events.utils.dtable_server_api import DTableServerAPI
 logger = logging.getLogger(__name__)
 
 
+def login_imap(host, user, password, port=None, timeout=None):
+    imap = ImapMail(host, user, password, port=port, ssl_context=ssl.SSLContext(ssl.PROTOCOL_TLSv1_2), timeout=timeout)
+    imap.client()
+    logger.debug('imap: %s client successfully!', host)
+    imap.login()
+    logger.debug('imap_host: %s email_user: %s, login imap client successfully!', host, user)
+    return imap
+
+
 def check_imap_account(imap_server, email_user, email_password, port=None, return_imap=False, timeout=None):
     """
     check imap server user and password
@@ -26,9 +35,7 @@ def check_imap_account(imap_server, email_user, email_password, port=None, retur
     return: error_msg -> str or None
     """
     try:
-        imap = ImapMail(imap_server, email_user, email_password, port=port, ssl_context=ssl.SSLContext(ssl.PROTOCOL_TLSv1_2), timeout=timeout)
-        imap.client()
-        imap.login()
+        imap = login_imap(imap_server, email_user, email_password, port=port, timeout=timeout)
     except LoginError:
         if not return_imap:
             return 'user or password invalid, email: %s user login error' % (email_user,)
@@ -36,7 +43,7 @@ def check_imap_account(imap_server, email_user, email_password, port=None, retur
             return None, 'user or password invalid, email: %s user login error' % (email_user,)
     except Exception as e:
         logger.exception(e)
-        logger.error('imap_server: %s, email_user: %s, email_password: %s, login error: %s' % (imap_server, email_user, email_password, e))
+        logger.error('imap_server: %s, email_user: %s, login error: %s' % (imap_server, email_user, e))
         if not return_imap:
             return 'email: %s login error: %s' % (email_user, e)
         else:
@@ -47,28 +54,6 @@ def check_imap_account(imap_server, email_user, email_password, port=None, retur
         return None
     else:
         return imap, None
-
-
-def get_emails(send_date, imap_host, email_user, email_password, imap: ImapMail=None, port=None, mode='ON', timeout=None):
-    """
-    return: email list, [email1, email2...], email is without thread id
-    """
-    if not imap:
-        imap = ImapMail(imap_host, email_user, email_password, port=port, ssl_context=ssl.SSLContext(ssl.PROTOCOL_TLSv1_2), timeout=timeout)
-        imap.client()
-        logger.debug('imap: %s client successfully!', imap_host)
-        imap.login()
-        logger.debug('imap_host: %s email_user: %s, password: %s login imap client successfully!', imap_host, email_user, email_password)
-
-    try:
-        email_list = imap.get_email_list(send_date, mode=mode)
-    except Exception as e:
-        logger.exception(e)
-    else:
-        return email_list
-    finally:
-        imap.close()
-    return []
 
 
 def fixed_sql_query(seatable, sql):
@@ -109,15 +94,17 @@ def update_email_thread_ids(dtable_db_api, email_table_name, send_date, email_li
     # get email rows in last 30 days and generate message-thread dict {`Message ID`: `Thread ID`}
     last_month_day = (str_2_datetime(send_date) - timedelta(days=30)).strftime('%Y-%m-%d')
     email_rows = query_table_rows(dtable_db_api, email_table_name,
-                                  fields='`Message ID`, `Thread ID`',
+                                  fields='`UID`, `Message ID`, `Thread ID`',
                                   conditions=f"Date>='{last_month_day}'")
     message2thread = {email['Message ID']: email['Thread ID'] for email in email_rows}
-    email_list = [email for email in email_list if email['Message ID'] not in message2thread]
+
+    uid2message = {email['UID']: email['Message ID'] for email in email_rows}
+    email_list = [email for email in email_list if not uid2message.get(email['UID'])]
 
     # no_thread_reply_message_ids is the list of new emails' reply-ids who are not in last 30 days
     no_thread_reply_message_ids = []
     for email in email_list:
-        if email['Reply to Message ID'] and email['Reply to Message ID'] not in message2thread:
+        if email['Reply to Message ID'] and not message2thread.get(email['Reply to Message ID']):
             no_thread_reply_message_ids.append(email['Reply to Message ID'])
     if no_thread_reply_message_ids:
         step = 100
@@ -331,70 +318,31 @@ def upload_attachments(seatable, email_list):
     return email_list
 
 
-def sync_email(context):
-    imap_host = context['imap_host']
-    imap_port = context['imap_port']
-    email_user = context['email_user']
-    email_password = context['email_password']
+def sync_email_to_table(seatable, dtable_db_api, email_table_name, link_table_name, send_date, email_list):
+    # update thread id of emails
+    email_list, new_thread_rows, to_be_updated_thread_dict = update_email_thread_ids(dtable_db_api, email_table_name,
+                                                                                     send_date, email_list)
+    logger.info(f'table: {email_table_name}, need to be inserted {len(email_list)} emails')
+    logger.info(f'table: {link_table_name}, need to be inserted {len(new_thread_rows)} thread rows')
 
-    send_date = context['send_date']
-    email_table_name = context['email_table_name']
-    link_table_name = context['link_table_name']
-    dtable_server_api = context['dtable_server_api']
-    dtable_db_api = context['dtable_db_api']
-    imap = context['imap']
-    mode = 'SINCE'
+    # upload attachments
+    email_list = upload_attachments(seatable, email_list)
+    # insert new emails
+    seatable.batch_append_rows(email_table_name, email_list)
 
-    seatable = dtable_server_api
+    # wait several seconds for dtable-db
+    time.sleep(2)
+    # update attachment
+    update_emails(seatable, dtable_db_api, email_table_name, email_list)
+    # insert new thread rows
+    if new_thread_rows:
+        seatable.batch_append_rows(link_table_name, new_thread_rows)
 
-    try:
-        # get emails on send_date
-        email_list = sorted(get_emails(send_date, imap_host, email_user, email_password, imap=imap, port=imap_port, mode=mode),
-                            key=lambda x: str_2_datetime(x['Date']))
-        if not email_list:
-            logger.info('email: %s send_date: %s mode: %s get 0 email(s)', email_user, send_date, mode)
-            return {'success': True}
-    except socket.timeout as e:
-        logger.exception(e)
-        logger.error('email: %s get emails timeout: %s', email_user, e)
-        return {'success': False}
+    # wait several seconds for dtable-db
+    time.sleep(3)
 
-    logger.info(f'email: {email_user} fetch {len(email_list)} emails')
-
-    try:
-        # update thread id of emails
-        email_list, new_thread_rows, to_be_updated_thread_dict = update_email_thread_ids(dtable_db_api, email_table_name,
-                                                                                         send_date, email_list)
-        logger.info(f'email: {email_user}, need to be inserted {len(email_list)} emails')
-        logger.info(f'email: {email_user}, need to be inserted {len(new_thread_rows)} thread rows')
-
-        if not email_list:
-            return {'success': True}
-
-        # upload attachments
-        email_list = upload_attachments(seatable, email_list)
-        # insert new emails
-        seatable.batch_append_rows(email_table_name, email_list)
-
-        # wait several seconds for dtable-db
-        time.sleep(2)
-        # update attachment
-        update_emails(seatable, dtable_db_api, email_table_name, email_list)
-        # insert new thread rows
-        if new_thread_rows:
-            seatable.batch_append_rows(link_table_name, new_thread_rows)
-
-        # wait several seconds for dtable-db
-        time.sleep(3)
-
-        # update threads Last Updated and Emails
-        update_threads(seatable, dtable_db_api, email_table_name, link_table_name, email_list, to_be_updated_thread_dict)
-    except Exception as e:
-        logger.exception(e)
-        logger.error('email: %s sync and update link error: %s', email_user, e)
-        return {'success': False}
-
-    return {'success': True}
+    # update threads Last Updated and Emails
+    update_threads(seatable, dtable_db_api, email_table_name, link_table_name, email_list, to_be_updated_thread_dict)
 
 
 def set_data_sync_invalid(data_sync_id, db_session):
@@ -462,11 +410,16 @@ def run_sync_emails(context):
         logger.error('third party account invalid.')
         return
 
-    imap, error_msg = check_imap_account(imap_host, email_user, email_password, port=imap_port, return_imap=True)
-
-    if error_msg:
+    # check imap account
+    try:
+        imap = login_imap(imap_host, email_user, email_password, port=imap_port)
+    except LoginError:
+        logger.error('user or password invalid, email: %s user login error', email_user)
         set_data_sync_invalid(data_sync_id, db_session)
-        logger.error(error_msg)
+        return
+    except Exception as e:
+        logger.exception(e)
+        logger.error('imap_server: %s, email_user: %s, login error: %s', imap_host, email_user, e)
         return
 
     dtable_server_api = DTableServerAPI(username, dtable_uuid, api_url,
@@ -496,21 +449,19 @@ def run_sync_emails(context):
         logger.error('email table or link table invalid.')
         return
 
-    sync_info = {
-        'imap_host': imap_host,
-        'imap_port': imap_port,
-        'email_user': email_user,
-        'email_password': email_password,
-        'send_date': send_date,
-        'email_table_name': email_table_name,
-        'link_table_name': link_table_name,
-        'dtable_server_api': dtable_server_api,
-        'dtable_db_api': dtable_db_api,
-        'imap': imap,
-    }
+    try:
+        email_list = sorted(imap.search_emails_by_send_date(send_date, 'SINCE'), key=lambda x: str_2_datetime(x['Date']))
+    except socket.timeout as e:
+        logger.exception(e)
+        logger.error('email: %s get emails timeout: %s', email_user, e)
+        return
 
-    sync_result = sync_email(sync_info)
+    logger.info(f'email: {email_user} fetch {len(email_list)} emails')
 
-    # update last sync time
-    if sync_result.get('success'):
-        update_sync_time(data_sync_id, db_session)
+    try:
+        sync_email_to_table(dtable_server_api, dtable_db_api, email_table_name, link_table_name, send_date, email_list)
+    except Exception as e:
+        logger.exception(e)
+        logger.error('email: %s sync and update link error: %s', email_user, e)
+        return
+    update_sync_time(data_sync_id, db_session)

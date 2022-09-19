@@ -91,3 +91,36 @@ class DurationFormatsType(object):
     H_MM_SS_S = 'h:mm:ss.s'
     H_MM_SS_SS = 'h:mm:ss.ss'
     H_MM_SS_SSS = 'h:mm:ss.sss'
+
+
+DURATION_ZERO_DISPLAY = {
+    DurationFormatsType.H_MM: '0:00',
+    DurationFormatsType.H_MM_SS: '0:00',
+    DurationFormatsType.H_MM_SS_S: '0:00.0',
+    DurationFormatsType.H_MM_SS_SS: '0:00.00',
+    DurationFormatsType.H_MM_SS_SSS: '0:00.000'
+}
+
+DURATION_DECIMAL_DIGITS = {
+    DurationFormatsType.H_MM: 0,
+    DurationFormatsType.H_MM_SS: 0,
+    DurationFormatsType.H_MM_SS_S: 1,
+    DurationFormatsType.H_MM_SS_SS: 2,
+    DurationFormatsType.H_MM_SS_SSS: 3
+}
+
+
+ARRAY_FORMAL_COLUMNS = [
+    ColumnTypes.IMAGE,
+    ColumnTypes.FILE,
+    ColumnTypes.MULTIPLE_SELECT,
+    ColumnTypes.COLLABORATOR
+]
+
+
+SIMPLE_CELL_FORMULA_RESULTS = [
+    FormulaResultType.NUMBER,
+    FormulaResultType.STRING,
+    FormulaResultType.DATE,
+    FormulaResultType.BOOL
+]

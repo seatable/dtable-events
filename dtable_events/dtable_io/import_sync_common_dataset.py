@@ -67,7 +67,7 @@ def sync_common_dataset(context, config):
     # request dst_dtable
     url = dtable_server_url.strip('/') + '/dtables/' + str(dst_dtable_uuid) + '?from=dtable_events'
     try:
-        resp = requests.get(url, headers=dst_headers)
+        resp = requests.get(url, headers=dst_headers, timeout=180)
         dst_dtable_json = resp.json()
     except Exception as e:
         dtable_io_logger.error('request dst dtable: %s error: %s', dst_dtable_uuid, e)
@@ -113,7 +113,7 @@ def sync_common_dataset(context, config):
     # get base's metadata
     src_url = dtable_server_url.rstrip('/') + '/api/v1/dtables/' + str(src_dtable_uuid) + '/metadata/?from=dtable_events'
     try:
-        dtable_metadata = requests.get(src_url, headers=src_headers)
+        dtable_metadata = requests.get(src_url, headers=src_headers, timeout=180)
         src_metadata = dtable_metadata.json()
     except Exception as e:
         dtable_io_logger.error('get metadata error:  %s', e)
@@ -193,7 +193,7 @@ def import_common_dataset(context, config):
     # get base's metadata
     url = dtable_server_url.rstrip('/') + '/api/v1/dtables/' + str(src_dtable_uuid) + '/metadata/?from=dtable_events'
     try:
-        dtable_metadata = requests.get(url, headers=src_headers)
+        dtable_metadata = requests.get(url, headers=src_headers, timeout=180)
         src_metadata = dtable_metadata.json()
     except Exception as e:
         dtable_io_logger.error('get metadata error:  %s', e)

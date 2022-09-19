@@ -111,7 +111,7 @@ class DTableDBAPI(object):
 
     def __init__(self, username, dtable_uuid, dtable_db_url):
         self.username = username
-        self.dtable_uuid = dtable_uuid
+        self.dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
         self.headers = None
         self.dtable_db_url = dtable_db_url.rstrip('/') if dtable_db_url else None
         self._init()
@@ -121,11 +121,10 @@ class DTableDBAPI(object):
         self.headers = {'Authorization': 'Token ' + access_token}
 
     def get_dtable_db_token(self):
-        dtable_uuid = uuid_str_to_36_chars(self.dtable_uuid)
         token = jwt.encode(
             payload={
                 'exp': int(time.time()) + 300,
-                'dtable_uuid': dtable_uuid,
+                'dtable_uuid': self.dtable_uuid,
                 'username': self.username,
                 'permission': 'rw',
             },
@@ -157,3 +156,25 @@ class DTableDBAPI(object):
             return converted_results
         else:
             return results
+
+    def query_and_metadata(self, sql, convert=True, server_only=True):
+        """
+        :param sql: str
+        :param convert: bool
+        :return: list
+        """
+        if not sql:
+            raise ValueError('sql can not be empty.')
+        url = self.dtable_db_url + '/api/v1/query/' + self.dtable_uuid + '/?from=dtable_events'
+        json_data = {'sql': sql, 'server_only': server_only}
+        response = requests.post(url, json=json_data, headers=self.headers)
+        data = parse_response(response)
+        if not data.get('success'):
+            raise Exception(data.get('error_message'))
+        metadata = data.get('metadata')
+        results = data.get('results')
+        if convert:
+            converted_results = convert_db_rows(metadata, results)
+            return converted_results, metadata
+        else:
+            return results, metadata

@@ -90,6 +90,13 @@ class ImapMail(object):
                 content_info[filename] = content_id[1:-1]
         return file_list, content_info
 
+    def parse_addr(self, addr):
+        addr_info = parseaddr(addr)
+        nickname = self.decode_str(addr_info[0])
+        if not nickname:
+            nickname = addr_info[1].split('@')[0]
+        return nickname + ' <' + addr_info[1] + '>'
+
     def get_email_header(self, msg):
         header_info = {}
         for header in ['From', 'To', 'CC', 'Subject', 'Message-ID', 'In-Reply-To', 'Date']:
@@ -100,28 +107,14 @@ class ImapMail(object):
                 elif header == 'Date':
                     value = parsedate_to_datetime(value).astimezone(get_localzone()).isoformat().replace('T', ' ')[:-6]
                 elif header in ['From', 'To', 'CC']:
-                    value = ','.join([parseaddr(val)[1] for val in value.split(',')])
+                    value = ','.join([self.parse_addr(val) for val in value.split(',')])
                 elif header in ['Message-ID', 'In-Reply-To']:
-                    # remove '<' and '>'
-                    value = value.strip().lower()[1:-1]
+                    value = value.strip()
             header_info[header] = value
 
         return header_info
 
-    def get_email_results(self, send_date, mode='ON'):
-        td = timedelta(days=1)
-        before_send_date = send_date - td
-        after_send_date = send_date + td
-        if mode == 'ON':
-            today_results = self.server.search(['ON', send_date])
-            before_results = self.server.search(['ON', before_send_date])
-            after_results = self.server.search(['ON', after_send_date])
-            return before_results + today_results + after_results
-        elif mode == 'SINCE':
-            return self.server.search(['SINCE', before_send_date])
-        return []
-
-    def gen_email_dict(self, mail, send_date, mode, send_box):
+    def gen_email_dict(self, mail, mode, send_box, send_date=None):
         email_dict = {}
         msg_dict = self.server.fetch(mail, ['BODY[]'])
         mail_body = msg_dict[mail][b'BODY[]']
@@ -158,8 +151,11 @@ class ImapMail(object):
 
         return email_dict
 
-    def get_email_list(self, send_date, mode='ON'):
+    def search_emails_by_send_date(self, send_date, mode='ON'):
         send_date = datetime.strptime(send_date, '%Y-%m-%d').date()
+        td = timedelta(days=1)
+        before_send_date = send_date - td
+        after_send_date = send_date + td
         total_email_list = []
         for send_box in ['INBOX', 'Sent Items']:
             logger.debug('start to get user: %s emails from box: %s', self.user, send_box)
@@ -168,16 +164,47 @@ class ImapMail(object):
             except Exception as e:
                 logger.warning('user: %s select email folder: %s error: %s', self.user, send_box, e)
                 continue
-            results = self.get_email_results(send_date, mode=mode)
+            results = []
+            if mode == 'ON':
+                today_results = self.server.search(['ON', send_date])
+                before_results = self.server.search(['ON', before_send_date])
+                after_results = self.server.search(['ON', after_send_date])
+                results = before_results + today_results + after_results
+            elif mode == 'SINCE':
+                results = self.server.search(['SINCE', before_send_date])
+
             for mail in results:
                 try:
-                    email_dict = self.gen_email_dict(mail, send_date, mode, send_box)
+                    email_dict = self.gen_email_dict(mail, mode, send_box, send_date)
                     if email_dict:
                         total_email_list.append(email_dict)
                 except Exception as e:
                     logger.exception(e)
                     logger.error('parse email error: %s', e)
         return total_email_list
+
+    def search_email_by_message_id(self, message_id):
+        for send_box in ['INBOX', 'Sent Items']:
+            logger.debug('start to search user: %s email from box: %s, message_id', self.user, send_box, message_id)
+            try:
+                self.server.select_folder(send_box, readonly=True)
+            except Exception as e:
+                logger.warning('user: %s select email folder: %s error: %s', self.user, send_box, e)
+                continue
+            criteria = '(HEADER Message-ID "%s")' % message_id
+            try:
+                results = self.server.search(criteria)
+            except Exception as e:
+                logger.error('search email failed: %s', e)
+                return {}
+            if results:
+                try:
+                    return self.gen_email_dict(results[0], 'SEARCH', send_box)
+                except Exception as e:
+                    logger.exception(e)
+                    logger.error('parse email error: %s', e)
+                    return {}
+        return {}
 
     def close(self):
         self.server.logout()
