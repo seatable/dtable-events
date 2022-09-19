@@ -750,12 +750,14 @@ def parse_view_rows(response_rows, head_list, summary_col_info, cols_without_hid
     return data_list, grouped_row_num_map
 
 
-def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, permission, name, archive_view_export_row_limit):
+def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, permission, name):
     from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_view_rows_from_dtable_server, \
         convert_db_rows
     from dtable_events.dtable_io.excel import parse_grouped_rows, write_xls_with_type
     from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
+    from dtable_events.app.config import ARCHIVE_VIEW_EXPORT_ROW_LIMIT
     import openpyxl
+
     target_dir = '/tmp/dtable-io/export-view-to-excel/' + dtable_uuid
     if not os.path.isdir(target_dir):
         os.makedirs(target_dir)
@@ -819,7 +821,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
     ws = wb.create_sheet(sheet_name)
     if is_archive:
         step = 10000
-        archive_view_export_row_limit = int(archive_view_export_row_limit)
+        archive_view_export_row_limit = int(ARCHIVE_VIEW_EXPORT_ROW_LIMIT)
         archive_metadata = []
 
         for i in range(0, archive_view_export_row_limit, step):

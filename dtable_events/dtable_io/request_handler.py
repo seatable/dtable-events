@@ -827,10 +827,9 @@ def convert_view_to_excel():
     id_in_org = request.args.get('id_in_org')
     permission = request.args.get('permission')
     name = request.args.get('name')
-    archive_view_export_row_limit = request.args.get('archive_view_export_row_limit')
 
     try:
-        task_id = task_manager.add_convert_view_to_execl_task(dtable_uuid, table_id, view_id, username, id_in_org, permission, name, archive_view_export_row_limit)
+        task_id = task_manager.add_convert_view_to_execl_task(dtable_uuid, table_id, view_id, username, id_in_org, permission, name)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
