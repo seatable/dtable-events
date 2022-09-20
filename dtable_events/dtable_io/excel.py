@@ -934,7 +934,12 @@ def parse_collaborator(cell_value, name_to_email):
     if not isinstance(cell_value, str):
         return []
     users = re.split('[,，]', cell_value)
-    return [name_to_email.get(user.strip()) for user in users if name_to_email.get(user.strip())]
+    email_list = []
+    for user in users:
+        email = name_to_email.get(user.strip())
+        if email:
+            email_list.append(email)
+    return email_list
 
 
 def get_summary(summary, summary_col_info, column_name):
