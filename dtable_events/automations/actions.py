@@ -31,6 +31,8 @@ PER_DAY = 'per_day'
 PER_WEEK = 'per_week'
 PER_UPDATE = 'per_update'
 PER_MONTH = 'per_month'
+CRON_CONDITIONS = (PER_DAY, PER_WEEK, PER_MONTH)
+ALL_CONDITIONS = (PER_DAY, PER_WEEK, PER_MONTH, PER_UPDATE)
 
 CONDITION_ROWS_MODIFIED = 'rows_modified'
 CONDITION_ROWS_ADDED = 'rows_added'
@@ -188,7 +190,7 @@ class UpdateAction(BaseAction):
             for key in updated_column_keys:
                 if key in to_update_keys:
                     return False
-        if self.auto_rule.run_condition in (PER_DAY, PER_WEEK, PER_MONTH):
+        if self.auto_rule.run_condition in CRON_CONDITIONS:
             return False
 
         return True
@@ -229,7 +231,7 @@ class LockRowAction(BaseAction):
             row_id = self.data['row']['_id']
             self.update_data['row_ids'].append(row_id)
 
-        if self.auto_rule.run_condition in (PER_DAY, PER_WEEK, PER_MONTH):
+        if self.auto_rule.run_condition in CRON_CONDITIONS:
             rows_data = self.auto_rule.get_trigger_conditions_rows()[:CONDITION_ROWS_LIMIT]
             for row in rows_data:
                 self.update_data['row_ids'].append(row.get('_id'))
@@ -524,7 +526,7 @@ class NotifyAction(BaseAction):
     def do_action(self):
         if self.auto_rule.run_condition == PER_UPDATE:
             self.per_update_notify()
-        elif self.auto_rule.run_condition in [PER_DAY, PER_WEEK, PER_MONTH]:
+        elif self.auto_rule.run_condition in CRON_CONDITIONS:
             if self.auto_rule.trigger.get('condition') == CONDITION_PERIODICALLY_BY_CONDITION:
                 self.condition_cron_notify()
             else:
@@ -601,7 +603,7 @@ class SendWechatAction(BaseAction):
             return
         if self.auto_rule.run_condition == PER_UPDATE:
             self.per_update_notify()
-        elif self.auto_rule.run_condition in [PER_DAY, PER_WEEK]:
+        elif self.auto_rule.run_condition in CRON_CONDITIONS:
             if self.auto_rule.trigger.get('condition') == CONDITION_PERIODICALLY_BY_CONDITION:
                 self.condition_cron_notify()
             else:
@@ -679,7 +681,7 @@ class SendDingtalkAction(BaseAction):
             return
         if self.auto_rule.run_condition == PER_UPDATE:
             self.per_update_notify()
-        elif self.auto_rule.run_condition in [PER_DAY, PER_WEEK]:
+        elif self.auto_rule.run_condition in CRON_CONDITIONS:
             if self.auto_rule.trigger.get('condition') == CONDITION_PERIODICALLY_BY_CONDITION:
                 self.condition_cron_notify()
             else:
@@ -850,7 +852,7 @@ class SendEmailAction(BaseAction):
             return
         if self.auto_rule.run_condition == PER_UPDATE:
             self.per_update_notify()
-        elif self.auto_rule.run_condition in [PER_DAY, PER_WEEK]:
+        elif self.auto_rule.run_condition in CRON_CONDITIONS:
             if self.auto_rule.trigger.get('condition') == CONDITION_PERIODICALLY_BY_CONDITION:
                 self.condition_cron_notify()
             else:
@@ -1574,7 +1576,7 @@ class AutomationRule:
                 return False
             return True
 
-        elif self.run_condition in (PER_DAY, PER_WEEK, PER_MONTH):
+        elif self.run_condition in CRON_CONDITIONS:
             cur_datetime = datetime.now()
             cur_hour = cur_datetime.hour
             cur_week_day = cur_datetime.isoweekday()
@@ -1702,7 +1704,7 @@ class AutomationRule:
                 INSERT INTO auto_rules_task_log (trigger_time, success, rule_id, run_condition, dtable_uuid, org_id, owner, warnings) VALUES
                 (:trigger_time, :success, :rule_id, :run_condition, :dtable_uuid, :org_id, :owner, :warnings)
             """
-            if self.run_condition in (PER_DAY, PER_WEEK, PER_MONTH, PER_UPDATE):
+            if self.run_condition in ALL_CONDITIONS:
                 self.db_session.execute(set_task_log_sql, {
                     'trigger_time': datetime.utcnow(),
                     'success': self.task_run_seccess,
