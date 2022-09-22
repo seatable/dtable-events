@@ -13,6 +13,7 @@ from selenium import webdriver
 from urllib import parse
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
+from datetime import datetime
 
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, SESSION_COOKIE_NAME, INNER_DTABLE_DB_URL
 from dtable_events.dtable_io.utils import setup_logger, \
@@ -30,7 +31,7 @@ from dtable_events.dtable_io.excel import parse_excel_csv_to_json, import_excel_
     parse_and_import_excel_csv_to_table, parse_and_update_file_to_table
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.statistics.db import save_email_sending_records, batch_save_email_sending_records
-from dtable_events.data_sync.data_sync_utils import run_sync_emails, check_imap_account, sync_email_to_table
+from dtable_events.data_sync.data_sync_utils import run_sync_emails
 from dtable_events.utils import get_inner_dtable_server_url
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.utils.dtable_server_api import DTableServerAPI
@@ -38,7 +39,7 @@ from dtable_events.utils.dtable_server_api import DTableServerAPI
 dtable_io_logger = setup_logger('dtable_events_io.log')
 dtable_message_logger = setup_logger('dtable_events_message.log')
 dtable_data_sync_logger = setup_logger('dtable_events_data_sync.log')
-dtable_email_fetch_logger = setup_logger('dtable_events_email_fetch.log')
+dtable_plugin_email_logger = setup_logger('dtable_events_plugin_email.log')
 
 def clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path):
     # delete tmp files/dirs
@@ -938,46 +939,79 @@ def email_sync(context, config):
             db_session.close()
 
 
-def fetch_email(context):
-    dtable_email_fetch_logger.info('Start fetch email to dtable %s, email table %s.' % (context.get('dtable_uuid'), context.get('email_table_name')))
+def plugin_email_send_email(context, config=None):
+    dtable_plugin_email_logger.info('Start send email by plugin %s, email table %s.' % (context.get('dtable_uuid'), context.get('table_info', {}).get('email_table_name')))
 
-    api_url = get_inner_dtable_server_url()
-
-    username = context.get('username')
     dtable_uuid = context.get('dtable_uuid')
+    username = context.get('username')
     repo_id = context.get('repo_id')
     workspace_id = context.get('workspace_id')
-    imap_host = context.get('imap_host')
-    email_user = context.get('email_user')
-    email_password = context.get('email_password')
-    imap_port = context.get('imap_port')
 
-    send_date = context.get('send_date')
-    email_table_name = context['email_table_name']
-    link_table_name = context['link_table_name']
-    message_id = context.get('message_id')
+    table_info = context.get('table_info')
+    email_info = context.get('email_info')
+    auth_info = context.get('auth_info')
 
+    thread_row_id = table_info.get('thread_row_id')
+    email_row_id = table_info.get('email_row_id')
+    email_table_name = table_info.get('email_table_name')
+    thread_table_name = table_info.get('thread_table_name')
+
+    # send email
+    result = send_email_msg(auth_info, email_info, username, config)
+
+    if result.get('err_msg'):
+        dtable_plugin_email_logger.error('plugin email send failed, email account: %s, username: %s', auth_info.get('host_user'), username)
+        return
+
+    send_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    api_url = get_inner_dtable_server_url()
     dtable_server_api = DTableServerAPI(username, dtable_uuid, api_url, server_url=DTABLE_WEB_SERVICE_URL,
                                         repo_id=repo_id, workspace_id=workspace_id)
 
-    dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
+    replied_email_row = dtable_server_api.get_row(email_table_name, email_row_id)
 
-    imap, error_msg = check_imap_account(imap_host, email_user, email_password, port=imap_port, return_imap=True)
+    thread_id = replied_email_row.get('Thread ID')
 
-    if error_msg:
-        dtable_email_fetch_logger.error('imap account error: %s' % error_msg)
+    html_message = email_info.get('html_message')
+    if html_message:
+        html_message = '```' + html_message + '```'
+
+    email = {
+        'cc': email_info.get('copy_to'),
+        'From': email_info.get('from'),
+        'Message ID': email_info.get('message_id'),
+        'Reply to Message ID': email_info.get('in_reply_to'),
+        'To': email_info.get('send_to'),
+        'Subject': email_info.get('subject'),
+        'Content': email_info.get('text_message'),
+        'HTML Content': html_message,
+        'Date': send_time,
+        'Thread ID': thread_id,
+    }
+
+    metadata = dtable_server_api.get_metadata()
+
+    tables = metadata.get('tables', [])
+    email_table_id = ''
+    link_table_id = ''
+    for table in tables:
+        if table.get('name') == email_table_name:
+            email_table_id = table.get('_id')
+        if table.get('name') == thread_table_name:
+            link_table_id = table.get('_id')
+        if email_table_id and link_table_id:
+            break
+    if not email_table_id or not link_table_id:
+        dtable_plugin_email_logger.error('email table: %s or link table: %s not found', email_table_name, thread_table_name)
         return
 
-    try:
-        email = imap.search_email_by_message_id(message_id)
-    except Exception as e:
-        dtable_email_fetch_logger.exception('fetch email ERROR: {}'.format(e))
-        return
-    else:
-        dtable_email_fetch_logger.info('fetch email success, email user: %s' % context.get('email_user'))
+    email_link_id = dtable_server_api.get_column_link_id(email_table_name, 'Threads')
 
-    try:
-        sync_email_to_table(dtable_server_api, dtable_db_api, email_table_name, link_table_name, send_date, [email])
-    except Exception as e:
-        dtable_email_fetch_logger.exception(e)
-        dtable_email_fetch_logger.error('email: %s sync and update link error: %s', email_user, e)
+    email_row = dtable_server_api.append_row(email_table_name, email)
+    email_row_id = email_row.get('_id')
+    other_rows_ids = [thread_row_id]
+
+    dtable_server_api.update_link(email_link_id, email_table_id, link_table_id, email_row_id, other_rows_ids)
+
+    dtable_server_api.update_row(thread_table_name, thread_row_id, {'Last Updated': send_time})

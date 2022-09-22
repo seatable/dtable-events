@@ -8,7 +8,7 @@ from dtable_events.app.config import DTABLE_PRIVATE_KEY
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.dtable_io.task_message_manager import message_task_manager
 from dtable_events.dtable_io.task_data_sync_manager import data_sync_task_manager
-from dtable_events.dtable_io.task_email_fetch_manager import email_fetch_task_manager
+from dtable_events.dtable_io.task_plugin_email_manager import plugin_email_task_manager
 
 app = Flask(__name__)
 logger = logging.getLogger(__name__)
@@ -939,20 +939,20 @@ def query_data_sync_status():
     return make_response((resp, 200))
 
 
-@app.route('/fetch-email', methods=['POST'])
-def fetch_email():
+@app.route('/plugin-email-send-email', methods=['POST'])
+def add_email_to_table():
     is_valid, error = check_auth_token(request)
     if not is_valid:
         return make_response((error, 403))
-    if email_fetch_task_manager.tasks_queue.full():
+    if plugin_email_task_manager.tasks_queue.full():
         return make_response(('dtable io server busy.', 400))
     try:
         context = json.loads(request.data)
     except:
-        return make_response(('fetch email context invalid.', 400))
+        return make_response(('add email context invalid.', 400))
 
     try:
-        task_id = email_fetch_task_manager.add_fetch_email_task(context)
+        task_id = plugin_email_task_manager.add_send_email_task(context)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -960,18 +960,18 @@ def fetch_email():
     return make_response(({'task_id': task_id}, 200))
 
 
-@app.route('/query-email-fetch-status', methods=['GET'])
-def query_email_fetch_status():
+@app.route('/query-plugin-email-send-status', methods=['GET'])
+def query_plugin_email_send_status():
     is_valid, error = check_auth_token(request)
     if not is_valid:
         return make_response((error, 403))
 
     task_id = request.args.get('task_id')
-    if not email_fetch_task_manager.is_valid_task_id(task_id):
+    if not plugin_email_task_manager.is_valid_task_id(task_id):
         return make_response(('task_id invalid.', 400))
 
     try:
-        is_finished = email_fetch_task_manager.query_status(task_id)
+        is_finished = plugin_email_task_manager.query_status(task_id)
     except Exception as e:
         logger.debug(e)
         return make_response((e, 500))
