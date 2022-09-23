@@ -82,14 +82,16 @@ class BaseAction:
                         parse_value_list.append(option_name)
                 return parse_value_list
         elif column.get('type') == ColumnTypes.DATE:
-            date_value = parser.isoparse(value)
-            date_format = column['data']['format']
-            if date_format == 'YYYY-MM-DD':
-                return date_value.strftime('%Y-%m-%d')
-            return date_value.strftime('%Y-%m-%d %H:%M')
+            if value and isinstance(value, str):
+                date_value = parser.isoparse(value)
+                date_format = column['data']['format']
+                if date_format == 'YYYY-MM-DD':
+                    return date_value.strftime('%Y-%m-%d')
+                return date_value.strftime('%Y-%m-%d %H:%M')
         elif column.get('type') in [ColumnTypes.CTIME, ColumnTypes.MTIME]:
-            date_value = parser.isoparse(value)
-            return date_value.strftime('%Y-%m-%d %H:%M:%S')
+            if value and isinstance(value, str):
+                date_value = parser.isoparse(value)
+                return date_value.strftime('%Y-%m-%d %H:%M:%S')
         else:
             return value
 
@@ -716,6 +718,7 @@ class SendEmailAction(BaseAction):
         self.column_blanks = []
         self.column_blanks_send_to = []
         self.column_blanks_copy_to = []
+        self.column_blanks_subject = []
         self.col_name_dict = {}
 
         self._init_notify()
@@ -743,6 +746,11 @@ class SendEmailAction(BaseAction):
                 blanks.extend(res)
         self.column_blanks_copy_to = [blank for blank in blanks if blank in self.col_name_dict]
 
+    def _init_notify_subject(self):
+        subject = self.send_info.get('subject')
+        blanks = set(re.findall(r'\{([^{]*?)\}', subject))
+        self.column_blanks_subject = [blank for blank in blanks if blank in self.col_name_dict]
+
     def _init_notify(self):
         account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id)
         if not account_dict:
@@ -753,6 +761,7 @@ class SendEmailAction(BaseAction):
         self._init_notify_msg()
         self._init_notify_send_to()
         self._init_notify_copy_to()
+        self._init_notify_subject()
 
         account_detail = account_dict.get('detail', {})
 
@@ -775,6 +784,7 @@ class SendEmailAction(BaseAction):
     def per_update_notify(self):
         row = self.data['converted_row']
         msg = self.send_info.get('message', '')
+        subject = self.send_info.get('subject', '')
         send_to_list = self.send_info.get('send_to', [])
         copy_to_list = self.send_info.get('copy_to', [])
         if self.column_blanks:
@@ -783,7 +793,10 @@ class SendEmailAction(BaseAction):
             send_to_list = [self._fill_msg_blanks(row, send_to, self.column_blanks_send_to) for send_to in send_to_list]
         if self.column_blanks_copy_to:
             copy_to_list = [self._fill_msg_blanks(row, copy_to, self.column_blanks_copy_to) for copy_to in copy_to_list]
+        if self.column_blanks_subject:
+            subject = self._fill_msg_blanks(row, subject, self.column_blanks_subject)
         self.send_info.update({
+            'subject': subject,
             'message': msg,
             'send_to': [send_to for send_to in send_to_list if self.is_valid_email(send_to)],
             'copy_to': [copy_to for copy_to in copy_to_list if self.is_valid_email(copy_to)],
@@ -819,6 +832,7 @@ class SendEmailAction(BaseAction):
                              for key in row}
             send_info = deepcopy(self.send_info)
             msg = send_info.get('message', '')
+            subject = send_info.get('subject', '')
             send_to_list = send_info.get('send_to', [])
             copy_to_list = send_info.get('copy_to', [])
             if self.column_blanks:
@@ -827,7 +841,10 @@ class SendEmailAction(BaseAction):
                 send_to_list = [self._fill_msg_blanks(converted_row, send_to, self.column_blanks_send_to) for send_to in send_to_list]
             if self.column_blanks_copy_to:
                 copy_to_list = [self._fill_msg_blanks(converted_row, copy_to, self.column_blanks_copy_to) for copy_to in copy_to_list]
+            if self.column_blanks_subject:
+                subject = self._fill_msg_blanks(converted_row, subject, self.column_blanks_subject)
             send_info.update({
+                'subject': subject,
                 'message': msg,
                 'send_to': [send_to for send_to in send_to_list if self.is_valid_email(send_to)],
                 'copy_to': [copy_to for copy_to in copy_to_list if self.is_valid_email(copy_to)],
