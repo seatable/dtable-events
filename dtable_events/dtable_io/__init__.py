@@ -1056,3 +1056,16 @@ def plugin_email_send_email(context, config=None):
     dtable_server_api.update_link(email_link_id, email_table_id, link_table_id, email_row_id, other_rows_ids)
 
     dtable_server_api.update_row(thread_table_name, thread_row_id, {'Last Updated': send_time})
+
+def import_big_excel(username, dtable_uuid, table_name, file_path, task_id, tasks_status_map):
+    """
+    upload excel json file to dtable-db
+    """
+
+    dtable_io_logger.info('Start import big excel: {}.'.format(dtable_uuid))
+    try:
+        import_excel_to_db(username, dtable_uuid, table_name, file_path, task_id, tasks_status_map)
+    except Exception as e:
+        dtable_io_logger.error('import big excel failed. ERROR: {}'.format(e))
+    else:
+        dtable_io_logger.info('import big excel %s.xlsx success!' % table_name)
