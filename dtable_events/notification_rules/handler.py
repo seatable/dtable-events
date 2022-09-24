@@ -25,6 +25,7 @@ class NotificationRuleHandler(Thread):
             try:
                 message = subscriber.get_message()
                 if message is not None:
+                    logger.info('notification rule handler subscribe one message')
                     event = json.loads(message['data'])
                     session = self._db_session_class()
                     try:
