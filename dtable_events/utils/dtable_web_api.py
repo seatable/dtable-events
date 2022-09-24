@@ -24,8 +24,9 @@ def parse_response(response):
 
 class DTableWebAPI:
 
-    def __init__(self, dtable_web_service_url):
+    def __init__(self, dtable_web_service_url, timeout=180):
         self.dtable_web_service_url = dtable_web_service_url.strip('/')
+        self.timeout = timeout
 
     def get_related_users(self, dtable_uuid, username='dtable-events'):
         logger.debug('get related users dtable_uuid: %s, username: %s', dtable_uuid, username)
@@ -36,7 +37,7 @@ class DTableWebAPI:
         }
         access_token = get_dtable_server_token(username, dtable_uuid)
         headers = {'Authorization': 'Token ' + access_token}
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=self.timeout)
         return parse_response(response)['user_list']
 
     def can_user_run_python(self, user):
@@ -52,7 +53,7 @@ class DTableWebAPI:
         #   'can_schedule_run_script': {org1: {'can_run_python_script': True/False}}
         # }
         try:
-            resp = requests.get(url, headers=headers, json=json_data)
+            resp = requests.get(url, headers=headers, json=json_data, timeout=self.timeout)
             if resp.status_code != 200:
                 logger.error('check run script permission error response: %s', resp.status_code)
                 return False
@@ -70,7 +71,7 @@ class DTableWebAPI:
         headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
         json_data = {'org_ids': [org_id]}
         try:
-            resp = requests.get(url, headers=headers, json=json_data)
+            resp = requests.get(url, headers=headers, json=json_data, timeout=self.timeout)
             if resp.status_code != 200:
                 logger.error('check run script permission error response: %s', resp.status_code)
                 return False
@@ -88,7 +89,7 @@ class DTableWebAPI:
         headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
         params = {'username': user}
         try:
-            resp = requests.get(url, headers=headers, params=params)
+            resp = requests.get(url, headers=headers, params=params, timeout=self.timeout)
             if resp.status_code != 200:
                 logger.error('get scripts running limit error response: %s', resp.status_code)
                 return 0
@@ -106,7 +107,7 @@ class DTableWebAPI:
         headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
         params = {'org_id': org_id}
         try:
-            resp = requests.get(url, headers=headers, params=params)
+            resp = requests.get(url, headers=headers, params=params, timeout=self.timeout)
             if resp.status_code != 200:
                 logger.error('get scripts running limit error response: %s', resp.status_code)
                 return 0

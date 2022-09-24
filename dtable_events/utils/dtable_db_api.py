@@ -109,11 +109,12 @@ def convert_db_rows(metadata, results):
 
 class DTableDBAPI(object):
 
-    def __init__(self, username, dtable_uuid, dtable_db_url):
+    def __init__(self, username, dtable_uuid, dtable_db_url, timeout=180):
         self.username = username
         self.dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
         self.headers = None
         self.dtable_db_url = dtable_db_url.rstrip('/') if dtable_db_url else None
+        self.timeout = timeout
         self._init()
 
     def _init(self):
@@ -145,7 +146,7 @@ class DTableDBAPI(object):
             raise ValueError('sql can not be empty.')
         url = self.dtable_db_url + '/api/v1/query/' + self.dtable_uuid + '/?from=dtable_events'
         json_data = {'sql': sql}
-        response = requests.post(url, json=json_data, headers=self.headers)
+        response = requests.post(url, json=json_data, headers=self.headers, timeout=self.timeout)
         data = parse_response(response)
         if not data.get('success'):
             raise Exception(data.get('error_message'))
@@ -167,7 +168,7 @@ class DTableDBAPI(object):
             raise ValueError('sql can not be empty.')
         url = self.dtable_db_url + '/api/v1/query/' + self.dtable_uuid + '/?from=dtable_events'
         json_data = {'sql': sql, 'server_only': server_only}
-        response = requests.post(url, json=json_data, headers=self.headers)
+        response = requests.post(url, json=json_data, headers=self.headers, timeout=self.timeout)
         data = parse_response(response)
         if not data.get('success'):
             raise Exception(data.get('error_message'))

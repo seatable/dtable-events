@@ -69,6 +69,7 @@ def scan_triggered_notification_rules(event_data, db_session):
         logger.error(f'redis event data not valid, event_data = {event_data}')
         return
 
+    logger.info('scan noti rule: %s of dtable: %s', rule_id, message_dtable_uuid)
     sql = "SELECT `id`, `trigger`, `action`, `creator`, `last_trigger_time`, `dtable_uuid` FROM dtable_notification_rules WHERE run_condition='per_update'" \
           "AND dtable_uuid=:dtable_uuid AND is_valid=1 AND id=:rule_id"
     rules = db_session.execute(sql, {'dtable_uuid': message_dtable_uuid, 'rule_id': rule_id})
@@ -382,6 +383,8 @@ def get_column_by_key(dtable_metadata, table_id, column_key):
 
 
 def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable_server_access_token, db_session, op_type):
+    logger.info('noti-rule: %s start to check trigger', rule[0])
+
     rule_id = rule[0]
     trigger = rule[1]
     action = rule[2]
@@ -398,6 +401,10 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
     view_id = trigger['view_id']
 
     if message_table_id != table_id:
+        return
+
+    if not users and not users_column_key:
+        # no users need to be notified
         return
 
     dtable_server_api = DTableServerAPI('notification-rule', dtable_uuid, get_inner_dtable_server_url())
@@ -440,6 +447,23 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
         if not is_trigger_time_satisfy(last_trigger_time):
             return
 
+        if users_column_key:
+            user_column = get_column_by_key(dtable_metadata, table_id, users_column_key)
+            if user_column:
+                users_column_name = user_column.get('name')
+                users_from_column = converted_row.get(users_column_name, [])
+                if not users_from_column:
+                    users_from_column = []
+                if not isinstance(users_from_column, list):
+                    users_from_column = [users_from_column, ]
+                users = list(set(users + [user for user in users_from_column if user in related_users_dict]))
+            else:
+                logger.warning('notification rule: %s notify user column: %s invalid', rule_id, users_column_key)
+
+        logger.info('noti-rule: %s prepare send noti to %s user(s)', rule_id, len(users))
+        if not users:
+            return
+
         detail = {
             'table_id': table_id,
             'view_id': view_id,
@@ -449,7 +473,22 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
             'msg': gen_noti_msg_with_converted_row(msg, converted_row, column_blanks, col_name_dict, db_session, dtable_metadata=dtable_metadata),
             'row_id_list': [row['_id']],
         }
+        logger.info('noti-rule: %s gen noti msg done', rule_id)
 
+        for user in users:
+            if not is_valid_email(user):
+                continue
+            user_msg_list.append({
+                'to_user': user,
+                'msg_type': 'notification_rules',
+                'detail': detail,
+                })
+        logger.info('noti-rule: %s at the end send noti to %s user(s)', rule_id, len(user_msg_list))
+        send_notification(dtable_uuid, user_msg_list, dtable_server_access_token)
+        logger.info('noti-rule: %s send noti end', rule_id)
+
+    elif (op_type == 'modify_row' and trigger['condition'] == CONDITION_FILTERS_SATISFY) or \
+         (op_type in ('insert_row', 'append_rows') and trigger['condition'] == CONDITION_ROWS_ADDED):
         if users_column_key:
             user_column = get_column_by_key(dtable_metadata, table_id, users_column_key)
             if user_column:
@@ -463,18 +502,10 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
             else:
                 logger.warning('notification rule: %s notify user column: %s invalid', rule_id, users_column_key)
 
-        for user in users:
-            if not is_valid_email(user):
-                continue
-            user_msg_list.append({
-                'to_user': user,
-                'msg_type': 'notification_rules',
-                'detail': detail,
-                })
-        send_notification(dtable_uuid, user_msg_list, dtable_server_access_token)
+        logger.info('noti-rule: %s prepare send noti to %s user(s)', rule_id, len(users))
+        if not users:
+            return
 
-    elif (op_type == 'modify_row' and trigger['condition'] == CONDITION_FILTERS_SATISFY) or \
-         (op_type in ('insert_row', 'append_rows') and trigger['condition'] == CONDITION_ROWS_ADDED):
         detail = {
             'table_id': table_id,
             'view_id': view_id,
@@ -484,18 +515,7 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
             'msg': gen_noti_msg_with_converted_row(msg, converted_row, column_blanks, col_name_dict, db_session, dtable_metadata=dtable_metadata),
             'row_id_list': [row['_id']],
         }
-        if users_column_key:
-            user_column = get_column_by_key(dtable_metadata, table_id, users_column_key)
-            if user_column:
-                users_column_name = user_column.get('name')
-                users_from_column = converted_row.get(users_column_name, [])
-                if not users_from_column:
-                    users_from_column = []
-                if not isinstance(users_from_column, list):
-                    users_from_column = [users_from_column, ]
-                users = list(set(users + [user for user in users_from_column if user in related_users_dict]))
-            else:
-                logger.warning('notification rule: %s notify user column: %s invalid', rule_id, users_column_key)
+        logger.info('noti-rule: %s gen noti msg done', rule_id)
 
         for user in users:
             if not is_valid_email(user):
@@ -505,7 +525,9 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
                 'msg_type': 'notification_rules',
                 'detail': detail,
                 })
+        logger.info('noti-rule: %s at the end send noti to %s user(s)', rule_id, len(user_msg_list))
         send_notification(dtable_uuid, user_msg_list, dtable_server_access_token)
+        logger.info('noti-rule: %s send noti end', rule_id)
 
     else:
         return
@@ -529,6 +551,10 @@ def trigger_near_deadline_notification_rule(rule, db_session):
     view_id = trigger['view_id']
 
     if trigger['condition'] != CONDITION_NEAR_DEADLINE:
+        return
+
+    if not users and not users_column_key:
+        # no users need to be notified
         return
 
     dtable_server_api = DTableServerAPI('notification-rule', dtable_uuid, get_inner_dtable_server_url())
