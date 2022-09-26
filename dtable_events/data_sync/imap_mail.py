@@ -139,7 +139,6 @@ class ImapMail(object):
         email_dict['HTML Content'] = html_content
         email_dict['filename2content_id'] = content_info
         email_dict['Attachment'] = file_list
-        email_dict['UID'] = str(mail)
         email_dict['From'] = header_info.get('From')
         email_dict['To'] = header_info.get('To')
         email_dict['Subject'] = header_info.get('Subject')
