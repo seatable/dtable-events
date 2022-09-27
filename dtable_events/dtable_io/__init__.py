@@ -28,7 +28,7 @@ from dtable_events.dtable_io.excel import parse_excel_csv_to_json, import_excel_
     append_parsed_file_by_dtable_server, parse_append_excel_csv_upload_file_to_json, \
     import_excel_csv_add_table_by_dtable_server, update_parsed_file_by_dtable_server, \
     parse_update_excel_upload_excel_to_json, parse_update_csv_upload_csv_to_json, parse_and_import_excel_csv_to_dtable, \
-    parse_and_import_excel_csv_to_table, parse_and_update_file_to_table
+    parse_and_import_excel_csv_to_table, parse_and_update_file_to_table, parse_and_append_excel_csv_to_table
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.statistics.db import save_email_sending_records, batch_save_email_sending_records
 from dtable_events.data_sync.data_sync_utils import run_sync_emails
@@ -398,6 +398,21 @@ def update_table_via_excel_csv(username, repo_id, file_name, dtable_uuid, table_
         dtable_io_logger.exception('update file update to table failed. ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('update file %s.%s update to table success!' % (file_name, file_type))
+
+
+def append_excel_csv_to_table(username, repo_id, file_name, dtable_uuid, table_name, file_type):
+    """
+    parse excel or csv to json, then append excel or csv to table
+    """
+    dtable_io_logger.info('Start append excel or csv: %s.%s to table.' % (file_name, file_type))
+    try:
+        parse_and_append_excel_csv_to_table(username, repo_id, file_name, dtable_uuid, table_name, file_type)
+    except Exception as e:
+        dtable_io_logger.exception('append excel or csv to table failed. ERROR: {}'.format(e))
+        if str(e.args[0]) == 'Excel format error':
+            raise Exception('Excel format error')
+    else:
+        dtable_io_logger.info('append excel or csv %s.%s to table success!' % (file_name, file_type))
 
 
 def _get_upload_link_to_seafile(seafile_server_url, access_token, parent_dir="/"):

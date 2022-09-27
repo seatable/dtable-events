@@ -729,12 +729,11 @@ def upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, json_fil
     if res.status_code != 200:
         raise ConnectionError('failed to import excel json %s %s' % (dtable_uuid, res.text))
 
-def append_excel_json_to_dtable_server(username, dtable_uuid, json_file, table_name):
+def append_rows_by_dtable_server(username, dtable_uuid, rows_data, table_name):
     api_url = get_inner_dtable_server_url()
     url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/batch-append-rows/?from=dtable_events'
     dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
     headers = {'Authorization': 'Token ' + dtable_server_access_token}
-    rows_data = json.loads(json_file.decode())[0]['rows']
     offset = 0
     while True:
         rows = rows_data[offset: offset + 1000]
@@ -811,27 +810,6 @@ def update_rows_by_dtable_server(username, dtable_uuid, update_rows, table_name)
         res = requests.put(url, headers=headers, json=json_data, timeout=180)
         if res.status_code != 200:
             raise ConnectionError('failed to update excel json %s %s' % (dtable_uuid, res.text))
-        time.sleep(0.5)
-
-
-def update_append_excel_json_to_dtable_server(username, dtable_uuid, rows_data, table_name):
-    api_url = get_inner_dtable_server_url()
-    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/batch-append-rows/?from=dtable_events'
-    dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
-    headers = {'Authorization': 'Token ' + dtable_server_access_token}
-    offset = 0
-    while True:
-        rows = rows_data[offset: offset + 1000]
-        offset = offset + 1000
-        if not rows:
-            break
-        json_data = {
-            'table_name': table_name,
-            'rows': rows,
-        }
-        res = requests.post(url, headers=headers, json=json_data, timeout=180)
-        if res.status_code != 200:
-            raise ConnectionError('failed to append excel json %s %s' % (dtable_uuid, res.text))
         time.sleep(0.5)
 
 
