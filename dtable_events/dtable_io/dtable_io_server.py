@@ -6,7 +6,7 @@ from dtable_events.dtable_io.request_handler import app as application
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.dtable_io.task_message_manager import message_task_manager
 from dtable_events.dtable_io.task_data_sync_manager import data_sync_task_manager
-from dtable_events.dtable_io.task_email_fetch_manager import email_fetch_task_manager
+from dtable_events.dtable_io.task_plugin_email_manager import plugin_email_task_manager
 
 
 class DTableIOServer(Thread):
@@ -17,11 +17,11 @@ class DTableIOServer(Thread):
         task_manager.init(self._workers, self._file_server_port, self._io_task_timeout, config)
         message_task_manager.init(self._workers, self._file_server_port, self._io_task_timeout, config)
         data_sync_task_manager.init(self._workers, self._file_server_port, self._io_task_timeout, config)
-        email_fetch_task_manager.init(self._workers, self._file_server_port, self._io_task_timeout, config)
+        plugin_email_task_manager.init(self._workers, self._file_server_port, self._io_task_timeout, config)
         task_manager.run()
         message_task_manager.run()
         data_sync_task_manager.run()
-        email_fetch_task_manager.run()
+        plugin_email_task_manager.run()
         self._server = WSGIServer((self._host, int(self._port)), application)
 
     def _parse_config(self, config):

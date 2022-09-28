@@ -94,12 +94,11 @@ def update_email_thread_ids(dtable_db_api, email_table_name, send_date, email_li
     # get email rows in last 30 days and generate message-thread dict {`Message ID`: `Thread ID`}
     last_month_day = (str_2_datetime(send_date) - timedelta(days=30)).strftime('%Y-%m-%d')
     email_rows = query_table_rows(dtable_db_api, email_table_name,
-                                  fields='`UID`, `Message ID`, `Thread ID`',
+                                  fields='`Message ID`, `Thread ID`',
                                   conditions=f"Date>='{last_month_day}'")
     message2thread = {email['Message ID']: email['Thread ID'] for email in email_rows}
 
-    uid2message = {email['UID']: email['Message ID'] for email in email_rows}
-    email_list = [email for email in email_list if not uid2message.get(email['UID'])]
+    email_list = [email for email in email_list if not message2thread.get(email['Message ID'])]
 
     # no_thread_reply_message_ids is the list of new emails' reply-ids who are not in last 30 days
     no_thread_reply_message_ids = []

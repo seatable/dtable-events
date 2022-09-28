@@ -13,6 +13,7 @@ from selenium import webdriver
 from urllib import parse
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
+from datetime import datetime
 
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, SESSION_COOKIE_NAME, INNER_DTABLE_DB_URL
 from dtable_events.dtable_io.utils import setup_logger, \
@@ -30,7 +31,7 @@ from dtable_events.dtable_io.excel import parse_excel_csv_to_json, import_excel_
     parse_and_import_excel_csv_to_table, parse_and_update_file_to_table
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.statistics.db import save_email_sending_records, batch_save_email_sending_records
-from dtable_events.data_sync.data_sync_utils import run_sync_emails, check_imap_account, sync_email_to_table
+from dtable_events.data_sync.data_sync_utils import run_sync_emails
 from dtable_events.utils import get_inner_dtable_server_url
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.utils.dtable_server_api import DTableServerAPI
@@ -38,7 +39,7 @@ from dtable_events.utils.dtable_server_api import DTableServerAPI
 dtable_io_logger = setup_logger('dtable_events_io.log')
 dtable_message_logger = setup_logger('dtable_events_message.log')
 dtable_data_sync_logger = setup_logger('dtable_events_data_sync.log')
-dtable_email_fetch_logger = setup_logger('dtable_events_email_fetch.log')
+dtable_plugin_email_logger = setup_logger('dtable_events_plugin_email.log')
 
 def clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path):
     # delete tmp files/dirs
@@ -185,7 +186,7 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
     if can_use_automation_rules:
         dtable_io_logger.info('create auto rules from src dtable.')
         try:
-            create_auto_rules_from_src_dtable(username, workspace_id, dtable_uuid, db_session)
+            create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, org_id, dtable_uuid, db_session)
         except Exception as e:
             dtable_io_logger.error('create auto rules failed. ERROR: {}'.format(e))
         finally:
@@ -195,7 +196,7 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
     if can_use_workflows:
         dtable_io_logger.info('create workflows from src dtable.')
         try:
-            create_workflows_from_src_dtable(username, workspace_id, dtable_uuid, owner, db_session)
+            create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uuid, owner, org_id, db_session)
         except Exception as e:
             dtable_io_logger.error('create workflows failed. ERROR: {}'.format(e))
         finally:
@@ -751,11 +752,31 @@ def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token, session_id):
         driver.quit()
 
 
+def parse_view_rows(response_rows, head_list, summary_col_info, cols_without_hidden):
+    from dtable_events.dtable_io.excel import parse_grouped_rows
+    if response_rows and ('rows' in response_rows[0] or 'subgroups' in response_rows[0]):
+        first_col_name = head_list[0][0]
+        result_rows, grouped_row_num_map = parse_grouped_rows(response_rows, first_col_name, summary_col_info)
+    else:
+        result_rows, grouped_row_num_map = response_rows, {}
+
+    data_list = []
+    for row_from_server in result_rows:
+        row = []
+        for col in cols_without_hidden:
+            cell_data = row_from_server.get(col['name'], '')
+            row.append(cell_data)
+        data_list.append(row)
+    return data_list, grouped_row_num_map
+
+
 def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, permission, name):
     from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_view_rows_from_dtable_server, \
         convert_db_rows
     from dtable_events.dtable_io.excel import parse_grouped_rows, write_xls_with_type
     from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
+    from dtable_events.app.config import ARCHIVE_VIEW_EXPORT_ROW_LIMIT
+    import openpyxl
 
     target_dir = '/tmp/dtable-io/export-view-to-excel/' + dtable_uuid
     if not os.path.isdir(target_dir):
@@ -813,40 +834,55 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
         if summary_configs.get(col.get('key')):
             summary_col_info.update({col.get('name'): summary_configs.get(col.get('key'))})
 
-    res_json = get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission,
-                                                table_name, view_name)
-
+    sheet_name = table_name + ('_' + view_name if view_name else '')
+    excel_name = name + '_' + table_name + ('_' + view_name if view_name else '') + '.xlsx'
+    target_path = os.path.join(target_dir, excel_name)
+    wb = openpyxl.Workbook(write_only=True)
+    ws = wb.create_sheet(sheet_name)
     if is_archive:
-        archive_rows = res_json.get('rows', [])
-        archive_metadata = res_json.get('metadata')
-        response_rows = convert_db_rows(archive_metadata, archive_rows)
+        step = 10000
+        archive_view_export_row_limit = int(ARCHIVE_VIEW_EXPORT_ROW_LIMIT)
+        archive_metadata = []
+
+        for i in range(0, archive_view_export_row_limit, step):
+            limit = step if (archive_view_export_row_limit - i > step) else (archive_view_export_row_limit - i)
+
+            res_json = get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission,
+                                                        table_name, view_name, start=i, limit=limit)
+            rows = res_json.get('rows', [])
+
+            if i == 0:
+                archive_metadata = res_json.get('metadata')
+
+            response_rows = convert_db_rows(archive_metadata, rows)
+            data_list, grouped_row_num_map = parse_view_rows(response_rows, head_list, summary_col_info, cols_without_hidden)
+
+            row_num = i
+
+            try:
+                write_xls_with_type(head_list, data_list, grouped_row_num_map, email2nickname, ws, row_num)
+            except Exception as e:
+                dtable_io_logger.exception(e)
+                dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
+                return
+
+            if len(rows) < step:
+                break
+        wb.save(target_path)
     else:
+        res_json = get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission,
+                                                    table_name, view_name)
         response_rows = res_json.get('rows', [])
 
-    if response_rows and ('rows' in response_rows[0] or 'subgroups' in response_rows[0]):
-        first_col_name = head_list[0][0]
-        result_rows, grouped_row_num_map = parse_grouped_rows(response_rows, first_col_name, summary_col_info)
-    else:
-        result_rows, grouped_row_num_map = response_rows, {}
+        data_list, grouped_row_num_map = parse_view_rows(response_rows, head_list, summary_col_info, cols_without_hidden)
 
-    data_list = []
-    for row_from_server in result_rows:
-        row = []
-        for col in cols_without_hidden:
-            cell_data = row_from_server.get(col['name'], '')
-            row.append(cell_data)
-        data_list.append(row)
-
-    excel_name = name + '_' + table_name + ('_' + view_name if view_name else '') + '.xlsx'
-
-    try:
-        wb = write_xls_with_type(table_name + ('_' + view_name if view_name else ''), head_list, data_list,
-                                 grouped_row_num_map, email2nickname)
-    except Exception as e:
-        dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
-        return
-    target_path = os.path.join(target_dir, excel_name)
-    wb.save(target_path)
+        try:
+            write_xls_with_type(head_list, data_list, grouped_row_num_map, email2nickname, ws, 0)
+        except Exception as e:
+            dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
+            return
+        target_path = os.path.join(target_dir, excel_name)
+        wb.save(target_path)
 
 
 def convert_table_to_execl(dtable_uuid, table_id, username, permission, name):
@@ -854,6 +890,7 @@ def convert_table_to_execl(dtable_uuid, table_id, username, permission, name):
         convert_db_rows
     from dtable_events.dtable_io.excel import parse_grouped_rows, write_xls_with_type
     from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
+    import openpyxl
 
     target_dir = '/tmp/dtable-io/export-table-to-excel/' + dtable_uuid
     if not os.path.isdir(target_dir):
@@ -898,13 +935,16 @@ def convert_table_to_execl(dtable_uuid, table_id, username, permission, name):
             row.append(cell_data)
         data_list.append(row)
 
+    sheet_name = table_name
     excel_name = name + '_' + table_name + '.xlsx'
+    target_path = os.path.join(target_dir, excel_name)
+    wb = openpyxl.Workbook(write_only=True)
+    ws = wb.create_sheet(sheet_name)
     try:
-        wb = write_xls_with_type(table_name, head_list, data_list, {}, email2nickname)
+        write_xls_with_type(head_list, data_list, {}, email2nickname, ws, 0)
     except Exception as e:
         dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
         return
-    target_path = os.path.join(target_dir, excel_name)
     wb.save(target_path)
 
 def app_user_sync(dtable_uuid, app_name, app_id, table_name, table_id, username, config):
@@ -938,46 +978,79 @@ def email_sync(context, config):
             db_session.close()
 
 
-def fetch_email(context):
-    dtable_email_fetch_logger.info('Start fetch email to dtable %s, email table %s.' % (context.get('dtable_uuid'), context.get('email_table_name')))
+def plugin_email_send_email(context, config=None):
+    dtable_plugin_email_logger.info('Start send email by plugin %s, email table %s.' % (context.get('dtable_uuid'), context.get('table_info', {}).get('email_table_name')))
 
-    api_url = get_inner_dtable_server_url()
-
-    username = context.get('username')
     dtable_uuid = context.get('dtable_uuid')
+    username = context.get('username')
     repo_id = context.get('repo_id')
     workspace_id = context.get('workspace_id')
-    imap_host = context.get('imap_host')
-    email_user = context.get('email_user')
-    email_password = context.get('email_password')
-    imap_port = context.get('imap_port')
 
-    send_date = context.get('send_date')
-    email_table_name = context['email_table_name']
-    link_table_name = context['link_table_name']
-    message_id = context.get('message_id')
+    table_info = context.get('table_info')
+    email_info = context.get('email_info')
+    auth_info = context.get('auth_info')
 
+    thread_row_id = table_info.get('thread_row_id')
+    email_row_id = table_info.get('email_row_id')
+    email_table_name = table_info.get('email_table_name')
+    thread_table_name = table_info.get('thread_table_name')
+
+    # send email
+    result = send_email_msg(auth_info, email_info, username, config)
+
+    if result.get('err_msg'):
+        dtable_plugin_email_logger.error('plugin email send failed, email account: %s, username: %s', auth_info.get('host_user'), username)
+        return
+
+    send_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    api_url = get_inner_dtable_server_url()
     dtable_server_api = DTableServerAPI(username, dtable_uuid, api_url, server_url=DTABLE_WEB_SERVICE_URL,
                                         repo_id=repo_id, workspace_id=workspace_id)
 
-    dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
+    replied_email_row = dtable_server_api.get_row(email_table_name, email_row_id)
 
-    imap, error_msg = check_imap_account(imap_host, email_user, email_password, port=imap_port, return_imap=True)
+    thread_id = replied_email_row.get('Thread ID')
 
-    if error_msg:
-        dtable_email_fetch_logger.error('imap account error: %s' % error_msg)
+    html_message = email_info.get('html_message')
+    if html_message:
+        html_message = '```' + html_message + '```'
+
+    email = {
+        'cc': email_info.get('copy_to'),
+        'From': email_info.get('from'),
+        'Message ID': email_info.get('message_id'),
+        'Reply to Message ID': email_info.get('in_reply_to'),
+        'To': email_info.get('send_to'),
+        'Subject': email_info.get('subject'),
+        'Content': email_info.get('text_message'),
+        'HTML Content': html_message,
+        'Date': send_time,
+        'Thread ID': thread_id,
+    }
+
+    metadata = dtable_server_api.get_metadata()
+
+    tables = metadata.get('tables', [])
+    email_table_id = ''
+    link_table_id = ''
+    for table in tables:
+        if table.get('name') == email_table_name:
+            email_table_id = table.get('_id')
+        if table.get('name') == thread_table_name:
+            link_table_id = table.get('_id')
+        if email_table_id and link_table_id:
+            break
+    if not email_table_id or not link_table_id:
+        dtable_plugin_email_logger.error('email table: %s or link table: %s not found', email_table_name, thread_table_name)
         return
 
-    try:
-        email = imap.search_email_by_message_id(message_id)
-    except Exception as e:
-        dtable_email_fetch_logger.exception('fetch email ERROR: {}'.format(e))
-        return
-    else:
-        dtable_email_fetch_logger.info('fetch email success, email user: %s' % context.get('email_user'))
+    email_link_id = dtable_server_api.get_column_link_id(email_table_name, 'Threads')
 
-    try:
-        sync_email_to_table(dtable_server_api, dtable_db_api, email_table_name, link_table_name, send_date, [email])
-    except Exception as e:
-        dtable_email_fetch_logger.exception(e)
-        dtable_email_fetch_logger.error('email: %s sync and update link error: %s', email_user, e)
+    email_row = dtable_server_api.append_row(email_table_name, email)
+    email_row_id = email_row.get('_id')
+    other_rows_ids = [thread_row_id]
+
+    dtable_server_api.update_link(email_link_id, email_table_id, link_table_id, email_row_id, other_rows_ids)
+
+    dtable_server_api.update_row(thread_table_name, thread_row_id, {'Last Updated': send_time})

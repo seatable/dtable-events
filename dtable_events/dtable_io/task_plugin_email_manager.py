@@ -3,7 +3,7 @@ import threading
 import time
 
 
-class TaskEmailFetchManager(object):
+class TaskPluginEmailManager(object):
 
     def __init__(self):
         self.tasks_map = {}
@@ -22,11 +22,11 @@ class TaskEmailFetchManager(object):
     def is_valid_task_id(self, task_id):
         return task_id in self.tasks_map.keys()
 
-    def add_fetch_email_task(self, context):
-        from dtable_events.dtable_io import fetch_email
+    def add_send_email_task(self, context):
+        from dtable_events.dtable_io import plugin_email_send_email
 
         task_id = str(int(time.time() * 1000))
-        task = (fetch_email, (context,))
+        task = (plugin_email_send_email, (context, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
 
@@ -40,7 +40,7 @@ class TaskEmailFetchManager(object):
         return False
 
     def handle_task(self):
-        from dtable_events.dtable_io import dtable_email_fetch_logger
+        from dtable_events.dtable_io import dtable_plugin_email_logger
 
         while True:
             try:
@@ -48,14 +48,14 @@ class TaskEmailFetchManager(object):
             except queue.Empty:
                 continue
             except Exception as e:
-                dtable_email_fetch_logger.error(e)
+                dtable_plugin_email_logger.error(e)
                 continue
 
             try:
                 task = self.tasks_map[task_id]
                 task_info = task_id + ' ' + str(task[0])
                 self.current_task_info[task_id] = task_info
-                dtable_email_fetch_logger.info('Run task: %s' % task_info)
+                dtable_plugin_email_logger.info('Run task: %s' % task_info)
                 start_time = time.time()
 
                 # run
@@ -63,17 +63,18 @@ class TaskEmailFetchManager(object):
                 self.tasks_map[task_id] = 'success'
 
                 finish_time = time.time()
-                dtable_email_fetch_logger.info('Run task success: %s cost %ds \n' % (task_info, int(finish_time - start_time)))
+                dtable_plugin_email_logger.info('Run task success: %s cost %ds \n' % (task_info, int(finish_time - start_time)))
                 self.current_task_info.pop(task_id, None)
             except Exception as e:
-                dtable_email_fetch_logger.error('Failed to handle task %s, error: %s \n' % (task_id, e))
+                dtable_plugin_email_logger.exception(e)
+                dtable_plugin_email_logger.error('Failed to handle task %s, error: %s \n' % (task_id, e))
                 self.tasks_map.pop(task_id, None)
                 self.current_task_info.pop(task_id, None)
 
     def run(self):
         thread_num = self.conf['workers']
         for i in range(thread_num):
-            t_name = 'EmailFetchTaskManager Thread-' + str(i)
+            t_name = 'PluginEmailTaskManager Thread-' + str(i)
             t = threading.Thread(target=self.handle_task, name=t_name)
             t.setDaemon(True)
             t.start()
@@ -82,4 +83,4 @@ class TaskEmailFetchManager(object):
         self.tasks_map.pop(task_id, None)
 
 
-email_fetch_task_manager = TaskEmailFetchManager()
+plugin_email_task_manager = TaskPluginEmailManager()
