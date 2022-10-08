@@ -12,7 +12,7 @@ from dtable_events import filter2sql
 from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL
 from dtable_events.notification_rules.utils import get_nickname_by_usernames
 from dtable_events.utils import is_valid_email, uuid_str_to_36_chars, get_inner_dtable_server_url
-from dtable_events.utils.constants import ColumnTypes
+from dtable_events.utils.constants import ColumnTypes, FormulaResultType
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 from dtable_events.utils.dtable_db_api import DTableDBAPI
@@ -106,21 +106,33 @@ def deal_invalid_rule(rule_id, db_session):
 
 def list_rows_near_deadline_with_dtable_db(dtable_metadata, table_id, view_id, date_column_name, alarm_days, dtable_db_api):
     """
-    return: rows -> list or None, metate -> dict or None
+    return: rows -> list or None, metate -> dict or None, is_valid -> True/False
     """
-    table, view = None, None
+    table, view, date_column = None, None, None
     for tmp_table in dtable_metadata['tables']:
         if tmp_table['_id'] == table_id:
             table = tmp_table
             break
     if not table:
-        return [], None
+        return [], None, False
     for tmp_view in table.get('views', []):
         if tmp_view['_id'] == view_id:
             view = tmp_view
             break
     if not view:
-        return [], None
+        return [], None, False
+    for tmp_column in table['columns']:
+        if tmp_column['name'] == date_column_name:
+            date_column = tmp_column
+            break
+    if not date_column:
+        return [], None, False
+    if date_column['type'] != ColumnTypes.DATE:
+        if date_column['type'] not in [ColumnTypes.FORMULA, ColumnTypes.LINK_FORMULA]:
+            return [], None, False
+        column_data = date_column.get('data') or {}
+        if column_data.get('result_type') != FormulaResultType.DATE:
+            return [], None, False
     filters = view.get('filters', [])
     filter_conjunction = view.get('filter_conjunction', 'And')
     filter_conditions = {
@@ -131,12 +143,12 @@ def list_rows_near_deadline_with_dtable_db(dtable_metadata, table_id, view_id, d
     for item in filters:
         if item.get('filter_predicate') == 'include_me':
             if filter_conjunction == 'And':
-                return [], None
+                return [], None, True
             else:
                 continue
         elif item.get('filter_predicate') == 'is_current_user_ID':
             if filter_conjunction == 'And':
-                return [], None
+                return [], None, True
             else:
                 continue
         new_filters.append(item)
@@ -152,7 +164,7 @@ def list_rows_near_deadline_with_dtable_db(dtable_metadata, table_id, view_id, d
                 "filter_term_modifier": "number_of_days_from_now"
             }, {
                 "column_name": date_column_name,
-                "filter_predicate": "is_after",
+                "filter_predicate": "is_on_or_after",
                 "filter_term": "",
                 "filter_term_modifier": "today"
             }
@@ -162,7 +174,8 @@ def list_rows_near_deadline_with_dtable_db(dtable_metadata, table_id, view_id, d
     filter_conditions['group_conjunction'] = 'And'
     sql = filter2sql(table['name'], table['columns'], filter_conditions, by_group=True)
     logger.debug('sql: %s', sql)
-    return dtable_db_api.query_and_metadata(sql, convert=False)
+    rows, metadata = dtable_db_api.query_and_metadata(sql, convert=False)
+    return rows, metadata, True
 
 
 def _get_geolocation_infos(cell_value_dict):
@@ -582,11 +595,14 @@ def trigger_near_deadline_notification_rule(rule, db_session):
 
     dtable_server_access_token = get_dtable_server_token(dtable_uuid)
     try:
-        rows_near_deadline, sql_metadata = list_rows_near_deadline_with_dtable_db(dtable_metadata, table_id, view_id, date_column_name, alarm_days, dtable_db_api)
+        rows_near_deadline, sql_metadata, is_valid = list_rows_near_deadline_with_dtable_db(dtable_metadata, table_id, view_id, date_column_name, alarm_days, dtable_db_api)
     except Exception as e:
         logger.exception(e)
         logger.error('dtable: %s list rows_near_deadline failed. error: %s', dtable_uuid, e)
         return
+
+    if is_valid is False:
+        deal_invalid_rule(rule_id, db_session)
 
     if not rows_near_deadline:
         return
