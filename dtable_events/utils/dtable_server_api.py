@@ -106,7 +106,7 @@ class DTableServerAPI(object):
         data = parse_response(response)
         return data.get('rows')
 
-    def get_row(self, table_name, row_id):
+    def get_row(self, table_name, row_id, convert_link_id=False):
         """
         :param table_name: str
         :param row_id: str
@@ -116,6 +116,7 @@ class DTableServerAPI(object):
         url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/rows/' + row_id + '/?from=dtable_events'
         params = {
             'table_name': table_name,
+            'convert_link_id': convert_link_id
         }
         response = requests.get(url, params=params, headers=self.headers, timeout=self.timeout)
         data = parse_response(response)

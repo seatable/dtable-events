@@ -13,7 +13,7 @@ from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY,
     SEATABLE_FAAS_URL
 from dtable_events.automations.models import BoundThirdPartyAccounts
 from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg
-from dtable_events.notification_rules.notification_rules_utils import fill_msg_blanks_with_converted_row as fill_msg_blanks, \
+from dtable_events.notification_rules.notification_rules_utils import fill_msg_blanks_with_converted_row, \
     send_notification
 from dtable_events.utils import is_valid_email, get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes
@@ -274,7 +274,7 @@ class BaseContext:
             logger.error('dtable: %s table: %s not found', self.dtable_uuid, table_id)
             return None
         try:
-            converted_row = self.dtable_server_api.get_row(table['name'], row_id)
+            converted_row = self.dtable_server_api.get_row(table['name'], row_id, convert_link_id=True)
             if not converted_row:
                 logger.error('dtable: %s table: %s row: %s not found or parse error', self.dtable_uuid, table_id, row_id)
                 return None
@@ -311,7 +311,7 @@ class BaseAction:
         if not column_blanks:
             return msg
         try:
-            return fill_msg_blanks(msg, column_blanks, col_name_dict, converted_row, self.context.db_session, self.context.dtable_metadata)
+            return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, converted_row, self.context.db_session, self.context.dtable_metadata)
         except Exception as e:
             logger.exception(e)
             logger.error('msg: %s col_name_dict: %s column_blanks: %s fill error: %s', msg, col_name_dict, column_blanks, e)
@@ -429,8 +429,8 @@ class NotifyAction(BaseAction):
     def get_users(self, converted_row):
         result_users = []
         result_users.extend(self.users or [])
-        if converted_row and self.users_column_key in converted_row:
-            users_cell_value = converted_row[self.users_column_key]
+        if converted_row and self.users_column and self.users_column['name'] in converted_row:
+            users_cell_value = converted_row[self.users_column['name']]
             if isinstance(users_cell_value, list):
                 result_users.extend(users_cell_value)
             elif isinstance(users_cell_value, str):

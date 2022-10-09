@@ -17,7 +17,7 @@ from dtable_events.cache import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, \
     SEATABLE_FAAS_AUTH_TOKEN, SEATABLE_FAAS_URL
 from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg, batch_send_email_msg
-from dtable_events.notification_rules.notification_rules_utils import fill_msg_blanks_with_converted_row as fill_msg_blanks, \
+from dtable_events.notification_rules.notification_rules_utils import fill_msg_blanks_with_converted_row, \
     send_notification
 from dtable_events.utils import utc_to_tz, uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes
@@ -141,7 +141,7 @@ class UpdateAction(BaseAction):
     def _fill_msg_blanks(self, row, text, blanks):
         col_name_dict = self.col_name_dict
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks(text, blanks, col_name_dict, row, db_session, dtable_metadata)
+        return fill_msg_blanks_with_converted_row(text, blanks, col_name_dict, row, db_session, dtable_metadata)
 
     def _init_updates(self):
         src_row = self.data['converted_row']
@@ -402,7 +402,7 @@ class NotifyAction(BaseAction):
     def _fill_msg_blanks(self, row):
         msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks(msg, column_blanks, col_name_dict, row, db_session, dtable_metadata)
+        return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, row, db_session, dtable_metadata)
 
     def per_update_notify(self):
         dtable_uuid, row, raw_row = self.auto_rule.dtable_uuid, self.data['converted_row'], self.data['row']
@@ -565,7 +565,7 @@ class SendWechatAction(BaseAction):
     def _fill_msg_blanks(self, row):
         msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks(msg, column_blanks, col_name_dict, row, db_session, dtable_metadata)
+        return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, row, db_session, dtable_metadata)
 
     def per_update_notify(self):
         row = self.data['converted_row']
@@ -643,7 +643,7 @@ class SendDingtalkAction(BaseAction):
     def _fill_msg_blanks(self, row):
         msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks(msg, column_blanks, col_name_dict, row, db_session, dtable_metadata)
+        return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, row, db_session, dtable_metadata)
 
     def per_update_notify(self):
         row = self.data['converted_row']
@@ -779,7 +779,7 @@ class SendEmailAction(BaseAction):
     def _fill_msg_blanks(self, row, text, blanks):
         col_name_dict = self.col_name_dict
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks(text, blanks, col_name_dict, row, db_session, dtable_metadata)
+        return fill_msg_blanks_with_converted_row(text, blanks, col_name_dict, row, db_session, dtable_metadata)
 
     def per_update_notify(self):
         row = self.data['converted_row']
@@ -1209,7 +1209,7 @@ class AddRecordToOtherTableAction(BaseAction):
     def _fill_msg_blanks(self, row, text, blanks):
         col_name_dict = self.col_name_dict
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks(text, blanks, col_name_dict, row, db_session, dtable_metadata)
+        return fill_msg_blanks_with_converted_row(text, blanks, col_name_dict, row, db_session, dtable_metadata)
 
     def format_time_by_offset(self, offset, format_length):
         cur_datetime = datetime.now()
