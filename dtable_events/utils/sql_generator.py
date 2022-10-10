@@ -13,6 +13,14 @@ from dtable_events.utils.constants import FilterPredicateTypes, FormulaResultTyp
 
 logger = logging.getLogger(__name__)
 
+DTABLE_DB_SUMMARY_METHOD = {
+  'MEAN': 'avg',
+  'MAX': 'MAX',
+  'SUM': 'SUM',
+  'MIN': 'MIN',
+  'COUNT': 'COUNT'
+}
+
 class Operator(object):
 
     def __init__(self, column, filter_item):
@@ -713,7 +721,7 @@ class ArrayOperator(object):
         operator = _get_operator_by_type(array_type)
         return operator(linked_column, filter_item)
 
-class FormularOperator(object):
+class FormulaOperator(object):
     def __new__(cls, column, filter_item):
         column_data = column.get('data', {})
         column_name = column.get('name', '')
@@ -741,16 +749,16 @@ class FormularOperator(object):
 
 
 def _filter2sqlslice(operator):
-    support_fitler_predicates = operator.SUPPORT_FILTER_PREDICATE
+    support_filter_predicates = operator.SUPPORT_FILTER_PREDICATE
     filter_predicate = operator.filter_predicate
-    if not operator.filter_predicate in support_fitler_predicates:
+    if not operator.filter_predicate in support_filter_predicates:
         raise ValueError(
             "%(column_type)s type column '%(column_name)s' does not support '%(value)s', available predicates are %(available_predicates)s" % (
             {
                 'column_type': operator.column_type,
                 'column_name': operator.column_name,
                 'value': operator.filter_predicate,
-                'available_predicates': support_fitler_predicates,
+                'available_predicates': support_filter_predicates,
             })
         )
 
@@ -863,9 +871,129 @@ def _get_operator_by_type(column_type):
         ColumnTypes.FORMULA,
         ColumnTypes.LINK_FORMULA,
     ]:
-        return FormularOperator
+        return FormulaOperator
 
     return None
+
+class StatisticSQLGenerator(object):
+
+    def __init__(self, table, statistic_type, statistic):
+        self.statistic_type = statistic_type
+        self.table_name = table.get('name', '')
+        self.statistic = statistic
+        
+        columns = table.get('columns', [])
+        self.column_key_map = {}
+        for column in columns:
+            self.column_key_map[column['key']] = column
+
+        views = table.get('views', [])
+        view_id = statistic.get('view_id', '')
+        try:
+            view = [view for view in views if view['_id'] == view_id][0]
+        except Exception as e:
+            view = { 'filters': [], 'filter_conjunction': 'And' }
+
+        self.filters = view.get('filters', [])
+        filter_conjunction = view.get('filter_conjunction', 'And')
+        self.filter_conjunction = filter_conjunction.upper()
+        self.filter_sql = self._view_filter_2_sql()
+
+    def _get_column_by_key(self, column_key):
+        return self.column_key_map.get(column_key, None)
+
+    def _view_filter_2_sql(self):
+        if not self.filters:
+            return ''
+        
+        filter_string_list = []
+        filter_sql = ''
+        filter_conjunction_split = " %s " % self.filter_conjunction
+        for filter_item in self.filters:
+            column_key = filter_item.get('column_key')
+            column = column_key and self._get_column_by_key(column_key)
+            column_type = column.get('type')
+            operator = _get_operator_by_type(column_type)(column, filter_item)
+            sql_condition = _filter2sqlslice(operator)
+            filter_string_list.append(sql_condition)
+        if filter_string_list:
+            filter_sql = "WHERE %s" % (
+                filter_conjunction_split.join(filter_string_list)
+            )
+        return filter_sql
+
+    def _statistic_column_name_to_sql(self, column, group_by):
+        column_name = column.get('name', '')
+        valid_column_name = '`%s`' % column_name
+        type = column.get('type', '')
+        if type == ColumnTypes.CTIME or type == ColumnTypes.MTIME or type == ColumnTypes.DATE:
+            date_granularity = group_by.get('date_granularity', '')
+            date_granularity = date_granularity.upper()
+            if date_granularity == 'DAY':
+                return 'ISODATE(%s)' % valid_column_name
+            if date_granularity == 'WEEK':
+                return 'ISODATE(STARTOFWEEK(%s, monday"))' % valid_column_name
+            if date_granularity == 'MONTH':
+                return 'ISOMONTH(%s)' % valid_column_name
+            if date_granularity == 'QUARTER':
+                return 'CONCATENATE(year(%s), "-Q", quarter(%s))' % valid_column_name, valid_column_name
+            if date_granularity == 'YEAR':
+                return 'YEAR(%s)' % valid_column_name
+            if date_granularity == 'MAX':
+                return 'MAX(%s)' % valid_column_name
+            if date_granularity == 'MIN':
+                return 'MIN(%s)' % valid_column_name
+            return 'ISOMONTH(%s)' % valid_column_name
+        else:
+            return valid_column_name
+
+    def _summary_column_2_sql(self, summary_method, column):
+        column_name = column.get('name', '')
+        return '%s(`%s`)' % (DTABLE_DB_SUMMARY_METHOD[summary_method], column_name)
+            
+    def _basic_statistic_2_sql(self):
+        x_axis_column_key = self.statistic.get('x_axis_column_key', '')
+        y_axis_summary_type = self.statistic.get('y_axis_summary_type', '')
+        y_axis_summary_method = self.statistic.get('y_axis_summary_method', '')
+        y_axis_column_key = self.statistic.get('y_axis_column_key', '')
+        x_axis_date_granularity = self.statistic.get('x_axis_date_granularity', '')
+        x_axis_geolocation_granularity = self.statistic.get('x_axis_geolocation_granularity', '')
+
+        group_by_column = self._get_column_by_key(x_axis_column_key)
+        if not group_by_column:
+            return ''
+        
+        group_by_column_name = self._statistic_column_name_to_sql(group_by_column,{'date_granularity': x_axis_date_granularity, 'geolocation_granularity': x_axis_geolocation_granularity })
+        summary_type = y_axis_summary_type.upper()
+
+        if summary_type == 'COUNT':
+            summary_column_name = self._summary_column_2_sql('COUNT', group_by_column)
+        else:
+            summary_column = self._get_column_by_key(y_axis_column_key)
+            if summary_column:
+                summary_method = y_axis_summary_method.upper()
+                summary_column_name = self._summary_column_2_sql(summary_method, summary_column)
+            else:
+                summary_column_name = None
+        
+        if summary_column_name:
+            return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (group_by_column_name, summary_column_name, self.table_name, self.filter_sql, group_by_column_name)
+        else:
+            return 'SELECT %s FROM %s %s GROUP BY % LIMIT 0, 5000`' % (group_by_column_name, self.table_name, self.filter_sql, group_by_column_name)
+
+    def _grouping_statistic_2_sql(self):
+        return ''
+
+    def to_sql(self):
+        if self.statistic_type == 'chart_bar':
+            column_groupby_column_key = self.statistic.get('column_groupby_column_key', '')
+            column_groupby_multiple_numeric_column = self.statistic.get('column_groupby_multiple_numeric_column', '')
+            if not column_groupby_column_key and not column_groupby_multiple_numeric_column:
+                return self._basic_statistic_2_sql()
+            else:
+                return self._grouping_statistic_2_sql()
+        else:
+            return ''
 
 
 class BaseSQLGenerator(object):
@@ -1062,3 +1190,8 @@ def db_query(dtable_uuid, sql):
     except Exception as e:
         logger.error(e)
         return []
+
+
+def statistic2sql(table, statistic_type, statistic):
+    sql_generator = StatisticSQLGenerator(table, statistic_type, statistic)
+    return sql_generator.to_sql()
