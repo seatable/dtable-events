@@ -877,9 +877,11 @@ def _get_operator_by_type(column_type):
 
 class StatisticSQLGenerator(object):
 
-    def __init__(self, table, statistic_type, statistic):
+    def __init__(self, table, statistic_type, statistic, username, id_in_org):
+        self.error = ''
         self.statistic_type = statistic_type
-        self.table_name = table.get('name', '')
+        table_name = table.get('name', '')
+        self.table_name = '`%s`' % table_name
         self.statistic = statistic
         
         columns = table.get('columns', [])
@@ -892,9 +894,18 @@ class StatisticSQLGenerator(object):
         try:
             view = [view for view in views if view['_id'] == view_id][0]
         except Exception as e:
+            self.error = 'View not found'
             view = { 'filters': [], 'filter_conjunction': 'And' }
 
-        self.filters = view.get('filters', [])
+        filters = view.get('filters', [])
+        if filters:
+            for item in filters:
+                if item.get('filter_predicate') == 'include_me':
+                    item['filter_term'].append(username)
+                if item.get('filter_predicate') == 'is_current_user_ID':
+                    item['filter_term'] = id_in_org
+        self.filters = filters
+
         filter_conjunction = view.get('filter_conjunction', 'And')
         self.filter_conjunction = filter_conjunction.upper()
         self.filter_sql = self._view_filter_2_sql()
@@ -908,17 +919,18 @@ class StatisticSQLGenerator(object):
         
         filter_string_list = []
         filter_sql = ''
-        filter_conjunction_split = " %s " % self.filter_conjunction
+        filter_conjunction = " %s " % self.filter_conjunction
         for filter_item in self.filters:
             column_key = filter_item.get('column_key')
             column = column_key and self._get_column_by_key(column_key)
-            column_type = column.get('type')
-            operator = _get_operator_by_type(column_type)(column, filter_item)
-            sql_condition = _filter2sqlslice(operator)
-            filter_string_list.append(sql_condition)
+            if column:
+                column_type = column.get('type')
+                operator = _get_operator_by_type(column_type)(column, filter_item)
+                sql_condition = _filter2sqlslice(operator)
+                filter_string_list.append(sql_condition)
         if filter_string_list:
             filter_sql = "WHERE %s" % (
-                filter_conjunction_split.join(filter_string_list)
+                filter_conjunction.join(filter_string_list)
             )
         return filter_sql
 
@@ -961,10 +973,12 @@ class StatisticSQLGenerator(object):
 
         group_by_column = self._get_column_by_key(x_axis_column_key)
         if not group_by_column:
+            self.error = 'Group by column not found'
             return ''
         
-        group_by_column_name = self._statistic_column_name_to_sql(group_by_column,{'date_granularity': x_axis_date_granularity, 'geolocation_granularity': x_axis_geolocation_granularity })
+        groupby_column_name = self._statistic_column_name_to_sql(group_by_column,{'date_granularity': x_axis_date_granularity, 'geolocation_granularity': x_axis_geolocation_granularity })
         summary_type = y_axis_summary_type.upper()
+        summary_column_name = None
 
         if summary_type == 'COUNT':
             summary_column_name = self._summary_column_2_sql('COUNT', group_by_column)
@@ -973,27 +987,77 @@ class StatisticSQLGenerator(object):
             if summary_column:
                 summary_method = y_axis_summary_method.upper()
                 summary_column_name = self._summary_column_2_sql(summary_method, summary_column)
-            else:
-                summary_column_name = None
         
         if summary_column_name:
-            return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (group_by_column_name, summary_column_name, self.table_name, self.filter_sql, group_by_column_name)
-        else:
-            return 'SELECT %s FROM %s %s GROUP BY % LIMIT 0, 5000`' % (group_by_column_name, self.table_name, self.filter_sql, group_by_column_name)
+            return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, summary_column_name, self.table_name, self.filter_sql, groupby_column_name)
+        return 'SELECT %s FROM %s %s GROUP BY % LIMIT 0, 5000`' % (groupby_column_name, self.table_name, self.filter_sql, groupby_column_name)
 
     def _grouping_statistic_2_sql(self):
-        return ''
+        x_axis_column_key = self.statistic.get('x_axis_column_key', '')
+        y_axis_summary_type = self.statistic.get('y_axis_summary_type', '')
+        y_axis_summary_method = self.statistic.get('y_axis_summary_method', '')
+        y_axis_column_key = self.statistic.get('y_axis_column_key', '')
+        x_axis_date_granularity = self.statistic.get('x_axis_date_granularity', '')
+        x_axis_geolocation_granularity = self.statistic.get('x_axis_geolocation_granularity', '')
+        column_groupby_column_key = self.statistic.get('column_groupby_column_key', '')
+        column_groupby_date_granularity = self.statistic.get('column_groupby_date_granularity', '')
+        column_groupby_geolocation_granularity = self.statistic.get('column_groupby_geolocation_granularity', '')
+        column_groupby_multiple_numeric_column = self.statistic.get('column_groupby_multiple_numeric_column', '')
+        column_groupby_numeric_column_keys = self.statistic.get('column_groupby_numeric_column_keys', []) or []
+        group_by_column = self._get_column_by_key(x_axis_column_key)
+        if not group_by_column:
+            self.error = 'Group by column not found'
+            return ''
+        
+        groupby_column_name = self._statistic_column_name_to_sql(group_by_column, { 'date_granularity': x_axis_date_granularity, 'geolocation_granularity': x_axis_geolocation_granularity })
+        summary_type = y_axis_summary_type.upper()
+
+        if summary_type == 'COUNT':
+            column_groupby_column = self._get_column_by_key(column_groupby_column_key)
+            if not column_groupby_column:
+                return self._basic_statistic_2_sql()
+            column_groupby_column_name = self._statistic_column_name_to_sql(column_groupby_column, { 'date_granularity': column_groupby_date_granularity, 'geolocation_granularity': column_groupby_geolocation_granularity })
+            summary_column_name = self._summary_column_2_sql('COUNT', group_by_column)
+            return 'SELECT %s, %s, %s FROM %s %s GROUP BY %s, %s LIMIT 0, 5000' % (groupby_column_name, column_groupby_column_name, summary_column_name, self.table_name, self.filter_sql, groupby_column_name, column_groupby_column_name)
+        
+        summary_method = y_axis_summary_method.upper()
+        if column_groupby_multiple_numeric_column:
+            column_groupby_numeric_columns = column_groupby_numeric_column_keys
+            column_groupby_numeric_columns.insert(0, column_groupby_multiple_numeric_column)
+            column_groupby_numeric_columns = list(set(column_groupby_numeric_columns))
+            column_groupby_numeric_columns = [self._get_column_by_key(column_key) for column_key in column_groupby_numeric_columns if column_key]
+            column_groupby_numeric_column_names = [self._summary_column_2_sql(summary_method, column) for column in column_groupby_numeric_columns if column]
+            column_groupby_numeric_column_names_string = ', '.join(column_groupby_numeric_column_names)
+            return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, column_groupby_numeric_column_names_string, self.table_name, self.filter_sql, groupby_column_name)
+
+        column_groupby_column = self._get_column_by_key(column_groupby_column_key)
+        summary_column = self._get_column_by_key(y_axis_column_key)
+        if not summary_column:
+            return self._basic_statistic_2_sql()
+
+        summary_column_name = self._summary_column_2_sql(summary_method, summary_column)
+        if not column_groupby_column:
+            return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, summary_column_name, self.table_name, self.filter_sql, groupby_column_name)
+        
+        column_groupby_column_name = self._statistic_column_name_to_sql(column_groupby_column, { 'date_granularity': column_groupby_date_granularity, 'geolocation_granularity': column_groupby_geolocation_granularity })
+        return 'SELECT %s, %s, %s FROM %s %s GROUP BY %s, %s LIMIT 0, 5000' % (groupby_column_name, column_groupby_column_name, summary_column_name, self.table_name, self.filter_sql, groupby_column_name, column_groupby_column_name)
 
     def to_sql(self):
+        if self.error:
+            return self.error, ''
+
         if self.statistic_type == 'chart_bar':
             column_groupby_column_key = self.statistic.get('column_groupby_column_key', '')
             column_groupby_multiple_numeric_column = self.statistic.get('column_groupby_multiple_numeric_column', '')
             if not column_groupby_column_key and not column_groupby_multiple_numeric_column:
-                return self._basic_statistic_2_sql()
-            else:
-                return self._grouping_statistic_2_sql()
-        else:
-            return ''
+                sql = self._basic_statistic_2_sql()
+                return self.error, sql
+            
+            sql = self._grouping_statistic_2_sql()
+            return self.error, sql
+        
+        return '', ''
+
 
 
 class BaseSQLGenerator(object):
@@ -1192,6 +1256,6 @@ def db_query(dtable_uuid, sql):
         return []
 
 
-def statistic2sql(table, statistic_type, statistic):
-    sql_generator = StatisticSQLGenerator(table, statistic_type, statistic)
+def statistic2sql(table, statistic_type, statistic, username='', id_in_org=''):
+    sql_generator = StatisticSQLGenerator(table, statistic_type, statistic, username, id_in_org)
     return sql_generator.to_sql()
