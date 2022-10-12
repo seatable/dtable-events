@@ -16,7 +16,7 @@ from seaserv import seafile_api
 from dtable_events.automations.models import get_third_party_account
 from dtable_events.app.event_redis import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, \
-    SEATABLE_FAAS_AUTH_TOKEN, SEATABLE_FAAS_URL
+    SEATABLE_FAAS_AUTH_TOKEN, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL
 from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg, batch_send_email_msg
 from dtable_events.notification_rules.notification_rules_utils import fill_msg_blanks_with_converted_row, \
     send_notification
@@ -25,6 +25,7 @@ from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, get_inner_
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI, WrongFilterException
 from dtable_events.utils.dtable_web_api import DTableWebAPI
+from dtable_events.utils.dtable_db_api import DTableDBAPI
 
 
 logger = logging.getLogger(__name__)
@@ -1436,6 +1437,7 @@ class AutomationRule:
         self.db_session = db_session
 
         self.dtable_server_api = DTableServerAPI('Automation Rule', str(UUID(self.dtable_uuid)), get_inner_dtable_server_url())
+        self.dtable_db_api = DTableDBAPI('Automation Rule', str(UUID(self.dtable_uuid)), INNER_DTABLE_DB_URL)
         self.dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
 
         self.table_id = None
