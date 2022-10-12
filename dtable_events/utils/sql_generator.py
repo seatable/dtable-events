@@ -9,12 +9,14 @@ from dateutil.relativedelta import relativedelta
 
 from dtable_events.app.config import DTABLE_PRIVATE_KEY, INNER_DTABLE_DB_URL
 from dtable_events.utils import uuid_str_to_36_chars
-from dtable_events.utils.constants import FilterPredicateTypes, FormulaResultType, FilterTermModifier, ColumnTypes, DurationFormatsType
+from dtable_events.utils.constants import FilterPredicateTypes, FormulaResultType, FilterTermModifier, ColumnTypes, \
+    DurationFormatsType, StatisticType
+from dtable_events.utils.dtable_column_utils import is_numeric_column, is_date_column
 
 logger = logging.getLogger(__name__)
 
 DTABLE_DB_SUMMARY_METHOD = {
-  'MEAN': 'avg',
+  'MEAN': 'AVG',
   'MAX': 'MAX',
   'SUM': 'SUM',
   'MIN': 'MIN',
@@ -962,7 +964,7 @@ class StatisticSQLGenerator(object):
     def _summary_column_2_sql(self, summary_method, column):
         column_name = column.get('name', '')
         return '%s(`%s`)' % (DTABLE_DB_SUMMARY_METHOD[summary_method], column_name)
-            
+
     def _basic_statistic_2_sql(self):
         x_axis_column_key = self.statistic.get('x_axis_column_key', '')
         y_axis_summary_type = self.statistic.get('y_axis_summary_type', '')
@@ -971,17 +973,17 @@ class StatisticSQLGenerator(object):
         x_axis_date_granularity = self.statistic.get('x_axis_date_granularity', '')
         x_axis_geolocation_granularity = self.statistic.get('x_axis_geolocation_granularity', '')
 
-        group_by_column = self._get_column_by_key(x_axis_column_key)
-        if not group_by_column:
+        groupby_column = self._get_column_by_key(x_axis_column_key)
+        if not groupby_column:
             self.error = 'Group by column not found'
             return ''
         
-        groupby_column_name = self._statistic_column_name_to_sql(group_by_column,{'date_granularity': x_axis_date_granularity, 'geolocation_granularity': x_axis_geolocation_granularity })
+        groupby_column_name = self._statistic_column_name_to_sql(groupby_column, {'date_granularity': x_axis_date_granularity, 'geolocation_granularity': x_axis_geolocation_granularity })
         summary_type = y_axis_summary_type.upper()
         summary_column_name = None
 
         if summary_type == 'COUNT':
-            summary_column_name = self._summary_column_2_sql('COUNT', group_by_column)
+            summary_column_name = self._summary_column_2_sql('COUNT', groupby_column)
         else:
             summary_column = self._get_column_by_key(y_axis_column_key)
             if summary_column:
@@ -1004,12 +1006,12 @@ class StatisticSQLGenerator(object):
         column_groupby_geolocation_granularity = self.statistic.get('column_groupby_geolocation_granularity', '')
         column_groupby_multiple_numeric_column = self.statistic.get('column_groupby_multiple_numeric_column', '')
         column_groupby_numeric_column_keys = self.statistic.get('column_groupby_numeric_column_keys', []) or []
-        group_by_column = self._get_column_by_key(x_axis_column_key)
-        if not group_by_column:
+        groupby_column = self._get_column_by_key(x_axis_column_key)
+        if not groupby_column:
             self.error = 'Group by column not found'
             return ''
         
-        groupby_column_name = self._statistic_column_name_to_sql(group_by_column, { 'date_granularity': x_axis_date_granularity, 'geolocation_granularity': x_axis_geolocation_granularity })
+        groupby_column_name = self._statistic_column_name_to_sql(groupby_column, { 'date_granularity': x_axis_date_granularity, 'geolocation_granularity': x_axis_geolocation_granularity })
         summary_type = y_axis_summary_type.upper()
 
         if summary_type == 'COUNT':
@@ -1017,7 +1019,7 @@ class StatisticSQLGenerator(object):
             if not column_groupby_column:
                 return self._basic_statistic_2_sql()
             column_groupby_column_name = self._statistic_column_name_to_sql(column_groupby_column, { 'date_granularity': column_groupby_date_granularity, 'geolocation_granularity': column_groupby_geolocation_granularity })
-            summary_column_name = self._summary_column_2_sql('COUNT', group_by_column)
+            summary_column_name = self._summary_column_2_sql('COUNT', groupby_column)
             return 'SELECT %s, %s, %s FROM %s %s GROUP BY %s, %s LIMIT 0, 5000' % (groupby_column_name, column_groupby_column_name, summary_column_name, self.table_name, self.filter_sql, groupby_column_name, column_groupby_column_name)
         
         summary_method = y_axis_summary_method.upper()
@@ -1042,11 +1044,148 @@ class StatisticSQLGenerator(object):
         column_groupby_column_name = self._statistic_column_name_to_sql(column_groupby_column, { 'date_granularity': column_groupby_date_granularity, 'geolocation_granularity': column_groupby_geolocation_granularity })
         return 'SELECT %s, %s, %s FROM %s %s GROUP BY %s, %s LIMIT 0, 5000' % (groupby_column_name, column_groupby_column_name, summary_column_name, self.table_name, self.filter_sql, groupby_column_name, column_groupby_column_name)
 
+    def _one_dimension_statistic_table_2_sql(self):
+        groupby_column_key = self.statistic.get('groupby_column_key', '')
+        summary_type = self.statistic.get('summary_type', '')
+        summary_column_key = self.statistic.get('summary_column_key', '')
+        numeric_column_keys = self.statistic.get('numeric_column_keys', []) or []
+        groupby_date_granularity = self.statistic.get('groupby_date_granularity', '')
+        groupby_geolocation_granularity = self.statistic.get('groupby_geolocation_granularity', '')
+        summary_method = self.statistic.get('summary_method', '')
+        summary_column_options = self.statistic.get('summary_column_options', [])
+        if not summary_method:
+            self.error = 'Summary method is not valid'
+            return ''
+        
+        groupby_column = self._get_column_by_key(groupby_column_key)
+        if not groupby_column:
+            self.error = 'Group by column not found'
+            return ''
+        
+        groupby_column_name = self._statistic_column_name_to_sql(groupby_column, { 'date_granularity': groupby_date_granularity, 'geolocation_granularity': groupby_geolocation_granularity })
+        summary_type = summary_type.upper()
+
+        if summary_type == 'COUNT':
+            summary_column_name = self._summary_column_2_sql('COUNT', groupby_column)
+            return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, summary_column_name, self.table_name, self.filter_sql, groupby_column_name)
+
+        if summary_column_options:
+            summary_column = self._get_column_by_key(summary_column_key)
+            summary_method = summary_method.upper()
+            summary_columns = []
+            if summary_column and (is_numeric_column(summary_column) or is_date_column(summary_column)):
+                summary_column_name = self._summary_column_2_sql(summary_method, summary_column)
+                summary_columns.append(summary_column_name)
+            
+            for column_option in summary_column_options:
+                column_key = column_option.get('key', '')
+                method = column_option.get('method', '')
+                method = method.upper()
+                column = self._get_column_by_key(column_key)
+                if column and (is_numeric_column(column) or is_date_column(column)):
+                    column_name = self._summary_column_2_sql(method, column)
+                    summary_columns.append(column_name)
+            
+            summary_columns_str = ', '.join(summary_columns)
+            if summary_columns_str:
+                summary_columns_str = ', %s' % summary_columns_str
+            
+            return 'SELECT %s%s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, summary_columns_str, self.table_name, self.filter_sql, groupby_column_name)
+
+        summary_method = summary_method.upper()
+        new_numeric_column_keys = numeric_column_keys
+        new_numeric_column_keys.insert(0, summary_column_key)
+        new_numeric_column_keys = list(set(new_numeric_column_keys))
+        numeric_column_names = []
+        for column_key in new_numeric_column_keys:
+            column = self._get_column_by_key(column_key)
+            if column and (is_numeric_column(column) or is_date_column(column)):
+                column_name = self._summary_column_2_sql(summary_method, column)
+                numeric_column_names.push(column_name)
+
+        if numeric_column_names:
+            return 'SELECT %s%s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, ', '.join(numeric_column_names), self.table_name, self.filter_sql, groupby_column_name)
+
+        return 'SELECT %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, self.table_name, self.filter_sql, groupby_column_name)
+
+    def _two_dimension_statistic_table_2_sql(self):
+        groupby_column_key = self.statistic.get('groupby_column_key', '')
+        column_groupby_column_key = self.statistic.get('column_groupby_column_key', '')
+        summary_type = self.statistic.get('summary_type', '')
+        summary_column_key = self.statistic.get('summary_column_key', '')
+        groupby_date_granularity = self.statistic.get('groupby_date_granularity', '')
+        groupby_geolocation_granularity = self.statistic.get('groupby_geolocation_granularity', '')
+        column_groupby_date_granularity = self.statistic.get('column_groupby_date_granularity', '')
+        column_groupby_geolocation_granularity = self.statistic.get('column_groupby_geolocation_granularity', '')
+        summary_method = self.statistic.get('summary_method', '')
+
+        if not summary_method:
+            self.error = 'Summary method is not valid'
+            return ''
+
+        column_groupby_column = self._get_column_by_key(column_groupby_column_key)
+        if not column_groupby_column:
+            return self._one_dimension_statistic_table_2_sql()
+        
+        groupby_column = self._get_column_by_key(groupby_column_key)
+        if not groupby_column:
+            self.error = 'Group by column not found'
+            return ''
+
+        groupby_column_name = self._statistic_column_name_to_sql(groupby_column, { 'date_granularity': groupby_date_granularity, 'geolocation_granularity': groupby_geolocation_granularity })
+        column_groupby_column_name = self._statistic_column_name_to_sql(column_groupby_column, { 'date_granularity': column_groupby_date_granularity, 'geolocation_granularity': column_groupby_geolocation_granularity })
+
+        summary_type = summary_type.upper()
+
+        if summary_type == 'COUNT':
+            summary_column_name = self._summary_column_2_sql('COUNT', groupby_column)
+        else:
+            summary_column = self._get_column_by_key(summary_column_key)
+            if not summary_column:
+                summary_column_name = self._summary_column_2_sql('COUNT', groupby_column)
+            else:
+                summary_method = summary_method.upper()
+                summary_column_name = self._summary_column_2_sql('COUNT', summary_column)
+
+        return 'SELECT %s, %s, %s FROM %s %s GROUP BY %s, %s LIMIT 0, 5000' % (groupby_column_name, column_groupby_column_name, summary_column_name, self.table_name, self.filter_sql, groupby_column_name, column_groupby_column_name)
+
+    def _pie_chart_statistic_2_sql(self):
+        groupby_column_key = self.statistic.get('groupby_column_key', '')
+        summary_type = self.statistic.get('summary_type', '')
+        summary_method = self.statistic.get('summary_method', '')
+        summary_column_key = self.statistic.get('summary_column_key', '')
+        groupby_date_granularity = self.statistic.get('groupby_date_granularity', '')
+        groupby_geolocation_granularity = self.statistic.get('groupby_geolocation_granularity', '')
+
+        if not summary_method:
+            self.error = 'Summary method is not valid'
+            return ''
+        
+        groupby_column = self._get_column_by_key(groupby_column_key)
+        if not groupby_column:
+            self.error = 'Group by column not found'
+            return ''
+        
+        groupby_column_name = self._statistic_column_name_to_sql(groupby_column, { 'date_granularity': groupby_date_granularity, 'geolocation_granularity': groupby_geolocation_granularity })
+        summary_type = summary_type.upper()
+        if summary_type == 'COUNT':
+            summary_column_name = self._summary_column_2_sql('COUNT', groupby_column)
+        else:
+            summary_column = self._get_column_by_key(summary_column_key)
+            if summary_column:
+                summary_method = summary_method.upper()
+                summary_column_name = self._summary_column_2_sql(summary_method, summary_column)
+            else:
+                summary_column_name = ''
+        if summary_column_name:
+            return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, summary_column_name, self.table_name, self.filter_sql, groupby_column_name)
+        return 'SELECT %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, self.table_name, self.filter_sql, groupby_column_name)
+    
     def to_sql(self):
         if self.error:
             return self.error, ''
 
-        if self.statistic_type == 'chart_bar':
+        if self.statistic_type == StatisticType.CHART_BAR or self.statistic_type == StatisticType.CHART_LINE:
             column_groupby_column_key = self.statistic.get('column_groupby_column_key', '')
             column_groupby_multiple_numeric_column = self.statistic.get('column_groupby_multiple_numeric_column', '')
             if not column_groupby_column_key and not column_groupby_multiple_numeric_column:
@@ -1055,7 +1194,23 @@ class StatisticSQLGenerator(object):
             
             sql = self._grouping_statistic_2_sql()
             return self.error, sql
+
+        if self.statistic_type == StatisticType.CHART_PIE:
+            sql = self._pie_chart_statistic_2_sql()
+            return self.error, sql
         
+        if self.statistic_type == StatisticType.CHART_TABLE:
+            column_groupby_column_key = self.statistic.get('column_groupby_column_key', '')
+            groupby_column_key = self.statistic.get('groupby_column_key', '')
+            if not groupby_column_key:
+                return 'Groupby column not set', ''
+            if not column_groupby_column_key:
+                sql = self._one_dimension_statistic_table_2_sql()
+                return self.error, sql
+            
+            sql = self._two_dimension_statistic_table_2_sql()
+            return self.error, sql
+
         return '', ''
 
 

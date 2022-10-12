@@ -124,3 +124,26 @@ SIMPLE_CELL_FORMULA_RESULTS = [
     FormulaResultType.DATE,
     FormulaResultType.BOOL
 ]
+
+FORMULA_COLUMN_TYPES = [
+    ColumnTypes.FORMULA,
+    ColumnTypes.LINK_FORMULA
+]
+
+NUMERIC_COLUMNS_TYPES = [
+    ColumnTypes.NUMBER,
+    ColumnTypes.DURATION,
+    ColumnTypes.RATE
+]
+
+DATE_COLUMN_TYPES = [
+    ColumnTypes.DATE,
+    ColumnTypes.CTIME,
+    ColumnTypes.MTIME
+]
+
+class StatisticType:
+    CHART_BAR = 'chart_bar'
+    CHART_PIE = 'chart_pie'
+    CHART_LINE = 'chart_line'
+    CHART_TABLE = 'chart_table'
