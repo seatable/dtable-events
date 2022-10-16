@@ -891,15 +891,7 @@ class StatisticSQLGenerator(object):
         for column in columns:
             self.column_key_map[column['key']] = column
 
-        views = table.get('views', [])
-        view_id = statistic.get('view_id', '')
-        try:
-            view = [view for view in views if view['_id'] == view_id][0]
-        except Exception as e:
-            self.error = 'View not found'
-            view = { 'filters': [], 'filter_conjunction': 'And' }
-
-        filters = view.get('filters', [])
+        filters = statistic.get('filters', [])
         if filters:
             for item in filters:
                 if item.get('filter_predicate') == 'include_me':
@@ -908,19 +900,20 @@ class StatisticSQLGenerator(object):
                     item['filter_term'] = id_in_org
         self.filters = filters
 
-        filter_conjunction = view.get('filter_conjunction', 'And')
+        filter_conjunction = statistic.get('filter_conjunction', 'and')
         self.filter_conjunction = filter_conjunction.upper()
-        self.filter_sql = self._view_filter_2_sql()
+        self.filter_sql = self._filter_2_sql()
 
     def _get_column_by_key(self, column_key):
         return self.column_key_map.get(column_key, None)
 
-    def _view_filter_2_sql(self):
+    def _filter_2_sql(self):
+        filter_sql = ''
         if not self.filters:
-            return ''
+            return filter_sql
         
         filter_string_list = []
-        filter_sql = ''
+        
         filter_conjunction = " %s " % self.filter_conjunction
         for filter_item in self.filters:
             column_key = filter_item.get('column_key')
@@ -931,10 +924,20 @@ class StatisticSQLGenerator(object):
                 sql_condition = _filter2sqlslice(operator)
                 filter_string_list.append(sql_condition)
         if filter_string_list:
-            filter_sql = "WHERE %s" % (
-                filter_conjunction.join(filter_string_list)
-            )
+            filter_sql = filter_conjunction.join(filter_string_list)
         return filter_sql
+    
+    def _update_filter_sql(self, x_axis_include_empty, x_axis_column):
+        column_name = x_axis_column.get('name', '')
+        if x_axis_include_empty:
+            if self.filter_sql:
+                self.filter_sql = 'WHERE %s' % self.filter_sql
+        else:
+            not_include_empty_sql = '`%s` is not null' % column_name
+            if self.filter_sql:
+                self.filter_sql = 'WHERE %s AND (%s)' % (not_include_empty_sql, self.filter_sql)
+            else:
+                self.filter_sql = 'WHERE %s' % not_include_empty_sql
 
     def _statistic_column_name_to_sql(self, column, group_by):
         column_name = column.get('name', '')
@@ -972,12 +975,14 @@ class StatisticSQLGenerator(object):
         y_axis_column_key = self.statistic.get('y_axis_column_key', '')
         x_axis_date_granularity = self.statistic.get('x_axis_date_granularity', '')
         x_axis_geolocation_granularity = self.statistic.get('x_axis_geolocation_granularity', '')
+        x_axis_include_empty = self.statistic.get('x_axis_include_empty', False) or False
 
         groupby_column = self._get_column_by_key(x_axis_column_key)
         if not groupby_column:
             self.error = 'Group by column not found'
             return ''
         
+        self._update_filter_sql(x_axis_include_empty, groupby_column)
         groupby_column_name = self._statistic_column_name_to_sql(groupby_column, {'date_granularity': x_axis_date_granularity, 'geolocation_granularity': x_axis_geolocation_granularity })
         summary_type = y_axis_summary_type.upper()
         summary_column_name = None
@@ -1007,10 +1012,13 @@ class StatisticSQLGenerator(object):
         column_groupby_multiple_numeric_column = self.statistic.get('column_groupby_multiple_numeric_column', '')
         column_groupby_numeric_column_keys = self.statistic.get('column_groupby_numeric_column_keys', []) or []
         groupby_column = self._get_column_by_key(x_axis_column_key)
+        x_axis_include_empty = self.statistic.get('x_axis_include_empty', False) or False
+
         if not groupby_column:
             self.error = 'Group by column not found'
             return ''
         
+        self._update_filter_sql(x_axis_include_empty, groupby_column)
         groupby_column_name = self._statistic_column_name_to_sql(groupby_column, { 'date_granularity': x_axis_date_granularity, 'geolocation_granularity': x_axis_geolocation_granularity })
         summary_type = y_axis_summary_type.upper()
 
