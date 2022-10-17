@@ -997,7 +997,7 @@ class StatisticSQLGenerator(object):
         
         if summary_column_name:
             return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, summary_column_name, self.table_name, self.filter_sql, groupby_column_name)
-        return 'SELECT %s FROM %s %s GROUP BY % LIMIT 0, 5000`' % (groupby_column_name, self.table_name, self.filter_sql, groupby_column_name)
+        return 'SELECT %s FROM %s %s GROUP BY %s LIMIT 0, 5000`' % (groupby_column_name, self.table_name, self.filter_sql, groupby_column_name)
 
     def _grouping_statistic_2_sql(self):
         x_axis_column_key = self.statistic.get('x_axis_column_key', '')
