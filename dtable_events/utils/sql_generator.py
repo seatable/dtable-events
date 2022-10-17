@@ -953,7 +953,7 @@ class StatisticSQLGenerator(object):
             if date_granularity == 'MONTH':
                 return 'ISOMONTH(%s)' % valid_column_name
             if date_granularity == 'QUARTER':
-                return 'CONCATENATE(year(%s), "-Q", quarter(%s))' % valid_column_name, valid_column_name
+                return 'CONCATENATE(year(%s), "-Q", quarter(%s))' % (valid_column_name, valid_column_name)
             if date_granularity == 'YEAR':
                 return 'YEAR(%s)' % valid_column_name
             if date_granularity == 'MAX':
