@@ -862,6 +862,7 @@ def _get_operator_by_type(column_type):
     if column_type in [
         ColumnTypes.FILE,
         ColumnTypes.IMAGE,
+        ColumnTypes.LONG_TEXT,
     ]:
         return FileOperator
 
@@ -1198,14 +1199,14 @@ class StatisticSQLGenerator(object):
             column_groupby_multiple_numeric_column = self.statistic.get('column_groupby_multiple_numeric_column', '')
             if not (column_groupby_column_key or column_groupby_multiple_numeric_column):
                 sql = self._basic_statistic_2_sql()
-                return sql, None
+                return sql, self.error
             
             sql = self._grouping_statistic_2_sql()
-            return sql, None
+            return sql, self.error
 
         if self.statistic_type == StatisticType.CHART_PIE:
             sql = self._pie_chart_statistic_2_sql()
-            return sql, None
+            return sql, self.error
         
         if self.statistic_type == StatisticType.CHART_TABLE:
             column_groupby_column_key = self.statistic.get('column_groupby_column_key', '')
@@ -1214,10 +1215,10 @@ class StatisticSQLGenerator(object):
                 return '', 'Groupby column not set'
             if not column_groupby_column_key:
                 sql = self._one_dimension_statistic_table_2_sql()
-                return sql, None
+                return sql, self.error
             
             sql = self._two_dimension_statistic_table_2_sql()
-            return sql, None
+            return sql, self.error
 
         return '', ''
 
