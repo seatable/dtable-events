@@ -880,7 +880,7 @@ def _get_operator_by_type(column_type):
 class StatisticSQLGenerator(object):
 
     def __init__(self, table, statistic_type, statistic, username, id_in_org):
-        self.error = ''
+        self.error = None
         self.statistic_type = statistic_type
         table_name = table.get('name', '')
         self.table_name = '`%s`' % table_name
@@ -1191,33 +1191,33 @@ class StatisticSQLGenerator(object):
     
     def to_sql(self):
         if self.error:
-            return self.error, ''
+            return '', self.error
 
-        if self.statistic_type == StatisticType.CHART_BAR or self.statistic_type == StatisticType.CHART_LINE:
+        if self.statistic_type in [StatisticType.CHART_BAR, StatisticType.CHART_LINE]:
             column_groupby_column_key = self.statistic.get('column_groupby_column_key', '')
             column_groupby_multiple_numeric_column = self.statistic.get('column_groupby_multiple_numeric_column', '')
-            if not column_groupby_column_key and not column_groupby_multiple_numeric_column:
+            if not (column_groupby_column_key or column_groupby_multiple_numeric_column):
                 sql = self._basic_statistic_2_sql()
-                return self.error, sql
+                return sql, None
             
             sql = self._grouping_statistic_2_sql()
-            return self.error, sql
+            return sql, None
 
         if self.statistic_type == StatisticType.CHART_PIE:
             sql = self._pie_chart_statistic_2_sql()
-            return self.error, sql
+            return sql, None
         
         if self.statistic_type == StatisticType.CHART_TABLE:
             column_groupby_column_key = self.statistic.get('column_groupby_column_key', '')
             groupby_column_key = self.statistic.get('groupby_column_key', '')
             if not groupby_column_key:
-                return 'Groupby column not set', ''
+                return '', 'Groupby column not set'
             if not column_groupby_column_key:
                 sql = self._one_dimension_statistic_table_2_sql()
-                return self.error, sql
+                return sql, None
             
             sql = self._two_dimension_statistic_table_2_sql()
-            return self.error, sql
+            return sql, None
 
         return '', ''
 
