@@ -878,16 +878,22 @@ def parse_collaborator(cell_value, name_to_email):
     return email_list
 
 
-def get_summary(summary, summary_col_info, column_name):
+def get_summary(summary, summary_col_info, column_name, head_name_to_head):
     summary_type = summary_col_info.get(column_name, 'sum').lower()
+    column_info = head_name_to_head.get(column_name)
+    # return summary info if column type is formula and result type is number for excel value
+    # because grouped summary row does not contain format symbol like $, ￥, %, etc
+    if column_info[1] == 'formula' and column_info[2].get('result_type') == 'number':
+        return {'is_summary_col': True, 'value': summary.get(summary_type)}
+
     return summary.get(summary_type)
 
 
-def parse_grouped_rows(grouped_rows, first_col_name, summary_col_info):
+def parse_grouped_rows(grouped_rows, first_col_name, summary_col_info, head_name_to_head):
     def parse(grouped_rows, sub_level, rows, grouped_row_num_map):
         for group in grouped_rows:
             summaries = group.get('summaries', {})
-            grouped_row = {column_name: get_summary(summary, summary_col_info, column_name) for column_name, summary in summaries.items()}
+            grouped_row = {column_name: get_summary(summary, summary_col_info, column_name, head_name_to_head) for column_name, summary in summaries.items()}
             grouped_row[first_col_name] = group.get('cell_value')
             rows.append(grouped_row)
             grouped_row_num_map[len(rows)] = sub_level
@@ -985,21 +991,74 @@ def convert_formula_number(value, column_data):
     return value
 
 
+def parse_summary_value(cell_data, column_data):
+    value = str(cell_data.get('value'))
+    precision = column_data.get('precision', 0)
+    src_format = column_data.get('format')
+
+    if src_format == 'percent':
+        try:
+            if is_int_str(value):
+                value = str(int(value) * 100)
+            else:
+                value = str(float(value) * 100)
+        except:
+            pass
+    elif src_format == 'duration':
+        duration_format = column_data.get('duration_format', 'h:mm')
+        duration_value = float(value)
+        h_value = str(duration_value // 3600).split('.')[0]
+        m_value = str((duration_value % 3600) // 60).split('.')[0]
+        s_value = str(duration_value % 60).split('.')[0]
+        if len(m_value) == 1:
+            m_value = '0' + m_value
+        if duration_format == 'h:mm':
+
+            return h_value + ':' + m_value
+        else:
+            if len(s_value) == 1:
+                s_value = '0' + s_value
+            return h_value + ':' + m_value + ':' + s_value
+    value_list = value.split('.')
+    value_precision = len(value_list[1]) if (len(value_list) > 1) else 0
+
+    if precision > 0 and precision > value_precision:
+        if value_precision > 0:
+            value = value + '0' * (precision - value_precision)
+        else:
+            value = value + '.' + '0' * (precision - value_precision)
+
+    return value
+
+
 def parse_formula_number(cell_data, column_data):
     """
     parse formula number to regular format
-    :param cell_data: value of cell (e.g. 1.25, ￥12.0, $10.20, €10.2, 0:02 or 10%, etc)
+    :param cell_data: value of cell (e.g. 1.25, ￥12.0, $10.20, €10.2, 0:02 or 10%, etc),
+                     value like {'is_summary_col': True, 'value': 123.56} if cell_data is summary data
     :param column_data: info of formula column
     """
     src_format = column_data.get('format')
-    value = str(cell_data)
-    number_format = '0'
-    if src_format in ['euro', 'dollar', 'yuan']:
-        value = value[1:]
-    elif src_format == 'percent':
-        value = value[:-1]
-    value = convert_formula_number(value, column_data)
 
+    if isinstance(cell_data, dict) and cell_data.get('is_summary_col'):
+        # parse group summary value
+        value = parse_summary_value(cell_data, column_data)
+    else:
+        value = str(cell_data)
+        if src_format in ['euro', 'dollar', 'yuan']:
+            value = value[1:]
+        elif src_format == 'percent':
+            value = value[:-1]
+        elif src_format == 'custom_currency':
+            currency_symbol = column_data.get('currency_symbol')
+            currency_symbol_position = column_data.get('currency_symbol_position', 'before')
+            if currency_symbol_position == 'before':
+                value = value[len(currency_symbol):]
+            else:
+                value = value[:-len(currency_symbol)]
+        value = convert_formula_number(value, column_data)
+
+    number_format = '0'
     if src_format == 'number':
         number_format = gen_decimal_format(value)
     elif src_format == 'percent' and isinstance(value, str):
@@ -1008,12 +1067,20 @@ def parse_formula_number(cell_data, column_data):
             value = float(value) / 100
         except Exception as e:
             pass
-    elif src_format == 'euro' and isinstance(cell_data, str):
+    elif src_format == 'euro':
         number_format = '"€"#,##' + gen_decimal_format(value)+'_-'
-    elif src_format == 'dollar' and isinstance(cell_data, str):
+    elif src_format == 'dollar':
         number_format = '"$"#,##' + gen_decimal_format(value)+'_-'
-    elif src_format == 'yuan' and isinstance(cell_data, str):
+    elif src_format == 'yuan':
         number_format = '"¥"#,##' + gen_decimal_format(value)+'_-'
+    elif src_format == 'custom_currency':
+        currency_symbol = column_data.get('currency_symbol')
+        currency_symbol_position = column_data.get('currency_symbol_position', 'before')
+        if currency_symbol_position == 'before':
+            number_format = '"%s"#,##' % currency_symbol + gen_decimal_format(value) + '_-'
+        else:
+            number_format = gen_decimal_format(value) + currency_symbol
+
     try:
         if is_int_str(value):
             value = int(value)

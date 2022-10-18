@@ -770,10 +770,14 @@ def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token, session_id):
 
 
 def parse_view_rows(response_rows, head_list, summary_col_info, cols_without_hidden):
+    """
+    return data_list for rows data, grouped_row_num_map like {1: 0, 2: 1, 5: 1, 8: 0, 9: 1} means position of summary row
+    """
     from dtable_events.dtable_io.excel import parse_grouped_rows
     if response_rows and ('rows' in response_rows[0] or 'subgroups' in response_rows[0]):
         first_col_name = head_list[0][0]
-        result_rows, grouped_row_num_map = parse_grouped_rows(response_rows, first_col_name, summary_col_info)
+        head_name_to_head = {head[0]: head for head in head_list}
+        result_rows, grouped_row_num_map = parse_grouped_rows(response_rows, first_col_name, summary_col_info, head_name_to_head)
     else:
         result_rows, grouped_row_num_map = response_rows, {}
 
@@ -790,7 +794,7 @@ def parse_view_rows(response_rows, head_list, summary_col_info, cols_without_hid
 def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, permission, name):
     from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_view_rows_from_dtable_server, \
         convert_db_rows
-    from dtable_events.dtable_io.excel import parse_grouped_rows, write_xls_with_type
+    from dtable_events.dtable_io.excel import write_xls_with_type
     from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
     from dtable_events.app.config import ARCHIVE_VIEW_EXPORT_ROW_LIMIT
     import openpyxl
@@ -905,7 +909,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
 def convert_table_to_execl(dtable_uuid, table_id, username, permission, name):
     from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_rows_from_dtable_server, \
         convert_db_rows
-    from dtable_events.dtable_io.excel import parse_grouped_rows, write_xls_with_type
+    from dtable_events.dtable_io.excel import write_xls_with_type
     from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
     import openpyxl
 
