@@ -883,9 +883,8 @@ def get_summary(summary, summary_col_info, column_name, head_name_to_head):
     column_info = head_name_to_head.get(column_name)
     # return summary info if column type is formula and result type is number for excel value
     # because grouped summary row does not contain format symbol like $, ￥, %, etc
-    if column_info[1] == 'formula' and column_info[2].get('result_type') == 'number':
-        return {'is_summary_col': True, 'value': summary.get(summary_type)}
-
+    if column_info and column_info[1] == 'formula' and column_info[2].get('result_type') == 'number':
+        return parse_summary_value(summary.get(summary_type), column_info[2])
     return summary.get(summary_type)
 
 
@@ -992,7 +991,7 @@ def convert_formula_number(value, column_data):
 
 
 def parse_summary_value(cell_data, column_data):
-    value = str(cell_data.get('value'))
+    value = str(cell_data)
     precision = column_data.get('precision', 0)
     src_format = column_data.get('format')
 
@@ -1028,35 +1027,45 @@ def parse_summary_value(cell_data, column_data):
         else:
             value = value + '.' + '0' * (precision - value_precision)
 
+    # add symbol
+    if src_format == 'euro':
+        value = '€' + value
+    elif src_format == 'dollar':
+        value = '$' + value
+    elif src_format == 'yuan':
+        value = '￥' + value
+    elif src_format == 'percent':
+        value = value + '%'
+    elif src_format == 'custom_currency':
+        currency_symbol = column_data.get('currency_symbol')
+        currency_symbol_position = column_data.get('currency_symbol_position', 'before')
+        if currency_symbol_position == 'before':
+            value = currency_symbol + value
+        else:
+            value = value + currency_symbol
     return value
 
 
 def parse_formula_number(cell_data, column_data):
     """
     parse formula number to regular format
-    :param cell_data: value of cell (e.g. 1.25, ￥12.0, $10.20, €10.2, 0:02 or 10%, etc),
-                     value like {'is_summary_col': True, 'value': 123.56} if cell_data is summary data
+    :param cell_data: value of cell (e.g. 1.25, ￥12.0, $10.20, €10.2, 0:02 or 10%, etc)
     :param column_data: info of formula column
     """
     src_format = column_data.get('format')
-
-    if isinstance(cell_data, dict) and cell_data.get('is_summary_col'):
-        # parse group summary value
-        value = parse_summary_value(cell_data, column_data)
-    else:
-        value = str(cell_data)
-        if src_format in ['euro', 'dollar', 'yuan']:
-            value = value[1:]
-        elif src_format == 'percent':
-            value = value[:-1]
-        elif src_format == 'custom_currency':
-            currency_symbol = column_data.get('currency_symbol')
-            currency_symbol_position = column_data.get('currency_symbol_position', 'before')
-            if currency_symbol_position == 'before':
-                value = value[len(currency_symbol):]
-            else:
-                value = value[:-len(currency_symbol)]
-        value = convert_formula_number(value, column_data)
+    value = str(cell_data)
+    if src_format in ['euro', 'dollar', 'yuan']:
+        value = value[1:]
+    elif src_format == 'percent':
+        value = value[:-1]
+    elif src_format == 'custom_currency':
+        currency_symbol = column_data.get('currency_symbol')
+        currency_symbol_position = column_data.get('currency_symbol_position', 'before')
+        if currency_symbol_position == 'before':
+            value = value[len(currency_symbol):]
+        else:
+            value = value[:-len(currency_symbol)]
+    value = convert_formula_number(value, column_data)
 
     number_format = '0'
     if src_format == 'number':
