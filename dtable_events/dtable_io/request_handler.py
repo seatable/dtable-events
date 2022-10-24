@@ -977,6 +977,35 @@ def add_import_big_excel_task():
         return make_response((e, 500))
     return make_response(({'task_id': task_id}, 200))
 
+@app.route('/add-update-big-excel-task', methods=['POST'])
+def add_update_big_excel_task():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    if big_data_task_manager.tasks_queue.full():
+        from dtable_events.dtable_io import dtable_io_logger
+        dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
+                                 % (big_data_task_manager.tasks_queue.qsize(), big_data_task_manager.current_task_info,
+                                    big_data_task_manager.threads_is_alive()))
+        return make_response(('dtable io server busy.', 400))
+
+    data = request.form
+
+    username = data.get('username')
+    dtable_uuid = data.get('dtable_uuid')
+    file_path = data.get('file_path')
+    table_name = data.get('table_name')
+    ref_columns = data.get('ref_columns')
+    is_insert_new_data = data.get('is_insert_new_data')
+    try:
+        task_id = big_data_task_manager.add_update_big_excel_task(
+            username, dtable_uuid, table_name, file_path, ref_columns, is_insert_new_data)
+    except Exception as e:
+        logger.error(e)
+        return make_response((e, 500))
+    return make_response(({'task_id': task_id}, 200))
+
 @app.route('/query-big-data-status', methods=['GET'])
 def query_big_data_status():
     is_valid, error = check_auth_token(request)

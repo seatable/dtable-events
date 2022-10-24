@@ -80,6 +80,15 @@ class TaskBigDataManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    def add_update_big_excel_task(self, username, dtable_uuid, table_name, file_path, ref_columns, is_insert_new_data=False):
+        from dtable_events.dtable_io import update_big_excel
+        task_id = str(int(time.time()*1000))
+        task = (update_big_excel,
+                (username, dtable_uuid, table_name, file_path, ref_columns, is_insert_new_data, task_id, self.tasks_status_map))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+        return task_id
+
     def run(self):
         thread_num = self.conf['workers']
         for i in range(thread_num):

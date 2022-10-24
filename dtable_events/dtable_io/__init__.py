@@ -16,7 +16,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from datetime import datetime
 
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, SESSION_COOKIE_NAME, INNER_DTABLE_DB_URL
-from dtable_events.dtable_io.big_data import import_excel_to_db
+from dtable_events.dtable_io.big_data import import_excel_to_db, update_excel_to_db
 from dtable_events.dtable_io.utils import setup_logger, \
     prepare_asset_file_folder, post_dtable_json, post_asset_files, \
     download_files_to_path, create_forms_from_src_dtable, copy_src_forms_to_json, \
@@ -1084,6 +1084,20 @@ def import_big_excel(username, dtable_uuid, table_name, file_path, task_id, task
     dtable_io_logger.info('Start import big excel: {}.'.format(dtable_uuid))
     try:
         import_excel_to_db(username, dtable_uuid, table_name, file_path, task_id, tasks_status_map)
+    except Exception as e:
+        dtable_io_logger.error('import big excel failed. ERROR: {}'.format(e))
+    else:
+        dtable_io_logger.info('import big excel %s.xlsx success!' % table_name)
+
+
+def update_big_excel(username, dtable_uuid, table_name, file_path, ref_columns, is_insert_new_data, task_id, tasks_status_map):
+    """
+    upload excel json file to dtable-db
+    """
+
+    dtable_io_logger.info('Start import big excel: {}.'.format(dtable_uuid))
+    try:
+        update_excel_to_db(username, dtable_uuid, table_name, file_path, ref_columns, is_insert_new_data, task_id, tasks_status_map)
     except Exception as e:
         dtable_io_logger.error('import big excel failed. ERROR: {}'.format(e))
     else:

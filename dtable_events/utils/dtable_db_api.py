@@ -14,6 +14,9 @@ TIMEOUT = 90
 class RowInsertedError(Exception):
     pass
 
+class RowUpdatedError(Exception):
+    pass
+
 def parse_response(response):
     if response.status_code >= 400:
         raise ConnectionError(response.status_code, response.text)
@@ -138,7 +141,7 @@ class DTableDBAPI(object):
             token = token.decode()
         return token
 
-    def query(self, sql, convert=True):
+    def query(self, sql, convert=False):
         """
         :param sql: str
         :param convert: bool
@@ -197,3 +200,19 @@ class DTableDBAPI(object):
         if not resp.status_code == 200:
            raise RowInsertedError
         return resp.json()
+
+    def batch_update_rows(self, table_name, rows_data):
+        url = "%s/api/v1/update-rows/%s" % (
+            self.dtable_db_url,
+            self.dtable_uuid
+        )
+
+        json_data = {
+            'table_name': table_name,
+            'updates': rows_data,
+        }
+        resp = requests.put(url, json=json_data, headers=self.headers, timeout=TIMEOUT)
+        if not resp.status_code == 200:
+            raise RowUpdatedError
+        return resp.json()
+
