@@ -12,6 +12,7 @@ from datetime import datetime, time
 from dtable_events.app.config import EXPORT2EXCEL_DEFAULT_STRING, TIME_ZONE
 from dtable_events.utils import utc_to_tz
 from dtable_events.utils.constants import ColumnTypes
+from dtable_events.utils.geo_location_parser import parse_geolocation_from_tree
 
 timezone = TIME_ZONE
 VIRTUAL_ID_EMAIL_DOMAIN = '@auth.local'
@@ -826,7 +827,7 @@ def parse_csv_rows(csv_file, columns, max_column, name_to_email):
     return rows, max_column, csv_row_num, csv_column_num
 
 
-def parse_row(column_type, cell_value, name_to_email):
+def parse_row(column_type, cell_value, name_to_email, location_tree=None):
     if isinstance(cell_value, datetime):  # JSON serializable
         cell_value = str(cell_value)
     if isinstance(cell_value, str):
@@ -856,7 +857,7 @@ def parse_row(column_type, cell_value, name_to_email):
     elif column_type == 'button':
         return None
     elif column_type == 'geolocation':
-        return None
+        return parse_geolocation_from_tree(location_tree, cell_value)
     elif column_type in ('creator', 'last-modifier', 'ctime', 'mtime', 'formula', 'link-formula', 'auto-number'):
         return None
     elif column_type == 'collaborator':

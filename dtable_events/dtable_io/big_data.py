@@ -1,10 +1,11 @@
 import openpyxl
 import os
+import json
 
 from dtable_events.dtable_io.excel import parse_row
 from dtable_events.utils import get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes
-from dtable_events.app.config import INNER_DTABLE_DB_URL
+from dtable_events.app.config import INNER_DTABLE_DB_URL, dtable_web_dir
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 
@@ -24,6 +25,17 @@ FILE_READ_ERROR_CODE = 2
 COLUMN_MATCH_ERROR_CODE = 3
 ROW_INSERT_ERROR_CODE = 4
 INTERNAL_ERROR_CODE = 5
+
+def get_location_tree_json():
+
+    json_path = os.path.join(dtable_web_dir, 'media/geo-data/cn-location.json')
+
+    with open(json_path, 'r', encoding='utf8') as fp:
+        json_data = json.load(fp)
+
+    return json_data
+
+
 
 def match_columns(authed_base, table_name, target_columns):
     table_columns = authed_base.list_columns(table_name)
@@ -105,6 +117,11 @@ def import_excel_to_db(
     tasks_status_map[task_id]['total_rows'] = total_rows
 
     column_name_type_map = {col.get('name'): col.get('type') for col in base_columns}
+    location_tree = None
+    for col_name, col_type in column_name_type_map.items():
+        if col_type == ColumnTypes.GEOLOCATION:
+            location_tree = get_location_tree_json()
+
     index = 0
     for row in ws.rows:
         try:
@@ -114,7 +131,7 @@ def import_excel_to_db(
                 parsed_row_data = {}
                 for col_name, value in row_data.items():
                     col_type = column_name_type_map.get(col_name)
-                    parsed_row_data[col_name] = value and parse_row(col_type, value, None) or ''
+                    parsed_row_data[col_name] = value and parse_row(col_type, value, None, location_tree=location_tree) or ''
                 slice.append(parsed_row_data)
                 if total_count + 1 == total_rows or len(slice) == 100:
                     tasks_status_map[task_id]['rows_imported'] = insert_count
