@@ -268,14 +268,6 @@ def update_excel_to_db(
                                 continue
                             parsed_row_data[col_name] = value and parse_row(col_type, value, None) or ''
                         import_rows.append(parsed_row_data)
-                        if total_count + 1 == total_rows or len(import_rows) == 100:
-                            tasks_status_map[task_id]['rows_handled'] = total_count
-                            db_handler.insert_rows(table_name, import_rows)
-                            import_rows = []
-                        total_count += 1
-                    else:
-                        total_count += 1
-
 
                 # 2. for update
                 else:
@@ -291,13 +283,18 @@ def update_excel_to_db(
                             'row_id': row_id,
                             'row': parsed_row_data or {}
                         })
-
                         update_rows.extend(updates)
-                    if total_count + 1 == total_rows or len(update_rows) >= 100:
-                        tasks_status_map[task_id]['rows_handled'] = total_count
-                        db_handler.batch_update_rows(table_name, update_rows)
-                        update_rows = []
-                    total_count += 1
+
+
+                if total_count + 1 >= total_rows or len(update_rows) >= 100:
+                    tasks_status_map[task_id]['rows_handled'] = total_count
+                    db_handler.batch_update_rows(table_name, update_rows)
+                    update_rows = []
+                if total_count + 1 >= total_rows or len(import_rows) >= 100:
+                    tasks_status_map[task_id]['rows_handled'] = total_count
+                    db_handler.insert_rows(table_name, import_rows)
+                    import_rows = []
+                total_count += 1
             index += 1
         except Exception as err:
             tasks_status_map[task_id]['err_msg'] = 'Row updated error'
