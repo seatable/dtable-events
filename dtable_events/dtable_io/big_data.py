@@ -240,7 +240,6 @@ def update_excel_to_db(
         return
 
     total_count = 0  # data in excel scanned
-    insert_count = 0 # data imported
 
     update_rows = []
     import_rows = []
@@ -305,7 +304,6 @@ def update_excel_to_db(
             return
 
     tasks_status_map[task_id]['status'] = status
-    tasks_status_map[task_id]['rows_imported'] = insert_count
     tasks_status_map[task_id]['rows_handled'] = total_count
     os.remove(file_path)
     return
