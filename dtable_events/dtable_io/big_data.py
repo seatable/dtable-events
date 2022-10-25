@@ -56,6 +56,8 @@ def query_row_ids_with_ref_columns(db_api, table_name, row_data, ref_cols, colum
     for ref_col in ref_cols:
         col_type = column_name_type_map.get(ref_col)
         value = row_data.get(ref_col)
+        if not value:
+            return []
         if col_type == ColumnTypes.NUMBER:
             where_clauses.append(
                 "`%s`=%s" % (ref_col, value)
@@ -193,7 +195,6 @@ def update_excel_to_db(
     tasks_status_map[task_id] = {
         'status': 'initializing',
         'err_msg': '',
-        'rows_imported': 0,
         'rows_handled': 0,
         'total_rows': 0,
         'err_code': 0,
@@ -263,17 +264,18 @@ def update_excel_to_db(
                         parsed_row_data = {}
                         for col_name, value in row_data.items():
                             col_type = column_name_type_map.get(col_name)
+                            if col_type in AUTO_GENERATED_COLUMNS:
+                                continue
                             parsed_row_data[col_name] = value and parse_row(col_type, value, None) or ''
                         import_rows.append(parsed_row_data)
                         if total_count + 1 == total_rows or len(import_rows) == 100:
-                            tasks_status_map[task_id]['rows_imported'] = insert_count
+                            tasks_status_map[task_id]['rows_handled'] = total_count
                             db_handler.insert_rows(table_name, import_rows)
-                            insert_count += len(import_rows)
                             import_rows = []
                         total_count += 1
                     else:
                         total_count += 1
-                        
+
 
                 # 2. for update
                 else:
@@ -281,6 +283,8 @@ def update_excel_to_db(
                     parsed_row_data = {}
                     for col_name, value in row_data.items():
                         col_type = column_name_type_map.get(col_name)
+                        if col_type in AUTO_GENERATED_COLUMNS:
+                            continue
                         parsed_row_data[col_name] = value and parse_row(col_type, value, None) or ''
                     for row_id in row_ids:
                         updates.append({
