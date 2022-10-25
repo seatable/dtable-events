@@ -121,6 +121,7 @@ def import_excel_to_db(
     for col_name, col_type in column_name_type_map.items():
         if col_type == ColumnTypes.GEOLOCATION:
             location_tree = get_location_tree_json()
+            break
 
     index = 0
     for row in ws.rows:
