@@ -1,5 +1,3 @@
-import json
-
 MUNICIPALITY = ['北京市', '天津市', '上海市', '重庆市', '香港', '澳门']
 
 init_province = None
