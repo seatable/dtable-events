@@ -73,8 +73,8 @@ def import_excel_to_db(
         sheets = wb.get_sheet_names()
         ws = wb[sheets[0]]
         total_rows = ws.max_row and ws.max_row - 1 or 0
-        if total_rows > 1000000:
-            tasks_status_map[task_id]['err_msg'] = 'Number of rows (%s) exceeds 100,000 limit' % total_rows
+        if total_rows > 500000:
+            tasks_status_map[task_id]['err_msg'] = 'Number of rows (%s) exceeds 500,000 limit' % total_rows
             tasks_status_map[task_id]['status'] = 'terminated'
             tasks_status_map[task_id]['err_code'] = ROW_EXCEED_ERROR_CODE
             os.remove(file_path)
