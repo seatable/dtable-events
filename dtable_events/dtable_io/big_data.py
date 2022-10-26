@@ -3,6 +3,7 @@ import os
 import json
 
 from dtable_events.dtable_io.excel import parse_row
+from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
 from dtable_events.utils import get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.app.config import INNER_DTABLE_DB_URL, dtable_web_dir
@@ -117,11 +118,10 @@ def import_excel_to_db(
     tasks_status_map[task_id]['total_rows'] = total_rows
 
     column_name_type_map = {col.get('name'): col.get('type') for col in base_columns}
-    location_tree = None
-    for col_name, col_type in column_name_type_map.items():
-        if col_type == ColumnTypes.GEOLOCATION:
-            location_tree = get_location_tree_json()
-            break
+    related_users = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
+    name_to_email = {user.get('name'): user.get('email') for user in related_users}
+
+    location_tree = get_location_tree_json()
 
     index = 0
     for row in ws.rows:
@@ -132,7 +132,7 @@ def import_excel_to_db(
                 parsed_row_data = {}
                 for col_name, value in row_data.items():
                     col_type = column_name_type_map.get(col_name)
-                    parsed_row_data[col_name] = value and parse_row(col_type, value, None, location_tree=location_tree) or ''
+                    parsed_row_data[col_name] = value and parse_row(col_type, value, name_to_email, location_tree=location_tree) or ''
                 slice.append(parsed_row_data)
                 if total_count + 1 == total_rows or len(slice) == 100:
                     tasks_status_map[task_id]['rows_imported'] = insert_count
