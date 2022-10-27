@@ -232,7 +232,6 @@ def update_excel_to_db(
         base = DTableServerAPI(username, dtable_uuid, dtable_server_url)
         column_name_type_map = {col.get('name'): col.get('type') for col in base.list_columns(table_name)}
     except Exception as err:
-
         tasks_status_map[task_id]['err_msg'] = str(err)
         tasks_status_map[task_id]['status'] = 'terminated'
         tasks_status_map[task_id]['err_code'] = INTERNAL_ERROR_CODE
@@ -244,6 +243,10 @@ def update_excel_to_db(
     update_rows = []
     import_rows = []
 
+    related_users = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
+    name_to_email = {user.get('name'): user.get('email') for user in related_users}
+
+    location_tree = get_location_tree_json()
 
     index = 0
     status = 'success'
@@ -265,7 +268,7 @@ def update_excel_to_db(
                             col_type = column_name_type_map.get(col_name)
                             if col_type in AUTO_GENERATED_COLUMNS:
                                 continue
-                            parsed_row_data[col_name] = value and parse_row(col_type, value, None) or ''
+                            parsed_row_data[col_name] = value and parse_row(col_type, value, name_to_email, location_tree=location_tree) or ''
                         import_rows.append(parsed_row_data)
 
                 # 2. for update
