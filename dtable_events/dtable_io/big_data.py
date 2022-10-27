@@ -57,15 +57,18 @@ def query_row_ids_with_ref_columns(db_api, table_name, row_data, ref_cols, colum
         col_type = column_name_type_map.get(ref_col)
         value = row_data.get(ref_col)
         if not value:
-            return []
-        if col_type == ColumnTypes.NUMBER:
             where_clauses.append(
-                "`%s`=%s" % (ref_col, value)
+                "`%s` is null" % ref_col
             )
         else:
-            where_clauses.append(
-                "`%s`='%s'" %(ref_col, value)
-            )
+            if col_type == ColumnTypes.NUMBER:
+                where_clauses.append(
+                    "`%s`=%s" % (ref_col, value)
+                )
+            else:
+                where_clauses.append(
+                    "`%s`='%s'" %(ref_col, value)
+                )
     sql = "Select _id from `%s` where %s" % (
         table_name,
         ' And '.join(where_clauses)
@@ -279,7 +282,7 @@ def update_excel_to_db(
                         col_type = column_name_type_map.get(col_name)
                         if col_type in AUTO_GENERATED_COLUMNS:
                             continue
-                        parsed_row_data[col_name] = value and parse_row(col_type, value, None) or ''
+                        parsed_row_data[col_name] = value and parse_row(col_type, value, name_to_email, location_tree=location_tree) or ''
                     for row_id in row_ids:
                         updates.append({
                             'row_id': row_id,

@@ -10,6 +10,7 @@ from dtable_events.dtable_io.task_message_manager import message_task_manager
 from dtable_events.dtable_io.task_data_sync_manager import data_sync_task_manager
 from dtable_events.dtable_io.task_plugin_email_manager import plugin_email_task_manager
 from dtable_events.dtable_io.task_big_data_manager import big_data_task_manager
+from dtable_events.dtable_io.utils import to_python_boolean
 
 app = Flask(__name__)
 logger = logging.getLogger(__name__)
@@ -997,7 +998,8 @@ def add_update_big_excel_task():
     file_path = data.get('file_path')
     table_name = data.get('table_name')
     ref_columns = data.get('ref_columns')
-    is_insert_new_data = data.get('is_insert_new_data')
+    is_insert_new_data = data.get('is_insert_new_data', 'false')
+    is_insert_new_data = to_python_boolean(is_insert_new_data)
     try:
         task_id = big_data_task_manager.add_update_big_excel_task(
             username, dtable_uuid, table_name, file_path, ref_columns, is_insert_new_data)

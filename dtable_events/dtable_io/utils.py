@@ -1060,3 +1060,13 @@ def sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username,
 
     if row_data_for_create or row_data_for_update or row_ids_for_delete:
         update_app_sync(db_session, app_id, table['_id'])
+
+def to_python_boolean(string):
+    """Convert a string to boolean.
+    """
+    string = string.lower()
+    if string in ('t', 'true', '1'):
+        return True
+    if string in ('f', 'false', '0'):
+        return False
+    raise ValueError("Invalid boolean value: '%s'" % string)
