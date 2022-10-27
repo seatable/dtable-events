@@ -129,6 +129,17 @@ class DTableServerAPI(object):
         data = parse_response(response)
         return data.get('columns')
 
+    def view_rows(self, table_name, view_name):
+        url = self.dtable_server_url + '/api/v1/internal/dtables/' + self.dtable_uuid + '/view-rows/?from=dtable_events'
+        params = {
+            'table_name': table_name,
+            'view_name': view_name,
+            'convert_link_id': True,
+        }
+        response = requests.get(url, params=params, headers=self.headers, timeout=self.timeout)
+        data = parse_response(response)
+        return data.get('rows')
+
     def insert_column(self, table_name, column_name, column_type, column_data=None):
         logger.debug('insert column table_name: %s, column_name: %s, column_type: %s, column_data: %s', table_name, column_name, column_type, column_data)
         url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/columns/?from=dtable_events'

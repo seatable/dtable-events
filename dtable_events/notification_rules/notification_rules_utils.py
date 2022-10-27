@@ -674,6 +674,8 @@ def parse_row(column, row):
     cell_value = row.get(col_key)
     if col_type in [
         ColumnTypes.TEXT,
+        ColumnTypes.LONG_TEXT,
+        ColumnTypes.LAST_MODIFIER,
         ColumnTypes.NUMBER,
         ColumnTypes.RATE,
         ColumnTypes.COLLABORATOR,
@@ -751,4 +753,15 @@ def parse_row(column, row):
                 return ', '.join(str(v) for v in cell_value)
             else:
                 return cell_value
+
     return cell_value
+
+
+def cell_data2str(cell_data):
+    if isinstance(cell_data, list):
+        cell_data.sort()
+        return ' '.join(cell_data2str(item) for item in cell_data)
+    elif cell_data is None:
+        return ''
+    else:
+        return str(cell_data)
