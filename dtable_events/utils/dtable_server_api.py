@@ -93,12 +93,15 @@ class DTableServerAPI(object):
         response = requests.post(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
-    def list_rows(self, table_name):
+    def list_rows(self, table_name, start=None, limit=None):
         logger.debug('list rows table_name: %s', table_name)
         url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/rows/?from=dtable_events'
         params = {
             'table_name': table_name,
         }
+        if start is not None and limit is not None:
+            params['start'] = start
+            params['limit'] = limit
         response = requests.get(url, params=params, headers=self.headers, timeout=self.timeout)
         data = parse_response(response)
         return data.get('rows')

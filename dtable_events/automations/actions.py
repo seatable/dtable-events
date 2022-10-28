@@ -82,6 +82,16 @@ def get_date_format(date_format):
         return '%Y-%m-%d', '2022-01-01'
 
 
+def cell_data2str(cell_data):
+    if isinstance(cell_data, list):
+        cell_data.sort()
+        return ' '.join(cell_data2str(item) for item in cell_data)
+    elif cell_data is None:
+        return ''
+    else:
+        return str(cell_data)
+
+
 class BaseAction:
 
     def __init__(self, auto_rule, data=None):
@@ -1515,43 +1525,37 @@ class AutoAddLinkAction(BaseAction):
                     column_dict[col.get('key')] = col
         return column_dict
 
-    def query_table_rows(self, table_name, column_names):
-        sql_columns = ', '.join(column_names)
-        limit = 0
-        step = 1000
+    def list_table_rows(self, table_name):
+        start = 0
+        limit = 10000
         result_rows = []
         while True:
-            sql = f"select `_id`, {sql_columns} from `{table_name}` limit {limit},{step}"
             try:
-                results = self.auto_rule.dtable_db_api.query(sql, convert=False)
+                results = self.auto_rule.dtable_server_api.list_rows(table_name, start, limit)
             except Exception as e:
-                logger.error('query dtable: %s, table name: %s, error: %s', self.auto_rule.dtable_uuid, table_name, e)
+                logger.error('dtable: %s, table name: %s, list rows error: %s', self.auto_rule.dtable_uuid, table_name, e)
                 return []
 
             result_rows += results
-            limit += step
-            if len(results) < step:
+            start += limit
+            if len(results) < limit:
                 break
+
         return result_rows
 
     def _init_linked_row_ids(self):
-        table_columns = []
-        other_table_columns = []
         for col in self.match_column_conditions:
-            if col and col.get('column_key') and self.table_columns_dict.get(col.get('column_key')) and \
-                    col.get('other_column_key') and self.other_table_columns_dict.get(col.get('other_column_key')):
-                table_columns.append('`' + self.table_columns_dict.get(col.get('column_key')).get('name') + '`')
-                other_table_columns.append('`' + self.other_table_columns_dict.get(col.get('other_column_key')).get('name') + '`')
+            table_column = self.table_columns_dict.get(col.get('column_key'))
+            other_table_column = self.other_table_columns_dict.get(col.get('other_column_key'))
+            if col and col.get('column_key') and table_column and col.get('other_column_key') and other_table_column:
                 continue
             self.auto_rule.set_invalid()
 
-        # link column maybe not exist
-        link_column_name = self.table_columns_dict.get(self.selected_link_option.get('link_column_key'), {}).get('name', '')
-        if link_column_name:
-            table_columns.append('`' + link_column_name + '`')
+        table_name = self.table_names_dict.get(self.table_id)
+        other_table_name = self.table_names_dict.get(self.other_table_id)
+        table_rows = self.list_table_rows(table_name)
+        other_table_rows = self.list_table_rows(other_table_name)
 
-        table_rows = self.query_table_rows(self.table_names_dict.get(self.table_id), table_columns)
-        other_table_rows = self.query_table_rows(self.table_names_dict.get(self.other_table_id), other_table_columns)
         row_id_list = []
         other_rows_ids_map = {}
 
@@ -1561,7 +1565,9 @@ class AutoAddLinkAction(BaseAction):
             for condition in self.match_column_conditions:
                 other_column_key = condition.get('other_column_key')
                 other_table_column = self.other_table_columns_dict.get(other_column_key)
-                other_row_value = cell_data2str(parse_row(other_table_column, other_row))
+                other_column_name = other_table_column.get('name')
+                other_row_value = other_row.get(other_column_name)
+                other_row_value = cell_data2str(other_row_value)
                 key += other_row_value + other_column_key + '-'
 
             if other_rows_dict.get(key):
@@ -1572,15 +1578,18 @@ class AutoAddLinkAction(BaseAction):
         for row in table_rows:
             linked_row_dict = {}
             if self.selected_link_option.get('link_column_key'):
-                linked_rows = row.get(self.selected_link_option.get('link_column_key'))
-                linked_row_dict = {row.get('row_id'): True for row in linked_rows}
+                link_column = self.table_columns_dict.get(self.selected_link_option.get('link_column_key'), {})
+                link_column_name = link_column.get('name', '')
+                linked_rows = row.get(link_column_name, [])
+                linked_row_dict = {row_id: True for row_id in linked_rows}
 
             key = '-'
             for condition in self.match_column_conditions:
                 column_key = condition.get('column_key')
                 other_column_key = condition.get('other_column_key')
                 table_column = self.table_columns_dict.get(column_key)
-                row_value = parse_row(table_column, row)
+                column_name = table_column.get('name')
+                row_value = row.get(column_name)
                 row_value = cell_data2str(row_value)
                 key += row_value + other_column_key + '-'
 
@@ -1596,40 +1605,6 @@ class AutoAddLinkAction(BaseAction):
 
             row_id_list.append(row.get('_id'))
             other_rows_ids_map[row.get('_id')] = to_link_row_list
-
-        # for row in table_rows:
-        #     linked_row_dict = {}
-        #     if self.selected_link_option.get('link_column_key'):
-        #         linked_rows = row.get(self.selected_link_option.get('link_column_key'))
-        #         linked_row_dict = {row.get('row_id'): True for row in linked_rows}
-        #
-        #     linked_row_list = []
-        #     to_link_row_list = []
-        #     for other_row in other_table_rows:
-        #         is_link = True
-        #         for condition in self.match_column_conditions:
-        #             column_key = condition.get('column_key')
-        #             other_column_key = condition.get('other_column_key')
-        #             table_column = self.table_columns_dict.get(column_key)
-        #             other_table_column = self.other_table_columns_dict.get(other_column_key)
-        #             row_value = parse_row(table_column, row)
-        #             other_row_value = parse_row(other_table_column, other_row)
-        #
-        #             row_value = cell_data2str(row_value)
-        #             other_row_value = cell_data2str(other_row_value)
-        #
-        #             if row_value != other_row_value:
-        #                 is_link = False
-        #                 break
-        #         if is_link:
-        #             other_row_id = other_row.get('_id')
-        #             if linked_row_dict.get(other_row_id):
-        #                 linked_row_list.append(other_row_id)
-        #             to_link_row_list.append(other_row_id)
-        #
-        #     if len(linked_row_dict) != len(linked_row_list) or len(linked_row_list) != len(to_link_row_list):
-        #         row_id_list.append(row.get('_id'))
-        #         other_rows_ids_map[row.get('_id')] = to_link_row_list
 
         self.row_id_list = row_id_list
         self.other_rows_ids_map = other_rows_ids_map
@@ -1755,6 +1730,7 @@ class CalculateAction(BaseAction):
 
             elif calculate_col_type == ColumnTypes.DATE or \
                     calculate_col_type == ColumnTypes.FORMULA and calculate_col.get('data').get('result_type') == 'date':
+                # default_date is for formatting date
                 date_format, default_date = get_date_format(calculate_col.get('data').get('format'))
                 self.rank_rows = sorted(self.rank_rows,
                                         key=lambda x: datetime.strptime(x.get(calculate_col_name, default_date), date_format),
@@ -1844,23 +1820,20 @@ class LookupAndCopyAction(BaseAction):
                     column_dict[col.get('key')] = col
         return column_dict
 
-    def query_table_rows(self, table_name, column_names):
-        column_names = [('`' + name + '`') for name in column_names]
-        sql_columns = ', '.join(column_names)
-        limit = 0
-        step = 1000
+    def list_table_rows(self, table_name):
+        start = 0
+        limit = 10000
         result_rows = []
         while True:
-            sql = f"select `_id`, {sql_columns} from `{table_name}` limit {limit},{step}"
             try:
-                results = self.auto_rule.dtable_db_api.query(sql, convert=False)
+                results = self.auto_rule.dtable_server_api.list_rows(table_name, start, limit)
             except Exception as e:
-                logger.error('query dtable: %s, table name: %s, error: %s', self.auto_rule.dtable_uuid, table_name, e)
+                logger.error('dtable: %s, table name: %s, list rows error: %s', self.auto_rule.dtable_uuid, table_name, e)
                 return []
 
             result_rows += results
-            limit += step
-            if len(results) < step:
+            start += limit
+            if len(results) < limit:
                 break
         return result_rows
 
@@ -1879,10 +1852,6 @@ class LookupAndCopyAction(BaseAction):
             self.auto_rule.set_invalid()
             return
 
-        equal_from_columns = []
-        equal_copy_to_columns = []
-        fill_from_columns = []
-        fill_copy_to_columns = []
         # check column valid
         try:
             for col in self.equal_column_conditions:
@@ -1891,8 +1860,6 @@ class LookupAndCopyAction(BaseAction):
                 if from_column.get('type') not in self.VALID_COLUMN_TYPES or copy_to_column.get('type') not in self.VALID_COLUMN_TYPES:
                     self.auto_rule.set_invalid()
                     return
-                equal_from_columns.append(from_column.get('name'))
-                equal_copy_to_columns.append(copy_to_column.get('name'))
 
             for col in self.fill_column_conditions:
                 from_column = from_column_dict[col['from_column_key']]
@@ -1900,18 +1867,13 @@ class LookupAndCopyAction(BaseAction):
                 if from_column.get('type') not in self.VALID_COLUMN_TYPES or copy_to_column.get('type') not in self.VALID_COLUMN_TYPES:
                     self.auto_rule.set_invalid()
                     return
-                fill_from_columns.append(from_column.get('name'))
-                fill_copy_to_columns.append(copy_to_column.get('name'))
         except KeyError as e:
             logger.error('dtable: %s, from_table: %s or copy_to_table:%s column key error: %s', self.auto_rule.dtable_uuid, self.from_table_name, self.copy_to_table_name, e)
             self.auto_rule.set_invalid()
             return
 
-        from_columns = equal_from_columns + fill_from_columns
-        copy_to_columns = equal_copy_to_columns + fill_copy_to_columns
-
-        from_table_rows = self.query_table_rows(self.from_table_name, from_columns)
-        copy_to_table_rows = self.query_table_rows(self.copy_to_table_name, copy_to_columns)
+        from_table_rows = self.list_table_rows(self.from_table_name)
+        copy_to_table_rows = self.list_table_rows(self.copy_to_table_name)
 
         from_table_rows_dict = {}
         for from_row in from_table_rows:
@@ -1919,7 +1881,9 @@ class LookupAndCopyAction(BaseAction):
             for equal_condition in self.equal_column_conditions:
                 from_column_key = equal_condition['from_column_key']
                 from_column = from_column_dict[from_column_key]
-                from_value = cell_data2str(parse_row(from_column, from_row))
+                from_column_name = from_column.get('name')
+                from_value = from_row.get(from_column_name)
+                from_value = cell_data2str(from_value)
                 from_key += from_value + from_column_key + '-'
             from_table_rows_dict[from_key] = from_row
 
@@ -1929,7 +1893,9 @@ class LookupAndCopyAction(BaseAction):
                 from_column_key = equal_condition['from_column_key']
                 copy_to_column_key = equal_condition['copy_to_column_key']
                 copy_to_column = copy_to_column_dict[copy_to_column_key]
-                copy_to_value = cell_data2str(parse_row(copy_to_column, copy_to_row))
+                copy_to_column_name = copy_to_column.get('name')
+                copy_to_value = copy_to_row.get(copy_to_column_name)
+                copy_to_value = cell_data2str(copy_to_value)
                 copy_to_key += copy_to_value + from_column_key + '-'
             from_row = from_table_rows_dict.get(copy_to_key)
             if not from_table_rows_dict.get(copy_to_key):
@@ -1937,9 +1903,13 @@ class LookupAndCopyAction(BaseAction):
 
             for fill_condition in self.fill_column_conditions:
                 from_column_key = fill_condition.get('from_column_key')
+                from_column = from_column_dict[from_column_key]
+                from_column_name = from_column.get('name')
                 copy_to_column_key = fill_condition.get('copy_to_column_key')
-                from_value = from_row[from_column_key]
-                copy_to_value = copy_to_row[copy_to_column_key]
+                copy_to_column = copy_to_column_dict[copy_to_column_key]
+                copy_to_column_name = copy_to_column.get('name')
+                from_value = from_row.get(from_column_name, '')
+                copy_to_value = copy_to_row.get(copy_to_column_name, '')
 
                 # do not need convert value to str because column type may be different
                 if from_value == copy_to_value:
@@ -1956,59 +1926,6 @@ class LookupAndCopyAction(BaseAction):
                         from_value = d[0] + ' ' + d[1].split('+')[0]
 
                 self.update_rows.append({'row_id': copy_to_row['_id'], 'row': {copy_to_column_name: from_value}})
-
-        # for from_row in from_table_rows:
-        #     for copy_to_row in copy_to_table_rows:
-        #         is_condition_value_equal = True
-        #         for equal_condition in self.equal_column_conditions:
-        #
-        #             from_column = from_column_dict[equal_condition['from_column_key']]
-        #             copy_to_column = copy_to_column_dict[equal_condition['copy_to_column_key']]
-        #
-        #             from_value = parse_row(from_column, from_row)
-        #             copy_to_value = parse_row(copy_to_column, copy_to_row)
-        #             #
-        #             from_value = cell_data2str(from_value)
-        #             copy_to_value = cell_data2str(copy_to_value)
-        #             print('from_value')
-        #             print(from_value)
-        #             print(copy_to_value)
-        #
-        #             if str(from_value) != str(copy_to_value):
-        #                 is_condition_value_equal = False
-        #                 break
-        #         if is_condition_value_equal:
-        #             filled_row = {}
-        #             for fill_condition in self.fill_column_conditions:
-        #                 from_column_key = fill_condition.get('from_column_key')
-        #                 copy_to_column_key = fill_condition.get('copy_to_column_key')
-        #                 from_value = from_row[from_column_key]
-        #                 copy_to_value = copy_to_row[copy_to_column_key]
-        #                 # print(from_value)
-        #                 # print(type(from_value))
-        #
-        #                 if from_value == copy_to_value:
-        #                     continue
-        #
-        #                 copy_to_column_name = copy_to_column_dict[copy_to_column_key].get('name')
-        #                 # 需要根据复制到的列的类型进行数据的解析
-        #                 # filled_row[copy_to_column_name] = from_value
-        #                 copy_to_column_type = copy_to_column_dict[copy_to_column_key].get('type')
-        #                 # print('copy_to_column_type')
-        #                 # print(copy_to_column_type)
-        #                 if copy_to_column_type == ColumnTypes.CHECKBOX:
-        #                     from_value = True if from_value else False
-        #                 elif copy_to_column_type == ColumnTypes.DATE:
-        #                     if isinstance(from_value, str) and 'T' in from_value:
-        #                         d = from_value.split('T')
-        #                         from_value = d[0] + ' ' + d[1].split('+')[0]
-        #
-        #                 filled_row[copy_to_column_name] = from_value
-        #
-        #             if filled_row:
-        #                 # for filter duplicate rows，it will copy the last row if some rows meet the criteria
-        #                 update_rows_dict[copy_to_row['_id']] = filled_row
-        # self.update_rows = [{'row_id': row, 'row': update_rows_dict.get(row)} for row in update_rows_dict]
 
     def _can_do_action(self):
         if not self.auto_rule.current_valid:
@@ -2051,21 +1968,20 @@ class ExtractUserNameAction(BaseAction):
         self.column_key_dict = {col.get('key'): col for col in self.auto_rule.view_columns}
         self.update_rows = []
 
-    def query_user_rows(self, table_name, extract_column_name, result_column_name):
-        limit = 0
-        step = 1000
+    def list_table_rows(self, table_name):
+        start = 0
+        limit = 10000
         result_rows = []
         while True:
-            sql = f"select `_id`, `{extract_column_name}`, `{result_column_name}` from `{table_name}` limit {limit},{step}"
             try:
-                results = self.auto_rule.dtable_db_api.query(sql, convert=True)
+                results = self.auto_rule.dtable_server_api.list_rows(table_name, start, limit)
             except Exception as e:
-                logger.error('query dtable: %s, table name: %s, error: %s', self.auto_rule.dtable_uuid, table_name, e)
+                logger.error('dtable: %s, table name: %s, list rows error: %s', self.auto_rule.dtable_uuid, table_name, e)
                 return []
 
             result_rows += results
-            limit += step
-            if len(results) < step:
+            start += limit
+            if len(results) < limit:
                 break
         return result_rows
 
@@ -2082,7 +1998,7 @@ class ExtractUserNameAction(BaseAction):
         extract_column_name = extract_column.get('name')
         result_column_name = result_column.get('name')
         table_name = self.auto_rule.table_info.get('name')
-        user_rows = self.query_user_rows(table_name, extract_column_name, result_column_name)
+        user_rows = self.list_table_rows(table_name)
         unknown_user_id_set = set()
         unknown_user_rows = []
         related_users_dict = self.auto_rule.related_users_dict
@@ -2592,8 +2508,7 @@ class AutomationRule:
                     match_column_conditions = action_info.get('match_column_conditions')
                     selected_link_option = action_info.get('selected_link_option')
                     action_id = action_info.get('_id')
-                    AutoAddLinkAction(self, self.data, match_table_condition, match_column_conditions,
-                                      selected_link_option, action_id).do_action()
+                    AutoAddLinkAction(self, self.data, match_table_condition, match_column_conditions, selected_link_option, action_id).do_action()
 
                 elif action_info.get('type') in AUTO_RULE_CALCULATE_TYPES:
                     calculate_column_key = action_info.get('calculate_column')
