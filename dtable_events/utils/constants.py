@@ -143,7 +143,7 @@ DATE_COLUMN_TYPES = [
 ]
 
 class StatisticType:
-    CHART_BAR = 'chart_bar'
-    CHART_PIE = 'chart_pie'
-    CHART_LINE = 'chart_line'
-    CHART_TABLE = 'chart_table'
+    BAR = 'bar'
+    PIE = 'pie'
+    LINE = 'line'
+    TABLE = 'table'
