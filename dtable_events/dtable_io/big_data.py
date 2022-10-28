@@ -269,10 +269,13 @@ def update_excel_to_db(
                         parsed_row_data = {}
                         for col_name, value in row_data.items():
                             col_type = column_name_type_map.get(col_name)
+                            if not col_type:
+                                continue
                             if col_type in AUTO_GENERATED_COLUMNS:
                                 continue
                             parsed_row_data[col_name] = value and parse_row(col_type, value, name_to_email, location_tree=location_tree) or ''
-                        import_rows.append(parsed_row_data)
+                        if parsed_row_data not in import_rows:
+                            import_rows.append(parsed_row_data)
 
                 # 2. for update
                 else:
@@ -292,13 +295,12 @@ def update_excel_to_db(
 
 
                 if total_count + 1 >= total_rows or len(update_rows) >= 100:
-                    tasks_status_map[task_id]['rows_handled'] = total_count
                     db_handler.batch_update_rows(table_name, update_rows)
                     update_rows = []
                 if total_count + 1 >= total_rows or len(import_rows) >= 100:
-                    tasks_status_map[task_id]['rows_handled'] = total_count
                     db_handler.insert_rows(table_name, import_rows)
                     import_rows = []
+                tasks_status_map[task_id]['rows_handled'] = total_count
                 total_count += 1
             index += 1
         except Exception as err:
