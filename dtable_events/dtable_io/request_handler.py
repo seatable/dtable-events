@@ -519,6 +519,10 @@ def add_email_sending_task():
     if file_download_urls and not isinstance(file_download_urls, dict):
         file_download_urls = json.loads(file_download_urls)
 
+    image_cid_url_map = data.get('image_cid_url_map', {})
+    if image_cid_url_map and not isinstance(image_cid_url_map, dict):
+        image_cid_url_map = json.loads(image_cid_url_map)
+
     auth_info = {
         'email_host': data.get('email_host'),
         'email_port': data.get('email_port'),
@@ -537,6 +541,7 @@ def add_email_sending_task():
         'file_download_urls': file_download_urls,
         'message_id': data.get('message_id'),
         'in_reply_to': data.get('in_reply_to'),
+        'image_cid_url_map': image_cid_url_map,
     }
 
     try:
