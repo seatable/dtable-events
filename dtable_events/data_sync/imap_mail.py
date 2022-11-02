@@ -31,15 +31,19 @@ class ImapMail(object):
     @staticmethod
     def decode_str(s):
         value, charset = decode_header(s)[0]
-        if charset:
-            value = value.decode(charset)
-        return value
+        if not charset:
+            return value
+        if charset.lower() in ['gb2312', 'gbk', 'gb18030']:
+            charset = 'gb18030'
+        return value.decode(charset)
 
     @staticmethod
     def parse_content(part):
         content = ''
         charset = part.get_content_charset()
         if charset:
+            if charset.lower() in ['gb2312', 'gbk', 'gb18030']:
+                charset = 'gb18030'
             try:
                 content = part.get_payload(decode=True).decode(charset)
             except LookupError:
