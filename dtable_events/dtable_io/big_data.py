@@ -51,31 +51,59 @@ def match_columns(authed_base, table_name, target_columns):
     return True, None, table_columns
 
 
-def query_row_ids_with_ref_columns(db_api, table_name, row_data, ref_cols, column_name_type_map):
+def _parse_excel_row(excel_row_data, column_name_type_map, name_to_email, location_tree):
+    parsed_row_data = {}
+    for col_name, value in excel_row_data.items():
+        col_type = column_name_type_map.get(col_name)
+        if not value:
+            continue
+        parsed_row_data[col_name] = parse_row(col_type, value, name_to_email,location_tree=location_tree)
+    return parsed_row_data
+
+
+def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column_name_type_map, name_to_email, location_tree, insert_new_row=False):
     where_clauses = []
     for ref_col in ref_cols:
-        col_type = column_name_type_map.get(ref_col)
-        value = row_data.get(ref_col)
-        if not value:
+        value_list = []
+        none_in_list = False
+        for row_data in excel_row_datas:
+            value = row_data.get(ref_col)
+            if not value:
+                none_in_list = True
+            if value and value not in value_list:
+                value_list.append(value)
+        if none_in_list:
             where_clauses.append(
-                "`%s` is null" % ref_col
+                "(`%s` in %s or `%s` is null)" % (ref_col, tuple(value_list), ref_col)
             )
         else:
-            if col_type == ColumnTypes.NUMBER:
-                where_clauses.append(
-                    "`%s`=%s" % (ref_col, value)
-                )
-            else:
-                where_clauses.append(
-                    "`%s`='%s'" %(ref_col, value)
-                )
-    sql = "Select _id from `%s` where %s" % (
+            where_clauses.append(
+                "`%s` in %s" % (ref_col, tuple(value_list))
+            )
+
+    sql = "Select * from `%s` where %s" % (
         table_name,
         ' And '.join(where_clauses)
     )
 
-    res = db_api.query(sql)
-    return res and [r.get('_id') for r in res] or []
+    rows_for_import = []
+    rows_for_update = []
+
+    query_rows_from_base = db_api.query(sql, convert=True)
+    for excel_row in excel_row_datas:
+        excel_ref_data = {col: excel_row.get(col) for col in ref_cols if  excel_row.get(col)}
+        find_tag = False
+        for base_row in query_rows_from_base:
+            base_ref_data = {col: base_row.get(col) for col in ref_cols if base_row.get(col)}
+            if base_ref_data and excel_ref_data and base_ref_data == excel_ref_data:
+                rows_for_update.append({
+                    "row_id": base_row.get('_id'),
+                    "row": _parse_excel_row(excel_row, column_name_type_map, name_to_email, location_tree) # parse
+                })
+                find_tag = True
+        if insert_new_row and excel_ref_data and not find_tag:
+            rows_for_import.append(_parse_excel_row(excel_row, column_name_type_map, name_to_email, location_tree)) # parse
+    return rows_for_import, rows_for_update
 
 
 def import_excel_to_db(
@@ -182,6 +210,7 @@ def import_excel_to_db(
     os.remove(file_path)
     return
 
+
 def update_excel_to_db(
         username,
         dtable_uuid,
@@ -242,10 +271,6 @@ def update_excel_to_db(
         return
 
     total_count = 0  # data in excel scanned
-
-    update_rows = []
-    import_rows = []
-
     related_users = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
     name_to_email = {user.get('name'): user.get('email') for user in related_users}
 
@@ -255,51 +280,26 @@ def update_excel_to_db(
     status = 'success'
     tasks_status_map[task_id]['status'] = 'running'
     tasks_status_map[task_id]['total_rows'] = total_rows
+
+    excel_row_datas = []
     for row in ws.rows:
         try:
             if index > 0:
                 row_list = [r.value for r in row]
                 row_data = dict(zip(excel_columns, row_list))
-                row_ids = query_row_ids_with_ref_columns(
-                    db_handler,table_name, row_data, ref_columns,column_name_type_map
-                )
-                # 1. for import
-                if not row_ids:
-                    if is_insert_new_data:
-                        parsed_row_data = {}
-                        for col_name, value in row_data.items():
-                            col_type = column_name_type_map.get(col_name)
-                            if not col_type:
-                                continue
-                            if col_type in AUTO_GENERATED_COLUMNS:
-                                continue
-                            parsed_row_data[col_name] = value and parse_row(col_type, value, name_to_email, location_tree=location_tree) or ''
-                        if parsed_row_data not in import_rows:
-                            import_rows.append(parsed_row_data)
-
-                # 2. for update
-                else:
-                    updates = []
-                    parsed_row_data = {}
-                    for col_name, value in row_data.items():
-                        col_type = column_name_type_map.get(col_name)
-                        if col_type in AUTO_GENERATED_COLUMNS:
-                            continue
-                        parsed_row_data[col_name] = value and parse_row(col_type, value, name_to_email, location_tree=location_tree) or ''
-                    for row_id in row_ids:
-                        updates.append({
-                            'row_id': row_id,
-                            'row': parsed_row_data or {}
-                        })
-                        update_rows.extend(updates)
-
-
-                if total_count + 1 >= total_rows or len(update_rows) >= 100:
-                    db_handler.batch_update_rows(table_name, update_rows)
-                    update_rows = []
-                if total_count + 1 >= total_rows or len(import_rows) >= 100:
-                    db_handler.insert_rows(table_name, import_rows)
-                    import_rows = []
+                excel_row_datas.append(row_data)
+                if total_count + 1 >= total_rows or len(excel_row_datas) >= 100:
+                    rows_for_import, rows_for_update = handle_excel_row_datas(
+                        db_handler, table_name,
+                        excel_row_datas, ref_columns,
+                        column_name_type_map, name_to_email, location_tree,
+                        is_insert_new_data
+                    )
+                    if is_insert_new_data and rows_for_import:
+                        db_handler.insert_rows(table_name, rows_for_import)
+                    if rows_for_update:
+                        db_handler.batch_update_rows(table_name, rows_for_update)
+                    excel_row_datas = []
                 tasks_status_map[task_id]['rows_handled'] = total_count
                 total_count += 1
             index += 1
