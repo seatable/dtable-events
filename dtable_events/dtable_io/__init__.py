@@ -1095,10 +1095,10 @@ def update_big_excel(username, dtable_uuid, table_name, file_path, ref_columns, 
     upload excel json file to dtable-db
     """
 
-    dtable_io_logger.info('Start import big excel: {}.'.format(dtable_uuid))
+    dtable_io_logger.info('Start update big excel: {}.'.format(dtable_uuid))
     try:
         update_excel_to_db(username, dtable_uuid, table_name, file_path, ref_columns, is_insert_new_data, task_id, tasks_status_map)
     except Exception as e:
-        dtable_io_logger.error('import big excel failed. ERROR: {}'.format(e))
+        dtable_io_logger.error('update big excel failed. ERROR: {}'.format(e))
     else:
-        dtable_io_logger.info('import big excel %s.xlsx success!' % table_name)
+        dtable_io_logger.info('update big excel %s.xlsx success!' % table_name)
