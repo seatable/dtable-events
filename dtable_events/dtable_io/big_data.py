@@ -74,11 +74,17 @@ def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column
                 value_list.append(value)
         if none_in_list:
             where_clauses.append(
-                "(`%s` in %s or `%s` is null)" % (ref_col, tuple(value_list), ref_col)
+                "(`%s` in (%s) or `%s` is null)" % (
+                    ref_col,
+                    str(value_list).replace('[', '').replace(']', ''),
+                    ref_col)
             )
         else:
             where_clauses.append(
-                "`%s` in %s" % (ref_col, tuple(value_list))
+                "`%s` in (%s)" % (
+                    ref_col,
+                    str(value_list).replace('[', '').replace(']', ''),
+                )
             )
 
     sql = "Select * from `%s` where %s" % (
