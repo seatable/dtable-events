@@ -141,7 +141,7 @@ class DTableDBAPI(object):
             token = token.decode()
         return token
 
-    def query(self, sql, convert=False):
+    def query(self, sql, convert=True):
         """
         :param sql: str
         :param convert: bool
