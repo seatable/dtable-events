@@ -684,6 +684,7 @@ def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token, session_id):
     webdriver_options.add_argument('--no-sandbox')
     webdriver_options.add_argument('--headless')
     webdriver_options.add_argument('--disable-gpu')
+    webdriver_options.add_argument('--disable-dev-shm-usage')
 
     driver = webdriver.Chrome('/usr/local/bin/chromedriver', options=webdriver_options)
 
