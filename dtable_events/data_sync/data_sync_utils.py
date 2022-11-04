@@ -380,7 +380,7 @@ def run_sync_emails(context):
 
     if not all([account_id, email_table_id, link_table_id]):
         set_data_sync_invalid(data_sync_id, db_session)
-        logger.error('account settings invalid.')
+        logger.warning('account settings invalid.')
         return
 
     if not send_date:
@@ -400,7 +400,7 @@ def run_sync_emails(context):
     account_detail = account.get('detail')
     if not account or account_type != 'email' or not account_detail:
         set_data_sync_invalid(data_sync_id, db_session)
-        logger.error('third party account not found.')
+        logger.warning('third party account not found.')
         return
 
     imap_host = account_detail.get('imap_host')
@@ -409,14 +409,14 @@ def run_sync_emails(context):
     email_password = account_detail.get('password')
     if not all([imap_host, imap_port, email_user, email_password]):
         set_data_sync_invalid(data_sync_id, db_session)
-        logger.error('third party account invalid.')
+        logger.warning('third party account invalid.')
         return
 
     # check imap account
     try:
         imap = login_imap(imap_host, email_user, email_password, port=imap_port)
     except LoginError:
-        logger.error('user or password invalid, email: %s user login error', email_user)
+        logger.warning('user or password invalid, email: %s user login error', email_user)
         set_data_sync_invalid(data_sync_id, db_session)
         return
     except Exception as e:
@@ -452,7 +452,7 @@ def run_sync_emails(context):
 
     if not email_table_name or not link_table_name:
         set_data_sync_invalid(data_sync_id, db_session)
-        logger.error('email table or link table invalid.')
+        logger.warning('email table or link table invalid.')
         return
 
     # check required columns
@@ -462,13 +462,13 @@ def run_sync_emails(context):
     for col_name in REQUIRED_EMAIL_COLUMNS:
         if not email_columns_dict.get(col_name):
             set_data_sync_invalid(data_sync_id, db_session)
-            logger.error('email table no such column: %s', col_name)
+            logger.warning('email table no such column: %s', col_name)
             return
 
     for col_name in REQUIRED_THREAD_COLUMNS:
         if not link_columns_dict.get(col_name):
             set_data_sync_invalid(data_sync_id, db_session)
-            logger.error('thread table no such column: %s', col_name)
+            logger.warning('thread table no such column: %s', col_name)
             return
 
     try:
