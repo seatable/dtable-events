@@ -569,7 +569,7 @@ class CheckBoxOperator(Operator):
 
     def op_is(self):
         if not self.filter_term:
-            return "`%(column_name)s` = %(value)s or `%(column_name)s` is null " % ({
+            return "(`%(column_name)s` = %(value)s or `%(column_name)s` is null)" % ({
                 "column_name": self.column_name,
                 "value": self.filter_term
         })
