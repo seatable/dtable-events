@@ -191,3 +191,14 @@ def get_inner_dtable_server_url():
         return INNER_DTABLE_SERVER_URL
     else:
         return DTABLE_SERVER_URL
+
+
+def get_location_tree_json():
+    import json
+    from dtable_events.app.config import dtable_web_dir
+    json_path = os.path.join(dtable_web_dir, 'media/geo-data/cn-location.json')
+
+    with open(json_path, 'r', encoding='utf8') as fp:
+        json_data = json.load(fp)
+
+    return json_data

@@ -702,11 +702,14 @@ def parse_dtable_excel_rows(sheet_rows, columns, column_length, name_to_email):
     parse excel according to dtable
     """
     from dtable_events.dtable_io import dtable_io_logger
+    from dtable_events.utils import get_location_tree_json
 
     value_rows = sheet_rows[1:]
     sheet_head = sheet_rows[0]
     head_dict = {sheet_head[index].value: index for index in range(len(sheet_head))}
     rows = []
+
+    location_tree = get_location_tree_json()
 
     for row in value_rows:
         row_data = {}
@@ -721,7 +724,7 @@ def parse_dtable_excel_rows(sheet_rows, columns, column_length, name_to_email):
                 if cell_value is None:
                     row_data[column_name] = None
                     continue
-                row_data[column_name] = parse_row(column_type, cell_value, name_to_email)
+                row_data[column_name] = parse_row(column_type, cell_value, name_to_email, location_tree=location_tree)
             except Exception as e:
                 dtable_io_logger.exception(e)
                 row_data[column_name] = None
@@ -785,6 +788,7 @@ def guess_delimiter(csv_file):
 
 def parse_csv_rows(csv_file, columns, max_column, name_to_email):
     from dtable_events.dtable_io import dtable_io_logger
+    from dtable_events.utils import get_location_tree_json
 
     rows = []
     delimiter = guess_delimiter(deepcopy(csv_file))
@@ -792,6 +796,8 @@ def parse_csv_rows(csv_file, columns, max_column, name_to_email):
 
     if not csv_rows:
         return rows, 0, 0, 0
+
+    location_tree = get_location_tree_json()
 
     csv_head = csv_rows[0]
     csv_column_num = len(csv_head)
@@ -817,7 +823,7 @@ def parse_csv_rows(csv_file, columns, max_column, name_to_email):
                 if cell_value is None:
                     row_data[column_name] = None
                     continue
-                parsed_value = parse_row(column_type, cell_value, name_to_email)
+                parsed_value = parse_row(column_type, cell_value, name_to_email, location_tree=location_tree)
                 row_data[column_name] = parsed_value
             except Exception as e:
                 dtable_io_logger.exception(e)

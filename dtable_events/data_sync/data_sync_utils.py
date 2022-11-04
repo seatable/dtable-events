@@ -19,6 +19,9 @@ from dtable_events.utils.dtable_server_api import DTableServerAPI
 logger = logging.getLogger(__name__)
 
 
+REQUIRED_EMAIL_COLUMNS = ['From', 'Message ID', 'To', 'Subject', 'cc', 'Date', 'Reply to Message ID', 'Thread ID']
+REQUIRED_THREAD_COLUMNS = ['Subject', 'Last Updated', 'Thread ID']
+
 def login_imap(host, user, password, port=None, timeout=None):
     imap = ImapMail(host, user, password, port=port, ssl_context=ssl.SSLContext(ssl.PROTOCOL_TLSv1_2), timeout=timeout)
     imap.client()
@@ -433,13 +436,17 @@ def run_sync_emails(context):
 
     email_table_name = ''
     link_table_name = ''
+    email_columns = []
+    link_columns = []
 
     tables = metadata.get('tables', [])
     for table in tables:
         if not email_table_name and table.get('_id') == email_table_id:
             email_table_name = table.get('name')
+            email_columns = table.get('columns')
         if not link_table_name and table.get('_id') == link_table_id:
             link_table_name = table.get('name')
+            link_columns = table.get('columns')
         if email_table_name and link_table_name:
             break
 
@@ -447,6 +454,22 @@ def run_sync_emails(context):
         set_data_sync_invalid(data_sync_id, db_session)
         logger.error('email table or link table invalid.')
         return
+
+    # check required columns
+    email_columns_dict = {column.get('name'): True for column in email_columns}
+    link_columns_dict = {column.get('name'): True for column in link_columns}
+
+    for col_name in REQUIRED_EMAIL_COLUMNS:
+        if not email_columns_dict.get(col_name):
+            set_data_sync_invalid(data_sync_id, db_session)
+            logger.error('email table no such column: %s', col_name)
+            return
+
+    for col_name in REQUIRED_THREAD_COLUMNS:
+        if not link_columns_dict.get(col_name):
+            set_data_sync_invalid(data_sync_id, db_session)
+            logger.error('thread table no such column: %s', col_name)
+            return
 
     try:
         email_list = sorted(imap.search_emails_by_send_date(send_date, 'SINCE'), key=lambda x: str_2_datetime(x['Date']))

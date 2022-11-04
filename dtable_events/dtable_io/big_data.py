@@ -4,9 +4,9 @@ import json
 
 from dtable_events.dtable_io.excel import parse_row
 from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
-from dtable_events.utils import get_inner_dtable_server_url
+from dtable_events.utils import get_inner_dtable_server_url, get_location_tree_json
 from dtable_events.utils.constants import ColumnTypes
-from dtable_events.app.config import INNER_DTABLE_DB_URL, dtable_web_dir
+from dtable_events.app.config import INNER_DTABLE_DB_URL
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 
@@ -26,16 +26,6 @@ FILE_READ_ERROR_CODE = 2
 COLUMN_MATCH_ERROR_CODE = 3
 ROW_INSERT_ERROR_CODE = 4
 INTERNAL_ERROR_CODE = 5
-
-def get_location_tree_json():
-
-    json_path = os.path.join(dtable_web_dir, 'media/geo-data/cn-location.json')
-
-    with open(json_path, 'r', encoding='utf8') as fp:
-        json_data = json.load(fp)
-
-    return json_data
-
 
 
 def match_columns(authed_base, table_name, target_columns):

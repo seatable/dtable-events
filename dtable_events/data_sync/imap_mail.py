@@ -126,7 +126,11 @@ class ImapMail(object):
 
         header_info = self.get_email_header(msg)
         send_time = header_info.get('Date')
-        send_time = datetime.strptime(send_time, '%Y-%m-%d %H:%M:%S')
+        try:
+            send_time = datetime.strptime(send_time, '%Y-%m-%d %H:%M:%S')
+        except Exception as e:
+            logger.error('parse send_time error: %s', e)
+            send_time = datetime.today().date()
 
         if mode == 'ON' and send_time.date() != send_date:
             return
