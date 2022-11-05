@@ -246,12 +246,13 @@ def copy_src_auto_rules_to_json(dtable_uuid, tmp_file_path, db_session):
 def copy_src_workflows_to_json(dtable_uuid, tmp_file_path, db_session):
     if not db_session:
         return
-    sql = """SELECT `workflow_config` FROM dtable_workflows WHERE dtable_uuid=:dtable_uuid"""
+    sql = """SELECT `token`, `workflow_config` FROM dtable_workflows WHERE dtable_uuid=:dtable_uuid"""
     src_workflows = db_session.execute(sql, {'dtable_uuid': ''.join(dtable_uuid.split('-'))})
     src_workflows_json = []
     for src_workflow in src_workflows:
         workflow = {
-            'workflow_config': src_workflow[0]
+            'token': src_workflow[0],
+            'workflow_config': src_workflow[1]
         }
         src_workflows_json.append(workflow)
     if src_workflows_json:
@@ -485,7 +486,7 @@ def add_a_form_to_db(form, workspace_id, dtable_uuid, db_session):
     db_session.commit()
 
 
-def add_a_auto_rule_to_db(username, auto_rule, workspace_id, repo_id, owner, org_id, dtable_uuid, db_session):
+def add_a_auto_rule_to_db(username, auto_rule, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, db_session):
     # get org_id
     sql_get_org_id = """SELECT `org_id` FROM workspaces WHERE id=:id"""
     org_id = [x[0] for x in db_session.execute(sql_get_org_id, {'id': workspace_id})][0]
@@ -499,6 +500,8 @@ def add_a_auto_rule_to_db(username, auto_rule, workspace_id, repo_id, owner, org
             action['owner'] = owner
             action['org_id'] = int(org_id)
             action['repo_id'] = repo_id
+        if action.get('type') == 'trigger_workflow':
+            action['token'] = old_new_workflow_token_dict.get(action.get('token'))
 
     sql = """INSERT INTO dtable_automation_rules (`dtable_uuid`, `run_condition`, `trigger`, `actions`,
              `creator`, `ctime`, `org_id`, `last_trigger_time`) VALUES (:dtable_uuid, :run_condition,
@@ -516,8 +519,9 @@ def add_a_auto_rule_to_db(username, auto_rule, workspace_id, repo_id, owner, org
     db_session.commit()
 
 
-def add_a_workflow_to_db(username, workflow, workspace_id, repo_id, dtable_uuid, owner, org_id, db_session):
+def add_a_workflow_to_db(username, workflow, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, db_session):
     try:
+        old_token = workflow.get('token')
         workflow_config = json.loads(workflow.get('workflow_config'))
     except:
         workflow_config = {}
@@ -534,8 +538,9 @@ def add_a_workflow_to_db(username, workflow, workspace_id, repo_id, dtable_uuid,
     sql = """INSERT INTO dtable_workflows (`token`,`dtable_uuid`, `workflow_config`, `creator`, `created_at`,
              `owner`) VALUES (:token, :dtable_uuid, :workflow_config,
              :creator, :created_at, :owner)"""
+    new_token = str(uuid.uuid4())
     db_session.execute(sql, {
-        'token': str(uuid.uuid4()),
+        'token': new_token,
         'dtable_uuid': ''.join(dtable_uuid.split('-')),
         'workflow_config': json.dumps(workflow_config),
         'creator': username,
@@ -543,6 +548,7 @@ def add_a_workflow_to_db(username, workflow, workspace_id, repo_id, dtable_uuid,
         'owner': owner,
         })
     db_session.commit()
+    old_new_workflow_token_dict[old_token] = new_token
 
 
 def add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, org_id):
@@ -577,7 +583,7 @@ def create_forms_from_src_dtable(workspace_id, dtable_uuid, db_session):
         add_a_form_to_db(form, workspace_id, dtable_uuid, db_session)
 
 
-def create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, org_id, dtable_uuid, db_session):
+def create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, db_session):
     if not db_session:
         return
     auto_rules_json_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted/', 'auto_rules.json')
@@ -589,10 +595,10 @@ def create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, or
     for auto_rule in auto_rules:
         if ('run_condition' not in auto_rule) or ('trigger' not in auto_rule) or ('actions' not in auto_rule):
             continue
-        add_a_auto_rule_to_db(username, auto_rule, workspace_id, repo_id, owner, org_id, dtable_uuid, db_session)
+        add_a_auto_rule_to_db(username, auto_rule, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, db_session)
 
 
-def create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uuid, owner, org_id, db_session):
+def create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, db_session):
     if not db_session:
         return
     workflows_json_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted/', 'workflows.json')
@@ -604,7 +610,7 @@ def create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uui
     for workflow in workflows:
         if 'workflow_config' not in workflow:
             continue
-        add_a_workflow_to_db(username, workflow, workspace_id, repo_id, dtable_uuid, owner, org_id, db_session)
+        add_a_workflow_to_db(username, workflow, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, db_session)
 
 
 def create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_id):

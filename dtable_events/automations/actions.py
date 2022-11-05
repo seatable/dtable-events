@@ -144,6 +144,8 @@ class UpdateAction(BaseAction):
         return fill_msg_blanks_with_converted_row(text, blanks, col_name_dict, row, db_session, dtable_metadata)
 
     def _init_updates(self):
+        if self.auto_rule.run_condition != PER_UPDATE:
+            return
         src_row = self.data['converted_row']
         self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
 
@@ -1375,6 +1377,7 @@ class TriggerWorkflowAction(BaseAction):
             resp = requests.post(internal_submit_workflow_url, data=data, headers={'Authorization': header_token})
             if resp.status_code != 200:
                 logger.error('rule: %s row_id: %s new workflow: %s task error status code: %s content: %s', self.auto_rule.rule_id, row_id, self.token, resp.status_code, resp.content)
+            self.auto_rule.set_done_actions()
         except Exception as e:
             logger.error('submit workflow: %s row_id: %s error: %s', self.token, row_id, e)
 

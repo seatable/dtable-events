@@ -185,22 +185,23 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
         if db_session:
             db_session.close()
 
-    if can_use_automation_rules:
-        dtable_io_logger.info('create auto rules from src dtable.')
+    old_new_workflow_token_dict = {}  # old new workflow token dict
+    if can_use_workflows:
+        dtable_io_logger.info('create workflows from src dtable.')
         try:
-            create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, org_id, dtable_uuid, db_session)
+            create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, db_session)
         except Exception as e:
-            dtable_io_logger.error('create auto rules failed. ERROR: {}'.format(e))
+            dtable_io_logger.error('create workflows failed. ERROR: {}'.format(e))
         finally:
             if db_session:
                 db_session.close()
 
-    if can_use_workflows:
-        dtable_io_logger.info('create workflows from src dtable.')
+    if can_use_automation_rules:
+        dtable_io_logger.info('create auto rules from src dtable.')
         try:
-            create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uuid, owner, org_id, db_session)
+            create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, db_session)
         except Exception as e:
-            dtable_io_logger.error('create workflows failed. ERROR: {}'.format(e))
+            dtable_io_logger.error('create auto rules failed. ERROR: {}'.format(e))
         finally:
             if db_session:
                 db_session.close()
