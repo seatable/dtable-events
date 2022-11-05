@@ -84,7 +84,7 @@ class BigDataStorageStatsTask(Thread):
                 try:
                     resp = requests.get(api_url, headers=headers).json()
                     bases = resp.get('bases', []) if resp else []
-                    if len(bases) > 0:
+                    if bases and len(bases) > 0:
                         db_session = self.db_session_class()
                         try:
                             update_big_data_storage_stats(db_session, bases)
