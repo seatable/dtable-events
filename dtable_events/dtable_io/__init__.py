@@ -825,7 +825,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
             break
 
     if not target_table:
-        dtable_io_logger.error('Table %s not found.' % table_id)
+        dtable_io_logger.warning('Table %s not found.' % table_id)
         return
 
     for view in target_table.get('views', []):
@@ -833,7 +833,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
             target_view = view
             break
     if not target_view:
-        dtable_io_logger.error('View %s not found.' % view_id)
+        dtable_io_logger.warning('View %s not found.' % view_id)
         return
 
     table_name = target_table.get('name', '')
@@ -938,7 +938,7 @@ def convert_table_to_execl(dtable_uuid, table_id, username, permission, name):
             break
 
     if not target_table:
-        dtable_io_logger.error('Table %s not found.' % table_id)
+        dtable_io_logger.warning('Table %s not found.' % table_id)
         return
 
     table_name = target_table.get('name', '')
