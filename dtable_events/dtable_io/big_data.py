@@ -6,7 +6,7 @@ from dtable_events.dtable_io.excel import parse_row
 from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
 from dtable_events.utils import get_inner_dtable_server_url, get_location_tree_json
 from dtable_events.utils.constants import ColumnTypes
-from dtable_events.app.config import INNER_DTABLE_DB_URL
+from dtable_events.app.config import INNER_DTABLE_DB_URL, BIG_DATA_ROW_IMPORT_LIMIT, BIG_DATA_ROW_UPDATE_LIMIT
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 
@@ -108,7 +108,7 @@ def import_excel_to_db(
         table_name,
         file_path,
         task_id,
-        tasks_status_map,
+        tasks_status_map
 
 ):
     from dtable_events.dtable_io import dtable_io_logger
@@ -117,20 +117,12 @@ def import_excel_to_db(
         'status': 'initializing',
         'err_msg': '',
         'rows_imported': 0,
-        'total_rows': 0,
         'err_code': 0,
     }
     try:
         wb = openpyxl.load_workbook(file_path, read_only=True)
         sheets = wb.get_sheet_names()
         ws = wb[sheets[0]]
-        total_rows = ws.max_row and ws.max_row - 1 or 0
-        if total_rows > 500000:
-            tasks_status_map[task_id]['err_msg'] = 'Number of rows (%s) exceeds 500,000 limit' % total_rows
-            tasks_status_map[task_id]['status'] = 'terminated'
-            tasks_status_map[task_id]['err_code'] = ROW_EXCEED_ERROR_CODE
-            os.remove(file_path)
-            return
     except Exception as err:
         tasks_status_map[task_id]['err_msg'] = "file reading error: %s" % str(err)
         tasks_status_map[task_id]['status'] = 'terminated'
@@ -162,12 +154,11 @@ def import_excel_to_db(
 
     total_count = 0
     insert_count = 0
-    slice = []
+    slice_data = []
 
 
     status = 'success'
     tasks_status_map[task_id]['status'] = 'running'
-    tasks_status_map[task_id]['total_rows'] = total_rows
 
     column_name_type_map = {col.get('name'): col.get('type') for col in base_columns}
     related_users = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
@@ -176,21 +167,25 @@ def import_excel_to_db(
     location_tree = get_location_tree_json()
 
     index = 0
+    exceed_flag = False
     for row in ws.rows:
+        if index > BIG_DATA_ROW_IMPORT_LIMIT:
+            exceed_flag = True
+            break
         try:
-            if index > 0:
+            if index > 0: # skip header row
                 row_list = [r.value for r in row]
                 row_data = dict(zip(excel_columns, row_list))
                 parsed_row_data = {}
                 for col_name, value in row_data.items():
                     col_type = column_name_type_map.get(col_name)
                     parsed_row_data[col_name] = value and parse_row(col_type, value, name_to_email, location_tree=location_tree) or ''
-                slice.append(parsed_row_data)
-                if total_count + 1 == total_rows or len(slice) == 100:
+                slice_data.append(parsed_row_data)
+                if len(slice_data) == 10:
                     tasks_status_map[task_id]['rows_imported'] = insert_count
-                    db_handler.insert_rows(table_name, slice)
-                    insert_count += len(slice)
-                    slice = []
+                    db_handler.insert_rows(table_name, slice_data)
+                    insert_count += len(slice_data)
+                    slice_data = []
                 total_count += 1
             index += 1
         except Exception as err:
@@ -200,6 +195,18 @@ def import_excel_to_db(
             dtable_io_logger.error(str(err))
             os.remove(file_path)
             return
+
+    if slice_data:
+        db_handler.insert_rows(table_name, slice_data)
+        insert_count += len(slice_data)
+
+    if exceed_flag:
+        tasks_status_map[task_id]['err_msg'] = 'Number of rows exceeds %s limit' % BIG_DATA_ROW_IMPORT_LIMIT
+        tasks_status_map[task_id]['status'] = 'terminated'
+        tasks_status_map[task_id]['err_code'] = ROW_EXCEED_ERROR_CODE
+        tasks_status_map[task_id]['rows_imported'] = insert_count
+        os.remove(file_path)
+        return
 
     tasks_status_map[task_id]['status'] = status
     tasks_status_map[task_id]['rows_imported'] = insert_count
@@ -215,7 +222,7 @@ def update_excel_to_db(
         ref_columns,
         is_insert_new_data,
         task_id,
-        tasks_status_map,
+        tasks_status_map
 
 ):
     from dtable_events.dtable_io import dtable_io_logger
@@ -224,20 +231,12 @@ def update_excel_to_db(
         'status': 'initializing',
         'err_msg': '',
         'rows_handled': 0,
-        'total_rows': 0,
         'err_code': 0,
     }
     try:
         wb = openpyxl.load_workbook(file_path, read_only=True)
         sheets = wb.get_sheet_names()
         ws = wb[sheets[0]]
-        total_rows = ws.max_row and ws.max_row - 1 or 0
-        if total_rows > 500000:
-            tasks_status_map[task_id]['err_msg'] = 'Number of rows (%s) exceeds 100,000 limit' % total_rows
-            tasks_status_map[task_id]['status'] = 'terminated'
-            tasks_status_map[task_id]['err_code'] = ROW_EXCEED_ERROR_CODE
-            os.remove(file_path)
-            return
     except Exception as err:
         tasks_status_map[task_id]['err_msg'] = "file reading error: %s" % str(err)
         tasks_status_map[task_id]['status'] = 'terminated'
@@ -275,16 +274,20 @@ def update_excel_to_db(
     index = 0
     status = 'success'
     tasks_status_map[task_id]['status'] = 'running'
-    tasks_status_map[task_id]['total_rows'] = total_rows
 
     excel_row_datas = []
+    exceed_flag = False
     for row in ws.rows:
+        if index > BIG_DATA_ROW_UPDATE_LIMIT:
+            exceed_flag = True
+            break
+
         try:
-            if index > 0:
+            if index > 0: # skip header row
                 row_list = [r.value for r in row]
                 row_data = dict(zip(excel_columns, row_list))
                 excel_row_datas.append(row_data)
-                if total_count + 1 >= total_rows or len(excel_row_datas) >= 100:
+                if len(excel_row_datas) >= 10:
                     rows_for_import, rows_for_update = handle_excel_row_datas(
                         db_handler, table_name,
                         excel_row_datas, ref_columns,
@@ -306,6 +309,27 @@ def update_excel_to_db(
             dtable_io_logger.error(str(err))
             os.remove(file_path)
             return
+
+    if excel_row_datas:
+        rows_for_import, rows_for_update = handle_excel_row_datas(
+            db_handler, table_name,
+            excel_row_datas, ref_columns,
+            column_name_type_map, name_to_email, location_tree,
+            is_insert_new_data
+        )
+        if is_insert_new_data and rows_for_import:
+            db_handler.insert_rows(table_name, rows_for_import)
+        if rows_for_update:
+            db_handler.batch_update_rows(table_name, rows_for_update)
+        total_count += len(excel_row_datas)
+
+    if exceed_flag:
+        tasks_status_map[task_id]['err_msg'] = 'Number of rows exceeds %s limit' % BIG_DATA_ROW_UPDATE_LIMIT
+        tasks_status_map[task_id]['status'] = 'terminated'
+        tasks_status_map[task_id]['err_code'] = ROW_EXCEED_ERROR_CODE
+        tasks_status_map[task_id]['rows_imported'] = total_count
+        os.remove(file_path)
+        return
 
     tasks_status_map[task_id]['status'] = status
     tasks_status_map[task_id]['rows_handled'] = total_count

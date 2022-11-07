@@ -39,6 +39,8 @@ try:
     USE_INNER_DTABLE_SERVER = getattr(seahub_settings, 'USE_INNER_DTABLE_SERVER', True)
     INNER_DTABLE_SERVER_URL = getattr(seahub_settings, 'INNER_DTABLE_SERVER_URL', 'http://127.0.0.1:5000/')
     ARCHIVE_VIEW_EXPORT_ROW_LIMIT = getattr(seahub_settings, 'ARCHIVE_VIEW_EXPORT_ROW_LIMIT', 500000)
+    BIG_DATA_ROW_IMPORT_LIMIT = getattr(seahub_settings, 'BIG_DATA_ROW_IMPORT_LIMIT', 500000)
+    BIG_DATA_ROW_UPDATE_LIMIT = getattr(seahub_settings, 'BIG_DATA_ROW_UPDATE_LIMIT', 500000)
 except Exception as e:
     logger.critical("Can not import dtable_web settings: %s." % e)
     raise RuntimeError("Can not import dtable_web settings: %s" % e)

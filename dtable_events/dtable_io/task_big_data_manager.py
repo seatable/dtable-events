@@ -2,7 +2,7 @@ import time
 import queue
 import threading
 
-class TaskBigDataManager(object):
+class BigDataTaskManager(object):
 
     def __init__(self):
         self.tasks_map = {}
@@ -98,4 +98,4 @@ class TaskBigDataManager(object):
             t.setDaemon(True)
             t.start()
 
-big_data_task_manager = TaskBigDataManager()
+big_data_task_manager = BigDataTaskManager()
