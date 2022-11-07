@@ -1,6 +1,5 @@
 import openpyxl
 import os
-import json
 
 from dtable_events.dtable_io.excel import parse_row
 from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
@@ -181,7 +180,7 @@ def import_excel_to_db(
                     col_type = column_name_type_map.get(col_name)
                     parsed_row_data[col_name] = value and parse_row(col_type, value, name_to_email, location_tree=location_tree) or ''
                 slice_data.append(parsed_row_data)
-                if len(slice_data) == 10:
+                if len(slice_data) == 100:
                     tasks_status_map[task_id]['rows_imported'] = insert_count
                     db_handler.insert_rows(table_name, slice_data)
                     insert_count += len(slice_data)
@@ -287,7 +286,7 @@ def update_excel_to_db(
                 row_list = [r.value for r in row]
                 row_data = dict(zip(excel_columns, row_list))
                 excel_row_datas.append(row_data)
-                if len(excel_row_datas) >= 10:
+                if len(excel_row_datas) >= 100:
                     rows_for_import, rows_for_update = handle_excel_row_datas(
                         db_handler, table_name,
                         excel_row_datas, ref_columns,
