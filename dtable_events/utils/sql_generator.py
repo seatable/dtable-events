@@ -1303,8 +1303,6 @@ class BaseSQLGenerator(object):
                 column_type = column.get('type')
                 operator = _get_operator_by_type(column_type)(column, filter_item)
                 sql_condition = _filter2sqlslice(operator)
-                if not sql_condition:
-                    continue
                 filter_string_list.append(sql_condition)
             if filter_string_list:
                 filter_content = "(%s)" % (
@@ -1337,8 +1335,6 @@ class BaseSQLGenerator(object):
             column_type = column.get('type')
             operator = _get_operator_by_type(column_type)(column, filter_item)
             sql_condition = _filter2sqlslice(operator)
-            if not sql_condition:
-                continue
             filter_string_list.append(sql_condition)
         if filter_string_list:
             filter_content = "%s" % (
