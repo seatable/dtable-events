@@ -202,3 +202,26 @@ def get_location_tree_json():
         json_data = json.load(fp)
 
     return json_data
+
+
+def normalize_file_path(path):
+    """Remove '/' at the end of file path if necessary.
+    And make sure path starts with '/'
+    """
+
+    path = path.strip('/')
+    if path == '':
+        return ''
+    else:
+        return '/' + path
+
+
+def gen_file_get_url(token, filename):
+    from urllib.parse import quote
+    from dtable_events.app.config import FILE_SERVER_ROOT
+    file_server_root = FILE_SERVER_ROOT.rstrip('/') if FILE_SERVER_ROOT else ''
+    """
+    Generate fileserver file url.
+    Format: http://<domain:port>/files/<token>/<filename>
+    """
+    return '%s/files/%s/%s' % (file_server_root, token, quote(filename))

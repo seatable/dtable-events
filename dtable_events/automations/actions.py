@@ -8,10 +8,12 @@ from uuid import UUID
 from copy import deepcopy
 from dateutil import parser
 from datetime import datetime, date, timedelta
+from urllib.parse import unquote
 
 import jwt
 import requests
 
+from seaserv import seafile_api
 from dtable_events.automations.models import get_third_party_account
 from dtable_events.cache import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, \
@@ -19,7 +21,8 @@ from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY,
 from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg, batch_send_email_msg
 from dtable_events.notification_rules.notification_rules_utils import fill_msg_blanks_with_converted_row, \
     send_notification
-from dtable_events.utils import utc_to_tz, uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url
+from dtable_events.utils import utc_to_tz, uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url, \
+    normalize_file_path, gen_file_get_url
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI, WrongFilterException
 from dtable_events.utils.dtable_web_api import DTableWebAPI
@@ -698,12 +701,7 @@ class SendEmailAction(BaseAction):
         """
         return is_valid_email(email)
 
-    def __init__(self,
-                 auto_rule,
-                 data,
-                 send_info,
-                 account_id,
-                 ):
+    def __init__(self, auto_rule, data, send_info, account_id, repo_id):
 
         super().__init__(auto_rule, data)
         self.action_type = 'send_email'
@@ -720,6 +718,7 @@ class SendEmailAction(BaseAction):
         self.column_blanks_copy_to = []
         self.column_blanks_subject = []
         self.col_name_dict = {}
+        self.repo_id = repo_id
 
         self._init_notify()
 
@@ -781,6 +780,40 @@ class SendEmailAction(BaseAction):
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
         return fill_msg_blanks_with_converted_row(text, blanks, col_name_dict, row, db_session, dtable_metadata)
 
+    def get_file_down_url(self, file_url):
+        file_path = unquote('/'.join(file_url.split('/')[-3:]).strip())
+
+        asset_path = normalize_file_path(os.path.join('/asset', uuid_str_to_36_chars(self.auto_rule.dtable_uuid), file_path))
+        asset_id = seafile_api.get_file_id_by_path(self.repo_id, asset_path)
+        asset_name = os.path.basename(normalize_file_path(file_path))
+        if not asset_id:
+            logger.warning('automation rule: %s, send email asset file %s does not exist.', asset_name)
+            return None
+
+        token = seafile_api.get_fileserver_access_token(
+            self.repo_id, asset_id, 'download', '', use_onetime=False
+        )
+
+        url = gen_file_get_url(token, asset_name)
+        return url
+
+    def get_file_download_urls(self, attachment_list, row):
+        file_download_urls_dict = {}
+        if not self.repo_id:
+            logger.warning('automation rule: %s, send email repo_id invalid', self.auto_rule.rule_id)
+            return None
+
+        for file_column_id in attachment_list:
+            files = row.get(file_column_id)
+            if not files:
+                continue
+            for file in files:
+                file_url = self.get_file_down_url(file.get('url', ''))
+                if not file_url:
+                    continue
+                file_download_urls_dict[file.get('name')] = file_url
+        return file_download_urls_dict
+
     def per_update_notify(self):
         row = self.data['converted_row']
         msg = self.send_info.get('message', '')
@@ -789,7 +822,6 @@ class SendEmailAction(BaseAction):
         copy_to_list = self.send_info.get('copy_to', [])
         attachment_list = self.send_info.get('attachment_list', [])
 
-        file_download_urls = {}
         if self.column_blanks:
             msg = self._fill_msg_blanks(row, msg, self.column_blanks)
         if self.column_blanks_send_to:
@@ -797,12 +829,7 @@ class SendEmailAction(BaseAction):
         if self.column_blanks_copy_to:
             copy_to_list = [self._fill_msg_blanks(row, copy_to, self.column_blanks_copy_to) for copy_to in copy_to_list]
 
-        if attachment_list:
-            for file_column_id in attachment_list:
-                if self.data['row'].get(file_column_id):
-                    file_info = {file.get('name'): file.get('url') for file in self.data['row'].get(file_column_id, [])}
-                    file_download_urls.update(file_info)
-
+        file_download_urls = self.get_file_download_urls(attachment_list, self.data['row'])
 
         if self.column_blanks_subject:
             subject = self._fill_msg_blanks(row, subject, self.column_blanks_subject)
@@ -849,7 +876,6 @@ class SendEmailAction(BaseAction):
             send_to_list = send_info.get('send_to', [])
             copy_to_list = send_info.get('copy_to', [])
             attachment_list = send_info.get('attachment_list', [])
-            file_download_urls = {}
             if self.column_blanks:
                 msg = self._fill_msg_blanks(converted_row, msg, self.column_blanks)
             if self.column_blanks_send_to:
@@ -857,11 +883,7 @@ class SendEmailAction(BaseAction):
             if self.column_blanks_copy_to:
                 copy_to_list = [self._fill_msg_blanks(converted_row, copy_to, self.column_blanks_copy_to) for copy_to in copy_to_list]
 
-            if attachment_list:
-                for file_column_id in attachment_list:
-                    if row.get(file_column_id):
-                        file_info = {file.get('name'): file.get('url') for file in row.get(file_column_id, [])}
-                        file_download_urls.update(file_info)
+            file_download_urls = self.get_file_download_urls(attachment_list, row)
 
             if self.column_blanks_subject:
                 subject = self._fill_msg_blanks(converted_row, subject, self.column_blanks_subject)
@@ -1685,6 +1707,7 @@ class AutomationRule:
                     send_to_list = email2list(action_info.get('send_to', ''))
                     copy_to_list = email2list(action_info.get('copy_to', ''))
                     attachment_list = email2list(action_info.get('attachments', ''))
+                    repo_id = action_info.get('repo_id')
 
                     send_info = {
                         'message': msg,
@@ -1693,7 +1716,7 @@ class AutomationRule:
                         'subject': subject,
                         'attachment_list': attachment_list,
                     }
-                    SendEmailAction(self, self.data, send_info, account_id).do_action()
+                    SendEmailAction(self, self.data, send_info, account_id, repo_id).do_action()
 
                 elif action_info.get('type') == 'run_python_script':
                     script_name = action_info.get('script_name')
