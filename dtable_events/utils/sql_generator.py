@@ -1340,7 +1340,6 @@ class BaseSQLGenerator(object):
             if not sql_condition:
                 continue
             filter_string_list.append(sql_condition)
-
         if filter_string_list:
             filter_content = "%s" % (
                 filter_conjunction_split.join(filter_string_list)
