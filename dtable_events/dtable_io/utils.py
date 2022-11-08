@@ -34,7 +34,7 @@ from dtable_events.utils.constants import ColumnTypes
 FILE_URL_PREFIX = 'file://dtable-bundle/asset/files/'
 IMG_URL_PREFIX = 'file://dtable-bundle/asset/images/'
 EXCEL_DIR_PATH = '/tmp/excel/'
-
+logger = logging.getLogger(__name__)
 
 def setup_logger(logname):
     """
@@ -409,54 +409,57 @@ def update_page_design_static_image(page_design_settings, repo_id, workspace_id,
     
     valid_dtable_web_service_url = dtable_web_service_url.strip('/')
     inner_file_server_root = 'http://127.0.0.1:' + str(file_server_port)
-    for page in page_design_settings:
-        page_id = page['page_id']
-        page_content_file_name = '%s.json'%(page_id)
-        page_content_url = page['content_url']
-        parent_dir = '/asset/%s/page-design/%s'%(dtable_uuid, page_id)
-        page_json_file_id = seafile_api.get_file_id_by_path(repo_id, '/asset' + page_content_url.split('asset')[1])
-        token = seafile_api.get_fileserver_access_token(
-            repo_id, page_json_file_id, 'view', '', use_onetime=False
-        )
-        content_url = '%s/files/%s/%s'%(inner_file_server_root, token,
-                                urlquote(page_content_file_name))
-        page_content_response = requests.get(content_url)
-        is_changed = False
-        if page_content_response.status_code == 200:
-            page_content = page_content_response.json()
-            if 'pages' not in page_content.keys():
-                page_elements = page_content.get('page_elements', {})
-                page_content = {
-                    'page_id': page_id,
-                    'default_font': page_content.get('default_font', ''),
-                    'page_settings': page_content.get('page_settings', {}),
-                    'pages': [
-                        {
-                            '_id': '0000',
-                            'element_map': page_elements.get('element_map', {}),
-                            'element_ids': page_elements.get('element_ids', [])
-                        }
-                    ]
-                }
-            pages = page_content.get('pages', [])
-            for sub_page in pages:
-                element_map = sub_page.get('element_map', {})
-                for element_id in element_map:
-                    element = element_map.get(element_id, {})
-                    if element['type'] == 'static_image':
-                        config_data = element.get('config_data', {})
-                        static_image_url = config_data.get('staticImageUrl', '')
-                        file_name = '/'.join(static_image_url.split('/')[-2:])
-                        config_data['staticImageUrl'] = '/'.join([valid_dtable_web_service_url, 'workspace', str(workspace_id),
-                                                                'asset', str(dtable_uuid), 'page-design', page_id, file_name])
-                        is_changed = True
-            if is_changed:
-                if not os.path.exists(content_json_tmp_path):
-                    os.makedirs(content_json_tmp_path)
-                page_content_save_path = os.path.join(content_json_tmp_path, page_content_file_name)
-                with open(page_content_save_path, 'w') as f:
-                    json.dump(page_content, f)
-                seafile_api.put_file(repo_id, page_content_save_path, parent_dir, '%s.json'%(page_id), username, None)
+    try:
+        for page in page_design_settings:
+            page_id = page['page_id']
+            page_content_file_name = '%s.json'%(page_id)
+            page_content_url = page['content_url']
+            parent_dir = '/asset/%s/page-design/%s'%(dtable_uuid, page_id)
+            page_json_file_id = seafile_api.get_file_id_by_path(repo_id, '/asset' + page_content_url.split('asset')[1])
+            token = seafile_api.get_fileserver_access_token(
+                repo_id, page_json_file_id, 'view', '', use_onetime=False
+            )
+            content_url = '%s/files/%s/%s'%(inner_file_server_root, token,
+                                    urlquote(page_content_file_name))
+            page_content_response = requests.get(content_url)
+            is_changed = False
+            if page_content_response.status_code == 200:
+                page_content = page_content_response.json()
+                if 'pages' not in page_content.keys():
+                    page_elements = page_content.get('page_elements', {})
+                    page_content = {
+                        'page_id': page_id,
+                        'default_font': page_content.get('default_font', ''),
+                        'page_settings': page_content.get('page_settings', {}),
+                        'pages': [
+                            {
+                                '_id': '0000',
+                                'element_map': page_elements.get('element_map', {}),
+                                'element_ids': page_elements.get('element_ids', [])
+                            }
+                        ]
+                    }
+                pages = page_content.get('pages', [])
+                for sub_page in pages:
+                    element_map = sub_page.get('element_map', {})
+                    for element_id in element_map:
+                        element = element_map.get(element_id, {})
+                        if element['type'] == 'static_image':
+                            config_data = element.get('config_data', {})
+                            static_image_url = config_data.get('staticImageUrl', '')
+                            file_name = '/'.join(static_image_url.split('/')[-2:])
+                            config_data['staticImageUrl'] = '/'.join([valid_dtable_web_service_url, 'workspace', str(workspace_id),
+                                                                    'asset', str(dtable_uuid), 'page-design', page_id, file_name])
+                            is_changed = True
+                if is_changed:
+                    if not os.path.exists(content_json_tmp_path):
+                        os.makedirs(content_json_tmp_path)
+                    page_content_save_path = os.path.join(content_json_tmp_path, page_content_file_name)
+                    with open(page_content_save_path, 'w') as f:
+                        json.dump(page_content, f)
+                    seafile_api.put_file(repo_id, page_content_save_path, parent_dir, '%s.json'%(page_id), username, None)
+    except Exception as e:
+        logger.warning('update page design static image failed. ERROR: {}'.format(e))
 
 
 def gen_form_id(length=4):
