@@ -34,7 +34,6 @@ from dtable_events.utils.constants import ColumnTypes
 FILE_URL_PREFIX = 'file://dtable-bundle/asset/files/'
 IMG_URL_PREFIX = 'file://dtable-bundle/asset/images/'
 EXCEL_DIR_PATH = '/tmp/excel/'
-logger = logging.getLogger(__name__)
 
 def setup_logger(logname):
     """
@@ -409,6 +408,7 @@ def update_page_design_static_image(page_design_settings, repo_id, workspace_id,
     
     valid_dtable_web_service_url = dtable_web_service_url.strip('/')
     inner_file_server_root = 'http://127.0.0.1:' + str(file_server_port)
+    from dtable_events.dtable_io import dtable_io_logger
     try:
         for page in page_design_settings:
             page_id = page['page_id']
@@ -459,7 +459,7 @@ def update_page_design_static_image(page_design_settings, repo_id, workspace_id,
                         json.dump(page_content, f)
                     seafile_api.put_file(repo_id, page_content_save_path, parent_dir, '%s.json'%(page_id), username, None)
     except Exception as e:
-        logger.warning('update page design static image failed. ERROR: {}'.format(e))
+        dtable_io_logger.warning('update page design static image failed. ERROR: {}'.format(e))
 
 
 def gen_form_id(length=4):
