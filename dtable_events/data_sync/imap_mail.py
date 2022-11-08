@@ -21,6 +21,7 @@ class ImapMail(object):
 
     def client(self):
         self.server = IMAPClient(self.serveraddress, self.port, timeout=self.timeout, ssl_context=self.ssl_context)
+        self.server._imap.debug = 0
         if '163.com' in self.serveraddress:
             self.server.id_({"name": "IMAPClient", "version": "2.1.0"})
         logger.info('connected success')
