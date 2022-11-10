@@ -1456,12 +1456,11 @@ class BaseSQLGenerator(object):
 
 
 def filter2sql(table_name, columns, filter_conditions, by_group=False):
-    
     if by_group:
         sql_generator = BaseSQLGenerator(table_name, columns, filter_condition_groups=filter_conditions)
     else:
         sql_generator = BaseSQLGenerator(table_name, columns, filter_conditions=filter_conditions)
-    return sql_generator.to_sql(by_group=by_group), None
+    return sql_generator.to_sql(by_group=by_group)
 
 
 def db_query(dtable_uuid, sql):
