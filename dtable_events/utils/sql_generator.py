@@ -23,17 +23,6 @@ DTABLE_DB_SUMMARY_METHOD = {
   'COUNT': 'COUNT'
 }
 
-class InvalidFilterPredicateError(Exception):
-    pass
-
-class InvalidFilterTermError(Exception):
-    pass
-
-class ColumnNotFoundError(Exception):
-    pass
-
-class ColumnNotSupportFilterError(Exception): # like button column
-    pass
 
 class Operator(object):
 
@@ -170,12 +159,6 @@ class TextOperator(Operator):
 
     def __init__(self, column, filter_item):
         super(TextOperator, self).__init__(column, filter_item)
-        self._validate()
-
-    def _validate(self):
-        if self.filter_term:
-            if not isinstance(self.filter_term, str):
-                raise InvalidFilterTermError
 
 
 class NumberOperator(Operator):
@@ -193,16 +176,8 @@ class NumberOperator(Operator):
 
     def __init__(self, column, filter_item):
         super(NumberOperator, self).__init__(column, filter_item)
-        self._validate()
         if self.column_type == ColumnTypes.DURATION:
             self.filter_term = self._duration2number()
-
-    def _validate(self):
-        if self.filter_term:
-            try:
-                int(self.filter_item)
-            except:
-                raise InvalidFilterTermError
 
     def _duration2number(self):
         filter_term = self.filter_term
@@ -336,12 +311,6 @@ class MultipleSelectOperator(Operator):
 
     def __init__(self, column, filter_item):
         super(MultipleSelectOperator, self).__init__(column, filter_item)
-        self._validate()
-
-    def _validate(self):
-        if self.filter_term:
-            if not isinstance(self.filter_term, list):
-                raise InvalidFilterTermError
 
     def _get_option_name_by_id(self, option_id):
         options = self.column.get('data', {}).get('options', [])
@@ -657,12 +626,6 @@ class CollaboratorOperator(Operator):
 
     def __init__(self, column, filter_item):
         super(CollaboratorOperator, self).__init__(column, filter_item)
-        self._validate()
-
-    def _validate(self):
-        if self.filter_term:
-            if not isinstance(self.filter_term, list):
-                raise InvalidFilterTermError
 
     def op_has_any_of(self):
         select_collaborators = self.filter_term
@@ -722,12 +685,6 @@ class CreatorOperator(Operator):
 
     def __init__(self, column, filter_item):
         super(CreatorOperator, self).__init__(column, filter_item)
-        self._validate()
-
-    def _validate(self):
-        if self.filter_term:
-            if not isinstance(self.filter_term, list):
-                raise InvalidFilterTermError
 
     def op_contains(self):
         select_collaborators = self.filter_term
@@ -837,7 +794,7 @@ def _filter2sqlslice(operator):
     support_filter_predicates = operator.SUPPORT_FILTER_PREDICATE
     filter_predicate = operator.filter_predicate
     if not operator.filter_predicate in support_filter_predicates:
-        raise InvalidFilterPredicateError(
+        raise ValueError(
             "%(column_type)s type column '%(column_name)s' does not support '%(value)s', available predicates are %(available_predicates)s" % (
             {
                 'column_type': operator.column_type,
@@ -958,8 +915,6 @@ def _get_operator_by_type(column_type):
         ColumnTypes.LINK_FORMULA,
     ]:
         return FormulaOperator
-
-    raise ColumnNotSupportFilterError
 
 class StatisticSQLGenerator(object):
 
@@ -1385,8 +1340,6 @@ class BaseSQLGenerator(object):
                 column = column_key and self._get_column_by_key(column_key)
                 if not column:
                     column = column_name and self._get_column_by_name(column_name)
-                    if not column:
-                        raise ColumnNotFoundError
                 column_type = column.get('type')
                 operator = _get_operator_by_type(column_type)(column, filter_item)
                 sql_condition = _filter2sqlslice(operator)
@@ -1424,8 +1377,6 @@ class BaseSQLGenerator(object):
             column = column_key and self._get_column_by_key(column_key)
             if not column:
                 column = column_name and self._get_column_by_name(column_name)
-                if not column:
-                    raise ColumnNotFoundError
             column_type = column.get('type')
             operator = _get_operator_by_type(column_type)(column, filter_item)
             sql_condition = _filter2sqlslice(operator)
@@ -1480,23 +1431,12 @@ class BaseSQLGenerator(object):
 
 def filter2sql(table_name, columns, filter_conditions, by_group=False):
     
-    try:
-        if by_group:
-            sql_generator = BaseSQLGenerator(table_name, columns, filter_condition_groups=filter_conditions)
-        else:
-            sql_generator = BaseSQLGenerator(table_name, columns, filter_conditions=filter_conditions)
-        return sql_generator.to_sql(by_group=by_group), None
-    except InvalidFilterPredicateError:
-        return '', 'invalid filter predicate'
-    except ColumnNotFoundError:
-        return '', 'column not found'
-    except ColumnNotSupportFilterError:
-        return '', 'column not support filter'
-    except InvalidFilterTermError:
-        return '', 'invalid filter term'
-    except Exception as e:
-        return '', e
-        
+    if by_group:
+        sql_generator = BaseSQLGenerator(table_name, columns, filter_condition_groups=filter_conditions)
+    else:
+        sql_generator = BaseSQLGenerator(table_name, columns, filter_conditions=filter_conditions)
+    return sql_generator.to_sql(by_group=by_group), None
+
 
 def db_query(dtable_uuid, sql):
     dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
