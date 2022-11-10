@@ -23,7 +23,6 @@ DTABLE_DB_SUMMARY_METHOD = {
   'COUNT': 'COUNT'
 }
 
-
 class Operator(object):
 
     def __init__(self, column, filter_item):
@@ -77,7 +76,7 @@ class Operator(object):
 
     def op_does_not_contain(self):
         if not self.filter_term:
-            return
+            return ''
         return "`%s` %s '%%%s%%'" % (
             self.column_name,
             'not like',
@@ -85,48 +84,48 @@ class Operator(object):
         )
 
     def op_equal(self):
-        if not self.filter_term:
-            return ""
+        if self.filter_term is None:
+            return ''
         return "`%(column_name)s` = %(value)s" % ({
             'column_name': self.column_name,
             'value': self.filter_term
         })
 
     def op_not_equal(self):
-        if not self.filter_term:
-            return ""
+        if self.filter_term is None:
+            return ''
         return "`%(column_name)s` <> %(value)s" % ({
             'column_name': self.column_name,
             'value': self.filter_term
         })
 
     def op_less(self):
-        if not self.filter_term:
-            return ""
+        if self.filter_term is None:
+            return ''
         return "`%(column_name)s` < %(value)s" % ({
             'column_name': self.column_name,
             'value': self.filter_term
         })
 
     def op_less_or_equal(self):
-        if not self.filter_term:
-            return ""
+        if self.filter_term is None:
+            return ''
         return "`%(column_name)s` <= %(value)s" % ({
             'column_name': self.column_name,
             'value': self.filter_term
         })
 
     def op_greater(self):
-        if not self.filter_term:
-            return ""
+        if self.filter_term is None:
+            return ''
         return "`%(column_name)s` > %(value)s" % ({
             'column_name': self.column_name,
             'value': self.filter_term
         })
 
     def op_greater_or_equal(self):
-        if not self. filter_term:
-            return ""
+        if self.filter_term is None:
+            return ''
         return "`%(column_name)s` >= %(value)s" % ({
             'column_name': self.column_name,
             'value': self.filter_term
@@ -172,7 +171,6 @@ class NumberOperator(Operator):
         FilterPredicateTypes.EMPTY,
         FilterPredicateTypes.NOT_EMPTY,
     ]
-
 
     def __init__(self, column, filter_item):
         super(NumberOperator, self).__init__(column, filter_item)
@@ -262,6 +260,8 @@ class SingleSelectOperator(Operator):
 
     def op_is(self):
         filter_term = self._get_option_name_by_id(self.filter_term)
+        if not filter_term:
+            return ''
         return "`%s` %s '%s'" % (
             self.column_name,
             '=',
@@ -270,6 +270,8 @@ class SingleSelectOperator(Operator):
 
     def op_is_not(self):
         filter_term = self._get_option_name_by_id(self.filter_term)
+        if not filter_term:
+            return ''
         return "`%s` %s '%s'" % (
             self.column_name,
             '<>',
@@ -282,6 +284,8 @@ class SingleSelectOperator(Operator):
             filter_term = [filter_term, ]
         filter_term = [self._get_option_name_by_id(f) for f in filter_term]
         option_names = ["'%s'" % (op_name) for op_name in filter_term]
+        if not option_names:
+            return ""
         return "`%(column_name)s` in (%(option_names)s)" % ({
             "column_name": self.column_name,
             "option_names": ", ".join(option_names)
@@ -289,10 +293,14 @@ class SingleSelectOperator(Operator):
 
     def op_is_none_of(self):
         filter_term = self.filter_term
+        if not filter_term:
+            return ''
         if not isinstance(filter_term, list):
             filter_term = [filter_term, ]
         filter_term = [self._get_option_name_by_id(f) for f in filter_term]
         option_names = ["'%s'" % (op_name) for op_name in filter_term]
+        if not option_names:
+            return ""
         return "`%(column_name)s` not in (%(option_names)s)" % ({
             "column_name": self.column_name,
             "option_names": ", ".join(option_names)
@@ -322,6 +330,8 @@ class MultipleSelectOperator(Operator):
         return option_id
 
     def op_has_any_of(self):
+        if not self.filter_term:
+            return ""
         filter_term = [self._get_option_name_by_id(f) for f in self.filter_term]
         option_names = ["'%s'" % op_name for op_name in filter_term]
         option_names_str = ', '.join(option_names)
@@ -331,6 +341,8 @@ class MultipleSelectOperator(Operator):
         })
 
     def op_has_none_of(self):
+        if not self.filter_term:
+            return ""
         filter_term = [self._get_option_name_by_id(f) for f in self.filter_term]
         option_names = ["'%s'" % op_name for op_name in filter_term]
         option_names_str = ', '.join(option_names)
@@ -340,6 +352,8 @@ class MultipleSelectOperator(Operator):
         })
 
     def op_has_all_of(self):
+        if not self.filter_term:
+            return ""
         filter_term = [self._get_option_name_by_id(f) for f in self.filter_term]
         option_names = ["'%s'" % op_name for op_name in filter_term]
         option_names_str = ', '.join(option_names)
@@ -349,6 +363,8 @@ class MultipleSelectOperator(Operator):
         })
 
     def op_is_exactly(self):
+        if not self.filter_term:
+            return ""
         filter_term = [self._get_option_name_by_id(f) for f in self.filter_term]
         option_names = ["'%s'" % op_name for op_name in filter_term]
         option_names_str = ', '.join(option_names)
@@ -626,6 +642,8 @@ class CollaboratorOperator(Operator):
 
     def op_has_any_of(self):
         select_collaborators = self.filter_term
+        if not select_collaborators:
+            return ""
         if not isinstance(select_collaborators, list):
             select_collaborators = [select_collaborators, ]
         collaborator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
@@ -637,6 +655,8 @@ class CollaboratorOperator(Operator):
 
     def op_has_all_of(self):
         select_collaborators = self.filter_term
+        if not select_collaborators:
+            return ""
         if not isinstance(select_collaborators, list):
             select_collaborators = [select_collaborators, ]
         collaborator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
@@ -648,6 +668,8 @@ class CollaboratorOperator(Operator):
 
     def op_has_none_of(self):
         select_collaborators = self.filter_term
+        if not select_collaborators:
+            return ""
         if not isinstance(select_collaborators, list):
             select_collaborators = [select_collaborators, ]
         collaborator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
@@ -659,6 +681,8 @@ class CollaboratorOperator(Operator):
 
     def op_is_exactly(self):
         select_collaborators = self.filter_term
+        if not select_collaborators:
+            return ""
         if not isinstance(select_collaborators, list):
             select_collaborators = [select_collaborators, ]
         collaborator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
@@ -682,6 +706,8 @@ class CreatorOperator(Operator):
 
     def op_contains(self):
         select_collaborators = self.filter_term
+        if not select_collaborators:
+            return ''
         if not isinstance(select_collaborators, list):
             select_collaborators = [select_collaborators, ]
         creator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
@@ -693,6 +719,8 @@ class CreatorOperator(Operator):
 
     def op_does_not_contain(self):
         select_collaborators = self.filter_term
+        if not select_collaborators:
+            return ''
         if not isinstance(select_collaborators, list):
             select_collaborators = [select_collaborators, ]
         creator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
@@ -703,6 +731,8 @@ class CreatorOperator(Operator):
 
     def op_include_me(self):
         select_collaborators = self.filter_term
+        if not select_collaborators:
+            return ''
         if not isinstance(select_collaborators, list):
             select_collaborators = [select_collaborators, ]
         creator = select_collaborators[0] if select_collaborators else ''
@@ -909,6 +939,8 @@ def _get_operator_by_type(column_type):
         ColumnTypes.LINK_FORMULA,
     ]:
         return FormulaOperator
+
+    return None
 
 class StatisticSQLGenerator(object):
 
