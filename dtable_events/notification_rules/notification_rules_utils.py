@@ -177,7 +177,7 @@ def list_rows_near_deadline_with_dtable_db(dtable_metadata, table_id, view_id, d
         logger.debug('sql: %s', sql)
         rows, metadata = dtable_db_api.query_and_metadata(sql, convert=False)
     except Exception as e:
-        logger.error('list rows near deadline error: %s, sql: %s' % e)
+        logger.error('list rows near deadline error: %s' % e)
         return [], None, False
     return rows, metadata, True
 
