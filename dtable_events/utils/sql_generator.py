@@ -121,19 +121,23 @@ class Operator(object):
 
     def op_less_or_equal(self):
         if not self.filter_term:
-            return
+            return ""
         return "`%(column_name)s` <= %(value)s" % ({
             'column_name': self.column_name,
             'value': self.filter_term
         })
 
     def op_greater(self):
+        if not self.filter_term:
+            return ""
         return "`%(column_name)s` > %(value)s" % ({
             'column_name': self.column_name,
             'value': self.filter_term
         })
 
     def op_greater_or_equal(self):
+        if not self. filter_term:
+            return ""
         return "`%(column_name)s` >= %(value)s" % ({
             'column_name': self.column_name,
             'value': self.filter_term
