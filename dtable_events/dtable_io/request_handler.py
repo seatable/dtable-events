@@ -790,6 +790,33 @@ def add_append_excel_csv_to_table_task():
     return make_response(({'task_id': task_id}, 200))
 
 
+@app.route('/import-table-from-base', methods=['POST'])
+def import_table_from_base():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    if task_manager.tasks_queue.full():
+        from dtable_events.dtable_io import dtable_io_logger
+        dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
+                                 % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
+                                    task_manager.threads_is_alive()))
+        return make_response(('dtable io server busy.', 400))
+
+    try:
+        context = json.loads(request.data)
+    except Exception as e:
+        return make_response(('context invalid, error: %s' % e, 400))
+
+    try:
+        task_id = task_manager.add_import_table_from_base_task(context)
+    except Exception as e:
+        logger.error(e)
+        return make_response((e, 500))
+
+    return make_response(({'task_id': task_id}, 200))
+
+
 @app.route('/import-common-dataset', methods=['POST'])
 def import_common_dataset():
     is_valid, error = check_auth_token(request)
@@ -813,7 +840,6 @@ def import_common_dataset():
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
-
 
 
 @app.route('/sync-common-dataset', methods=['POST'])

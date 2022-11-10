@@ -1,7 +1,5 @@
-import logging
 import os
 import queue
-import sys
 import threading
 import time
 from threading import Lock
@@ -243,6 +241,16 @@ class TaskManager(object):
 
         return task_id
 
+    def add_import_table_from_base_task(self, context):
+        from dtable_events.dtable_io.import_table_from_base import import_table_from_base
+
+        task_id = str(int(time.time()*1000))
+        task = (import_table_from_base, (context,))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+
+        return task_id
+
     def add_import_common_dataset_task(self, context):
         from dtable_events.dtable_io.import_sync_common_dataset import import_common_dataset
 
@@ -319,8 +327,8 @@ class TaskManager(object):
                 dtable_io_logger.error(e)
                 continue
 
+            task = self.tasks_map.get(task_id)
             try:
-                task = self.tasks_map[task_id]
                 task_info = task_id + ' ' + str(task[0])
                 self.current_task_info[task_id] = task_info
                 dtable_io_logger.info('Run task: %s' % task_info)
