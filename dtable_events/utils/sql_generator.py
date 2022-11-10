@@ -624,9 +624,6 @@ class CollaboratorOperator(Operator):
         FilterPredicateTypes.INCLUDE_ME,
     ]
 
-    def __init__(self, column, filter_item):
-        super(CollaboratorOperator, self).__init__(column, filter_item)
-
     def op_has_any_of(self):
         select_collaborators = self.filter_term
         if not isinstance(select_collaborators, list):
@@ -682,9 +679,6 @@ class CreatorOperator(Operator):
         FilterPredicateTypes.IS_NOT,
         FilterPredicateTypes.INCLUDE_ME,
     ]
-
-    def __init__(self, column, filter_item):
-        super(CreatorOperator, self).__init__(column, filter_item)
 
     def op_contains(self):
         select_collaborators = self.filter_term

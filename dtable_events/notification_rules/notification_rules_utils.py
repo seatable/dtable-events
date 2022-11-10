@@ -172,14 +172,12 @@ def list_rows_near_deadline_with_dtable_db(dtable_metadata, table_id, view_id, d
         'filter_conjunction': 'And'
     })
     filter_conditions['group_conjunction'] = 'And'
-    sql, err_msg = filter2sql(table['name'], table['columns'], filter_conditions, by_group=True)
-    logger.debug('sql: %s', sql)
-    if err_msg:
-        return [], None, False
     try:
+        sql = filter2sql(table['name'], table['columns'], filter_conditions, by_group=True)
+        logger.debug('sql: %s', sql)
         rows, metadata = dtable_db_api.query_and_metadata(sql, convert=False)
     except Exception as e:
-        logger.warning('list rows near deadline error: %s' % e)
+        logger.error('list rows near deadline error: %s, sql: %s' % e)
         return [], None, False
     return rows, metadata, True
 
