@@ -20,6 +20,7 @@ class TaskManager(object):
         self.threads = []
         self.dataset_sync_ids = set()
         self.dataset_sync_ids_lock = Lock()
+        self.tasks_status_map = {}
         self.conf = {}
 
     def init(self, workers, file_server_port, io_task_timeout, config):
@@ -224,13 +225,21 @@ class TaskManager(object):
 
     def query_status(self, task_id):
         task = self.tasks_map[task_id]
+        task_status = self.tasks_status_map.get(task_id, {})
+        if task_status:
+            if task_status.get('status') == 'success':
+                self.tasks_map.pop(task_id, None)
+                self.tasks_status_map.pop(task_id, None)
+                return True, None, task_status
+            return False, None, task_status
+
         if task == 'success':
             self.tasks_map.pop(task_id, None)
-            return True, None
+            return True, None, None
         if isinstance(task, str) and task.startswith('error_'):
             self.tasks_map.pop(task_id, None)
-            return True, task[6:]
-        return False, None
+            return True, task[6:], None
+        return False, None, None
 
     def convert_page_to_pdf(self, dtable_uuid, page_id, row_id, access_token, session_id):
         from dtable_events.dtable_io import convert_page_to_pdf
@@ -276,7 +285,7 @@ class TaskManager(object):
         from dtable_events.dtable_io import convert_view_to_execl
 
         task_id = str(int(time.time()*1000))
-        task = (convert_view_to_execl, (dtable_uuid, table_id, view_id, username, id_in_org, permission, name))
+        task = (convert_view_to_execl, (dtable_uuid, table_id, view_id, username, id_in_org, permission, name, task_id, self.tasks_status_map))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
 
