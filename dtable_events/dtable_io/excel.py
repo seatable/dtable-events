@@ -1115,14 +1115,24 @@ def convert_time_to_utc_str(time_str):
     return utc_to_tz(utc_time, timezone).strftime('%Y-%m-%d %H:%M:%S')
 
 
+def select_option_to_name(id2name, cell):
+    if not cell.get('display_value'):
+        return ''
+    return id2name.get(cell.get('display_value'), '')
+
+def email_to_nickname(email2nickname, cell):
+    if not cell.get('display_value'):
+        return ''
+    return email2nickname.get(cell.get('display_value'), '')
+
 def parse_link(col_head, cell_data, email2nickname):
     if isinstance(cell_data, list):
         if col_head[2].get('array_type') == ColumnTypes.SINGLE_SELECT:
             options = col_head[2].get('array_data', {}).get('options')
             id2name = {op.get('id'): op.get('name') for op in options}
-            return ', '.join([id2name.get(cell.get('display_value')) if cell.get('display_value') else '' for cell in cell_data])
+            return ', '.join([select_option_to_name(id2name, cell) for cell in cell_data])
         elif col_head[2].get('array_type') in (ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER):
-            return ', '.join([email2nickname.get(cell.get('display_value')) if cell.get('display_value') else '' for cell in cell_data])
+            return ', '.join([email_to_nickname(email2nickname, cell) for cell in cell_data])
         elif col_head[2].get('array_type') in (ColumnTypes.CTIME, ColumnTypes.MTIME):
             return ', '.join([convert_time_to_utc_str(cell.get('display_value')) if cell.get('display_value') else '' for cell in cell_data])
         # display_value may be array
