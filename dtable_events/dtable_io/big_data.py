@@ -84,7 +84,7 @@ def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column
     rows_for_import = []
     rows_for_update = []
 
-    query_rows_from_base = db_api.query(sql, convert=True)
+    query_rows_from_base = db_api.query(sql, convert=True, server_only=False)
     for excel_row in excel_row_datas:
         excel_ref_data = {col: excel_row.get(col) for col in ref_cols if  excel_row.get(col)}
         find_tag = False

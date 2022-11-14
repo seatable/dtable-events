@@ -792,6 +792,15 @@ def parse_view_rows(response_rows, head_list, summary_col_info, cols_without_hid
         data_list.append(row)
     return data_list, grouped_row_num_map
 
+def get_excel_row_data(response_rows, columns):
+    data_list = []
+    for response_row in response_rows:
+        row = []
+        for col in columns:
+            cell_data = response_row.get(col['name'], '')
+            row.append(cell_data)
+        data_list.append(row)
+    return data_list
 
 def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, permission, name, task_id, tasks_status_map):
     from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_view_rows_from_dtable_server, \
@@ -799,6 +808,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
     from dtable_events.dtable_io.excel import write_xls_with_type
     from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
     from dtable_events.app.config import ARCHIVE_VIEW_EXPORT_ROW_LIMIT
+    from dtable_events.utils.sql_generator import filter2sql
     import openpyxl
 
     # init task_status_map for exporting big data process
@@ -871,50 +881,55 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
     wb = openpyxl.Workbook(write_only=True)
     ws = wb.create_sheet(sheet_name)
     if is_archive:
-        step = 10000
-        archive_view_export_row_limit = int(ARCHIVE_VIEW_EXPORT_ROW_LIMIT)
-        archive_metadata = []
-
         dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
         try:
-            total_row_count = dtable_db_api.query('select count(*) as total_count from %s' % table_name)[0].get('total_count', 0)
+            total_row_count = dtable_db_api.query('select count(*) as total_count from %s' % table_name, server_only=False)[0].get('total_count', 0)
         except Exception as e:
             dtable_io_logger.error('get big data rows count error: %s', e)
             tasks_status_map[task_id]['status'] = 'terminated'
             tasks_status_map[task_id]['err_msg'] = 'get big data rows count failed'
             return
+        # exported row number should less than ARCHIVE_VIEW_EXPORT_ROW_LIMIT
+        if total_row_count > int(ARCHIVE_VIEW_EXPORT_ROW_LIMIT):
+            total_row_count = int(ARCHIVE_VIEW_EXPORT_ROW_LIMIT)
 
         tasks_status_map[task_id]['total_row_count'] = total_row_count
 
-        for i in range(0, archive_view_export_row_limit, step):
-            limit = step if (archive_view_export_row_limit - i > step) else (archive_view_export_row_limit - i)
+        filter_conditions = {}
+        filter_conditions['sorts'] = target_view.get('sorts')
+        filter_conditions['filters'] = target_view.get('filters')
+        filter_conditions['filter_conjunction'] = target_view.get('filter_conjunction')
 
-            res_json = get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission,
-                                                        table_name, view_name, start=i, limit=limit)
-            rows = res_json.get('rows', [])
+        offset = 10000
+        start = 0
+        while True:
+            # exported row number should less than ARCHIVE_VIEW_EXPORT_ROW_LIMIT
+            if (start + offset) > total_row_count:
+                offset = total_row_count - start
 
-            if i == 0:
-                archive_metadata = res_json.get('metadata')
+            filter_conditions['start'] = start
+            filter_conditions['limit'] = offset
+            sql = filter2sql(table_name, cols_without_hidden, filter_conditions, by_group=False)
+            response_rows = dtable_db_api.query(sql, server_only=False)
+            data_list = get_excel_row_data(response_rows, cols_without_hidden)
 
-            response_rows = convert_db_rows(archive_metadata, rows)
-            data_list, grouped_row_num_map = parse_view_rows(response_rows, head_list, summary_col_info, cols_without_hidden)
-
-            row_num = i
-
+            row_num = start
             try:
-                write_xls_with_type(head_list, data_list, grouped_row_num_map, email2nickname, ws, row_num)
+                write_xls_with_type(head_list, data_list, {}, email2nickname, ws, row_num)
             except Exception as e:
                 dtable_io_logger.exception(e)
                 dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
                 tasks_status_map[task_id]['status'] = 'terminated'
                 tasks_status_map[task_id]['err_msg'] = 'write xls error'
                 return
-            handled_row_count = (i + step) if (i + step) < total_row_count else total_row_count
-            tasks_status_map[task_id]['handled_row_count'] = handled_row_count
+
+            start += offset
+            tasks_status_map[task_id]['handled_row_count'] = start
             tasks_status_map[task_id]['status'] = 'running'
 
-            if len(rows) < step:
+            if total_row_count <= start:
                 break
+
         tasks_status_map[task_id]['status'] = 'success'
         wb.save(target_path)
     else:

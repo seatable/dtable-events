@@ -1319,7 +1319,7 @@ def write_xls_with_type(head, data_list, grouped_row_num_map, email2nickname, ws
     unknown_cell_list = []
     row_list = []
     for row in data_list:
-        row_num += 1
+        row_num += 1  # for grouped row num
         try:
             row_cells = handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list)
         except Exception as e:
