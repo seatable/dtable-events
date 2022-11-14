@@ -15,12 +15,12 @@ from dtable_events.dtable_io import dtable_io_logger
 from dtable_events.utils import get_inner_dtable_server_url
 
 service_url = DTABLE_WEB_SERVICE_URL.strip()
-dtable_server_url = get_inner_dtable_server_url()
+dtable_server_url = get_inner_dtable_server_url().rstrip('/')
 
 
 def _trans_url(url, workspace_id, dtable_uuid):
     if url.startswith(service_url):
-        return re.sub(r'\d+/asset/[-\w]{36}', str(workspace_id) + '/asset/' + str(dtable_uuid), url)
+        return re.sub(r'\d+/asset/[-\w]{36}', workspace_id + '/asset/' + dtable_uuid, url)
     return url
 
 
@@ -124,15 +124,43 @@ def import_table_from_base(context):
     username = context['username']
     src_repo_id = context['src_repo_id']
     src_dtable_uuid = context['src_dtable_uuid']
-    src_table = context['src_table']
+    src_table_id = context['src_table_id']
     dst_workspace_id = context['dst_workspace_id']
     dst_repo_id = context['dst_repo_id']
     dst_dtable_uuid = context['dst_dtable_uuid']
     dst_table_name = context['dst_table_name']
     lang = context.get('lang', 'en')
-    src_columns = src_table.get('columns', [])
 
     try:
+        # generate src_headers
+        src_payload = {
+            'dtable_uuid': src_dtable_uuid,
+            'username': username,
+            'permission': 'r',
+            'exp': int(time.time()) + 60
+        }
+        src_access_token = jwt.encode(src_payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
+        src_headers = {'Authorization': 'Token ' + src_access_token}
+
+        # get src_base's data
+        url = '%s/dtables/%s/?from=dtable_events' % (dtable_server_url, src_dtable_uuid)
+        resp = requests.get(url, headers=src_headers, timeout=180)
+        src_dtable_json = resp.json()
+
+        # get src_table and src_columns
+        src_table = None
+        for table in src_dtable_json.get('tables', []):
+            if table.get('_id') == src_table_id:
+                src_table = table
+                break
+
+        if not src_table:
+            error_msg = 'Table %s not found.' % src_table_id
+            dtable_io_logger.error(error_msg)
+            raise Exception(error_msg)
+
+        src_columns = src_table.get('columns', [])
+
         # trans asset url and copy asset
         succeed, new_table = trans_and_copy_asset(
             src_table, src_repo_id, src_dtable_uuid, dst_workspace_id, dst_repo_id, dst_dtable_uuid, username)
@@ -143,17 +171,16 @@ def import_table_from_base(context):
 
         # generate dst_headers
         dst_payload = {
-            'dtable_uuid': str(dst_dtable_uuid),
+            'dtable_uuid': dst_dtable_uuid,
             'username': username,
             'permission': 'rw',
-            'exp': int(time.time()) + 60
+            'exp': int(time.time()) + 60*5
         }
         dst_access_token = jwt.encode(dst_payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
         dst_headers = {'Authorization': 'Token ' + dst_access_token}
 
         # create dst_table
-        url = dtable_server_url.strip('/') + '/api/v1/dtables/%s/tables/?from=dtable_events' % \
-            (str(dst_dtable_uuid),)
+        url = '%s/api/v1/dtables/%s/tables/?from=dtable_events' % (dtable_server_url, dst_dtable_uuid)
         dst_columns = [{
                 'column_key': col.get('key'),
                 'column_name': col.get('name'),
@@ -180,8 +207,7 @@ def import_table_from_base(context):
         # import src_rows step by step
         src_rows = new_table.get('rows', [])
         step = 1000
-        url = dtable_server_url.strip('/') + '/api/v1/dtables/%s/batch-append-rows/?from=dtable_events' % \
-            (str(dst_dtable_uuid),)
+        url = '%s/api/v1/dtables/%s/batch-append-rows/?from=dtable_events' % (dtable_server_url, dst_dtable_uuid)
         for i in range(0, len(src_rows), step):
             data = {
                 'table_name': dst_table_name,
