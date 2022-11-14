@@ -26,7 +26,7 @@ from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI, WrongFilterException
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 from dtable_events.utils.dtable_db_api import DTableDBAPI
-from dtable_events.dtable_io.utils import get_nicknames_from_dtable
+from dtable_events.notification_rules.utils import get_nickname_by_usernames
 
 
 logger = logging.getLogger(__name__)
@@ -1530,7 +1530,9 @@ class CalculateAction(BaseAction):
 
         calculate_col_name = calculate_col.get('name')
         result_col_name = result_col.get('name')
-        view_rows = self.auto_rule.view_rows
+        table_name = self.auto_rule.table_info['name']
+        view_name = self.auto_rule.view_info['name']
+        view_rows = self.auto_rule.dtable_server_api.view_rows(table_name, view_name, True)
 
         if view_rows and ('rows' in view_rows[0] or 'subgroups' in view_rows[0]):
             self.parse_group_rows(view_rows)
@@ -1634,21 +1636,26 @@ class LookupAndCopyAction(BaseAction):
                     column_dict[col.get('key')] = col
         return column_dict
 
-    def list_table_rows(self, table_name):
-        start = 0
-        limit = 10000
+    def query_table_rows(self, table_name, column_names):
+        sql_columns = ', '.join(column_names)
+        limit = 0
+        step = 10000
         result_rows = []
         while True:
+            # sql = f"select `_id`, {sql_columns} from `{table_name}` limit {limit},{step}"
+            sql = f"select * from `{table_name}`"
             try:
-                results = self.auto_rule.dtable_server_api.list_rows(table_name, start, limit)
+                results = self.auto_rule.dtable_db_api.query(sql)
             except Exception as e:
-                logger.error('dtable: %s, table name: %s, list rows error: %s', self.auto_rule.dtable_uuid, table_name, e)
+                logger.exception(e)
+                logger.error('query dtable: %s, table name: %s, error: %s', self.auto_rule.dtable_uuid, table_name, e)
                 return []
-
             result_rows += results
-            start += limit
-            if len(results) < limit:
+            limit += step
+            if len(results) < step:
                 break
+        print('result_rows')
+        print(result_rows)
         return result_rows
 
     def _init_updates(self):
@@ -1666,6 +1673,10 @@ class LookupAndCopyAction(BaseAction):
             self.auto_rule.set_invalid()
             return
 
+        equal_from_columns = []
+        equal_copy_to_columns = []
+        fill_from_columns = []
+        fill_copy_to_columns = []
         # check column valid
         try:
             for col in self.equal_column_conditions:
@@ -1674,6 +1685,8 @@ class LookupAndCopyAction(BaseAction):
                 if from_column.get('type') not in self.VALID_COLUMN_TYPES or copy_to_column.get('type') not in self.VALID_COLUMN_TYPES:
                     self.auto_rule.set_invalid()
                     return
+                equal_from_columns.append(from_column.get('name'))
+                equal_copy_to_columns.append(copy_to_column.get('name'))
 
             for col in self.fill_column_conditions:
                 from_column = from_column_dict[col['from_column_key']]
@@ -1681,13 +1694,17 @@ class LookupAndCopyAction(BaseAction):
                 if from_column.get('type') not in self.VALID_COLUMN_TYPES or copy_to_column.get('type') not in self.VALID_COLUMN_TYPES:
                     self.auto_rule.set_invalid()
                     return
+                fill_from_columns.append(from_column.get('name'))
+                fill_copy_to_columns.append(copy_to_column.get('name'))
         except KeyError as e:
             logger.error('dtable: %s, from_table: %s or copy_to_table:%s column key error: %s', self.auto_rule.dtable_uuid, self.from_table_name, self.copy_to_table_name, e)
             self.auto_rule.set_invalid()
             return
 
-        from_table_rows = self.list_table_rows(self.from_table_name)
-        copy_to_table_rows = self.list_table_rows(self.copy_to_table_name)
+        from_columns = equal_from_columns + fill_from_columns
+        copy_to_columns = equal_copy_to_columns + fill_copy_to_columns
+        from_table_rows = self.query_table_rows(self.from_table_name, from_columns)
+        copy_to_table_rows = self.query_table_rows(self.copy_to_table_name, copy_to_columns)
 
         from_table_rows_dict = {}
         for from_row in from_table_rows:
@@ -1782,20 +1799,20 @@ class ExtractUserNameAction(BaseAction):
         self.column_key_dict = {col.get('key'): col for col in self.auto_rule.view_columns}
         self.update_rows = []
 
-    def list_table_rows(self, table_name):
-        start = 0
-        limit = 10000
+    def query_user_rows(self, table_name, extract_column_name, result_column_name):
+        limit = 0
+        step = 10000
         result_rows = []
         while True:
+            sql = f"select `_id`, `{extract_column_name}`, `{result_column_name}` from `{table_name}` limit {limit},{step}"
             try:
-                results = self.auto_rule.dtable_server_api.list_rows(table_name, start, limit)
+                results = self.auto_rule.dtable_db_api.query(sql)
             except Exception as e:
-                logger.error('dtable: %s, table name: %s, list rows error: %s', self.auto_rule.dtable_uuid, table_name, e)
+                logger.error('query dtable: %s, table name: %s, error: %s', self.auto_rule.dtable_uuid, table_name, e)
                 return []
-
             result_rows += results
-            start += limit
-            if len(results) < limit:
+            limit += step
+            if len(results) < step:
                 break
         return result_rows
 
@@ -1812,7 +1829,7 @@ class ExtractUserNameAction(BaseAction):
         extract_column_name = extract_column.get('name')
         result_column_name = result_column.get('name')
         table_name = self.auto_rule.table_info.get('name')
-        user_rows = self.list_table_rows(table_name)
+        user_rows = self.query_user_rows(table_name, extract_column_name, result_column_name)
         unknown_user_id_set = set()
         unknown_user_rows = []
         related_users_dict = self.auto_rule.related_users_dict
@@ -1861,11 +1878,10 @@ class ExtractUserNameAction(BaseAction):
             unknown_user_id_list = list(unknown_user_id_set)
             step = 1000
             start = 0
-            user_list = []
             for i in range(0, len(unknown_user_id_list), step):
-                user_list += get_nicknames_from_dtable(unknown_user_id_list[start: start + step])
+                users_dict = get_nickname_by_usernames(unknown_user_id_list[start: start + step], self.auto_rule.db_session)
+                email2nickname.update(users_dict)
                 start += step
-            email2nickname = {nickname['email']: nickname['name'] for nickname in user_list}
 
         for user_row in unknown_user_rows:
             result_col_value = user_row.get(result_column_name)
@@ -2012,16 +2028,16 @@ class AutomationRule:
             self._view_columns = self.dtable_server_api.list_columns(table_name, view_name=view_name)
         return self._view_columns
 
-    @property
-    def view_rows(self):
-        """
-        rows of the view defined in trigger
-        """
-        if not self._view_rows:
-            table_name = self.table_info['name']
-            view_name = self.view_info['name']
-            self._view_rows = self.dtable_server_api.view_rows(table_name, view_name)
-        return self._view_rows
+    # @property
+    # def view_rows(self):
+    #     """
+    #     rows of the view defined in trigger
+    #     """
+    #     if not self._view_rows:
+    #         table_name = self.table_info['name']
+    #         view_name = self.view_info['name']
+    #         self._view_rows = self.dtable_server_api.view_rows(table_name, view_name)
+    #     return self._view_rows
 
     @property
     def table_info(self):

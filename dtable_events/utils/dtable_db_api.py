@@ -31,12 +31,16 @@ def parse_response(response):
 def is_single_multiple_structure(column):
     column_type = column['type']
     if column_type in ('single-select', 'multiple-select'):
-        options = column.get('data', {}).get('options', [])
+        data = column.get('data', {})  # data may be None
+        if not data:
+            return True, []
+        options = data.get('options', [])
         return True, options
     if column_type in ('link', 'link-formula'):
         array_type = column.get('data', {}).get('array_type')
         if array_type in ('single-select', 'multiple-select'):
-            options = column.get('data', {}).get('array_data', {}).get('options', [])
+            data = column.get('data', {})  # data may be None
+            options = data.get('array_data', {}).get('options', [])
             return True, options
     return False, []
 

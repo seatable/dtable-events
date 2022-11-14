@@ -132,12 +132,13 @@ class DTableServerAPI(object):
         data = parse_response(response)
         return data.get('columns')
 
-    def view_rows(self, table_name, view_name):
+    def view_rows(self, table_name, view_name, has_hidden_columns):
         url = self.dtable_server_url + '/api/v1/internal/dtables/' + self.dtable_uuid + '/view-rows/?from=dtable_events'
         params = {
             'table_name': table_name,
             'view_name': view_name,
             'convert_link_id': True,
+            'has_hidden_columns': has_hidden_columns,
         }
         response = requests.get(url, params=params, headers=self.headers, timeout=self.timeout)
         data = parse_response(response)
