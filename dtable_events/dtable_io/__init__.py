@@ -927,7 +927,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
             tasks_status_map[task_id]['handled_row_count'] = start
             tasks_status_map[task_id]['status'] = 'running'
 
-            if total_row_count <= start:
+            if start >= total_row_count or len(response_rows) < offset:
                 break
 
         tasks_status_map[task_id]['status'] = 'success'
