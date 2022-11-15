@@ -956,8 +956,19 @@ def get_related_nicknames_from_dtable(dtable_uuid, username, permission):
 
     if res.status_code != 200:
         raise ConnectionError('failed to get related users %s %s' % (dtable_uuid, res.text))
-    return res.json().get('user_list')
+    res_json = res.json()
+    results = []
 
+    user_list = res_json.get('user_list', [])
+    app_user_list = res_json.get('app_user_list', [])
+    if app_user_list:
+        user_list.extend(app_user_list)
+
+    for user in user_list:
+        if user in results:
+            continue
+        results.append(user)
+    return results
 
 def get_nicknames_from_dtable(user_id_list):
     url = DTABLE_WEB_SERVICE_URL.strip('/') + '/api/v2.1/users-common-info/'
