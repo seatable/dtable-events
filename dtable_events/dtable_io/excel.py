@@ -1334,6 +1334,7 @@ def write_xls_with_type(head, data_list, grouped_row_num_map, email2nickname, ws
             row_cells = handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list)
         except Exception as e:
             if not row_error_log_exists:
+                dtable_io_logger.exception(e)
                 dtable_io_logger.error('Error row in exporting excel: {}'.format(e))
                 row_error_log_exists = True
             continue

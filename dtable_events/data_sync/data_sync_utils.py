@@ -396,12 +396,11 @@ def run_sync_emails(context):
             return
 
     account = get_third_party_account(db_session, account_id)
-    account_type = account.get('account_type')
-    account_detail = account.get('detail')
-    if not account or account_type != 'email' or not account_detail:
+    if not account or account.get('account_type') != 'email' or not account.get('detail'):
         set_data_sync_invalid(data_sync_id, db_session)
         logger.warning('third party account not found.')
         return
+    account_detail = account.get('detail')
 
     imap_host = account_detail.get('imap_host')
     imap_port = account_detail.get('imap_port')
@@ -419,9 +418,13 @@ def run_sync_emails(context):
         logger.warning('user or password invalid, email: %s user login error', email_user)
         set_data_sync_invalid(data_sync_id, db_session)
         return
+    except socket.timeout:
+        logger.warning('user or password invalid, email: %s user login timeout', email_user)
+        return
     except Exception as e:
         logger.exception(e)
         logger.error('imap_server: %s, email_user: %s, login error: %s', imap_host, email_user, e)
+        set_data_sync_invalid(data_sync_id, db_session)
         return
 
     dtable_server_api = DTableServerAPI(username, dtable_uuid, api_url,
