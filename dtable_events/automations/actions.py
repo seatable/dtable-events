@@ -82,6 +82,59 @@ def get_date_format(date_format):
         return '%Y-%m-%d', '2022-01-01'
 
 
+def is_int_str(num):
+    return '.' not in str(num)
+
+
+def convert_formula_number(value, column_data):
+    decimal = column_data.get('decimal')
+    thousands = column_data.get('thousands')
+    precision = column_data.get('precision')
+    if decimal == 'comma':
+        # decimal maybe dot or comma
+        value = value.replace(',', '.')
+    if thousands == 'space':
+        # thousands maybe space, dot, comma or no
+        value = value.replace(' ', '')
+    elif thousands == 'dot':
+        value = value.replace('.', '')
+        if precision > 0 or decimal == 'dot':
+            value = value[:-precision] + '.' + value[-precision:]
+    elif thousands == 'comma':
+        value = value.replace(',', '')
+
+    return value
+
+
+def parse_formula_number(cell_data, column_data):
+    """
+    parse formula number to regular format
+    :param cell_data: value of cell (e.g. 1.25, ￥12.0, $10.20, €10.2, 0:02 or 10%, etc)
+    :param column_data: info of formula column
+    """
+    src_format = column_data.get('format')
+    value = str(cell_data)
+    if src_format in ['euro', 'dollar', 'yuan']:
+        value = value[1:]
+    elif src_format == 'percent':
+        value = value[:-1]
+    value = convert_formula_number(value, column_data)
+
+    if src_format == 'percent' and isinstance(value, str):
+        try:
+            value = float(value) / 100
+        except Exception as e:
+            return 0
+    try:
+        if is_int_str(value):
+            value = int(value)
+        else:
+            value = float(value)
+    except Exception as e:
+        return 0
+    return value
+
+
 def cell_data2str(cell_data):
     if isinstance(cell_data, list):
         cell_data.sort()
@@ -1483,15 +1536,23 @@ class CalculateAction(BaseAction):
             else:
                 self.parse_rows(group_rows)
 
+    def get_row_value(self, row, column):
+        col_name = column.get('name')
+        value = row.get(col_name, 0)
+        if column.get('type') in [ColumnTypes.FORMULA, ColumnTypes.LINK_FORMULA]:
+            value = parse_formula_number(value, column.get('data'))
+        return value
+
     def parse_rows(self, rows):
-        calculate_col_name = self.column_key_dict.get(self.calculate_column_key, {}).get('name')
-        result_col_name = self.column_key_dict.get(self.result_column_key, {}).get('name')
+        calculate_col = self.column_key_dict.get(self.calculate_column_key, {})
+        result_col = self.column_key_dict.get(self.result_column_key, {})
+        result_col_name = result_col.get('name')
         result_value = 0
 
         if self.action_type == 'calculate_accumulated_value':
             for index in range(len(rows)):
                 row_id = rows[index].get('_id')
-                result_value += rows[index].get(calculate_col_name, 0)
+                result_value += self.get_row_value(rows[index], calculate_col)
                 result_row = {result_col_name: result_value}
                 self.update_rows.append({'row_id': row_id, 'row': result_row})
 
@@ -1499,16 +1560,21 @@ class CalculateAction(BaseAction):
             for index in range(len(rows)):
                 row_id = rows[index].get('_id')
                 if index > 0:
-                    result_value = rows[index].get(calculate_col_name, 0) - rows[index-1].get(calculate_col_name, 0)
+                    pre_value = self.get_row_value(rows[index], calculate_col)
+                    next_value = self.get_row_value(rows[index-1], calculate_col)
+                    result_value = pre_value - next_value
                     result_row = {result_col_name: result_value}
                     self.update_rows.append({'row_id': row_id, 'row': result_row})
 
         elif self.action_type == 'calculate_percentage':
-            sum_calculate = sum([float(row.get(calculate_col_name, 0)) for row in rows])
+            sum_calculate = sum([float(self.get_row_value(row, calculate_col)) for row in rows])
             for row in rows:
                 row_id = row.get('_id')
-                result_row = {result_col_name: float(row.get(calculate_col_name, 0)) / sum_calculate}
-                self.update_rows.append({'row_id': row_id, 'row': result_row})
+                try:
+                    result_value = float(self.get_row_value(row, calculate_col)) / sum_calculate
+                except ZeroDivisionError:
+                    result_value = None
+                self.update_rows.append({'row_id': row_id, 'row': {result_col_name: result_value}})
 
         elif self.action_type == 'calculate_rank':
             self.rank_rows.extend(rows)
@@ -1542,7 +1608,7 @@ class CalculateAction(BaseAction):
         if self.action_type == 'calculate_rank':
             calculate_col_type = calculate_col.get('type')
             if is_number_format(calculate_col):
-                self.rank_rows = sorted(self.rank_rows, key=lambda x: float(x.get(calculate_col_name, 0)), reverse=True)
+                self.rank_rows = sorted(self.rank_rows, key=lambda x: float(self.get_row_value(x, calculate_col)), reverse=True)
 
             elif calculate_col_type == ColumnTypes.DATE or \
                     calculate_col_type == ColumnTypes.FORMULA and calculate_col.get('data').get('result_type') == 'date':
@@ -1654,8 +1720,6 @@ class LookupAndCopyAction(BaseAction):
             limit += step
             if len(results) < step:
                 break
-        print('result_rows')
-        print(result_rows)
         return result_rows
 
     def _init_updates(self):
@@ -2027,17 +2091,6 @@ class AutomationRule:
             view_name = self.view_info['name']
             self._view_columns = self.dtable_server_api.list_columns(table_name, view_name=view_name)
         return self._view_columns
-
-    # @property
-    # def view_rows(self):
-    #     """
-    #     rows of the view defined in trigger
-    #     """
-    #     if not self._view_rows:
-    #         table_name = self.table_info['name']
-    #         view_name = self.view_info['name']
-    #         self._view_rows = self.dtable_server_api.view_rows(table_name, view_name)
-    #     return self._view_rows
 
     @property
     def table_info(self):
