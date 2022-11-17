@@ -19,7 +19,7 @@ from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY,
     SEATABLE_FAAS_AUTH_TOKEN, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL
 from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg, batch_send_email_msg
 from dtable_events.notification_rules.notification_rules_utils import fill_msg_blanks_with_converted_row, \
-    send_notification, parse_row, cell_data2str
+    send_notification
 from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url, \
     normalize_file_path, gen_file_get_url
 from dtable_events.utils.constants import ColumnTypes
@@ -2026,7 +2026,6 @@ class AutomationRule:
         self._dtable_metadata = None
         self._access_token = None
         self._view_columns = None
-        self._view_rows = None
         self.can_run_python = None
         self.scripts_running_limit = None
         self._related_users = None
