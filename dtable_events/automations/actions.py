@@ -1623,6 +1623,7 @@ class CalculateAction(BaseAction):
                                         key=lambda x: datetime.strptime(x.get(calculate_col_name, default_date), date_format),
                                         reverse=True)
             rank = 0
+            real_rank = 0
             pre_value = None
             for row in self.rank_rows:
                 cal_value = row.get(calculate_col_name)
@@ -1630,14 +1631,17 @@ class CalculateAction(BaseAction):
                 if cal_value is None:
                     result_row = {result_col_name: None}
                 else:
+                    real_rank += 1
                     if rank == 0 or cal_value != pre_value:
-                        rank += 1
+                        rank = real_rank
                         pre_value = cal_value
                     result_row = {result_col_name: rank}
 
                 self.update_rows.append({'row_id': row_id, 'row': result_row})
 
     def _can_do_action(self):
+        if self.auto_rule.trigger.get('condition') != CONDITION_PERIODICALLY:
+            return False
         if not self.auto_rule.current_valid:
             return False
         if not self.calculate_column_key or not self.result_column_key:
@@ -1780,6 +1784,7 @@ class LookupAndCopyAction(BaseAction):
                 from_value = from_row.get(from_column_name)
                 from_value = cell_data2str(from_value)
                 from_key += from_value + from_column_key + '-'
+            from_key = str(hash(from_key))
             from_table_rows_dict[from_key] = from_row
 
         for copy_to_row in copy_to_table_rows:
@@ -1792,10 +1797,11 @@ class LookupAndCopyAction(BaseAction):
                 copy_to_value = copy_to_row.get(copy_to_column_name)
                 copy_to_value = cell_data2str(copy_to_value)
                 copy_to_key += copy_to_value + from_column_key + '-'
+            copy_to_key = str(hash(copy_to_key))
             from_row = from_table_rows_dict.get(copy_to_key)
             if not from_table_rows_dict.get(copy_to_key):
                 continue
-
+            row = {}
             for fill_condition in self.fill_column_conditions:
                 from_column_key = fill_condition.get('from_column_key')
                 from_column = from_column_dict[from_column_key]
@@ -1819,10 +1825,13 @@ class LookupAndCopyAction(BaseAction):
                     if isinstance(from_value, str) and 'T' in from_value:
                         d = from_value.split('T')
                         from_value = d[0] + ' ' + d[1].split('+')[0]
+                row[copy_to_column_name] = from_value
 
-                self.update_rows.append({'row_id': copy_to_row['_id'], 'row': {copy_to_column_name: from_value}})
+            self.update_rows.append({'row_id': copy_to_row['_id'], 'row': row})
 
     def _can_do_action(self):
+        if self.auto_rule.trigger.get('condition') != CONDITION_PERIODICALLY:
+            return False
         if not self.auto_rule.current_valid:
             return False
         if not self.table_condition or not self.equal_column_conditions or not self.fill_column_conditions:
@@ -1968,6 +1977,8 @@ class ExtractUserNameAction(BaseAction):
                 self.update_rows.append({'row_id': user_row.get('_id'), 'row': {result_column_name: update_result_value}})
 
     def _can_do_action(self):
+        if self.auto_rule.trigger.get('condition') != CONDITION_PERIODICALLY:
+            return False
         if not self.auto_rule.current_valid:
             return False
         if not self.extract_column_key or not self.result_column_key:
