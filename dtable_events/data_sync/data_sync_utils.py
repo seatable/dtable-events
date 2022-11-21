@@ -418,8 +418,8 @@ def run_sync_emails(context):
         logger.warning('user or password invalid, email: %s user login error', email_user)
         set_data_sync_invalid(data_sync_id, db_session)
         return
-    except socket.timeout:
-        logger.warning('user or password invalid, email: %s user login timeout', email_user)
+    except socket.error as e:
+        logger.warning('email: %s login imap_server: %s failed: %s', email_user, imap_host, e)
         return
     except Exception as e:
         logger.exception(e)
