@@ -70,7 +70,7 @@ class Operator(object):
             return ""
         return "`%s` %s '%%%s%%'" % (
             self.column_name,
-            'like',
+            'ilike',
             self.filter_term
         )
 
@@ -79,7 +79,7 @@ class Operator(object):
             return ''
         return "`%s` %s '%%%s%%'" % (
             self.column_name,
-            'not like',
+            'not ilike',
             self.filter_term
         )
 
