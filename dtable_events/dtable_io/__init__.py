@@ -492,9 +492,10 @@ def send_dingtalk_msg(webhook_url, msg, msg_type="text", msg_title=None):
 def send_email_msg(auth_info, send_info, username, config=None, db_session=None):
     # auth info
     email_host = auth_info.get('email_host')
-    email_port = int(auth_info.get('email_port'))
+    email_port = int(auth_info.get('email_port', 0))
     host_user = auth_info.get('host_user')
     password = auth_info.get('password')
+    sender_name = auth_info.get('sender_name', '')
 
     # send info
     msg = send_info.get('message', '')
@@ -520,7 +521,7 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
 
     msg_obj = MIMEMultipart()
     msg_obj['Subject'] = subject
-    msg_obj['From'] = source or host_user
+    msg_obj['From'] = source or formataddr((sender_name, host_user))
     msg_obj['To'] = ",".join(send_to)
     msg_obj['Cc'] = ",".join(copy_to)
     msg_obj['Reply-to'] = reply_to
@@ -591,6 +592,7 @@ def batch_send_email_msg(auth_info, send_info_list, username, config=None, db_se
     email_port = int(auth_info.get('email_port'))
     host_user = auth_info.get('host_user')
     password = auth_info.get('password')
+    sender_name = auth_info.get('sender_name', '')
 
     try:
         smtp = smtplib.SMTP(email_host, int(email_port), timeout=30)
@@ -623,9 +625,12 @@ def batch_send_email_msg(auth_info, send_info_list, username, config=None, db_se
             dtable_message_logger.warning('Email message invalid')
             continue
 
+        send_to = [formataddr(parseaddr(to)) for to in send_to]
+        copy_to = [formataddr(parseaddr(to)) for to in copy_to]
+
         msg_obj = MIMEMultipart()
         msg_obj['Subject'] = subject
-        msg_obj['From'] = source or host_user
+        msg_obj['From'] = source or formataddr((sender_name, host_user))
         msg_obj['To'] = ",".join(send_to)
         msg_obj['Cc'] = copy_to and ",".join(copy_to) or ""
         msg_obj['Reply-to'] = reply_to

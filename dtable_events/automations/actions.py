@@ -766,16 +766,7 @@ class SendEmailAction(BaseAction):
 
         account_detail = account_dict.get('detail', {})
 
-        email_host = account_detail.get('email_host', '')
-        email_port = account_detail.get('email_port', 0)
-        host_user = account_detail.get('host_user', '')
-        password = account_detail.get('password', '')
-        self.auth_info = {
-            'email_host': email_host,
-            'email_port': int(email_port),
-            'host_user': host_user,
-            'password': password
-        }
+        self.auth_info = account_detail
 
     def _fill_msg_blanks(self, row, text, blanks):
         col_name_dict = self.col_name_dict
