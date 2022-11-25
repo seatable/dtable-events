@@ -863,9 +863,10 @@ def convert_view_to_excel():
     id_in_org = request.args.get('id_in_org')
     permission = request.args.get('permission')
     name = request.args.get('name')
+    repo_id = request.args.get('repo_id')
 
     try:
-        task_id = task_manager.add_convert_view_to_execl_task(dtable_uuid, table_id, view_id, username, id_in_org, permission, name)
+        task_id = task_manager.add_convert_view_to_execl_task(dtable_uuid, table_id, view_id, username, id_in_org, permission, name, repo_id)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -891,9 +892,10 @@ def convert_table_to_excel():
     username = request.args.get('username')
     permission = request.args.get('permission')
     name = request.args.get('name')
+    repo_id = request.args.get('repo_id')
 
     try:
-        task_id = task_manager.add_convert_table_to_execl_task(dtable_uuid, table_id, username, permission, name)
+        task_id = task_manager.add_convert_table_to_execl_task(dtable_uuid, table_id, username, permission, name, repo_id)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))

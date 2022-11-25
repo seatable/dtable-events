@@ -802,7 +802,7 @@ def get_excel_row_data(response_rows, columns):
         data_list.append(row)
     return data_list
 
-def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, permission, name, task_id, tasks_status_map):
+def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, permission, name, task_id, repo_id, tasks_status_map):
     from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_view_rows_from_dtable_server, \
         convert_db_rows
     from dtable_events.dtable_io.excel import write_xls_with_type
@@ -883,7 +883,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
     if is_archive:
         dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
         try:
-            total_row_count = dtable_db_api.query('select count(*) as total_count from %s' % table_name, server_only=False)[0].get('total_count', 0)
+            total_row_count = dtable_db_api.query('select count(*) as total_count from `%s`' % table_name, server_only=False)[0].get('total_count', 0)
         except Exception as e:
             dtable_io_logger.error('get big data rows count error: %s', e)
             tasks_status_map[task_id]['status'] = 'terminated'
@@ -915,7 +915,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
 
             row_num = start
             try:
-                write_xls_with_type(head_list, data_list, {}, email2nickname, ws, row_num)
+                write_xls_with_type(head_list, data_list, {}, email2nickname, ws, row_num, dtable_uuid, repo_id)
             except Exception as e:
                 dtable_io_logger.exception(e)
                 dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
@@ -943,7 +943,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
         data_list, grouped_row_num_map = parse_view_rows(response_rows, head_list, summary_col_info, cols_without_hidden)
 
         try:
-            write_xls_with_type(head_list, data_list, grouped_row_num_map, email2nickname, ws, 0)
+            write_xls_with_type(head_list, data_list, grouped_row_num_map, email2nickname, ws, 0, dtable_uuid, repo_id)
         except Exception as e:
             dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
             return
@@ -951,7 +951,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
         wb.save(target_path)
 
 
-def convert_table_to_execl(dtable_uuid, table_id, username, permission, name):
+def convert_table_to_execl(dtable_uuid, table_id, username, permission, name, repo_id):
     from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_rows_from_dtable_server, \
         convert_db_rows
     from dtable_events.dtable_io.excel import write_xls_with_type
@@ -1007,7 +1007,7 @@ def convert_table_to_execl(dtable_uuid, table_id, username, permission, name):
     wb = openpyxl.Workbook(write_only=True)
     ws = wb.create_sheet(sheet_name)
     try:
-        write_xls_with_type(head_list, data_list, {}, email2nickname, ws, 0)
+        write_xls_with_type(head_list, data_list, {}, email2nickname, ws, 0, dtable_uuid, repo_id)
     except Exception as e:
         dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
         return

@@ -48,6 +48,14 @@ IMAGE_REG_2 = r'^!\[\]\((\S+)\)'
 UPDATE_TYPE_LIST = ['number', 'single-select', 'url', 'email', 'text', 'date', 'duration', 'rate', 'checkbox',
                     'multiple-select', 'collaborator']
 
+# image offset in excel cell
+FROM_COL_START_OFFSET = 20000
+FROM_ROW_START_OFFSET = 20000
+TO_COL_START_OFFSET = -300000
+TO_ROW_START_OFFSET = -200000
+IMAGE_CELL_ROW_HEIGHT = 50
+IMAGE_CELL_COLUMN_WIDTH = 30
+
 
 class EmptyCell(object):
     value = None
@@ -1216,7 +1224,75 @@ def parse_dtable_long_text(cell_value):
     return parse_dtable_long_text(cell_value.replace('\n\n', '\n'))
 
 
-def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list):
+def get_file_download_url(file_url, dtable_uuid, repo_id):
+    from urllib.parse import unquote
+    from seaserv import seafile_api
+    from dtable_events.utils import uuid_str_to_36_chars, normalize_file_path, gen_file_get_url
+    file_path = unquote('/'.join(file_url.split('/')[-3:]).strip())
+
+    asset_path = normalize_file_path(os.path.join('/asset', uuid_str_to_36_chars(dtable_uuid), file_path))
+    asset_id = seafile_api.get_file_id_by_path(repo_id, asset_path)
+    asset_name = os.path.basename(normalize_file_path(file_path))
+    if not asset_id:
+        # logger.warning('automation rule: %s, send email asset file %s does not exist.', asset_name)
+        return None
+
+    token = seafile_api.get_fileserver_access_token(
+        repo_id, asset_id, 'download', '', use_onetime=False
+    )
+
+    url = gen_file_get_url(token, asset_name)
+    return url
+
+
+def add_image_to_excel(ws, row, col_num, row_num, dtable_uuid, repo_id):
+    import requests
+    from io import BytesIO
+    from openpyxl.drawing.image import Image
+    from PIL import Image as PILImage
+    from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, TwoCellAnchor
+
+    images = row[col_num]
+    row_pos = str(row_num + 1)
+    # set image cell height
+    ws.row_dimensions[int(row_pos)].height = IMAGE_CELL_ROW_HEIGHT
+
+    offset_increment = 0
+    for image_url in images:
+        image_download_url = get_file_download_url(image_url, dtable_uuid, repo_id)
+        if not image_download_url:
+            continue
+
+        response = requests.get(image_download_url)
+        image_content = response.content
+
+        try:
+            img = Image(BytesIO(image_content))
+        except:
+            continue
+        image_format = img.format
+        if image_format in ('webp', ):
+            # convert webp to png
+            img = PILImage.open(BytesIO(image_content))
+            img.load()
+            buffer = BytesIO()
+            img.save(buffer, format='PNG')
+            img = Image(buffer)
+
+        from_col_offset = FROM_COL_START_OFFSET + offset_increment
+        from_row_offset = FROM_ROW_START_OFFSET + offset_increment
+        to_col_offset = TO_COL_START_OFFSET + offset_increment
+        to_row_offset = TO_ROW_START_OFFSET + offset_increment
+
+        from_anchor = AnchorMarker(col_num, from_col_offset, row_num, from_row_offset)
+        to_anchor = AnchorMarker(col_num + 1, to_col_offset, row_num + 1, to_row_offset)
+        img.anchor = TwoCellAnchor('twoCell', from_anchor, to_anchor)
+
+        ws.add_image(img)
+        offset_increment += 20000
+
+
+def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id):
     from openpyxl.cell import WriteOnlyCell
     cell_list = []
     for col_num in range(len(row)):
@@ -1288,6 +1364,9 @@ def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unkn
             c = WriteOnlyCell(ws, value=parse_link(head[col_num], row[col_num], email2nickname))
         elif head[col_num][1] == ColumnTypes.LONG_TEXT:
             c = WriteOnlyCell(ws, value=parse_dtable_long_text(row[col_num]))
+        elif head[col_num][1] == ColumnTypes.IMAGE and row[col_num]:
+            c = WriteOnlyCell(ws)
+            add_image_to_excel(ws, row, col_num, row_num, dtable_uuid, repo_id)
         else:
             c = WriteOnlyCell(ws, value=cell_data2str(row[col_num]))
         if row_num in grouped_row_num_map:
@@ -1300,13 +1379,14 @@ def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unkn
     return cell_list
 
 
-def write_xls_with_type(head, data_list, grouped_row_num_map, email2nickname, ws, row_num):
+def write_xls_with_type(head, data_list, grouped_row_num_map, email2nickname, ws, row_num, dtable_uuid, repo_id):
     """ write listed data into excel
         head is a list of tuples,
         e.g. head = [(col_name, col_type, col_date), (...), ...]
     """
     from dtable_events.dtable_io import dtable_io_logger
     from openpyxl.cell import WriteOnlyCell
+    from openpyxl.utils import get_column_letter
 
     if row_num == 0:
         # write table head
@@ -1315,6 +1395,10 @@ def write_xls_with_type(head, data_list, grouped_row_num_map, email2nickname, ws
         for col_num in range(len(head)):
             try:
                 c = WriteOnlyCell(ws, value=head[col_num][0])
+                if head[col_num][1] == ColumnTypes.IMAGE:
+                    col_pos = get_column_letter(col_num + 1)
+                    # set image column width
+                    ws.column_dimensions[col_pos].width = IMAGE_CELL_COLUMN_WIDTH
             except Exception as e:
                 if not column_error_log_exists:
                     dtable_io_logger.error('Error column in exporting excel: {}'.format(e))
@@ -1331,7 +1415,7 @@ def write_xls_with_type(head, data_list, grouped_row_num_map, email2nickname, ws
     for row in data_list:
         row_num += 1  # for grouped row num
         try:
-            row_cells = handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list)
+            row_cells = handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id)
         except Exception as e:
             if not row_error_log_exists:
                 dtable_io_logger.exception(e)

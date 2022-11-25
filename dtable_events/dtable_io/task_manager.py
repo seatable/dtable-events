@@ -281,21 +281,21 @@ class TaskManager(object):
 
         return task_id, None
 
-    def add_convert_view_to_execl_task(self, dtable_uuid, table_id, view_id, username, id_in_org, permission, name):
+    def add_convert_view_to_execl_task(self, dtable_uuid, table_id, view_id, username, id_in_org, permission, name, repo_id):
         from dtable_events.dtable_io import convert_view_to_execl
 
         task_id = str(int(time.time()*1000))
-        task = (convert_view_to_execl, (dtable_uuid, table_id, view_id, username, id_in_org, permission, name, task_id, self.tasks_status_map))
+        task = (convert_view_to_execl, (dtable_uuid, table_id, view_id, username, id_in_org, permission, name, task_id, repo_id, self.tasks_status_map))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
 
         return task_id
 
-    def add_convert_table_to_execl_task(self, dtable_uuid, table_id, username, permission, name,):
+    def add_convert_table_to_execl_task(self, dtable_uuid, table_id, username, permission, name, repo_id):
         from dtable_events.dtable_io import convert_table_to_execl
 
         task_id = str(int(time.time()*1000))
-        task = (convert_table_to_execl, (dtable_uuid, table_id, username, permission, name))
+        task = (convert_table_to_execl, (dtable_uuid, table_id, username, permission, name, repo_id))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
 
@@ -343,6 +343,7 @@ class TaskManager(object):
                 dtable_io_logger.info('Run task success: %s cost %ds \n' % (task_info, int(finish_time - start_time)))
                 self.current_task_info.pop(task_id, None)
             except Exception as e:
+                dtable_io_logger.exception(e)
                 if str(e.args[0]) == 'the number of cells accessing the table exceeds the limit':
                     dtable_io_logger.warning('Failed to handle task %s, error: %s \n' % (task_id, e))
                 else:
