@@ -1205,7 +1205,6 @@ class AddRecordToOtherTableAction(BaseAction):
             'row': {},
             'table_name': self.get_table_name(dst_table_id)
         }
-        self._init_append_rows()
 
     def get_table_name(self, table_id):
         dtable_metadata = self.auto_rule.dtable_metadata
@@ -1279,12 +1278,17 @@ class AddRecordToOtherTableAction(BaseAction):
         self.row_data['row'] = filtered_updates
 
     def _can_do_action(self):
-        if not self.row_data.get('row'):
+        if not self.data and self.auto_rule.trigger.get('condition') in (CONDITION_ROWS_MODIFIED, CONDITION_ROWS_ADDED):
             return False
 
         return True
 
     def do_action(self):
+        self._init_append_rows()
+
+        if not self.row_data.get('row'):
+            return False
+
         table_name = self.get_table_name(self.dst_table_id)
         if not self._can_do_action() or not table_name:
             return

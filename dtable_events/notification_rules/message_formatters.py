@@ -180,10 +180,14 @@ class NumberMessageFormatter(BaseMessageFormatter):
             value *= 100
 
         value = ('%%.%sf' % precision) % value
-        int_part, float_part = value.split('.')
+
+        int_part = value.split('.')[0]
+        if str(precision) != '0':
+            float_part = value.split('.')[1]
+
         if thousands != 'no':
             int_part = ('{:%s}' % self.separator_map[thousands]).format(int(int_part))
-        if enable_precision:
+        if enable_precision and str(precision) != '0':
             value = int_part + self.separator_map[decimal] + float_part
         else:
             value = int_part
