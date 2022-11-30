@@ -615,6 +615,7 @@ def trigger_near_deadline_notification_rule(rule, db_session):
     if blanks:
         column_blanks, col_name_dict = get_column_blanks(blanks, sql_metadata)
 
+    to_users = []
     for row in rows_near_deadline[:25]:
         row_id = row['_id']
 
