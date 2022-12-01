@@ -1278,7 +1278,7 @@ class AddRecordToOtherTableAction(BaseAction):
         self.row_data['row'] = filtered_updates
 
     def _can_do_action(self):
-        if not self.data and self.auto_rule.trigger.get('condition') in (CONDITION_ROWS_MODIFIED, CONDITION_ROWS_ADDED):
+        if not self.data or not self.auto_rule.trigger.get('condition') in (CONDITION_ROWS_MODIFIED, CONDITION_ROWS_ADDED):
             return False
 
         return True
