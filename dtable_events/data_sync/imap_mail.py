@@ -123,7 +123,11 @@ class ImapMail(object):
         email_dict = {}
         msg_dict = self.server.fetch(mail, ['BODY[]'])
         mail_body = msg_dict[mail][b'BODY[]']
-        msg = Parser().parsestr(mail_body.decode())
+        try:
+            mail_body = mail_body.decode()
+        except UnicodeDecodeError:
+            mail_body = mail_body.decode('gb18030')
+        msg = Parser().parsestr(mail_body)
 
         header_info = self.get_email_header(msg)
         send_time = header_info.get('Date')
@@ -137,6 +141,9 @@ class ImapMail(object):
             return
         if mode == 'SINCE' and send_time.date() < send_date:
             return
+
+        if not header_info.get('Message-ID'):
+            logger.error('message-id not found, email body: %s', mail_body)
 
         if not header_info['From']:
             logger.warning('account: %s message: %s no sender!', self.user, mail)
