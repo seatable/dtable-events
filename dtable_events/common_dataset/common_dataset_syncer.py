@@ -133,7 +133,7 @@ def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_
             break
     if not dst_table:
         set_common_dataset_sync_invalid(dataset_sync_id, db_session)
-        logging.error('Destination table: %s not found.' % dst_table_id)
+        logging.warning('Destination table: %s not found.' % dst_table_id)
         return
 
     return {

@@ -80,7 +80,7 @@ def sync_common_dataset(context, config):
             dst_table = table
             break
     if not dst_table:
-        dtable_io_logger.error('Destination table: %s not found.' % dst_table_id)
+        dtable_io_logger.warning('Destination table: %s not found.' % dst_table_id)
         return
     dst_columns = dst_table.get('columns')
     dst_rows = dst_table.get('rows')
@@ -106,7 +106,8 @@ def sync_common_dataset(context, config):
         raise Exception(str(e))
     else:
         if result and 'task_status_code' in result and result['task_status_code'] != 200:
-            dtable_io_logger.error(result)
+            if result['task_status_code'] == 500:
+                dtable_io_logger.error(result)
             error_msg = 'import_sync_common_dataset:%s' % json.dumps(result)
             raise Exception(error_msg)
 
