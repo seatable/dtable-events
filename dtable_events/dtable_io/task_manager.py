@@ -345,6 +345,8 @@ class TaskManager(object):
             except Exception as e:
                 if str(e.args[0]) == 'the number of cells accessing the table exceeds the limit':
                     dtable_io_logger.warning('Failed to handle task %s, error: %s \n' % (task_id, e))
+                elif str(e.args[0]).startswith('import_sync_common_dataset:'):
+                    dtable_io_logger.warning('Failed to handle task %s error: %s \n' % (task_id, e))
                 else:
                     dtable_io_logger.error('Failed to handle task %s, error: %s \n' % (task_id, e))
                 self.tasks_map[task_id] = 'error_' + str(e.args[0])
