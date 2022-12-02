@@ -56,6 +56,10 @@ TO_ROW_START_OFFSET = -200000
 IMAGE_CELL_ROW_HEIGHT = 50
 IMAGE_CELL_COLUMN_WIDTH = 30
 
+IMAGE_TMP_DIR = '/tmp/dtable-io/export-excel/images/'
+
+EXPORT_IMAGE_LIMIT = 1000
+
 
 class EmptyCell(object):
     value = None
@@ -1228,13 +1232,12 @@ def get_file_download_url(file_url, dtable_uuid, repo_id):
     from urllib.parse import unquote
     from seaserv import seafile_api
     from dtable_events.utils import uuid_str_to_36_chars, normalize_file_path, gen_file_get_url
-    file_path = unquote('/'.join(file_url.split('/')[-3:]).strip())
 
+    file_path = unquote('/'.join(file_url.split('/')[-3:]).strip())
     asset_path = normalize_file_path(os.path.join('/asset', uuid_str_to_36_chars(dtable_uuid), file_path))
     asset_id = seafile_api.get_file_id_by_path(repo_id, asset_path)
     asset_name = os.path.basename(normalize_file_path(file_path))
     if not asset_id:
-        # logger.warning('automation rule: %s, send email asset file %s does not exist.', asset_name)
         return None
 
     token = seafile_api.get_fileserver_access_token(
@@ -1244,13 +1247,12 @@ def get_file_download_url(file_url, dtable_uuid, repo_id):
     url = gen_file_get_url(token, asset_name)
     return url
 
-
-def add_image_to_excel(ws, row, col_num, row_num, dtable_uuid, repo_id):
+def add_image_to_excel(ws, row, col_num, row_num, dtable_uuid, repo_id, image_num):
     import requests
-    from io import BytesIO
     from openpyxl.drawing.image import Image
     from PIL import Image as PILImage
     from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, TwoCellAnchor
+    from urllib.parse import unquote
 
     images = row[col_num]
     row_pos = str(row_num + 1)
@@ -1258,7 +1260,16 @@ def add_image_to_excel(ws, row, col_num, row_num, dtable_uuid, repo_id):
     ws.row_dimensions[int(row_pos)].height = IMAGE_CELL_ROW_HEIGHT
 
     offset_increment = 0
+    images_target_dir = IMAGE_TMP_DIR + dtable_uuid
     for image_url in images:
+        if image_num >= EXPORT_IMAGE_LIMIT:
+            return image_num
+        image_path = unquote('/'.join(image_url.split('/')[-2:]).strip())
+
+        image_month_dir = os.path.join(images_target_dir, '/'.join(image_url.split('/')[-2:-1]))
+        if not os.path.exists(image_month_dir):
+            os.mkdir(image_month_dir)
+
         image_download_url = get_file_download_url(image_url, dtable_uuid, repo_id)
         if not image_download_url:
             continue
@@ -1266,18 +1277,25 @@ def add_image_to_excel(ws, row, col_num, row_num, dtable_uuid, repo_id):
         response = requests.get(image_download_url)
         image_content = response.content
 
+        tmp_image_path = os.path.join(images_target_dir, image_path)
+        with open(tmp_image_path, 'wb') as f:
+            f.write(image_content)
+
         try:
-            img = Image(BytesIO(image_content))
+            img = Image(tmp_image_path)
         except:
             continue
         image_format = img.format
+        # convert webp to png
         if image_format in ('webp', ):
-            # convert webp to png
-            img = PILImage.open(BytesIO(image_content))
+            img = PILImage.open(tmp_image_path)
             img.load()
-            buffer = BytesIO()
-            img.save(buffer, format='PNG')
-            img = Image(buffer)
+            image_name = image_path.split('.')[0] + '.png'
+            new_tmp_image_path = os.path.join(images_target_dir, image_name)
+            img.save(new_tmp_image_path, format='png')
+            # remove webp image
+            os.remove(tmp_image_path)
+            img = Image(new_tmp_image_path)
 
         from_col_offset = FROM_COL_START_OFFSET + offset_increment
         from_row_offset = FROM_ROW_START_OFFSET + offset_increment
@@ -1290,9 +1308,11 @@ def add_image_to_excel(ws, row, col_num, row_num, dtable_uuid, repo_id):
 
         ws.add_image(img)
         offset_increment += 20000
+        image_num += 1
+    return image_num
 
 
-def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id):
+def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id, image_param):
     from openpyxl.cell import WriteOnlyCell
     cell_list = []
     for col_num in range(len(row)):
@@ -1364,9 +1384,12 @@ def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unkn
             c = WriteOnlyCell(ws, value=parse_link(head[col_num], row[col_num], email2nickname))
         elif head[col_num][1] == ColumnTypes.LONG_TEXT:
             c = WriteOnlyCell(ws, value=parse_dtable_long_text(row[col_num]))
-        elif head[col_num][1] == ColumnTypes.IMAGE and row[col_num]:
+        elif head[col_num][1] == ColumnTypes.IMAGE and row[col_num] and image_param['is_support']:
             c = WriteOnlyCell(ws)
-            add_image_to_excel(ws, row, col_num, row_num, dtable_uuid, repo_id)
+            image_num = image_param.get('num')
+            if image_num < EXPORT_IMAGE_LIMIT:
+                num = add_image_to_excel(ws, row, col_num, row_num, dtable_uuid, repo_id, image_num)
+                image_param['num'] = num
         else:
             c = WriteOnlyCell(ws, value=cell_data2str(row[col_num]))
         if row_num in grouped_row_num_map:
@@ -1379,7 +1402,7 @@ def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unkn
     return cell_list
 
 
-def write_xls_with_type(head, data_list, grouped_row_num_map, email2nickname, ws, row_num, dtable_uuid, repo_id):
+def write_xls_with_type(head, data_list, grouped_row_num_map, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param):
     """ write listed data into excel
         head is a list of tuples,
         e.g. head = [(col_name, col_type, col_date), (...), ...]
@@ -1415,7 +1438,7 @@ def write_xls_with_type(head, data_list, grouped_row_num_map, email2nickname, ws
     for row in data_list:
         row_num += 1  # for grouped row num
         try:
-            row_cells = handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id)
+            row_cells = handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id, image_param)
         except Exception as e:
             if not row_error_log_exists:
                 dtable_io_logger.exception(e)

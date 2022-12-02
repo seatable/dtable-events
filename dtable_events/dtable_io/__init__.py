@@ -802,10 +802,10 @@ def get_excel_row_data(response_rows, columns):
         data_list.append(row)
     return data_list
 
-def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, permission, name, task_id, repo_id, tasks_status_map):
+def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, permission, name, task_id, repo_id, tasks_status_map, is_support_image=False):
     from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_view_rows_from_dtable_server, \
         convert_db_rows
-    from dtable_events.dtable_io.excel import write_xls_with_type
+    from dtable_events.dtable_io.excel import write_xls_with_type, IMAGE_TMP_DIR
     from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
     from dtable_events.app.config import ARCHIVE_VIEW_EXPORT_ROW_LIMIT
     from dtable_events.utils.sql_generator import filter2sql
@@ -875,11 +875,16 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
         if summary_configs.get(col.get('key')):
             summary_col_info.update({col.get('name'): summary_configs.get(col.get('key'))})
 
+    images_target_dir = IMAGE_TMP_DIR + dtable_uuid
+    if not os.path.exists(images_target_dir):
+        os.makedirs(images_target_dir)
+
     sheet_name = table_name + ('_' + view_name if view_name else '')
     excel_name = name + '_' + table_name + ('_' + view_name if view_name else '') + '.xlsx'
     target_path = os.path.join(target_dir, excel_name)
     wb = openpyxl.Workbook(write_only=True)
     ws = wb.create_sheet(sheet_name)
+    image_param = {'num': 0, 'is_support': is_support_image}
     if is_archive:
         dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
         try:
@@ -915,7 +920,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
 
             row_num = start
             try:
-                write_xls_with_type(head_list, data_list, {}, email2nickname, ws, row_num, dtable_uuid, repo_id)
+                write_xls_with_type(head_list, data_list, {}, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param)
             except Exception as e:
                 dtable_io_logger.exception(e)
                 dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
@@ -943,18 +948,23 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
         data_list, grouped_row_num_map = parse_view_rows(response_rows, head_list, summary_col_info, cols_without_hidden)
 
         try:
-            write_xls_with_type(head_list, data_list, grouped_row_num_map, email2nickname, ws, 0, dtable_uuid, repo_id)
+            write_xls_with_type(head_list, data_list, grouped_row_num_map, email2nickname, ws, 0, dtable_uuid, repo_id, image_param)
         except Exception as e:
             dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
             return
         target_path = os.path.join(target_dir, excel_name)
         wb.save(target_path)
+    # remove tmp images
+    try:
+        shutil.rmtree(images_target_dir)
+    except:
+        pass
 
 
-def convert_table_to_execl(dtable_uuid, table_id, username, permission, name, repo_id):
+def convert_table_to_execl(dtable_uuid, table_id, username, permission, name, repo_id, is_support_image=False):
     from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_rows_from_dtable_server, \
         convert_db_rows
-    from dtable_events.dtable_io.excel import write_xls_with_type
+    from dtable_events.dtable_io.excel import write_xls_with_type, IMAGE_TMP_DIR
     from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
     import openpyxl
 
@@ -1001,17 +1011,27 @@ def convert_table_to_execl(dtable_uuid, table_id, username, permission, name, re
             row.append(cell_data)
         data_list.append(row)
 
+    images_target_dir = IMAGE_TMP_DIR + dtable_uuid
+    if not os.path.exists(images_target_dir):
+        os.makedirs(images_target_dir)
+
     sheet_name = table_name
     excel_name = name + '_' + table_name + '.xlsx'
     target_path = os.path.join(target_dir, excel_name)
     wb = openpyxl.Workbook(write_only=True)
     ws = wb.create_sheet(sheet_name)
+    image_param = {'num': 0, 'is_support': is_support_image}
     try:
-        write_xls_with_type(head_list, data_list, {}, email2nickname, ws, 0, dtable_uuid, repo_id)
+        write_xls_with_type(head_list, data_list, {}, email2nickname, ws, 0, dtable_uuid, repo_id, image_param)
     except Exception as e:
         dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
         return
     wb.save(target_path)
+    # remove tmp images
+    try:
+        shutil.rmtree(images_target_dir)
+    except:
+        pass
 
 def app_user_sync(dtable_uuid, app_name, app_id, table_name, table_id, username, config):
     dtable_io_logger.info('Start sync app %s users: to table %s.' % (app_name, table_name))

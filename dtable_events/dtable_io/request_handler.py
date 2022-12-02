@@ -864,9 +864,10 @@ def convert_view_to_excel():
     permission = request.args.get('permission')
     name = request.args.get('name')
     repo_id = request.args.get('repo_id')
+    is_support_image = to_python_boolean(request.args.get('is_support_image', 'false'))
 
     try:
-        task_id = task_manager.add_convert_view_to_execl_task(dtable_uuid, table_id, view_id, username, id_in_org, permission, name, repo_id)
+        task_id = task_manager.add_convert_view_to_execl_task(dtable_uuid, table_id, view_id, username, id_in_org, permission, name, repo_id, is_support_image)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -893,9 +894,10 @@ def convert_table_to_excel():
     permission = request.args.get('permission')
     name = request.args.get('name')
     repo_id = request.args.get('repo_id')
+    is_support_image = to_python_boolean(request.args.get('is_support_image', 'false'))
 
     try:
-        task_id = task_manager.add_convert_table_to_execl_task(dtable_uuid, table_id, username, permission, name, repo_id)
+        task_id = task_manager.add_convert_table_to_execl_task(dtable_uuid, table_id, username, permission, name, repo_id, is_support_image)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
