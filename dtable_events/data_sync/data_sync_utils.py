@@ -294,13 +294,14 @@ def upload_attachments(seatable, email_list):
         file_list = email.pop('Attachment', [])
         filename2content_id = email.pop('filename2content_id', {})
         html_content = email.pop('HTML Content', '')
+        message_id = email.get('Message ID', '')
         filename2url = {}
         file_info_list = []
         for file in file_list:
             file_name = file.get('file_name')
             file_data = file.get('file_data')
             try:
-                file_info = seatable.upload_bytes_file(file_name, file_data)
+                file_info = seatable.upload_email_attachment(file_name, file_data, message_id)
                 file_info_list.append(file_info)
                 filename2url[file_name] = file_info['url']
             except Exception as e:

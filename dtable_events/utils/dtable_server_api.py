@@ -12,9 +12,6 @@ from dtable_events.app.config import FILE_SERVER_ROOT
 
 logger = logging.getLogger(__name__)
 
-UPLOAD_IMG_RELATIVE_PATH = 'images'
-UPLOAD_FILE_RELATIVE_PATH = 'files'
-
 
 class WrongFilterException(Exception):
     pass
@@ -264,13 +261,16 @@ class DTableServerAPI(object):
         response = requests.put(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
-    def get_file_upload_link(self):
+    def get_file_upload_link(self, attach_path=None):
         """
         :return: dict
         """
         repo_id = self.repo_id
         asset_dir_path = '/asset/' + self.dtable_uuid
+        if attach_path:
+            asset_dir_path = os.path.join('/asset', self.dtable_uuid, attach_path)
         asset_dir_id = seafile_api.get_dir_id_by_path(repo_id, asset_dir_path)
+
         if not asset_dir_id:
             seafile_api.mkdir_with_parents(repo_id, '/', asset_dir_path[1:], self.username)
 
@@ -283,8 +283,6 @@ class DTableServerAPI(object):
         res = dict()
         res['upload_link'] = upload_link
         res['parent_path'] = asset_dir_path
-        res['img_relative_path'] = os.path.join(UPLOAD_IMG_RELATIVE_PATH, str(datetime.today())[:7])
-        res['file_relative_path'] = os.path.join(UPLOAD_FILE_RELATIVE_PATH, str(datetime.today())[:7])
         return res
 
     def upload_bytes_file(self, name, content: bytes, relative_path=None, file_type=None, replace=False):
@@ -321,6 +319,36 @@ class DTableServerAPI(object):
             'relative_path': parse.quote(relative_path.strip('/')),
             'filename': parse.quote(d.get('name', name))
         }
+        return {
+            'type': file_type,
+            'size': d.get('size'),
+            'name': d.get('name'),
+            'url': url
+        }
+
+    def upload_email_attachment(self, name, content: bytes, email_id):
+        file_type = 'file'
+        attach_path = os.path.join('emails', str(datetime.today())[:7], email_id)
+        upload_link_dict = self.get_file_upload_link(attach_path)
+        parent_dir = upload_link_dict['parent_path']
+        upload_link = upload_link_dict['upload_link'] + '?ret-json=1'
+
+        response = requests.post(upload_link, data={
+            'parent_dir': parent_dir,
+            'replace': 0,
+        }, files={
+            'file': (name, io.BytesIO(content))
+        }, timeout=120)
+
+        d = response.json()[0]
+        url = '%(server)s/workspace/%(workspace_id)s/%(parent_dir)s/%(filename)s' % {
+            'server': self.server_url.strip('/'),
+            'workspace_id': self.workspace_id,
+            'parent_dir': parent_dir.strip('/'),
+            'file_type': file_type,
+            'filename': parse.quote(d.get('name', name))
+        }
+
         return {
             'type': file_type,
             'size': d.get('size'),
