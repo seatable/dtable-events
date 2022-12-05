@@ -439,7 +439,8 @@ def parse_and_update_file_to_table(repo_id, file_name, username, dtable_uuid, ta
     dtable_rows = get_rows_from_dtable_server(username, dtable_uuid, table_name)
     key_columns = selected_columns.split(',')
 
-    columns = get_columns_from_dtable_server(username, dtable_uuid, table_name)
+    has_hidden_columns = True
+    columns = get_columns_from_dtable_server(username, dtable_uuid, table_name, has_hidden_columns)
     dtable_col_name_to_type = {col['name']: col['type'] for col in columns}
 
     insert_rows, update_rows = get_insert_update_rows(dtable_col_name_to_type, file_rows, dtable_rows, key_columns)
@@ -580,7 +581,8 @@ def update_parsed_file_by_dtable_server(username, repo_id, dtable_uuid, file_nam
     dtable_rows = get_rows_from_dtable_server(username, dtable_uuid, table_name)
     key_columns = selected_columns.split(',')
 
-    columns = get_columns_from_dtable_server(username, dtable_uuid, table_name)
+    has_hidden_columns = True
+    columns = get_columns_from_dtable_server(username, dtable_uuid, table_name, has_hidden_columns)
     dtable_col_name_to_type = {col['name']: col['type'] for col in columns}
 
     insert_rows, update_rows = get_insert_update_rows(dtable_col_name_to_type, excel_rows, dtable_rows, key_columns)
@@ -642,7 +644,8 @@ def parse_dtable_excel_file(repo_id, file_name, username, dtable_uuid, table_nam
     sheet = wb.get_sheet_by_name(wb.sheetnames[0])
 
     sheet_rows = list(sheet.rows)
-    columns = get_columns_from_dtable_server(username, dtable_uuid, table_name)
+    has_hidden_columns = True
+    columns = get_columns_from_dtable_server(username, dtable_uuid, table_name, has_hidden_columns)
     if not sheet_rows:
         wb.close()
         table = {
@@ -740,7 +743,8 @@ def parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name, name_t
     # parse
     csv_file = get_csv_file(repo_id, file_name)
     tables = []
-    columns = get_columns_from_dtable_server(username, dtable_uuid, table_name)
+    has_hidden_columns = True
+    columns = get_columns_from_dtable_server(username, dtable_uuid, table_name, has_hidden_columns)
 
     max_column = 500  # columns limit
     rows, max_column, csv_row_num, csv_column_num = parse_csv_rows(csv_file, columns, max_column, name_to_email)

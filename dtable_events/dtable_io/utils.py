@@ -759,13 +759,21 @@ def append_rows_by_dtable_server(username, dtable_uuid, rows_data, table_name):
         time.sleep(0.5)
 
 
-def get_columns_from_dtable_server(username, dtable_uuid, table_name):
+def get_columns_from_dtable_server(username, dtable_uuid, table_name, has_hidden_columns):
     api_url = get_inner_dtable_server_url()
-    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/columns/?from=dtable_events&table_name=' + urlquote(table_name)
+    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/columns/'
     dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
     headers = {'Authorization': 'Token ' + dtable_server_access_token}
+    has_hidden_columns = 'true' if has_hidden_columns else 'false'
+    _from = 'dtable_events'
 
-    res = requests.get(url, headers=headers, timeout=180)
+    params = {
+        'table_name': urlquote(table_name),
+        'has_hidden_columns': has_hidden_columns,
+        'from': _from,
+    }
+
+    res = requests.get(url, headers=headers, params=params, timeout=180)
     if res.status_code != 200:
         raise ConnectionError('failed to get columns %s %s' % (dtable_uuid, res.text))
     return json.loads(res.content.decode()).get('columns', [])
