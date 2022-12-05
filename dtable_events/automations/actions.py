@@ -1284,13 +1284,12 @@ class AddRecordToOtherTableAction(BaseAction):
         return True
 
     def do_action(self):
-        self._init_append_rows()
-
-        if not self.row_data.get('row'):
-            return False
-
         table_name = self.get_table_name(self.dst_table_id)
         if not self._can_do_action() or not table_name:
+            return
+
+        self._init_append_rows()
+        if not self.row_data.get('row'):
             return
 
         try:
