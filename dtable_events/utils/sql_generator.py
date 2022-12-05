@@ -1409,6 +1409,8 @@ class BaseSQLGenerator(object):
             filter_content = "%s" % (
                 filter_conjunction_split.join(filter_string_list)
             )
+        else:
+            return ''
         return "%s%s" % (
             filter_header,
             filter_content
