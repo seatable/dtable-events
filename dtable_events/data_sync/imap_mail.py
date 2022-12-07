@@ -1,5 +1,6 @@
 import logging
 from imapclient import IMAPClient
+from imapclient.imapclient import SENT
 from email.parser import Parser
 from email.header import decode_header
 from datetime import datetime, timedelta
@@ -119,10 +120,8 @@ class ImapMail(object):
 
         return header_info
 
-    def gen_email_dict(self, mail, mode, send_box, send_date=None):
+    def gen_email_dict(self, mail_body, mode, is_sender, send_date=None):
         email_dict = {}
-        msg_dict = self.server.fetch(mail, ['BODY[]'])
-        mail_body = msg_dict[mail][b'BODY[]']
         try:
             mail_body = mail_body.decode()
         except UnicodeDecodeError:
@@ -142,13 +141,14 @@ class ImapMail(object):
         if mode == 'SINCE' and send_time.date() < send_date:
             return
 
-        if not header_info.get('Message-ID'):
+        message_id = header_info.get('Message-ID')
+        if not message_id:
             logger.error('message-id not found, email body: %s', mail_body)
 
         if not header_info['From']:
-            logger.warning('account: %s message: %s no sender!', self.user, mail)
+            logger.warning('account: %s message: %s no sender!', self.user, message_id)
         if not header_info['To']:
-            logger.warning('account: %s message: %s no recipient!', self.user, mail)
+            logger.warning('account: %s message: %s no recipient!', self.user, message_id)
         plain_content, html_content = self.get_content(msg)
         file_list, content_info = self.get_attachments(msg)
         email_dict['Content'] = plain_content
@@ -162,7 +162,7 @@ class ImapMail(object):
         email_dict['Reply to Message ID'] = header_info.get('In-Reply-To')
         email_dict['cc'] = header_info.get('CC')
         email_dict['Date'] = header_info.get('Date')
-        email_dict['is_sender'] = True if send_box == 'Sent Items' else False
+        email_dict['is_sender'] = is_sender
 
         return email_dict
 
@@ -172,12 +172,15 @@ class ImapMail(object):
         before_send_date = send_date - td
         after_send_date = send_date + td
         total_email_list = []
-        for send_box in ['INBOX', 'Sent Items']:
-            logger.debug('start to get user: %s emails from box: %s', self.user, send_box)
+        sent_box = self.server.find_special_folder(SENT)
+        inbox = 'INBOX'
+
+        for email_folder in [inbox, sent_box]:
+            logger.debug('start to get user: %s emails from box: %s', self.user, email_folder)
             try:
-                self.server.select_folder(send_box, readonly=True)
+                self.server.select_folder(email_folder, readonly=True)
             except Exception as e:
-                logger.warning('user: %s select email folder: %s error: %s', self.user, send_box, e)
+                logger.warning('user: %s select email folder: %s error: %s', self.user, email_folder, e)
                 continue
             results = []
             if mode == 'ON':
@@ -188,9 +191,15 @@ class ImapMail(object):
             elif mode == 'SINCE':
                 results = self.server.search(['SINCE', before_send_date])
 
-            for mail in results:
+            emails = self.server.fetch(results, ['BODY[]'])
+            is_sender = False
+            if email_folder == sent_box:
+                is_sender = True
+
+            for uid, message_data in emails.items():
+                mail_body = message_data[b'BODY[]']
                 try:
-                    email_dict = self.gen_email_dict(mail, mode, send_box, send_date)
+                    email_dict = self.gen_email_dict(mail_body, mode, is_sender, send_date)
                     if email_dict:
                         total_email_list.append(email_dict)
                 except Exception as e:
@@ -199,12 +208,14 @@ class ImapMail(object):
         return total_email_list
 
     def search_email_by_message_id(self, message_id):
-        for send_box in ['INBOX', 'Sent Items']:
-            logger.debug('start to search user: %s email from box: %s, message_id', self.user, send_box, message_id)
+        sent_box = self.server.find_special_folder(SENT)
+        inbox = 'INBOX'
+        for email_folder in [inbox, sent_box]:
+            logger.debug('start to search user: %s email from box: %s, message_id', self.user, email_folder, message_id)
             try:
-                self.server.select_folder(send_box, readonly=True)
+                self.server.select_folder(email_folder, readonly=True)
             except Exception as e:
-                logger.warning('user: %s select email folder: %s error: %s', self.user, send_box, e)
+                logger.warning('user: %s select email folder: %s error: %s', self.user, email_folder, e)
                 continue
             criteria = '(HEADER Message-ID "%s")' % message_id
             try:
@@ -212,9 +223,15 @@ class ImapMail(object):
             except Exception as e:
                 logger.error('search email failed: %s', e)
                 return {}
-            if results:
+            emails = self.server.fetch(results, ['BODY[]'])
+            is_sender = False
+            if email_folder == sent_box:
+                is_sender = True
+            if emails:
+                uid, message_data = list(emails.items())[0]
+                mail_body = message_data[b'BODY[]']
                 try:
-                    return self.gen_email_dict(results[0], 'SEARCH', send_box)
+                    return self.gen_email_dict(mail_body, 'SEARCH', is_sender)
                 except Exception as e:
                     logger.exception(e)
                     logger.error('parse email error: %s', e)
