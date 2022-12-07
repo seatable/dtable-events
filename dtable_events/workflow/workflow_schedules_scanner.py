@@ -41,7 +41,7 @@ class WorkflowSchedulesScanner:
         WorkflowSchedulesScannerTimer(self._db_session_class).start()
 
 
-def do_notify_schedule(task_id, action):
+def do_notify_schedule(schedule_id, task_id, action):
     try:
         offset = action['offset']
         token = action['token']
@@ -55,7 +55,7 @@ def do_notify_schedule(task_id, action):
         dtable_web_api.internal_add_notification(to_users, 'workflow_processing_expired', detail)
     except Exception as e:
         logging.exception(e)
-        logging.error('send notification to users: %s error: %s', to_users, e)
+        logging.error('schedule_id: %s task_id: %s action: %s send notifications error: %s', schedule_id, task_id, action, e)
 
 
 def scan_workflow_schedules(db_session):
@@ -68,13 +68,14 @@ def scan_workflow_schedules(db_session):
         schedule_id = item.id
         task_id = item.task_id
         action = item.action
+        logging.debug('start to execute schedule: %s, task_id: %s, action: %s', schedule_id, task_id, action)
         try:
             action = json.loads(action)
         except:
             logging.error('schedule: %s action: %s invalid', schedule_id, action)
             continue
         if action.get('type') == 'notify':
-            do_notify_schedule(task_id, action)
+            do_notify_schedule(schedule_id, task_id, action)
         try:
             db_session.execute('UPDATE dtable_workflow_task_schedules SET is_executed=1 WHERE id=:schedule_id', {
                 'schedule_id': schedule_id
