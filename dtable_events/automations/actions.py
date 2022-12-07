@@ -124,7 +124,7 @@ class UpdateAction(BaseAction):
         """
         super().__init__(auto_rule, data)
         self.action_type = 'update'
-        self.updates = updates
+        self.updates = updates or {}
         self.update_data = {
             'row': {},
             'table_name': self.auto_rule.table_info['name'],
@@ -282,7 +282,7 @@ class AddRowAction(BaseAction):
         """
         super().__init__(auto_rule)
         self.action_type = 'add'
-        self.row = row
+        self.row = row or {}
         self.row_data = {
             'row': {},
             'table_name': self.auto_rule.table_info['name']
@@ -356,16 +356,16 @@ class NotifyAction(BaseAction):
         """
         super().__init__(auto_rule, data)
         self.action_type = 'notify'
-        self.msg = msg
+        self.msg = msg or ''
         temp_users = []
-        for user in users:
+        for user in users or []:
             if user and user not in self.auto_rule.related_users_dict:
                 error_msg = 'rule: %s notify action has invalid user: %s' % (self.auto_rule.rule_id, user)
                 raise RuleInvalidException(error_msg)
             if user:
                 temp_users.append(user)
         self.users = temp_users
-        self.users_column_key = users_column_key
+        self.users_column_key = users_column_key or ''
 
         self.column_blanks = []
         self.col_name_dict = {}
@@ -543,9 +543,9 @@ class SendWechatAction(BaseAction):
 
         super().__init__(auto_rule, data)
         self.action_type = 'send_wechat'
-        self.msg = msg
-        self.msg_type = msg_type
-        self.account_id = account_id
+        self.msg = msg or ''
+        self.msg_type = msg_type or 'text'
+        self.account_id = account_id or ''
 
         self.webhook_url = ''
         self.column_blanks = []
@@ -556,8 +556,7 @@ class SendWechatAction(BaseAction):
     def init_notify(self, msg):
         account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id)
         if not account_dict:
-            self.auto_rule.set_invalid()
-            return
+            raise RuleInvalidException('Send wechat no account')
         blanks = set(re.findall(r'\{([^{]*?)\}', msg))
         self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
         self.column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
@@ -620,10 +619,10 @@ class SendDingtalkAction(BaseAction):
 
         super().__init__(auto_rule, data)
         self.action_type = 'send_dingtalk'
-        self.msg = msg
-        self.msg_type = msg_type
-        self.account_id = account_id
-        self.msg_title = msg_title
+        self.msg = msg or ''
+        self.msg_type = msg_type or 'text'
+        self.account_id = account_id or ''
+        self.msg_title = msg_title or ''
 
         self.webhook_url = ''
         self.column_blanks = []
@@ -634,8 +633,7 @@ class SendDingtalkAction(BaseAction):
     def init_notify(self, msg):
         account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id)
         if not account_dict:
-            self.auto_rule.set_invalid()
-            return
+            raise RuleInvalidException('Send dingtalk no account')
         blanks = set(re.findall(r'\{([^{]*?)\}', msg))
         self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
         self.column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
@@ -751,9 +749,7 @@ class SendEmailAction(BaseAction):
     def init_notify(self):
         account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id)
         if not account_dict:
-            self.auto_rule.set_invalid()
-            return
-
+            raise RuleInvalidException('Send email no account')
         self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
         self.init_notify_msg()
         self.init_notify_send_to()
@@ -1039,7 +1035,7 @@ class LinkRecordsAction(BaseAction):
         self.action_type = 'link_record'
         self.linked_table_id = linked_table_id
         self.link_id = link_id
-        self.match_conditions = match_conditions
+        self.match_conditions = match_conditions or []
         self.linked_row_ids = []
         self.init_linked_row_ids()
 
@@ -1194,7 +1190,7 @@ class AddRecordToOtherTableAction(BaseAction):
         """
         super().__init__(auto_rule, data)
         self.action_type = 'add_record_to_other_table'
-        self.row = row
+        self.row = row or {}
         self.col_name_dict = {}
         self.dst_table_id = dst_table_id
         self.row_data = {
@@ -1321,7 +1317,7 @@ class TriggerWorkflowAction(BaseAction):
 
     def __init__(self, auto_rule, row, token):
         super().__init__(auto_rule, None)
-        self.row = row
+        self.row = row or {}
         self.row_data = {
             'row': {}
         }
@@ -1350,8 +1346,6 @@ class TriggerWorkflowAction(BaseAction):
         return workflow_table_id == self.auto_rule.table_id
 
     def init_updates(self):
-        if self.auto_rule.trigger.get('condition') != CONDITION_PERIODICALLY:
-            return
         if not self.is_workflow_valid():
             return
         # filter columns in view and type of column is in VALID_COLUMN_TYPES
@@ -1384,9 +1378,6 @@ class TriggerWorkflowAction(BaseAction):
         self.row_data['row'] = filtered_updates
 
     def do_action(self):
-        if not self.row_data['row']:
-            return
-
         try:
             logger.debug('rule: %s new workflow: %s task row data: %s', self.auto_rule.rule_id, self.token, self.row_data)
             resp_data = self.auto_rule.dtable_server_api.append_row(self.auto_rule.table_info['name'], self.row_data['row'])
@@ -1455,7 +1446,7 @@ class AutomationRule:
         self._trigger_conditions_rows = None
 
         self.cache_key = 'AUTOMATION_RULE:%s' % self.rule_id
-        self.task_run_seccess = True
+        self.task_run_success = True
 
         self.done_actions = False
         self.load_trigger_and_actions(raw_trigger, raw_actions)
@@ -1795,8 +1786,7 @@ class AutomationRule:
                     linked_table_id = action_info.get('linked_table_id')
                     link_id = action_info.get('link_id')
                     match_conditions = action_info.get('match_conditions')
-                    if self.run_condition == PER_UPDATE:
-                        LinkRecordsAction(self, self.data, linked_table_id, link_id, match_conditions).do_action()
+                    LinkRecordsAction(self, self.data, linked_table_id, link_id, match_conditions).do_action()
 
                 elif action_info.get('type') == 'add_record_to_other_table':
                     row = action_info.get('row')
@@ -1810,12 +1800,12 @@ class AutomationRule:
 
             except RuleInvalidException as e:
                 logger.error('auto rule: %s, invalid error: %s', self.rule_id, e)
-                self.task_run_seccess = False
+                self.task_run_success = False
                 self.set_invalid()
                 break
             except Exception as e:
                 logger.exception(e)
-                self.task_run_seccess = False
+                self.task_run_success = False
                 logger.error('rule: %s, do action: %s error: %s', self.rule_id, action_info, e)
 
         if self.done_actions and not with_test:
@@ -1838,7 +1828,7 @@ class AutomationRule:
             if self.run_condition in ALL_CONDITIONS:
                 self.db_session.execute(set_task_log_sql, {
                     'trigger_time': datetime.utcnow(),
-                    'success': self.task_run_seccess,
+                    'success': self.task_run_success,
                     'rule_id': self.rule_id,
                     'run_condition': self.run_condition,
                     'dtable_uuid': self.dtable_uuid,
