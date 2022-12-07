@@ -154,33 +154,34 @@ class UpdateAction(BaseAction):
         filtered_updates = {}
 
         for col in self.auto_rule.table_info['columns']:
-            if 'key' in col and col.get('type') in self.VALID_COLUMN_TYPES:
-                col_name = col.get('name')
-                col_key = col.get('key')
-                col_type = col.get('type')
-                if col_key in self.updates.keys():
-                    if col_type == ColumnTypes.DATE:
-                        time_format = col.get('data', {}).get('format', '')
-                        format_length = len(time_format.split(" "))
-                        try:
-                            time_dict = self.updates.get(col_key)
-                            set_type = time_dict.get('set_type')
-                            if set_type == 'specific_value':
-                                time_value = time_dict.get('value')
-                                filtered_updates[col_name] = time_value
-                            elif set_type == 'relative_date':
-                                offset = time_dict.get('offset')
-                                filtered_updates[col_name] = self.format_time_by_offset(int(offset), format_length)
-                        except Exception as e:
-                            logger.error(e)
-                            filtered_updates[col_name] = self.updates.get(col_key)
-                    else:
-                        cell_value = self.updates.get(col_key)
-                        if isinstance(cell_value, str):
-                            blanks = set(re.findall(r'\{([^{]*?)\}', cell_value))
-                            column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
-                            cell_value = self.fill_msg_blanks(src_row, cell_value, column_blanks)
-                        filtered_updates[col_name] = self.parse_column_value(col, cell_value)
+            if col.get('type') not in self.VALID_COLUMN_TYPES:
+                continue
+            col_name = col.get('name')
+            col_key = col.get('key')
+            col_type = col.get('type')
+            if col_key in self.updates.keys():
+                if col_type == ColumnTypes.DATE:
+                    time_format = col.get('data', {}).get('format', '')
+                    format_length = len(time_format.split(" "))
+                    try:
+                        time_dict = self.updates.get(col_key)
+                        set_type = time_dict.get('set_type')
+                        if set_type == 'specific_value':
+                            time_value = time_dict.get('value')
+                            filtered_updates[col_name] = time_value
+                        elif set_type == 'relative_date':
+                            offset = time_dict.get('offset')
+                            filtered_updates[col_name] = self.format_time_by_offset(int(offset), format_length)
+                    except Exception as e:
+                        logger.error(e)
+                        filtered_updates[col_name] = self.updates.get(col_key)
+                else:
+                    cell_value = self.updates.get(col_key)
+                    if isinstance(cell_value, str):
+                        blanks = set(re.findall(r'\{([^{]*?)\}', cell_value))
+                        column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
+                        cell_value = self.fill_msg_blanks(src_row, cell_value, column_blanks)
+                    filtered_updates[col_name] = self.parse_column_value(col, cell_value)
         row_id = self.data['row']['_id']
         self.update_data['row'] = filtered_updates
         self.update_data['row_id'] = row_id
@@ -301,30 +302,31 @@ class AddRowAction(BaseAction):
         # filter columns in view and type of column is in VALID_COLUMN_TYPES
         filtered_updates = {}
         for col in self.auto_rule.table_info['columns']:
-            if 'key' in col and col.get('type') in self.VALID_COLUMN_TYPES:
-                col_name = col.get('name')
-                col_type = col.get('type')
-                col_key = col.get('key')
-                if col_key in self.row.keys():
-                    if col_type == ColumnTypes.DATE:
-                        time_format = col.get('data', {}).get('format', '')
-                        format_length = len(time_format.split(" "))
-                        try:
-                            time_dict = self.row.get(col_key)
-                            if not time_dict:
-                                continue
-                            set_type = time_dict.get('set_type')
-                            if set_type == 'specific_value':
-                                time_value = time_dict.get('value')
-                                filtered_updates[col_name] = time_value
-                            elif set_type == 'relative_date':
-                                offset = time_dict.get('offset')
-                                filtered_updates[col_name] = self.format_time_by_offset(int(offset), format_length)
-                        except Exception as e:
-                            logger.error(e)
-                            filtered_updates[col_name] = self.row.get(col_key)
-                    else:
-                        filtered_updates[col_name] = self.parse_column_value(col, self.row.get(col_key))
+            if col.get('type') not in self.VALID_COLUMN_TYPES:
+                continue
+            col_name = col.get('name')
+            col_type = col.get('type')
+            col_key = col.get('key')
+            if col_key in self.row.keys():
+                if col_type == ColumnTypes.DATE:
+                    time_format = col.get('data', {}).get('format', '')
+                    format_length = len(time_format.split(" "))
+                    try:
+                        time_dict = self.row.get(col_key)
+                        if not time_dict:
+                            continue
+                        set_type = time_dict.get('set_type')
+                        if set_type == 'specific_value':
+                            time_value = time_dict.get('value')
+                            filtered_updates[col_name] = time_value
+                        elif set_type == 'relative_date':
+                            offset = time_dict.get('offset')
+                            filtered_updates[col_name] = self.format_time_by_offset(int(offset), format_length)
+                    except Exception as e:
+                        logger.error(e)
+                        filtered_updates[col_name] = self.row.get(col_key)
+                else:
+                    filtered_updates[col_name] = self.parse_column_value(col, self.row.get(col_key))
         self.row_data['row'] = filtered_updates
 
     def can_do_action(self):
@@ -1242,30 +1244,31 @@ class AddRecordToOtherTableAction(BaseAction):
 
         filtered_updates = {}
         for col in dst_columns:
-            if 'key' in col and col.get('type') in self.VALID_COLUMN_TYPES:
-                col_name = col.get('name')
-                col_type = col.get('type')
-                col_key = col.get('key')
-                if col_key in self.row.keys():
-                    if col_type == ColumnTypes.DATE:
-                        time_format = col.get('data', {}).get('format', '')
-                        format_length = len(time_format.split(" "))
-                        try:
-                            time_dict = self.row.get(col_key)
-                            if not time_dict:
-                                continue
-                            set_type = time_dict.get('set_type')
-                            if set_type == 'specific_value':
-                                time_value = time_dict.get('value')
-                                filtered_updates[col_name] = time_value
-                            elif set_type == 'relative_date':
-                                offset = time_dict.get('offset')
-                                filtered_updates[col_name] = self.format_time_by_offset(int(offset), format_length)
-                        except Exception as e:
-                            logger.error(e)
-                            filtered_updates[col_name] = self.row.get(col_key)
-                    else:
-                        filtered_updates[col_name] = self.parse_column_value(col, self.row.get(col_key))
+            if col.get('type') not in self.VALID_COLUMN_TYPES:
+                continue
+            col_name = col.get('name')
+            col_type = col.get('type')
+            col_key = col.get('key')
+            if col_key in self.row.keys():
+                if col_type == ColumnTypes.DATE:
+                    time_format = col.get('data', {}).get('format', '')
+                    format_length = len(time_format.split(" "))
+                    try:
+                        time_dict = self.row.get(col_key)
+                        if not time_dict:
+                            continue
+                        set_type = time_dict.get('set_type')
+                        if set_type == 'specific_value':
+                            time_value = time_dict.get('value')
+                            filtered_updates[col_name] = time_value
+                        elif set_type == 'relative_date':
+                            offset = time_dict.get('offset')
+                            filtered_updates[col_name] = self.format_time_by_offset(int(offset), format_length)
+                    except Exception as e:
+                        logger.error(e)
+                        filtered_updates[col_name] = self.row.get(col_key)
+                else:
+                    filtered_updates[col_name] = self.parse_column_value(col, self.row.get(col_key))
 
         self.row_data['row'] = filtered_updates
 
@@ -1351,30 +1354,31 @@ class TriggerWorkflowAction(BaseAction):
         # filter columns in view and type of column is in VALID_COLUMN_TYPES
         filtered_updates = {}
         for col in self.auto_rule.view_columns:
-            if 'key' in col and col.get('type') in self.VALID_COLUMN_TYPES:
-                col_name = col.get('name')
-                col_type = col.get('type')
-                col_key = col.get('key')
-                if col_key in self.row.keys():
-                    if col_type == ColumnTypes.DATE:
-                        time_format = col.get('data', {}).get('format', '')
-                        format_length = len(time_format.split(" "))
-                        try:
-                            time_dict = self.row.get(col_key)
-                            if not time_dict:
-                                continue
-                            set_type = time_dict.get('set_type')
-                            if set_type == 'specific_value':
-                                time_value = time_dict.get('value')
-                                filtered_updates[col_name] = time_value
-                            elif set_type == 'relative_date':
-                                offset = time_dict.get('offset')
-                                filtered_updates[col_name] = self.format_time_by_offset(int(offset), format_length)
-                        except Exception as e:
-                            logger.error(e)
-                            filtered_updates[col_name] = self.row.get(col_key)
-                    else:
-                        filtered_updates[col_name] = self.parse_column_value(col, self.row.get(col_key))
+            if col.get('type') not in self.VALID_COLUMN_TYPES:
+                continue
+            col_name = col.get('name')
+            col_type = col.get('type')
+            col_key = col.get('key')
+            if col_key in self.row.keys():
+                if col_type == ColumnTypes.DATE:
+                    time_format = col.get('data', {}).get('format', '')
+                    format_length = len(time_format.split(" "))
+                    try:
+                        time_dict = self.row.get(col_key)
+                        if not time_dict:
+                            continue
+                        set_type = time_dict.get('set_type')
+                        if set_type == 'specific_value':
+                            time_value = time_dict.get('value')
+                            filtered_updates[col_name] = time_value
+                        elif set_type == 'relative_date':
+                            offset = time_dict.get('offset')
+                            filtered_updates[col_name] = self.format_time_by_offset(int(offset), format_length)
+                    except Exception as e:
+                        logger.error(e)
+                        filtered_updates[col_name] = self.row.get(col_key)
+                else:
+                    filtered_updates[col_name] = self.parse_column_value(col, self.row.get(col_key))
         self.row_data['row'] = filtered_updates
 
     def do_action(self):
