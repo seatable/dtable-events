@@ -1,13 +1,15 @@
 import openpyxl
 import os
 
-from dtable_events.dtable_io.excel import parse_row
-from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
+from dtable_events.dtable_io.excel import parse_row, write_xls_with_type, TEMP_EXPORT_VIEW_DIR
+from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, get_metadata_from_dtable_server
 from dtable_events.utils import get_inner_dtable_server_url, get_location_tree_json
 from dtable_events.utils.constants import ColumnTypes
-from dtable_events.app.config import INNER_DTABLE_DB_URL, BIG_DATA_ROW_IMPORT_LIMIT, BIG_DATA_ROW_UPDATE_LIMIT
+from dtable_events.app.config import INNER_DTABLE_DB_URL, BIG_DATA_ROW_IMPORT_LIMIT, BIG_DATA_ROW_UPDATE_LIMIT, \
+    ARCHIVE_VIEW_EXPORT_ROW_LIMIT
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.utils.dtable_server_api import DTableServerAPI
+from dtable_events.utils.sql_generator import filter2sql
 
 AUTO_GENERATED_COLUMNS = [
     ColumnTypes.AUTO_NUMBER,
@@ -99,6 +101,17 @@ def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column
         if insert_new_row and excel_ref_data and not find_tag:
             rows_for_import.append(_parse_excel_row(excel_row, column_name_type_map, name_to_email, location_tree)) # parse
     return rows_for_import, rows_for_update
+
+
+def get_excel_row_data(response_rows, columns):
+    data_list = []
+    for response_row in response_rows:
+        row = []
+        for col in columns:
+            cell_data = response_row.get(col['name'], '')
+            row.append(cell_data)
+        data_list.append(row)
+    return data_list
 
 
 def import_excel_to_db(
@@ -334,3 +347,125 @@ def update_excel_to_db(
     tasks_status_map[task_id]['rows_handled'] = total_count
     os.remove(file_path)
     return
+
+
+def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, task_id, tasks_status_map):
+    from dtable_events.dtable_io import dtable_io_logger
+
+    # init task_status_map for exporting big data process
+    tasks_status_map[task_id] = {
+        'status': 'initializing',
+        'err_msg': '',
+        'handled_row_count': 0,
+        'total_row_count': 0,
+    }
+
+    target_dir = TEMP_EXPORT_VIEW_DIR + dtable_uuid
+    if not os.path.isdir(target_dir):
+        os.makedirs(target_dir)
+
+    try:
+        nicknames = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
+    except Exception as e:
+        dtable_io_logger.error('get nicknames. ERROR: {}'.format(e))
+        return
+    email2nickname = {nickname['email']: nickname['name'] for nickname in nicknames}
+
+    try:
+        metadata = get_metadata_from_dtable_server(dtable_uuid, username, 'r')
+    except Exception as e:
+        dtable_io_logger.error('get metadata. ERROR: {}'.format(e))
+        return
+
+    target_table = {}
+    target_view = {}
+    for table in metadata.get('tables', []):
+        if table.get('_id', '') == table_id:
+            target_table = table
+            break
+
+    if not target_table:
+        dtable_io_logger.warning('Table %s not found.' % table_id)
+        return
+
+    for view in target_table.get('views', []):
+        if view.get('_id', '') == view_id:
+            target_view = view
+            break
+    if not target_view:
+        dtable_io_logger.warning('View %s not found.' % view_id)
+        return
+
+    table_name = target_table.get('name', '')
+    view_name = target_view.get('name', '')
+    cols = target_table.get('columns', [])
+    hidden_cols_key = target_view.get('hidden_columns', [])
+    summary_configs = target_table.get('summary_configs', {})
+    cols_without_hidden = []
+    summary_col_info = {}
+    head_list = []
+    for col in cols:
+        if col.get('key', '') not in hidden_cols_key:
+            cols_without_hidden.append(col)
+            head_list.append((col.get('name', ''), col.get('type', ''), col.get('data', '')))
+        if summary_configs.get(col.get('key')):
+            summary_col_info.update({col.get('name'): summary_configs.get(col.get('key'))})
+
+    sheet_name = table_name + ('_' + view_name if view_name else '')
+    excel_name = name + '_' + table_name + ('_' + view_name if view_name else '') + '.xlsx'
+    target_path = os.path.join(target_dir, excel_name)
+    wb = openpyxl.Workbook(write_only=True)
+    ws = wb.create_sheet(sheet_name)
+
+    dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
+    try:
+        row_count_sql = 'select count(*) as total_count from `%s`' % table_name
+        total_row_count = dtable_db_api.query(row_count_sql, server_only=False)[0].get('total_count', 0)
+    except Exception as e:
+        dtable_io_logger.error('get big data rows count error: %s', e)
+        tasks_status_map[task_id]['status'] = 'terminated'
+        tasks_status_map[task_id]['err_msg'] = 'get big data rows count failed'
+        return
+    # exported row number should less than ARCHIVE_VIEW_EXPORT_ROW_LIMIT
+    if total_row_count > int(ARCHIVE_VIEW_EXPORT_ROW_LIMIT):
+        total_row_count = int(ARCHIVE_VIEW_EXPORT_ROW_LIMIT)
+
+    tasks_status_map[task_id]['total_row_count'] = total_row_count
+
+    filter_conditions = {}
+    filter_conditions['sorts'] = target_view.get('sorts')
+    filter_conditions['filters'] = target_view.get('filters')
+    filter_conditions['filter_conjunction'] = target_view.get('filter_conjunction')
+
+    offset = 10000
+    start = 0
+    while True:
+        # exported row number should less than ARCHIVE_VIEW_EXPORT_ROW_LIMIT
+        if (start + offset) > total_row_count:
+            offset = total_row_count - start
+
+        filter_conditions['start'] = start
+        filter_conditions['limit'] = offset
+        sql = filter2sql(table_name, cols_without_hidden, filter_conditions, by_group=False)
+        response_rows = dtable_db_api.query(sql, server_only=False)
+        data_list = get_excel_row_data(response_rows, cols_without_hidden)
+
+        row_num = start
+        try:
+            write_xls_with_type(head_list, data_list, {}, email2nickname, ws, row_num)
+        except Exception as e:
+            dtable_io_logger.exception(e)
+            dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
+            tasks_status_map[task_id]['status'] = 'terminated'
+            tasks_status_map[task_id]['err_msg'] = 'write xls error'
+            return
+
+        start += offset
+        tasks_status_map[task_id]['handled_row_count'] = start
+        tasks_status_map[task_id]['status'] = 'running'
+
+        if start >= total_row_count or len(response_rows) < offset:
+            break
+
+    tasks_status_map[task_id]['status'] = 'success'
+    wb.save(target_path)

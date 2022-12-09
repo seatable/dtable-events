@@ -263,7 +263,7 @@ def query_status():
         return make_response(('task_id not found.', 404))
 
     try:
-        is_finished, error, task_status = task_manager.query_status(task_id)
+        is_finished, error = task_manager.query_status(task_id)
     except Exception as e:
         logger.debug(e)
         return make_response((e, 500))
@@ -271,7 +271,7 @@ def query_status():
     if error:
         return make_response((error, 500))
 
-    return make_response(({'is_finished': is_finished, 'task_status': task_status}, 200))
+    return make_response(({'is_finished': is_finished}, 200))
 
 
 @app.route('/cancel-task', methods=['GET'])
@@ -950,6 +950,35 @@ def sync_email():
 
     try:
         task_id = data_sync_task_manager.add_sync_email_task(context)
+    except Exception as e:
+        logger.error(e)
+        return make_response((e, 500))
+
+    return make_response(({'task_id': task_id}, 200))
+
+
+@app.route('/add-convert-big-data-view-to-excel-task', methods=['POST'])
+def convert_big_data_view_to_excel():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    if big_data_task_manager.tasks_queue.full():
+        from dtable_events.dtable_io import dtable_io_logger
+        dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
+                                 % (big_data_task_manager.tasks_queue.qsize(), big_data_task_manager.current_task_info,
+                                    big_data_task_manager.threads_is_alive()))
+        return make_response(('dtable io server busy.', 400))
+
+    data = request.form
+    dtable_uuid = data.get('dtable_uuid')
+    table_id = data.get('table_id')
+    view_id = data.get('view_id')
+    username = data.get('username')
+    name = data.get('name')
+
+    try:
+        task_id = big_data_task_manager.add_convert_big_data_view_to_execl_task(dtable_uuid, table_id, view_id, username, name)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))

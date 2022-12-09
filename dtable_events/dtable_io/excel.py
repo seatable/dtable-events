@@ -48,6 +48,8 @@ IMAGE_REG_2 = r'^!\[\]\((\S+)\)'
 UPDATE_TYPE_LIST = ['number', 'single-select', 'url', 'email', 'text', 'date', 'duration', 'rate', 'checkbox',
                     'multiple-select', 'collaborator']
 
+TEMP_EXPORT_VIEW_DIR = '/tmp/dtable-io/export-view-to-excel/'
+
 
 class EmptyCell(object):
     value = None
