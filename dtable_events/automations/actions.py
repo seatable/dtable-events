@@ -1273,22 +1273,18 @@ class AddRecordToOtherTableAction(BaseAction):
         self.row_data['row'] = filtered_updates
 
     def can_do_action(self):
-        if not self.data or self.auto_rule.trigger.get('condition') not in (CONDITION_ROWS_MODIFIED, CONDITION_ROWS_ADDED):
+        if not self.data or self.auto_rule.trigger.get('condition') not in (CONDITION_FILTERS_SATISFY, CONDITION_ROWS_ADDED):
             return False
 
         return True
 
     def do_action(self):
-        self.init_append_rows()
-
-        if not self.row_data.get('row'):
-            return False
 
         table_name = self.get_table_name(self.dst_table_id)
         if not self.can_do_action() or not table_name:
             return
 
-        self._init_append_rows()
+        self.init_append_rows()
         if not self.row_data.get('row'):
             return
 
