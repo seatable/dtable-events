@@ -20,7 +20,8 @@ DTABLE_DB_SUMMARY_METHOD = {
   'MAX': 'MAX',
   'SUM': 'SUM',
   'MIN': 'MIN',
-  'COUNT': 'COUNT'
+  'COUNT': 'COUNT',
+  'DISTINCT_VALUES': 'DISTINCT_VALUES'
 }
 
 class Operator(object):
@@ -1031,6 +1032,8 @@ class StatisticSQLGenerator(object):
 
     def _summary_column_2_sql(self, summary_method, column):
         column_name = column.get('name', '')
+        if summary_method == DTABLE_DB_SUMMARY_METHOD.DISTINCT_VALUES:
+            return 'COUNT(DISTINCT %s)' % column_name
         return '%s(`%s`)' % (DTABLE_DB_SUMMARY_METHOD[summary_method], column_name)
 
     def _basic_statistic_2_sql(self):
