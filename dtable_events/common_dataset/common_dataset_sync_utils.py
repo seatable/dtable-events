@@ -50,6 +50,14 @@ DATA_NEED_KEY_VALUES = {
         'name': 'geo_format',
         'optional_params': ['geolocation', 'lng_lat', 'country_region', 'province_city_district', 'province', 'province_city'],
         'default': 'lng_lat'
+    }],
+    ColumnTypes.SINGLE_SELECT: [{
+        'name': 'options',
+        'default': []
+    }],
+    ColumnTypes.MULTIPLE_SELECT: [{
+        'name': 'options',
+        'default': []
     }]
 }
 
@@ -62,7 +70,7 @@ def fix_column_data(column):
         if need_key_value['name'] not in column['data']:
             column['data'][need_key_value['name']] = need_key_value['default']
         else:
-            if column['data'][need_key_value['name']] not in need_key_value['optional_params']:
+            if need_key_value.get('optional_params') and column['data'][need_key_value['name']] not in need_key_value['optional_params']:
                 column['data'][need_key_value['name']] = need_key_value['default']
     return column
 
@@ -82,7 +90,7 @@ def transfer_link_formula_array_column(column, array_type, array_data):
     ]:
         column['type'] = array_type
         column['data'] = array_data
-        if column['type'] not in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT] and array_data is not None:
+        if array_data is not None:
             column = fix_column_data(column)
     elif array_type in [
         ColumnTypes.TEXT,
@@ -117,7 +125,9 @@ def transfer_column(src_column):
         ColumnTypes.DATE,
         ColumnTypes.DURATION,
         ColumnTypes.NUMBER,
-        ColumnTypes.GEOLOCATION
+        ColumnTypes.GEOLOCATION,
+        ColumnTypes.SINGLE_SELECT,
+        ColumnTypes.MULTIPLE_SELECT
     ]:
         """
         Because these column types need specific keys and values in column['data'],
