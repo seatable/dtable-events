@@ -1232,12 +1232,14 @@ class StatisticSQLGenerator(object):
         summary_column_key = self.statistic.get('summary_column_key', '')
         groupby_date_granularity = self.statistic.get('groupby_date_granularity', '')
         groupby_geolocation_granularity = self.statistic.get('groupby_geolocation_granularity', '')
+        groupby_include_empty_cells = self.statistic.get('groupby_include_empty_cells', False)
         
         groupby_column = self._get_column_by_key(groupby_column_key)
         if not groupby_column:
             self.error = 'Group by column not found'
             return ''
         
+        self._update_filter_sql(groupby_include_empty_cells, groupby_column)
         groupby_column_name = self._statistic_column_name_to_sql(groupby_column, { 'date_granularity': groupby_date_granularity, 'geolocation_granularity': groupby_geolocation_granularity })
         summary_type = summary_type.upper()
         if summary_type == 'COUNT':
