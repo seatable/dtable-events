@@ -142,7 +142,16 @@ class Operator(object):
         })
 
     def op_is_current_user_id(self):
-        return self.op_is()
+        if not self.filter_term:
+            return "(`%s`IS NULL AND `%s` IS NOT NULL)" % (
+                self.column_name,
+                self.column_name
+            )
+        return "`%s` %s '%s'" % (
+            self.column_name,
+            '=',
+            self.filter_term
+        )
 
 
 class TextOperator(Operator):
