@@ -419,12 +419,8 @@ def run_sync_emails(context):
         logger.warning('user or password invalid, email: %s user login error', email_user)
         set_data_sync_invalid(data_sync_id, db_session)
         return
-    except socket.error as e:
-        logger.warning('email: %s login imap_server: %s failed: %s', email_user, imap_host, e)
-        return
     except Exception as e:
         logger.warning('imap_server: %s, email_user: %s, login error: %s', imap_host, email_user, e)
-        set_data_sync_invalid(data_sync_id, db_session)
         return
 
     dtable_server_api = DTableServerAPI(username, dtable_uuid, api_url,
