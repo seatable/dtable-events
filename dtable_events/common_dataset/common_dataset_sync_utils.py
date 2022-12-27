@@ -7,8 +7,13 @@ from copy import deepcopy
 
 import requests
 from dateutil import parser
-from dtable_events.utils.constants import ColumnTypes
+
+from dtable_events.app.config import INNER_DTABLE_DB_URL
+from dtable_events.common_dataset.dtable_db_cell_validators import validate_table_db_cell_value
 from dtable_events.utils import get_inner_dtable_server_url
+from dtable_events.utils.constants import ColumnTypes
+from dtable_events.utils.dtable_server_api import DTableServerAPI
+from dtable_events.utils.dtable_db_api import DTableDBAPI
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +21,8 @@ dtable_server_url = get_inner_dtable_server_url()
 
 
 SRC_ROWS_LIMIT = 50000
+INSERT_UPDATE_ROWS_LIMIT = 1000
+DELETE_ROWS_LIMIT = 10000
 
 
 DATA_NEED_KEY_VALUES = {
@@ -233,14 +240,13 @@ def generate_synced_columns(src_columns, dst_columns=None):
     return to_be_updated_columns, to_be_appended_columns, None
 
 
-def generate_synced_rows(converted_rows, src_rows, src_columns, synced_columns, dst_rows=None):
+def generate_synced_rows(converted_rows, src_columns, synced_columns, dst_rows=None, to_archive=False):
     """
     generate synced rows divided into `rows to be updated`, `rows to be appended` and `rows to be deleted`
     return: to_be_updated_rows, to_be_appended_rows, to_be_deleted_row_ids
     """
 
     converted_rows_dict = {row.get('_id'): row for row in converted_rows}
-    src_rows_dict = {row.get('_id'): row for row in src_rows}
     synced_columns_dict = {col.get('key'): col for col in synced_columns}
 
     to_be_updated_rows, to_be_appended_rows, transfered_row_ids = [], [], {}
@@ -249,13 +255,12 @@ def generate_synced_rows(converted_rows, src_rows, src_columns, synced_columns, 
     to_be_deleted_row_ids = []
     for row in dst_rows:
         row_id = row.get('_id')
-        src_row = src_rows_dict.get(row_id)
         converted_row = converted_rows_dict.get(row_id)
-        if not converted_row or not src_row:
+        if not converted_row:
             to_be_deleted_row_ids.append(row_id)
             continue
 
-        update_row = generate_single_row(converted_row, src_row, src_columns, synced_columns_dict, dst_row=row)
+        update_row = generate_single_row(converted_row, src_columns, synced_columns_dict, dst_row=row, to_archive=to_archive)
         if update_row:
             update_row['_id'] = row_id
             to_be_updated_rows.append(update_row)
@@ -263,10 +268,9 @@ def generate_synced_rows(converted_rows, src_rows, src_columns, synced_columns, 
 
     for converted_row in converted_rows:
         row_id = converted_row.get('_id')
-        src_row = src_rows_dict.get(row_id)
-        if not src_row or transfered_row_ids.get(row_id):
+        if transfered_row_ids.get(row_id):
             continue
-        append_row = generate_single_row(converted_row, src_row, src_columns, synced_columns_dict, dst_row=None)
+        append_row = generate_single_row(converted_row, src_columns, synced_columns_dict, dst_row=None, to_archive=to_archive)
         if append_row:
             append_row['_id'] = row_id
             to_be_appended_rows.append(append_row)
@@ -339,8 +343,7 @@ def get_link_formula_converted_cell_value(transfered_column, converted_cell_valu
                     return value.strftime('%Y-%m-%d')
 
 
-def get_converted_cell_value(converted_cell_value, src_row, transfered_column, col):
-    col_key = col.get('key')
+def get_converted_cell_value(converted_cell_value, transfered_column, col):
     col_type = col.get('type')
     if col_type in [
         ColumnTypes.TEXT,
@@ -362,7 +365,7 @@ def get_converted_cell_value(converted_cell_value, src_row, transfered_column, c
         ColumnTypes.URL,
         ColumnTypes.GEOLOCATION
     ]:
-        return deepcopy(src_row.get(col_key))
+        return deepcopy(converted_cell_value)
 
     elif col_type == ColumnTypes.SINGLE_SELECT:
         if not isinstance(converted_cell_value, str):
@@ -445,7 +448,7 @@ def get_converted_cell_value(converted_cell_value, src_row, transfered_column, c
         elif result_type == 'string':
             if converted_cell_value:
                 return str(converted_cell_value)
-    return src_row.get(col_key)
+    return deepcopy(converted_cell_value)
 
 
 def is_equal(v1, v2, column_type):
@@ -512,19 +515,22 @@ def is_equal(v1, v2, column_type):
         return False
 
 
-def generate_single_row(converted_row, src_row, src_columns, transfered_columns_dict, dst_row=None):
+def generate_single_row(converted_row, src_columns, transfered_columns_dict, dst_row=None, to_archive=False):
     """
     generate new single row according to src column type
-    :param converted_row: {'_id': '', 'column_name_1': '', 'col_name_2'; ''} from dtable-db
+    :param converted_row: {'_id': '', 'column_key_1': '', 'col_key_2'; ''} from dtable-db
     :param src_columns: [{'key': 'column_key_1', 'name': 'column_name_1'}]
     :param transfered_columns_dict: {'col_key_1': {'key': 'column_key_1', 'name': 'column_name_1'}}
     :param dst_row: {'_id': '', 'column_key_1': '', 'col_key_2': ''}
+    :param to_archive: is row for dtable-db
+
+    :return: dataset_row => if to_archive is True {col_name1: value1,...} else {col_key1: value1,...}
     """
     dataset_row = {}
     op_type = 'update'
     if not dst_row:
         op_type = 'append'
-    dst_row = deepcopy(dst_row) if dst_row else {'_id': src_row.get('_id')}
+    dst_row = deepcopy(dst_row) if dst_row else {'_id': converted_row.get('_id')}
     for col in src_columns:
         col_key = col.get('key')
 
@@ -533,90 +539,41 @@ def generate_single_row(converted_row, src_row, src_columns, transfered_columns_
         if not transfered_column:
             continue
 
+        # if to_archive and col['key'] in ['_creator', '_ctime', '_last_modifier', '_mtime']:
+        #     continue
+
         if op_type == 'update':
-            converted_cell_value = get_converted_cell_value(converted_cell_value, src_row, transfered_column, col)
+            converted_cell_value = get_converted_cell_value(converted_cell_value, transfered_column, col)
             if not is_equal(dst_row.get(col_key), converted_cell_value, transfered_column['type']):
-                dataset_row[col_key] = converted_cell_value
+                if not to_archive:
+                    dataset_row[col_key] = converted_cell_value
+                else:
+                    dataset_row[col['name']] = validate_table_db_cell_value(transfered_column, converted_cell_value)
         else:
-            dataset_row[col_key] = get_converted_cell_value(converted_cell_value, src_row, transfered_column, col)
+            converted_cell_value = get_converted_cell_value(converted_cell_value, transfered_column, col)
+            if not to_archive:
+                dataset_row[col_key] = converted_cell_value
+            else:
+                dataset_row[col['name']] = validate_table_db_cell_value(transfered_column, converted_cell_value)
 
     return dataset_row
 
 
-def import_or_sync(import_sync_context):
-    """
-    import or sync common dataset
-    return: {
-        dst_table_id: destination table id,
-        error_msg: error msg,
-        task_status_code: return frontend status code, 40x 50x...
-    }
-    """
-    # extract necessary assets
-    dst_dtable_uuid = import_sync_context.get('dst_dtable_uuid')
-    src_dtable_uuid = import_sync_context.get('src_dtable_uuid')
-
-    src_rows = import_sync_context.get('src_rows')
-    src_columns = import_sync_context.get('src_columns')
-    src_column_keys_set = {col['key'] for col in src_columns}
-    src_table_name = import_sync_context.get('src_table_name')
-    src_view_name = import_sync_context.get('src_view_name')
-    src_headers = import_sync_context.get('src_headers')
-
-    dst_table_id = import_sync_context.get('dst_table_id')
-    dst_table_name = import_sync_context.get('dst_table_name')
-    dst_headers = import_sync_context.get('dst_headers')
-    dst_columns = import_sync_context.get('dst_columns')
-    dst_rows = import_sync_context.get('dst_rows')
-
-    lang = import_sync_context.get('lang', 'en')
-
-    # generate cols and rows
-    ## Old generate-cols is from src_columns from dtable json, but some (link-)formula columns have wrong array_type
-    ## For example, a LOOKUP(GEOLOCATION) link-formula column, whose array_type in dtable json is `string`, but should being `GEOLOCATION`
-    ## So, generate columns from the columns(archive columns) returned by SQL query instead of from the columns in dtable json, and remove old code
-    ## New code and more details is in the following code
-
-    ## generate rows
-    ### get src view-rows
-    result_rows = []
+def fetch_src_rows_and_columns(src_dtable_uuid, src_table_name, src_view_name, src_columns, src_dtable_server_api, server_only, dst_columns):
+    result_rows, flag_row_set = [], set()
     start, limit = 0, 10000
+    src_column_keys_set = {col['key'] for col in src_columns}
     to_be_updated_columns, to_be_appended_columns = [], []
 
     while True:
-        url = dtable_server_url.rstrip('/') + '/api/v1/internal/dtables/' + str(src_dtable_uuid) + '/view-rows/?from=dtable_events'
-        if (start + limit) > SRC_ROWS_LIMIT:
+        if server_only and (start + limit) > SRC_ROWS_LIMIT:
             limit = SRC_ROWS_LIMIT - start
-        query_params = {
-            'table_name': src_table_name,
-            'view_name': src_view_name,
-            'use_dtable_db': True,
-            'start': start,
-            'limit': limit
-        }
         try:
-            resp = requests.get(url, headers=src_headers, params=query_params, timeout=180)
-            if resp.status_code == 400:
-                try:
-                    res_json = resp.json()
-                except:
-                    return {
-                        'dst_table_id': None,
-                        'error_msg': 'fetch src view rows error',
-                        'task_status_code': 500
-                    }
-                else:
-                    return {
-                        'dst_table_id': None,
-                        'error_msg': 'fetch src view rows error',
-                        'error_type': res_json.get('error_type'),
-                        'task_status_code': 400
-                    }
-            res_json = resp.json()
+            res_json = src_dtable_server_api.internal_view_rows(src_table_name, src_view_name, use_dtable_db=True, server_only=server_only, start=start, limit=limit)
             archive_rows = res_json.get('rows', [])
             archive_metadata = res_json.get('metadata')
         except Exception as e:
-            logger.error('request src_dtable: %s params: %s view-rows error: %s', src_dtable_uuid, query_params, e)
+            logger.error('request src_dtable: %s view-rows error: %s', src_dtable_uuid, e)
             return {
                 'dst_table_id': None,
                 'error_msg': 'fetch view rows error',
@@ -633,194 +590,257 @@ def import_or_sync(import_sync_context):
                     'error_msg': str(error),  # generally, this error is caused by client
                     'task_status_code': 400
                 }
-        result_rows.extend(archive_rows)
-        if not archive_rows or len(archive_rows) < limit or (start + limit) >= SRC_ROWS_LIMIT:
+        for row in archive_rows:
+            if row['_id'] in flag_row_set:
+                continue
+            result_rows.append(row)
+            flag_row_set.add(row['_id'])
+        if not archive_rows or len(archive_rows) < limit or (server_only and (start + limit) >= SRC_ROWS_LIMIT):
             break
         start += limit
 
-    final_columns = (to_be_updated_columns or []) + (to_be_appended_columns or [])
+    return result_rows, to_be_updated_columns, to_be_appended_columns
 
-    to_be_updated_rows, to_be_appended_rows, to_be_deleted_row_ids = generate_synced_rows(result_rows, src_rows, src_columns, final_columns, dst_rows=dst_rows)
 
-    # sync table
-    ## maybe create table
-    if not dst_table_id:
-        url = dtable_server_url.strip('/') + '/api/v1/dtables/%s/tables/?from=dtable_events' % (str(dst_dtable_uuid),)
-        data = {
-            'table_name': dst_table_name,
-            'lang': lang,
-            'columns': [{
-                'column_key': col.get('key'),
-                'column_name': col.get('name'),
-                'column_type': col.get('type'),
-                'column_data': col.get('data')
-            } for col in to_be_appended_columns] if to_be_appended_columns else []
+def fetch_dst_rows(dst_table_id, dst_table_name, dst_columns, dst_dtable_db_api, src_column_keys_set, to_archive):
+    dst_rows = None
+    # fetch dst rows
+    if dst_table_id:
+        dst_rows, flag_row_set = [], set()
+        query_columns = [col for col in dst_columns if col['key'] in src_column_keys_set]
+        sql_template = "SELECT `_id`, %(column_names)s FROM `%(table_name)s` LIMIT %%(start)s, %%(limit)s" % {
+            'column_names': ', '.join(["`%s`" % col['name'] for col in query_columns]),
+            'table_name': dst_table_name
         }
-        try:
-            resp = requests.post(url, headers=dst_headers, json=data, timeout=180)
-            if resp.status_code != 200:
-                logger.error('create new table error status code: %s, resp text: %s', resp.status_code, resp.text)
-                error_msg = 'create table error'
-                status_code = 500
-                try:
-                    resp_json = resp.json()
-                    if resp_json.get('error_message'):
-                        error_msg = resp_json['error_message']
-                    status_code = resp.status_code
-                except:
-                    pass
-                return {
+        start, limit = 0, 10000
+        while True:
+            sql = sql_template % {'start': start, 'limit': limit}
+            try:
+                dst_archive_rows = dst_dtable_db_api.query(sql, convert=False, server_only=(not to_archive))
+            except Exception as e:
+                logger.error('fetch dst table: %s error: %s', dst_table_name, e)
+                return None, {
                     'dst_table_id': None,
-                    'error_msg': error_msg,
-                    'task_status_code': status_code
+                    'error_msg': 'fetch dst rows error',
+                    'task_status_code': 500
                 }
-            dst_table_id = resp.json().get('_id')
+            for row in dst_archive_rows:
+                if row['_id'] in flag_row_set:
+                    continue
+                dst_rows.append(row)
+                flag_row_set.add(row['_id'])
+            if len(dst_archive_rows) < limit:
+                break
+            start += limit
+    return dst_rows, None
+
+
+def create_dst_table_or_update_columns(dst_dtable_uuid, dst_table_id, dst_table_name, to_be_appended_columns, to_be_updated_columns, dst_dtable_server_api, lang):
+    if not dst_table_id:  ## create table
+        columns = [{
+            'column_key': col.get('key'),
+            'column_name': col.get('name'),
+            'column_type': col.get('type'),
+            'column_data': col.get('data')
+        } for col in to_be_appended_columns] if to_be_appended_columns else []
+        try:
+            resp_json = dst_dtable_server_api.add_table(dst_table_name, lang, columns=columns)
+            dst_table_id = resp_json.get('_id')
         except Exception as e:
-            logger.error(e)
-            return {
+            logger.error(e)  # TODO: table exists shoud return 400
+            return None, {
                 'dst_table_id': None,
                 'error_msg': 'create table error',
                 'task_status_code': 500
             }
-    ## or maybe append/update columns
-    else:
+    else:  ## append/update columns
         ### batch append columns
         if to_be_appended_columns:
-            url = dtable_server_url.strip('/') + '/api/v1/dtables/' + str(dst_dtable_uuid) + '/batch-append-columns/?from=dtable_events'
-            data = {
-                'table_id': dst_table_id,
-                'columns': [{
-                    'column_key': col.get('key'),
-                    'column_name': col.get('name'),
-                    'column_type': col.get('type'),
-                    'column_data': col.get('data')
-                } for col in to_be_appended_columns]
-            }
+            columns = [{
+                'column_key': col.get('key'),
+                'column_name': col.get('name'),
+                'column_type': col.get('type'),
+                'column_data': col.get('data')
+            } for col in to_be_appended_columns]
             try:
-                resp = requests.post(url, headers=dst_headers, json=data, timeout=180)
-                if resp.status_code != 200:
-                    logger.error('batch append columns to dst dtable: %s, table: %s error status code: %s text: %s', dst_dtable_uuid, dst_table_id, resp.status_code, resp.text)
-                    return {
-                        'dst_table_id': None,
-                        'error_msg': 'append columns error',
-                        'task_status_code': 500
-                    }
+                dst_dtable_server_api.batch_append_columns_by_table_id(dst_table_id, columns)
             except Exception as e:
                 logger.error('batch append columns to dst dtable: %s, table: %s error: %s', dst_dtable_uuid, dst_table_id, e)
-                return {
+                return None, {
                     'dst_table_id': None,
                     'error_msg': 'append columns error',
                     'task_status_code': 500
                 }
         ### batch update columns
         if to_be_updated_columns:
-            url = dtable_server_url.strip('/') + '/api/v1/dtables/' + str(dst_dtable_uuid) + '/batch-update-columns/?from=dtable_events'
-            data = {
-                'table_id': dst_table_id,
-                'columns': [{
-                    'key': col.get('key'),
-                    'type': col.get('type'),
-                    'data': col.get('data')
-                } for col in to_be_updated_columns]
-            }
+            columns = [{
+                'key': col.get('key'),
+                'type': col.get('type'),
+                'data': col.get('data')
+            } for col in to_be_updated_columns]
             try:
-                resp = requests.put(url, headers=dst_headers, json=data, timeout=180)
-                if resp.status_code != 200:
-                    logger.error('batch update columns to dst dtable: %s, table: %s error status code: %s text: %s', dst_dtable_uuid, dst_table_id, resp.status_code, resp.text)
-                    return {
-                        'dst_table_id': None,
-                        'error_msg': 'update columns error',
-                        'task_status_code': 500
-                    }
+                dst_dtable_server_api.batch_update_columns_by_table_id(dst_table_id, columns)
             except Exception as e:
                 logger.error('batch update columns to dst dtable: %s, table: %s error: %s', dst_dtable_uuid, dst_table_id, e)
-                return {
+                return None, {
                     'dst_table_id': None,
                     'error_msg': 'update columns error',
                     'task_status_code': 500
                 }
+    return dst_table_id, None
 
-    ## update delete append rows step by step
-    step = 1000
-    ### update rows
-    url = dtable_server_url.strip('/') + '/api/v1/dtables/%s/batch-update-rows/?from=dtable_events' % (str(dst_dtable_uuid),)
-    for i in range(0, len(to_be_updated_rows), step):
-        updates = []
-        for row in to_be_updated_rows[i: i+step]:
-            updates.append({
-                'row_id': row['_id'],
-                'row': row
-            })
-        data = {
-            'table_name': dst_table_name,
-            'updates': updates,
-            'need_convert_back': False
-        }
-        try:
-            resp = requests.put(url, headers=dst_headers, json=data, timeout=180)
-            if resp.status_code != 200:
-                logger.error('sync dataset update rows dst dtable: %s dst table: %s error status code: %s content: %s', dst_dtable_uuid, dst_table_name, resp.status_code, resp.text)
-                return {
-                    'dst_table_id': None,
-                    'error_msg': 'update rows error',
-                    'task_status_code': 500
-                }
-        except Exception as e:
-            logger.error('sync dataset update rows dst dtable: %s dst table: %s error: %s', dst_dtable_uuid, dst_table_name, e)
-            return {
-                'dst_table_id': None,
-                'error_msg': 'update rows error',
-                'task_status_code': 500
-            }
 
-    ### delete rows
-    url = dtable_server_url.strip('/') + '/api/v1/dtables/%s/batch-delete-rows/?from=dtable_events' % (str(dst_dtable_uuid),)
-    for i in range(0, len(to_be_deleted_row_ids), step):
-        data = {
-            'table_name': dst_table_name,
-            'row_ids': to_be_deleted_row_ids[i: i+step]
-        }
-        try:
-            resp = requests.delete(url, headers=dst_headers, json=data, timeout=180)
-            if resp.status_code != 200:
-                logger.error('sync dataset delete rows dst dtable: %s dst table: %s error status code: %s, content: %s', dst_dtable_uuid, dst_table_name, resp.status_code, resp.text)
-                return {
-                    'dst_table_id': None,
-                    'error_msg': 'delete rows error',
-                    'task_status_code': 500
-                }
-        except Exception as e:
-            logger.error('sync dataset delete rows dst dtable: %s dst table: %s error: %s', dst_dtable_uuid, dst_table_name, e)
-            return {
-                'dst_table_id': None,
-                'error_msg': 'delete rows error',
-                'task_status_code': 500
-            }
-
-    ### append rows
-    url = dtable_server_url.strip('/') + '/api/v1/dtables/%s/batch-append-rows/?from=dtable_events' % (str(dst_dtable_uuid),)
-    for i in range(0, len(to_be_appended_rows), step):
-        data = {
-            'table_name': dst_table_name,
-            'rows': to_be_appended_rows[i: i+step],
-            'need_convert_back': False
-        }
-        try:
-            resp = requests.post(url, headers=dst_headers, json=data, timeout=180)
-            if resp.status_code != 200:
-                logger.error('sync dataset append rows dst dtable: %s dst table: %s error status code: %s', dst_dtable_uuid, dst_table_name, resp.status_code)
+def append_dst_rows(dst_dtable_uuid, dst_table_name, to_be_appended_rows, dst_dtable_db_api, dst_dtable_server_api, to_archive):
+    if to_archive:
+        step = 10000
+        for i in range(0, len(to_be_appended_rows), step):
+            try:
+                dst_dtable_db_api.insert_rows(dst_table_name, to_be_appended_rows[i: i+step])
+            except Exception as e:
+                logger.error('sync dataset append rows dst dtable: %s dst table: %s error: %s', dst_dtable_uuid, dst_table_name, e)
                 return {
                     'dst_table_id': None,
                     'error_msg': 'append rows error',
                     'task_status_code': 500
                 }
-        except Exception as e:
-            logger.error('sync dataset append rows dst dtable: %s dst table: %s error: %s', dst_dtable_uuid, dst_table_name, e)
-            return {
-                'dst_table_id': None,
-                'error_msg': 'append rows error',
-                'task_status_code': 500
-            }
+    else:
+        step = DELETE_ROWS_LIMIT
+        for i in range(0, len(to_be_appended_rows), step):
+            try:
+                dst_dtable_server_api.batch_append_rows(dst_table_name, to_be_appended_rows[i: i+step], need_convert_back=False)
+            except Exception as e:
+                logger.error('sync dataset append rows dst dtable: %s dst table: %s error: %s', dst_dtable_uuid, dst_table_name, e)
+                return {
+                    'dst_table_id': None,
+                    'error_msg': 'append rows error',
+                    'task_status_code': 500
+                }
+
+
+def update_dst_rows(dst_dtable_uuid, dst_table_name, to_be_updated_rows, dst_dtable_db_api, dst_dtable_server_api, to_archive):
+    if to_archive:
+        step = 10000
+        for i in range(0, len(to_be_updated_rows), step):
+            updates = []
+            for row in to_be_updated_rows[i: i+step]:
+                row_id = row.pop('_id', None)
+                updates.append({
+                    'row_id': row_id,
+                    'row': row
+                })
+            try:
+                dst_dtable_db_api.batch_update_rows(dst_table_name, updates)
+            except Exception as e:
+                logger.error('sync dataset update rows dst dtable: %s dst table: %s error: %s', dst_dtable_uuid, dst_table_name, e)
+                return {
+                    'dst_table_id': None,
+                    'error_msg': 'update rows error',
+                    'task_status_code': 500
+                }
+    else:
+        step = INSERT_UPDATE_ROWS_LIMIT
+        for i in range(0, len(to_be_updated_rows), step):
+            updates = [{
+                'row_id': row['_id'],
+                'row': row
+            } for row in to_be_updated_rows[i: i+step]]
+            try:
+                dst_dtable_server_api.batch_update_rows(dst_table_name, updates, need_convert_back=False)
+            except Exception as e:
+                logger.error('sync dataset update rows dst dtable: %s dst table: %s error: %s', dst_dtable_uuid, dst_table_name, e)
+                return {
+                    'dst_table_id': None,
+                    'error_msg': 'update rows error',
+                    'task_status_code': 500
+                }
+
+
+def delete_dst_rows(dst_dtable_uuid, dst_table_name, to_be_deleted_row_ids, dst_dtable_db_api, dst_dtable_server_api, to_archive):
+    if to_archive:
+        step = 10000
+        for i in range(0, len(to_be_deleted_row_ids), step):
+            try:
+                dst_dtable_db_api.batch_delete_rows(dst_table_name, to_be_deleted_row_ids[i: i+step])
+            except Exception as e:
+                logger.error('sync dataset delete rows dst dtable: %s dst table: %s error: %s', dst_dtable_uuid, dst_table_name, e)
+    else:
+        step = DELETE_ROWS_LIMIT
+        for i in range(0, len(to_be_deleted_row_ids), step):
+            try:
+                dst_dtable_server_api.batch_delete_rows(dst_table_name, to_be_deleted_row_ids[i: i+step])
+            except Exception as e:
+                logger.error('sync dataset delete rows dst dtable: %s dst table: %s error: %s', dst_dtable_uuid, dst_table_name, e)
+
+
+def import_sync_CDS(context):
+    """
+    import or sync common dataset
+    please check all resources in context before call this function
+
+    Steps:
+        1. fetch src rows
+        2. fetch dst rows
+        3. create dst table or update dst table columns
+        4. append rows
+        5. update rows
+        6. delete rows
+    """
+    src_dtable_uuid = context.get('src_dtable_uuid')
+    dst_dtable_uuid = context.get('dst_dtable_uuid')
+
+    src_table_name = context.get('src_table_name')
+    src_view_name = context.get('src_view_name')
+    src_view_type = context.get('src_view_type', 'table')
+    src_columns = context.get('src_columns')
+    src_enable_archive = context.get('src_enable_archive', False)
+
+    dst_table_id = context.get('dst_table_id')
+    dst_table_name = context.get('dst_table_name')
+    dst_columns = context.get('dst_columns')
+
+    operator = context.get('operator')
+    lang = context.get('lang', 'en')
+
+    to_archive = context.get('to_archive', False)
+
+    src_dtable_server_api = DTableServerAPI(operator, src_dtable_uuid, dtable_server_url)
+    dst_dtable_server_api = DTableServerAPI(operator, dst_dtable_uuid, dtable_server_url)
+    dst_dtable_db_api = DTableDBAPI(operator, dst_dtable_uuid, INNER_DTABLE_DB_URL)
+
+    server_only = not (to_archive and src_enable_archive and src_view_type == 'archive')
+    logger.debug('to_archive: %s src_enable_archive: %s src_view_type: %s', to_archive, src_enable_archive, src_view_type)
+
+    src_column_keys_set = {col['key'] for col in src_columns}
+
+    # fetch src rows and generate columns
+    result_rows, to_be_updated_columns, to_be_appended_columns = fetch_src_rows_and_columns(src_dtable_uuid, src_table_name, src_view_name, src_columns, src_dtable_server_api, server_only, dst_columns)
+
+
+    # fetch dst rows
+    dst_rows, error_resp = fetch_dst_rows(dst_table_id, dst_table_name, dst_columns, dst_dtable_db_api, src_column_keys_set, to_archive)
+    if error_resp:
+        return error_resp
+
+    # generate update/append/delete rows
+    final_columns = (to_be_updated_columns or []) + (to_be_appended_columns or [])
+    to_be_updated_rows, to_be_appended_rows, to_be_deleted_row_ids = generate_synced_rows(result_rows, src_columns, final_columns, dst_rows=dst_rows, to_archive=to_archive)
+
+    # create table or update/append columns
+    dst_table_id, error_resp = create_dst_table_or_update_columns(dst_dtable_uuid, dst_table_id, dst_table_name, to_be_appended_columns, to_be_appended_columns, dst_dtable_server_api, lang)
+    if error_resp:
+        return  error_resp
+
+    # append/update/delete rows
+    ## append
+    error_resp = append_dst_rows(dst_dtable_uuid, dst_table_name, to_be_appended_rows, dst_dtable_db_api, dst_dtable_server_api, to_archive)
+    if error_resp:
+        return error_resp
+    ## update
+    error_resp = update_dst_rows(dst_dtable_uuid, dst_table_name, to_be_updated_rows, dst_dtable_db_api, dst_dtable_server_api, to_archive)
+    if error_resp:
+        return error_resp
+    ## delete
+    delete_dst_rows(dst_dtable_uuid, dst_table_name, to_be_deleted_row_ids, dst_dtable_db_api, dst_dtable_server_api, to_archive)
 
     return {
         'dst_table_id': dst_table_id,
@@ -845,4 +865,3 @@ def set_common_dataset_sync_invalid(dataset_sync_id, db_session):
         db_session.commit()
     except Exception as e:
         logger.error('set state of common dataset sync: %s error: %s', dataset_sync_id, e)
-
