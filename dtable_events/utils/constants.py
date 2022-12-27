@@ -147,3 +147,4 @@ class StatisticType:
     PIE = 'pie'
     LINE = 'line'
     TABLE = 'table'
+    RING = 'ring'
