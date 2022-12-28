@@ -50,6 +50,8 @@ UPDATE_TYPE_LIST = ['number', 'single-select', 'url', 'email', 'text', 'date', '
 
 TEMP_EXPORT_VIEW_DIR = '/tmp/dtable-io/export-view-to-excel/'
 
+ILLEGAL_CHARACTERS_RE = re.compile(r'[\000-\010]|[\013-\014]|[\016-\037]')
+
 
 class EmptyCell(object):
     value = None
@@ -1251,8 +1253,6 @@ def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unkn
             else:
                 utc_time = datetime.strptime(row[col_num], '%Y-%m-%dT%H:%M:%S.%f+00:00')
             c = WriteOnlyCell(ws, value=utc_to_tz(utc_time, timezone).strftime('%Y-%m-%d %H:%M:%S'))
-        elif head[col_num][1] == ColumnTypes.GEOLOCATION:
-            c = WriteOnlyCell(ws, value=parse_geolocation(row[col_num]))
         elif head[col_num][1] == ColumnTypes.COLLABORATOR:
             nickname_list = []
             collaborator_email_list = []
@@ -1277,21 +1277,26 @@ def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unkn
             if not email2nickname.get(cell_data2str(row[col_num]), ''):
                 unknown_user_set.add(cell_data2str(row[col_num]))
                 unknown_cell_list.append((c, cell_data2str(row[col_num]), head[col_num][1]))
-        elif head[col_num][1] == ColumnTypes.LINK_FORMULA:
-            c = WriteOnlyCell(ws, value=parse_link_formula(row[col_num], email2nickname))
-        elif head[col_num][1] == ColumnTypes.MULTIPLE_SELECT:
-            c = WriteOnlyCell(ws, value=parse_multiple_select_formula(row[col_num]))
         elif head[col_num][1] == ColumnTypes.FORMULA \
                 and isinstance(head[col_num][2], dict) and head[col_num][2].get('result_type') == 'number':
             formula_value, number_format = parse_formula_number(row[col_num], head[col_num][2])
             c = WriteOnlyCell(ws, value=formula_value)
             c.number_format = number_format
-        elif head[col_num][1] == ColumnTypes.LINK:
-            c = WriteOnlyCell(ws, value=parse_link(head[col_num], row[col_num], email2nickname))
-        elif head[col_num][1] == ColumnTypes.LONG_TEXT:
-            c = WriteOnlyCell(ws, value=parse_dtable_long_text(row[col_num]))
         else:
-            c = WriteOnlyCell(ws, value=cell_data2str(row[col_num]))
+            if head[col_num][1] == ColumnTypes.GEOLOCATION:
+                cell_value = parse_geolocation(row[col_num])
+            elif head[col_num][1] == ColumnTypes.LINK_FORMULA:
+                cell_value = parse_link_formula(row[col_num], email2nickname)
+            elif head[col_num][1] == ColumnTypes.MULTIPLE_SELECT:
+                cell_value = parse_multiple_select_formula(row[col_num])
+            elif head[col_num][1] == ColumnTypes.LINK:
+                cell_value = parse_link(head[col_num], row[col_num], email2nickname)
+            elif head[col_num][1] == ColumnTypes.LONG_TEXT:
+                cell_value = parse_dtable_long_text(row[col_num])
+            else:
+                cell_value = cell_data2str(row[col_num])
+            c = WriteOnlyCell(ws, value=ILLEGAL_CHARACTERS_RE.sub('', cell_value))
+
         if row_num in grouped_row_num_map:
             fill_num = grouped_row_num_map[row_num]
             try:
