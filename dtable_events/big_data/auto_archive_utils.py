@@ -1,7 +1,7 @@
 import logging
 import json
 from datetime import datetime
-from dtable_events.utils import get_inner_dtable_server_url
+from dtable_events.utils import get_inner_dtable_server_url, uuid_str_to_36_chars
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.sql_generator import BaseSQLGenerator
 
@@ -47,7 +47,7 @@ def run_dtable_auto_archive_task(task, db_session):
         details = json.loads(details)
         if not meet_condition(run_condition, details):
             return
-
+        dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
         dtable_server_url = get_inner_dtable_server_url()
         seatable = DTableServerAPI(creator, dtable_uuid, dtable_server_url)
         current_table, current_view = None, None
