@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 def update_last_run_time(task_id, db_session):
 
     cmd = "UPDATE dtable_auto_archive_task SET last_run_time=:new_time WHERE id=:task_id"
-    db_session.execute(cmd, {'new_time': datetime.utcnow(), 'task_id': task_id})
+    db_session.execute(cmd, {'new_time': datetime.now(), 'task_id': task_id})
 
 def set_invalid(task_id, db_session):
     sql = "UPDATE dtable_auto_archive_task SET is_valid=:is_valid WHERE id=:task_id"
