@@ -144,7 +144,9 @@ DATE_COLUMN_TYPES = [
 
 class StatisticType:
     BAR = 'bar'
+    BAR_GROUP = 'bar_group'
     PIE = 'pie'
     LINE = 'line'
+    LINE_GROUP = 'line_group'
     TABLE = 'table'
     RING = 'ring'
