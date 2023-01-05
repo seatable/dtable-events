@@ -19,12 +19,32 @@ def set_invalid(task_id, db_session):
         logger.error(e)
 
 def meet_condition(run_condition, details):
+    cur_datetime = datetime.now()
+    cur_hour = int(cur_datetime.hour)
+    cur_week_day = cur_datetime.isoweekday()
+    cur_month_day = cur_datetime.day
     if run_condition == 'per_day':
         run_hour = details.get('run_hour', None)
-        cur_datetime = datetime.now()
-        cur_hour = int(cur_datetime.hour)
         try:
             if int(run_hour) == cur_hour:
+                return True
+        except:
+            return False
+
+    if run_condition == 'per_week':
+        run_week_day = details.get('run_week_day', None)
+        run_week_hour = details.get('run_week_hour', None)
+        try:
+            if (int(run_week_hour) == cur_hour) and (int(run_week_day) == cur_week_day):
+                return True
+        except:
+            return False
+
+    if run_condition == 'per_month':
+        run_month_day = details.get('run_month_day', None)
+        run_month_hour = details.get('run_month_hour', None)
+        try:
+            if (int(run_month_hour) == cur_hour) and (int(run_month_day) == cur_month_day):
                 return True
         except:
             return False
