@@ -6,6 +6,17 @@ from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.sql_generator import BaseSQLGenerator
 
 logger = logging.getLogger(__name__)
+
+PER_DAY = 'per_day'
+PER_WEEK = 'per_week'
+PER_MONTH = 'per_month'
+
+VALID_RUN_CONDITIONS = [
+    PER_DAY,
+    PER_WEEK,
+    PER_MONTH
+]
+
 def update_last_run_time(task_id, db_session):
 
     cmd = "UPDATE dtable_auto_archive_task SET last_run_time=:new_time WHERE id=:task_id"
@@ -23,7 +34,7 @@ def meet_condition(run_condition, details):
     cur_hour = int(cur_datetime.hour)
     cur_week_day = cur_datetime.isoweekday()
     cur_month_day = cur_datetime.day
-    if run_condition == 'per_day':
+    if run_condition == PER_DAY:
         run_hour = details.get('run_hour', None)
         try:
             if int(run_hour) == cur_hour:
@@ -31,7 +42,7 @@ def meet_condition(run_condition, details):
         except:
             return False
 
-    if run_condition == 'per_week':
+    if run_condition == PER_WEEK:
         run_week_day = details.get('run_week_day', None)
         run_week_hour = details.get('run_week_hour', None)
         try:
@@ -40,7 +51,7 @@ def meet_condition(run_condition, details):
         except:
             return False
 
-    if run_condition == 'per_month':
+    if run_condition == PER_MONTH:
         run_month_day = details.get('run_month_day', None)
         run_month_hour = details.get('run_month_hour', None)
         try:
