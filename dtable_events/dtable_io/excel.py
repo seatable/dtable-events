@@ -374,6 +374,18 @@ def parse_dtable_csv(repo_id, dtable_name):
     tables = []
     delimiter = guess_delimiter(deepcopy(csv_file))
     csv_rows = [row for row in csv.reader(csv_file, delimiter=delimiter)]
+
+    if not csv_rows:
+        table = {
+            'name': dtable_name,
+            'rows': [],
+            'columns': [],
+            'max_row': 0,
+            'max_column': 0,
+        }
+        tables.append(table)
+        return json.dumps(tables)
+
     csv_head = csv_rows[0]
     max_row = len(csv_rows)
     max_column = len(csv_head)
