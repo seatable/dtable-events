@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 REQUIRED_EMAIL_COLUMNS = ['From', 'Message ID', 'To', 'Subject', 'cc', 'Date', 'Reply to Message ID', 'Thread ID']
-REQUIRED_THREAD_COLUMNS = ['Subject', 'Last Updated', 'Thread ID']
+REQUIRED_THREAD_COLUMNS = ['Subject', 'Last Updated', 'Thread ID', 'Emails']
 
 def login_imap(host, user, password, port=None, timeout=None):
     imap = ImapMail(host, user, password, port=port, ssl_context=ssl.SSLContext(ssl.PROTOCOL_TLSv1_2), timeout=timeout)
