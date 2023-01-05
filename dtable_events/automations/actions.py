@@ -1039,7 +1039,6 @@ class LinkRecordsAction(BaseAction):
         self.link_id = link_id
         self.match_conditions = match_conditions or []
         self.linked_row_ids = []
-        self.init_linked_row_ids()
 
     def parse_column_value(self, column, value):
         if column.get('type') == ColumnTypes.SINGLE_SELECT:
@@ -1138,6 +1137,14 @@ class LinkRecordsAction(BaseAction):
         self.linked_row_ids = linked_rows_data and [row.get('_id') for row in linked_rows_data] or []
 
     def can_do_action(self):
+        linked_table_name = self.get_table_name(self.linked_table_id)
+        if not linked_table_name or not self.data \
+                or self.auto_rule.trigger.get('condition') not in (CONDITION_FILTERS_SATISFY, CONDITION_ROWS_ADDED):
+            self.auto_rule.set_invalid()
+            return False
+
+        self.init_linked_row_ids()
+
         table_columns = self.get_columns(self.auto_rule.table_id)
         link_col_name = ''
         for col in table_columns:
@@ -1282,6 +1289,7 @@ class AddRecordToOtherTableAction(BaseAction):
 
         table_name = self.get_table_name(self.dst_table_id)
         if not self.can_do_action() or not table_name:
+            self.auto_rule.set_invalid()
             return
 
         self.init_append_rows()
