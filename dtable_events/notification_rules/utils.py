@@ -1,6 +1,6 @@
 import logging
 
-from dtable_events.cache import redis_cache as cache
+from dtable_events.app.event_redis import redis_cache as cache
 
 logger = logging.getLogger(__name__)
 

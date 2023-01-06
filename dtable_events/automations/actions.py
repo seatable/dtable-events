@@ -3,7 +3,6 @@ import logging
 import re
 import time
 import os
-from urllib import parse
 from uuid import UUID
 from copy import deepcopy
 from dateutil import parser
@@ -15,13 +14,13 @@ import requests
 
 from seaserv import seafile_api
 from dtable_events.automations.models import get_third_party_account
-from dtable_events.cache import redis_cache
+from dtable_events.app.event_redis import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, \
     SEATABLE_FAAS_AUTH_TOKEN, SEATABLE_FAAS_URL
 from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg, batch_send_email_msg
 from dtable_events.notification_rules.notification_rules_utils import fill_msg_blanks_with_converted_row, \
     send_notification
-from dtable_events.utils import utc_to_tz, uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url, \
+from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url, \
     normalize_file_path, gen_file_get_url
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI, WrongFilterException

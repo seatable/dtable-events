@@ -8,7 +8,7 @@ import logging
 from dtable_events.app.app import App
 from dtable_events.app.log import LogConfigurator
 from dtable_events.app.config import get_config, is_syslog_enabled, get_task_mode
-from dtable_events.cache import redis_cache
+from dtable_events.app.event_redis import redis_cache
 from dtable_events.db import create_db_tables
 
 
@@ -18,7 +18,7 @@ def main():
 
     config = get_config(args.config_file)
 
-    redis_cache.init_redis(config)  # init redis instance in redis-cache
+    redis_cache.init_redis(config)  # init redis instance for redis_cache
 
     try:
         create_db_tables(config)

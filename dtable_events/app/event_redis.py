@@ -5,6 +5,7 @@ import redis
 
 logger = logging.getLogger(__name__)
 
+
 class RedisClient(object):
 
     def __init__(self, config, socket_connect_timeout=30, socket_timeout=None):
@@ -23,7 +24,6 @@ class RedisClient(object):
             decode_responses=True
             )
 
-
     def _parse_config(self, config):
         if config.has_option('REDIS', 'host'):
             self._host = config.get('REDIS', 'host')
@@ -33,7 +33,6 @@ class RedisClient(object):
 
         if config.has_option('REDIS', 'password'):
             self._password = config.get('REDIS', 'password')
-
 
     def get_subscriber(self, channel_name):
         while True:
@@ -57,3 +56,23 @@ class RedisClient(object):
 
     def delete(self, key):
         return self.connection.delete(key)
+
+
+class RedisCache(object):
+    def __init__(self):
+        self._redis_client = None
+
+    def init_redis(self, config):
+        self._redis_client = RedisClient(config)
+
+    def get(self, key):
+        return self._redis_client.get(key)
+
+    def set(self, key, value, timeout=None):
+        return self._redis_client.set(key, value, timeout=timeout)
+
+    def delete(self, key):
+        return self._redis_client.delete(key)
+
+
+redis_cache = RedisCache()
