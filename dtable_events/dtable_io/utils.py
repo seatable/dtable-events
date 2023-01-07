@@ -462,6 +462,63 @@ def update_page_design_static_image(page_design_settings, repo_id, workspace_id,
         dtable_io_logger.warning('update page design static image failed. ERROR: {}'.format(e))
 
 
+def update_universal_app_custom_page_static_image(pages, repo_id, workspace_id, dtable_uuid, content_json_tmp_path, dtable_web_service_url, file_server_port, username):
+    if not isinstance(pages, list):
+        return
+
+    custom_pages = [ page for page in pages if page.get('type', '') == 'custom_page' ]
+    
+    valid_dtable_web_service_url = dtable_web_service_url.strip('/')
+    inner_file_server_root = 'http://127.0.0.1:' + str(file_server_port)
+    from dtable_events.dtable_io import dtable_io_logger
+    try:
+        for page in custom_pages:
+            page_id = page['id']
+            page_content_file_name = '%s.json'%(page_id)
+            page_content_url = page['content_url']
+            parent_dir = '/asset/%s/external-apps/%s'%(dtable_uuid, page_id)
+            page_json_file_id = seafile_api.get_file_id_by_path(repo_id, '/asset' + page_content_url.split('asset')[1])
+            token = seafile_api.get_fileserver_access_token(
+                repo_id, page_json_file_id, 'view', '', use_onetime=False
+            )
+            content_url = '%s/files/%s/%s'%(inner_file_server_root, token,
+                                    urlquote(page_content_file_name))
+            page_content_response = requests.get(content_url)
+            is_changed = False
+            if page_content_response.status_code == 200:
+                page_content = page_content_response.json()
+                if 'block_ids' not in page_content.keys():
+                    page_content = {
+                        'block_ids': [],
+                        'block_by_id': {},
+                        'version': 5
+                    }
+                block_ids = page_content.get('block_ids', [])
+                block_by_id = page_content.get('block_by_id', {})
+                for block_id in block_ids:
+                    block = block_by_id.get(block_id, {})
+                    block_children = block.get('children', [])
+                    for block_children_id in block_children:
+                        element = block_by_id.get(block_children_id, {})
+                        element_type = element.get('type', '')
+                        if element_type == 'static_image':
+                            static_image_url = element.get('value', '')
+                            file_name = '/'.join(static_image_url.split('/')[-2:])
+                            element['value'] = '/'.join([valid_dtable_web_service_url, 'workspace', str(workspace_id),
+                                                        'asset', str(dtable_uuid), 'external-apps', page_id, file_name])
+                            is_changed = True
+
+                if is_changed:
+                    if not os.path.exists(content_json_tmp_path):
+                        os.makedirs(content_json_tmp_path)
+                    page_content_save_path = os.path.join(content_json_tmp_path, page_content_file_name)
+                    with open(page_content_save_path, 'w') as f:
+                        json.dump(page_content, f)
+                    seafile_api.put_file(repo_id, page_content_save_path, parent_dir, '%s.json'%(page_id), username, None)
+    except Exception as e:
+        print(e)
+        dtable_io_logger.warning('update custom page\'s static image of external app failed. ERROR: {}'.format(e))
+
 def gen_form_id(length=4):
     return ''.join(random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(length))
 
