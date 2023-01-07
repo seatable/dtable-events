@@ -200,7 +200,6 @@ class DTableDBAPI(object):
         }
         resp = requests.put(url, json=json_data, headers=self.headers, timeout=TIMEOUT)
         if not resp.status_code == 200:
-            print('batch_update_rows resp.text: ', resp.text)
             raise RowUpdatedError
         return resp.json()
 
