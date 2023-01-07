@@ -516,7 +516,6 @@ def update_universal_app_custom_page_static_image(pages, repo_id, workspace_id, 
                         json.dump(page_content, f)
                     seafile_api.put_file(repo_id, page_content_save_path, parent_dir, '%s.json'%(page_id), username, None)
     except Exception as e:
-        print(e)
         dtable_io_logger.warning('update custom page\'s static image of external app failed. ERROR: {}'.format(e))
 
 def gen_form_id(length=4):
