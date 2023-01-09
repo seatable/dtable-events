@@ -505,7 +505,7 @@ def update_universal_app_custom_page_static_image(pages, repo_id, workspace_id, 
                             static_image_url = element.get('value', '')
                             file_name = '/'.join(static_image_url.split('/')[-2:])
                             element['value'] = '/'.join([valid_dtable_web_service_url, 'workspace', str(workspace_id),
-                                                        'asset', str(dtable_uuid), 'external-apps', page_id, file_name])
+                                                        'asset', str(dtable_uuid), 'external-apps', file_name])
                             is_changed = True
 
                 if is_changed:
