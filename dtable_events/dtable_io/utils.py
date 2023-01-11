@@ -507,6 +507,10 @@ def update_universal_app_custom_page_static_image(pages, repo_id, workspace_id, 
                             element['value'] = '/'.join([valid_dtable_web_service_url, 'workspace', str(workspace_id),
                                                         'asset', str(dtable_uuid), 'external-apps', file_name])
                             is_changed = True
+                        elif element_type == 'static_long_text':
+                            old_text = element['value']['text']
+                            element['value']['text'] = re.sub(r'workspace/\d/asset/[-0-9a-f]{36}/external-apps', 'workspace/%s/asset/%s/external-apps'%(str(workspace_id), str(dtable_uuid)), old_text)
+                            is_changed = True
 
                 if is_changed:
                     if not os.path.exists(content_json_tmp_path):
