@@ -99,6 +99,9 @@ def convert_dtable_export_file_and_image_url(workspace_id, dtable_uuid, dtable_c
     from dtable_events.dtable_io import dtable_io_logger
 
     tables = dtable_content.get('tables', [])
+    settings = dtable_content.get('settings')
+    if settings:
+        dtable_content['settings']['enable_archive'] = False
     old_file_part_path = '/workspace/%s/asset/%s/' % (workspace_id, str(UUID(dtable_uuid)))
     dtable_io_logger.debug('old_file_part_path: %s', old_file_part_path)
     for table in tables:
