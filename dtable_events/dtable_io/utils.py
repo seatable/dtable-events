@@ -509,8 +509,8 @@ def update_universal_app_custom_page_static_image(pages, repo_id, workspace_id, 
                             is_changed = True
                         elif element_type == 'static_long_text':
                             old_value_text = element['value']['text']
-                            dst_image_url_part = 'workspace/%s/asset/%s/external-apps'%(str(workspace_id), str(dtable_uuid))
-                            element['value']['text'] = re.sub(r'workspace/\d/asset/[-0-9a-f]{36}/external-apps', dst_image_url_part, old_value_text)
+                            dst_image_url_part = '%s/asset/%s' % (str(workspace_id), str(dtable_uuid))
+                            element['value']['text'] = re.sub(r'\d+/asset/[-\w]{36}', dst_image_url_part, old_value_text)
                             is_changed = True
 
                 if is_changed:
