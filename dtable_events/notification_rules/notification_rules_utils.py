@@ -213,6 +213,11 @@ def _get_geolocation_infos(cell_value_dict):
 
     return info_list and " ".join(info_list) or ''
 
+def _convert_zero_in_value(value):
+    if value == 0:
+        return '0'
+    return value
+
 def fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, converted_row, db_session, dtable_metadata):
     for blank in column_blanks:
         if col_name_dict[blank]['type'] in [
@@ -226,9 +231,11 @@ def fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, conver
             ColumnTypes.EMAIL,
             ColumnTypes.AUTO_NUMBER,
             ColumnTypes.CTIME,
-            ColumnTypes.MTIME
+            ColumnTypes.MTIME,
+            ColumnTypes.RATE,
         ]:
             value = converted_row.get(blank, '')
+            value = _convert_zero_in_value(value)
             msg = msg.replace('{' + blank + '}', str(value) if value else '')  # maybe value is None and str(None) is 'None'
 
         elif col_name_dict[blank]['type'] in [
@@ -245,7 +252,7 @@ def fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, conver
 
         elif col_name_dict[blank]['type'] in [ColumnTypes.LINK]:
             value = converted_row.get(blank, [])
-            msg = msg.replace('{' + blank + '}', ('[' + ', '.join([f['display_value'] for f in value]) + ']') if value else '[]')
+            msg = msg.replace('{' + blank + '}', ('[' + ', '.join([f['display_value'] for f in value if f['display_value']]) + ']') if value else '[]')
 
         elif col_name_dict[blank]['type'] in [ColumnTypes.FILE]:
             value = converted_row.get(blank, [])
@@ -275,7 +282,7 @@ def fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, conver
             # else just transfer value to str to fill blanks.
             # Judge whether value is like collaborator or not is base on metadata of dtable
             value = converted_row.get(blank)
-
+            value = _convert_zero_in_value(value)
             # If result of formula is a string or None, just replace directly
             if isinstance(value, str) or value is None:
                 msg = msg.replace('{' + blank + '}', value if value else '')
