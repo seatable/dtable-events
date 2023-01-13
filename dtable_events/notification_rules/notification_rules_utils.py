@@ -214,8 +214,11 @@ def _get_geolocation_infos(cell_value_dict):
     return info_list and " ".join(info_list) or ''
 
 def _convert_zero_in_value(value):
-    if value == 0:
-        return '0'
+    try:
+        if int(value) == 0:
+            return '0'
+    except:
+        pass
     return value
 
 def fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, converted_row, db_session, dtable_metadata):
