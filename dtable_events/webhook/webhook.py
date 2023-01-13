@@ -5,12 +5,17 @@ from threading import Thread
 from queue import Queue
 
 import requests
+from requests.exceptions import ReadTimeout
 
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.db import init_db_session_class
 from dtable_events.webhook.models import Webhooks, WebhookJobs, PENDING, FAILURE
 
 logger = logging.getLogger(__name__)
+
+WEBHOOK_ERROR_CACHE_PREFIX = 'webhook_error_'
+WEBHOOK_ERROR_TIMES_CACHE_TIMEOUT = 24 * 60 * 60
+WEBHOOK_ALLOW_ERROR_TIMES = 5
 
 
 class Webhooker(object):
@@ -69,7 +74,19 @@ class Webhooker(object):
             db_session.execute(sql, {'webhook_id': webhook_id})
             db_session.commit()
         except Exception as e:
-            logger.error('invalidate webhhok: %s error: %s', webhook_id, e)
+            logger.error('invalidate webhook: %s error: %s', webhook_id, e)
+
+    def get_webhook_error_times(self, cache_key):
+        webhook_error_times = self._redis_client.get(cache_key)
+        if not webhook_error_times:
+            webhook_error_times = 0
+
+        return int(webhook_error_times)
+
+    def save_webhook_job(self, session, job_params):
+        webhook_job = WebhookJobs(*job_params)
+        session.add(webhook_job)
+        session.commit()
 
     def trigger_jobs(self):
         while True:
@@ -77,31 +94,52 @@ class Webhooker(object):
                 job = self.job_queue.get()
                 session = self._db_session_class()
                 need_invalidate = False
+                webhook_error_cache_key = WEBHOOK_ERROR_CACHE_PREFIX + str(job['webhook_id'])
                 try:
                     body = job.get('request_body')
                     headers = job.get('request_headers')
                     response = requests.post(job['url'], json=body, headers=headers, timeout=30)
+                except ReadTimeout:
+                    logger.warning('request webhook url: %s timeout', job['url'])
+
+                    job_params = (job['webhook_id'], job['created_at'], datetime.now(), FAILURE,
+                                  job['url'], job['request_headers'], job['request_body'], None, None)
+                    self.save_webhook_job(session, job_params)
+
+                    webhook_error_times = self.get_webhook_error_times(webhook_error_cache_key) + 1
+                    if webhook_error_times >= WEBHOOK_ALLOW_ERROR_TIMES:
+                        need_invalidate = True
+                    self._redis_client.set(webhook_error_cache_key,
+                                           webhook_error_times,
+                                           timeout=WEBHOOK_ERROR_TIMES_CACHE_TIMEOUT
+                                           )
                 except Exception as e:
                     logger.warning('request webhook url: %s error: %s', job['url'], e)
                     need_invalidate = True
 
-                    webhook_job = WebhookJobs(job['webhook_id'], job['created_at'], datetime.now(), FAILURE,
-                                              job['url'], job['request_headers'], job['request_body'], None, None)
-                    session.add(webhook_job)
-                    session.commit()
+                    job_params = (job['webhook_id'], job['created_at'], datetime.now(), FAILURE,
+                                  job['url'], job['request_headers'], job['request_body'], None, None)
+                    self.save_webhook_job(session, job_params)
                 else:
                     if 200 <= response.status_code < 300:
+                        self._redis_client.delete(webhook_error_cache_key)
                         continue
                     else:
-                        webhook_job = WebhookJobs(
-                            job['webhook_id'], job['created_at'], datetime.now(), FAILURE, job['url'],
-                            job['request_headers'], job['request_body'], response.status_code, response.text)
-                        session.add(webhook_job)
-                        session.commit()
-                        need_invalidate = True
+                        job_params = (job['webhook_id'], job['created_at'], datetime.now(), FAILURE, job['url'],
+                                      job['request_headers'], job['request_body'], response.status_code, response.text)
+                        self.save_webhook_job(session, job_params)
+
+                        webhook_error_times = self.get_webhook_error_times(webhook_error_cache_key) + 1
+                        if webhook_error_times >= WEBHOOK_ALLOW_ERROR_TIMES:
+                            need_invalidate = True
+                        self._redis_client.set(webhook_error_cache_key,
+                                               webhook_error_times,
+                                               timeout=WEBHOOK_ERROR_TIMES_CACHE_TIMEOUT
+                                               )
                 finally:
                     if need_invalidate:
                         self.invalidate_webhook(job['webhook_id'], session)
+                        self._redis_client.delete(webhook_error_cache_key)
                     session.close()
             except Exception as e:
                 logger.error('trigger job error: %s' % e)
