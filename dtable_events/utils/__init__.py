@@ -94,6 +94,8 @@ def _get_python_executable():
         return sys.executable
 
     try_list = [
+        'python3.8',
+        'python38',
         'python3.7',
         'python37',
         'python3.6',
