@@ -539,8 +539,8 @@ def generate_single_row(converted_row, src_columns, transfered_columns_dict, dst
         if not transfered_column:
             continue
 
-        # if to_archive and col['key'] in ['_creator', '_ctime', '_last_modifier', '_mtime']:
-        #     continue
+        if to_archive and col['key'] in ['_creator', '_ctime', '_last_modifier', '_mtime']:
+            continue
 
         if op_type == 'update':
             converted_cell_value = get_converted_cell_value(converted_cell_value, transfered_column, col)
@@ -704,7 +704,7 @@ def append_dst_rows(dst_dtable_uuid, dst_table_name, to_be_appended_rows, dst_dt
                     'task_status_code': 500
                 }
     else:
-        step = DELETE_ROWS_LIMIT
+        step = INSERT_UPDATE_ROWS_LIMIT
         for i in range(0, len(to_be_appended_rows), step):
             try:
                 dst_dtable_server_api.batch_append_rows(dst_table_name, to_be_appended_rows[i: i+step], need_convert_back=False)
@@ -778,12 +778,9 @@ def import_sync_CDS(context):
     please check all resources in context before call this function
 
     Steps:
-        1. fetch src rows
-        2. fetch dst rows
-        3. create dst table or update dst table columns
-        4. append rows
-        5. update rows
-        6. delete rows
+        1. create or update dst columns
+        2. fetch src rows, (find rows to be updated and rows to be appended, update and append them), step by step
+        3. fetch dst rows, (find rows to be deleted, delete them), step by step
     """
     src_dtable_uuid = context.get('src_dtable_uuid')
     dst_dtable_uuid = context.get('dst_dtable_uuid')
@@ -804,43 +801,135 @@ def import_sync_CDS(context):
     to_archive = context.get('to_archive', False)
 
     src_dtable_server_api = DTableServerAPI(operator, src_dtable_uuid, dtable_server_url)
+    src_dtable_db_api = DTableDBAPI(operator, src_dtable_uuid, INNER_DTABLE_DB_URL)
     dst_dtable_server_api = DTableServerAPI(operator, dst_dtable_uuid, dtable_server_url)
     dst_dtable_db_api = DTableDBAPI(operator, dst_dtable_uuid, INNER_DTABLE_DB_URL)
 
     server_only = not (to_archive and src_enable_archive and src_view_type == 'archive')
+    is_sync = bool(dst_table_id)
     logger.debug('to_archive: %s src_enable_archive: %s src_view_type: %s', to_archive, src_enable_archive, src_view_type)
 
     src_column_keys_set = {col['key'] for col in src_columns}
 
-    # fetch src rows and generate columns
-    result_rows, to_be_updated_columns, to_be_appended_columns = fetch_src_rows_and_columns(src_dtable_uuid, src_table_name, src_view_name, src_columns, src_dtable_server_api, server_only, dst_columns)
-
-
-    # fetch dst rows
-    dst_rows, error_resp = fetch_dst_rows(dst_table_id, dst_table_name, dst_columns, dst_dtable_db_api, src_column_keys_set, to_archive)
-    if error_resp:
-        return error_resp
-
-    # generate update/append/delete rows
-    final_columns = (to_be_updated_columns or []) + (to_be_appended_columns or [])
-    to_be_updated_rows, to_be_appended_rows, to_be_deleted_row_ids = generate_synced_rows(result_rows, src_columns, final_columns, dst_rows=dst_rows, to_archive=to_archive)
-
-    # create table or update/append columns
-    dst_table_id, error_resp = create_dst_table_or_update_columns(dst_dtable_uuid, dst_table_id, dst_table_name, to_be_appended_columns, to_be_appended_columns, dst_dtable_server_api, lang)
-    if error_resp:
-        return  error_resp
-
-    # append/update/delete rows
-    ## append
-    error_resp = append_dst_rows(dst_dtable_uuid, dst_table_name, to_be_appended_rows, dst_dtable_db_api, dst_dtable_server_api, to_archive)
-    if error_resp:
-        return error_resp
-    ## update
-    error_resp = update_dst_rows(dst_dtable_uuid, dst_table_name, to_be_updated_rows, dst_dtable_db_api, dst_dtable_server_api, to_archive)
-    if error_resp:
-        return error_resp
-    ## delete
-    delete_dst_rows(dst_dtable_uuid, dst_table_name, to_be_deleted_row_ids, dst_dtable_db_api, dst_dtable_server_api, to_archive)
+    # fetch src rows, find existed rows, not existed rows, update/append rows, step by step
+    start, step = 0, 10000
+    src_row_ids_set = set()
+    to_be_updated_columns, to_be_appended_columns = [], []
+    final_columns = []
+    while True:
+        logger.debug('update/append start: %s step: %s', start, step)
+        if server_only and (start + step) > SRC_ROWS_LIMIT:
+            step = SRC_ROWS_LIMIT - start
+        try:
+            res_json = src_dtable_server_api.internal_view_rows(src_table_name, src_view_name, use_dtable_db=True, server_only=server_only, start=start, limit=step)
+            step_src_rows = res_json.get('rows', [])
+            src_view_metadata = res_json.get('metadata')
+        except Exception as e:
+            logger.error('request src_dtable: %s view-rows error: %s', src_dtable_uuid, e)
+            return {
+                'dst_table_id': None,
+                'error_msg': 'fetch view rows error',
+                'task_status_code': 500
+            }
+        if start == 0:
+            ## generate columns from the columns(archive_metadata) returned from SQL query
+            sync_columns = [col for col in src_view_metadata if col['key'] in src_column_keys_set]
+            to_be_updated_columns, to_be_appended_columns, error = generate_synced_columns(sync_columns, dst_columns=dst_columns)
+            if error:
+                return {
+                    'dst_table_id': None,
+                    'error_type': 'generate_synced_columns_error',
+                    'error_msg': str(error),  # generally, this error is caused by client
+                    'task_status_code': 400
+                }
+            final_columns = (to_be_updated_columns or []) + (to_be_appended_columns or [])
+            ## create or update dst columns
+            dst_table_id, error_resp = create_dst_table_or_update_columns(dst_dtable_uuid, dst_table_id, dst_table_name, to_be_appended_columns, to_be_updated_columns, dst_dtable_server_api, lang)
+            if error_resp:
+                return error_resp
+        row_ids = []
+        step_rows_dict = {}
+        for row in step_src_rows:
+            if row['_id'] in src_row_ids_set:
+                continue
+            row_ids.append(row['_id'])
+            src_row_ids_set.add(row['_id'])
+            step_rows_dict[row['_id']] = row
+        if not row_ids:
+            if not step_src_rows or len(step_src_rows) < step or (server_only and (start + step) >= SRC_ROWS_LIMIT):
+                break
+            start += step
+            continue
+        ## find to-be-appended-rows to-be-updated-rows
+        step_dst_rows = None
+        if dst_table_id:
+            sql = "SELECT _id, %(dst_columns)s FROM `%(dst_table)s` WHERE _id IN %(row_ids)s LIMIT %(rows_count)s" % {
+                'dst_table': dst_table_name,
+                'dst_columns': ', '.join(["`%s`" % col['name'] for col in final_columns]),
+                'row_ids': '(%s)' % ', '.join(["'%s'" % row_id for row_id in row_ids]),
+                'rows_count': len(row_ids)
+            }
+            try:
+                step_dst_rows = dst_dtable_db_api.query(sql, convert=False, server_only=(not to_archive))
+            except Exception as e:
+                logger.error('find to-be-updated-rows error: %s', e)
+                return {
+                    'dst_table_id': None,
+                    'error_msg': 'find to-be-updated-rows error',
+                    'task_status_code': 500
+                }
+        logger.debug('step_dst_rows: %s', len(step_dst_rows))
+        filtered_step_src_rows = [step_rows_dict[row_id] for row_id in row_ids]
+        to_be_updated_rows, to_be_appended_rows, _ = generate_synced_rows(filtered_step_src_rows, src_columns, final_columns, dst_rows=step_dst_rows, to_archive=to_archive)
+        logger.debug('to_be_updated_rows: %s to_be_appended_rows: %s', len(to_be_updated_rows), len(to_be_appended_rows))
+        ## append
+        if to_be_appended_rows:
+            error_resp = append_dst_rows(dst_dtable_uuid, dst_table_name, to_be_appended_rows, dst_dtable_db_api, dst_dtable_server_api, to_archive)
+            if error_resp:
+                return error_resp
+        ## update
+        if to_be_updated_rows:
+            error_resp = update_dst_rows(dst_dtable_uuid, dst_table_name, to_be_updated_rows, dst_dtable_db_api, dst_dtable_server_api, to_archive)
+            if error_resp:
+                return error_resp
+        ## judge whether break
+        if not step_src_rows or len(step_src_rows) < step or (server_only and (start + step) >= SRC_ROWS_LIMIT):
+            break
+        start += step
+    # fetch dst rows, find useless rows, delete rows, step by step
+    dst_row_ids_set = set()
+    start, step = 0, 10000
+    while is_sync and True:
+        logger.debug('delete start: %s step: %s', start, step)
+        sql = "SELECT _id FROM `%(dst_table_name)s` LIMIT %(start)s, %(limit)s" % {
+            'dst_table_name': dst_table_name,
+            'start': start,
+            'limit': step
+        }
+        rows = dst_dtable_db_api.query(sql, convert=False, server_only=(not to_archive))
+        query_row_ids_set = set()
+        for row in rows:
+            if row['_id'] in dst_row_ids_set:
+                continue
+            query_row_ids_set.add(row['_id'])
+            dst_row_ids_set.add(row['_id'])
+        if not query_row_ids_set:
+            if len(rows) < step:
+                break
+            start += step
+            continue
+        sql = "SELECT _id FROM `%(src_table_name)s` WHERE _id IN %(row_ids)s LIMIT %(rows_count)s" % {
+            'src_table_name': src_table_name,
+            'row_ids': '(%s)' % ', '.join(["'%s'" % row_id for row_id in query_row_ids_set]),
+            'rows_count': len(query_row_ids_set)
+        }
+        existed_rows = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
+        to_be_deleted_row_ids_set = query_row_ids_set - {row['_id'] for row in existed_rows}
+        if to_be_deleted_row_ids_set:
+            delete_dst_rows(dst_dtable_uuid, dst_table_name, list(to_be_deleted_row_ids_set), dst_dtable_db_api, dst_dtable_server_api, to_archive)
+        if len(rows) < step:
+                break
+        start += step
 
     return {
         'dst_table_id': dst_table_id,
