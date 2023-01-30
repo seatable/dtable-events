@@ -80,7 +80,7 @@ class Operator(object):
             return ''
         return "`%s` %s '%%%s%%'" % (
             self.column_name,
-            'like' if self.case_sensitive is True else 'ilike',
+            'not like' if self.case_sensitive is True else 'not ilike',
             self.filter_term
         )
 
