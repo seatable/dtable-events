@@ -49,6 +49,8 @@ class ImageValidator(BaseValidator):
         if value is None:
             return None
         if isinstance(value, list):
+            if value and not isinstance(value[0], str):
+                return None
             return [v for v in value if isinstance(v, str)]
         return None
 
@@ -91,7 +93,7 @@ class SingleSelectValidator(BaseValidator):
 class MultipleSelectValidator(BaseValidator):
 
     def validate(self, value):
-        if not isinstance(value, list):
+        if not isinstance(value, list) or (value and not isinstance(value[0], str)):
             return None
         column_data = self.column.get('data') or {}
         options = column_data.get('options') or []
@@ -115,7 +117,7 @@ class DurationValidator(BaseValidator):
 class FileValidator(BaseValidator):
 
     def validate(self, value):
-        if not isinstance(value, list):
+        if not isinstance(value, list) or (value and not isinstance(value[0], dict)):
             return None
         real_values = []
         for v in value:
@@ -129,7 +131,7 @@ class FileValidator(BaseValidator):
 class CollaboratorValidator(BaseValidator):
 
     def validate(self, value):
-        if not isinstance(value, list):
+        if not isinstance(value, list) or (value and not isinstance(value[0], str)):
             return None
         return [v for v in value if isinstance(v, str)]
 
