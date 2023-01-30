@@ -560,82 +560,6 @@ def generate_single_row(converted_row, src_columns, transfered_columns_dict, dst
     return dataset_row
 
 
-def fetch_src_rows_and_columns(src_dtable_uuid, src_table_name, src_view_name, src_columns, src_dtable_server_api, server_only, dst_columns):
-    result_rows, flag_row_set = [], set()
-    start, limit = 0, 10000
-    src_column_keys_set = {col['key'] for col in src_columns}
-    to_be_updated_columns, to_be_appended_columns = [], []
-
-    while True:
-        if server_only and (start + limit) > SRC_ROWS_LIMIT:
-            limit = SRC_ROWS_LIMIT - start
-        try:
-            res_json = src_dtable_server_api.internal_view_rows(src_table_name, src_view_name, use_dtable_db=True, server_only=server_only, start=start, limit=limit)
-            archive_rows = res_json.get('rows', [])
-            archive_metadata = res_json.get('metadata')
-        except Exception as e:
-            logger.error('request src_dtable: %s view-rows error: %s', src_dtable_uuid, e)
-            return {
-                'dst_table_id': None,
-                'error_msg': 'fetch view rows error',
-                'task_status_code': 500
-            }
-        if start == 0:
-            ## generate columns from the columns(archive_metadata) returned from SQL query
-            sync_columns = [col for col in archive_metadata if col['key'] in src_column_keys_set]
-            to_be_updated_columns, to_be_appended_columns, error = generate_synced_columns(sync_columns, dst_columns=dst_columns)
-            if error:
-                return {
-                    'dst_table_id': None,
-                    'error_type': 'generate_synced_columns_error',
-                    'error_msg': str(error),  # generally, this error is caused by client
-                    'task_status_code': 400
-                }
-        for row in archive_rows:
-            if row['_id'] in flag_row_set:
-                continue
-            result_rows.append(row)
-            flag_row_set.add(row['_id'])
-        if not archive_rows or len(archive_rows) < limit or (server_only and (start + limit) >= SRC_ROWS_LIMIT):
-            break
-        start += limit
-
-    return result_rows, to_be_updated_columns, to_be_appended_columns
-
-
-def fetch_dst_rows(dst_table_id, dst_table_name, dst_columns, dst_dtable_db_api, src_column_keys_set, to_archive):
-    dst_rows = None
-    # fetch dst rows
-    if dst_table_id:
-        dst_rows, flag_row_set = [], set()
-        query_columns = [col for col in dst_columns if col['key'] in src_column_keys_set]
-        sql_template = "SELECT `_id`, %(column_names)s FROM `%(table_name)s` LIMIT %%(start)s, %%(limit)s" % {
-            'column_names': ', '.join(["`%s`" % col['name'] for col in query_columns]),
-            'table_name': dst_table_name
-        }
-        start, limit = 0, 10000
-        while True:
-            sql = sql_template % {'start': start, 'limit': limit}
-            try:
-                dst_archive_rows = dst_dtable_db_api.query(sql, convert=False, server_only=(not to_archive))
-            except Exception as e:
-                logger.error('fetch dst table: %s error: %s', dst_table_name, e)
-                return None, {
-                    'dst_table_id': None,
-                    'error_msg': 'fetch dst rows error',
-                    'task_status_code': 500
-                }
-            for row in dst_archive_rows:
-                if row['_id'] in flag_row_set:
-                    continue
-                dst_rows.append(row)
-                flag_row_set.add(row['_id'])
-            if len(dst_archive_rows) < limit:
-                break
-            start += limit
-    return dst_rows, None
-
-
 def create_dst_table_or_update_columns(dst_dtable_uuid, dst_table_id, dst_table_name, to_be_appended_columns, to_be_updated_columns, dst_dtable_server_api, lang):
     if not dst_table_id:  ## create table
         columns = [{
@@ -832,8 +756,7 @@ def import_sync_CDS(context):
                 'error_msg': 'fetch view rows error',
                 'task_status_code': 500
             }
-        if start == 0:
-            ## generate columns from the columns(archive_metadata) returned from SQL query
+        if start == 0: ## generate columns from the columns(archive_metadata) returned from SQL query in internal_view_rows
             sync_columns = [col for col in src_view_metadata if col['key'] in src_column_keys_set]
             to_be_updated_columns, to_be_appended_columns, error = generate_synced_columns(sync_columns, dst_columns=dst_columns)
             if error:
@@ -844,7 +767,7 @@ def import_sync_CDS(context):
                     'task_status_code': 400
                 }
             final_columns = (to_be_updated_columns or []) + (to_be_appended_columns or [])
-            ## create or update dst columns
+            ### create or update dst columns
             dst_table_id, error_resp = create_dst_table_or_update_columns(dst_dtable_uuid, dst_table_id, dst_table_name, to_be_appended_columns, to_be_updated_columns, dst_dtable_server_api, lang)
             if error_resp:
                 return error_resp
@@ -897,10 +820,11 @@ def import_sync_CDS(context):
         if not step_src_rows or len(step_src_rows) < step or (server_only and (start + step) >= SRC_ROWS_LIMIT):
             break
         start += step
+
     # fetch dst rows, find useless rows, delete rows, step by step
     dst_row_ids_set = set()
     start, step = 0, 10000
-    ## src view filter2sql for following select from src table/view
+    ## generate src view WHERE clause
     try:
         src_metadata = src_dtable_server_api.get_metadata()
     except Exception as e:
@@ -920,6 +844,7 @@ def import_sync_CDS(context):
     }
     sql_generator = BaseSQLGenerator(src_table_name, src_table['columns'], filter_conditions=filter_conditions)
     filter_clause = sql_generator._filter2sql()
+    ## delete useless rows step by step
     while is_sync and True:
         logger.debug('delete start: %s step: %s', start, step)
         sql = "SELECT _id FROM `%(dst_table_name)s` LIMIT %(start)s, %(limit)s" % {
