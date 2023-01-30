@@ -3,7 +3,7 @@ from copy import deepcopy
 from datetime import datetime
 
 import requests
-from dtable_events.common_dataset.common_dataset_sync_utils import import_sync_CDS
+from dtable_events.common_dataset.common_dataset_sync_utils import import_sync_CDS, new_import_sync_CDS
 from dtable_events.db import init_db_session_class
 from dtable_events.dtable_io import dtable_io_logger
 from dtable_events.utils import uuid_str_to_32_chars, get_inner_dtable_server_url
@@ -69,11 +69,13 @@ def sync_common_dataset(context, config):
             db_session.close()
             return
 
-        if list(sync_dataset):
+        sync_dataset = list(sync_dataset)
+        if sync_dataset:
+            dtable_io_logger.debug('sync_dataset: %s', sync_dataset[0])
             return
 
     try:
-        result = import_sync_CDS({
+        result = new_import_sync_CDS({
             'src_dtable_uuid': src_dtable_uuid,
             'dst_dtable_uuid': dst_dtable_uuid,
             'src_table_name': src_table_name,
@@ -153,7 +155,7 @@ def import_common_dataset(context, config):
     dataset_id = context.get('dataset_id')
 
     try:
-        result = import_sync_CDS({
+        result = new_import_sync_CDS({
             'src_dtable_uuid': src_dtable_uuid,
             'dst_dtable_uuid': dst_dtable_uuid,
             'src_table_name': src_table_name,
