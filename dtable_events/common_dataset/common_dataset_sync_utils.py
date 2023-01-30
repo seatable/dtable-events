@@ -8,6 +8,7 @@ from copy import deepcopy
 import requests
 from dateutil import parser
 
+from dtable_events.utils.sql_generator import BaseSQLGenerator
 from dtable_events.app.config import INNER_DTABLE_DB_URL
 from dtable_events.common_dataset.dtable_db_cell_validators import validate_table_db_cell_value
 from dtable_events.utils import get_inner_dtable_server_url
@@ -899,6 +900,26 @@ def import_sync_CDS(context):
     # fetch dst rows, find useless rows, delete rows, step by step
     dst_row_ids_set = set()
     start, step = 0, 10000
+    ## src view filter2sql for following select from src table/view
+    try:
+        src_metadata = src_dtable_server_api.get_metadata()
+    except Exception as e:
+        logger.error('request src dtable: %s table: %s metadata error: %s', src_dtable_uuid, src_table_name, e)
+        return {
+            'dst_table_id': None,
+            'error_msg': 'request src table metadata error',
+            'task_status_code': 500
+        }
+    src_table = [table for table in src_metadata['tables'] if table['name'] == src_table_name][0]
+    src_view = [view for view in src_table['views'] if view['name'] == src_view_name][0]
+    filters = src_view.get('filters', [])
+    filter_conjunction = src_view.get('filter_conjunction', 'And')
+    filter_conditions = {
+        'filters': filters,
+        'filter_conjunction': filter_conjunction
+    }
+    sql_generator = BaseSQLGenerator(src_table_name, src_table['columns'], filter_conditions=filter_conditions)
+    filter_clause = sql_generator._filter2sql()
     while is_sync and True:
         logger.debug('delete start: %s step: %s', start, step)
         sql = "SELECT _id FROM `%(dst_table_name)s` LIMIT %(start)s, %(limit)s" % {
@@ -911,6 +932,8 @@ def import_sync_CDS(context):
         for row in rows:
             if row['_id'] in dst_row_ids_set:
                 continue
+            if row['_id'] in src_row_ids_set:
+                continue
             query_row_ids_set.add(row['_id'])
             dst_row_ids_set.add(row['_id'])
         if not query_row_ids_set:
@@ -918,10 +941,11 @@ def import_sync_CDS(context):
                 break
             start += step
             continue
-        sql = "SELECT _id FROM `%(src_table_name)s` WHERE _id IN %(row_ids)s LIMIT %(rows_count)s" % {
+        sql = "SELECT _id FROM `%(src_table_name)s` WHERE _id IN %(row_ids)s %(view_filter_clause)s LIMIT %(rows_count)s" % {
             'src_table_name': src_table_name,
             'row_ids': '(%s)' % ', '.join(["'%s'" % row_id for row_id in query_row_ids_set]),
-            'rows_count': len(query_row_ids_set)
+            'rows_count': len(query_row_ids_set),
+            'view_filter_clause': 'AND (%s)' % filter_clause[filter_clause.find('WHERE') + len('WHERE'):] if filter_clause else ''
         }
         existed_rows = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
         to_be_deleted_row_ids_set = query_row_ids_set - {row['_id'] for row in existed_rows}
