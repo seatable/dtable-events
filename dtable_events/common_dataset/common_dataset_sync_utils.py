@@ -887,6 +887,249 @@ def import_sync_CDS(context):
     }
 
 
+def new_import_sync_CDS(context):
+    """
+    fetch src/dst rows id, find need append/update/delete rows
+    """
+    src_dtable_uuid = context.get('src_dtable_uuid')
+    dst_dtable_uuid = context.get('dst_dtable_uuid')
+
+    src_table_name = context.get('src_table_name')
+    src_view_name = context.get('src_view_name')
+    src_view_type = context.get('src_view_type', 'table')
+    src_columns = context.get('src_columns')
+    src_enable_archive = context.get('src_enable_archive', False)
+
+    dst_table_id = context.get('dst_table_id')
+    dst_table_name = context.get('dst_table_name')
+    dst_columns = context.get('dst_columns')
+
+    operator = context.get('operator')
+    lang = context.get('lang', 'en')
+
+    to_archive = context.get('to_archive', False)
+
+    src_dtable_server_api = DTableServerAPI(operator, src_dtable_uuid, dtable_server_url)
+    src_dtable_db_api = DTableDBAPI(operator, src_dtable_uuid, INNER_DTABLE_DB_URL)
+    dst_dtable_server_api = DTableServerAPI(operator, dst_dtable_uuid, dtable_server_url)
+    dst_dtable_db_api = DTableDBAPI(operator, dst_dtable_uuid, INNER_DTABLE_DB_URL)
+
+    server_only = not (to_archive and src_enable_archive and src_view_type == 'archive')
+    is_sync = bool(dst_table_id)
+    logger.debug('to_archive: %s src_enable_archive: %s src_view_type: %s', to_archive, src_enable_archive, src_view_type)
+
+    src_column_keys_set = {col['key'] for col in src_columns}
+
+    # fetch create dst table or update dst table columns
+    # fetch all src view rows id, S
+    # fetch all dst table rows id, D
+    # to-be-appended-rows-id = S - D
+    # to-be-updated-rows-id = S & D
+    # to-be-deleted-rows-id = D - S
+    # fetch src to-be-append-rows, append to dst table, step by step
+    # fetch src to-be-updated-rows and dst to-be-updated-rows, update to dst table, step by step
+    # delete dst to-be-deleted-rows
+
+    # fetch create dst table or update dst table columns
+    # use src_columns from context temporary !
+    to_be_updated_columns, to_be_appended_columns, error = generate_synced_columns(src_columns, dst_columns=dst_columns)
+    if error:
+        return {
+            'dst_table_id': None,
+            'error_type': 'generate_synced_columns_error',
+            'error_msg': str(error),  # generally, this error is caused by client
+            'task_status_code': 400
+        }
+    final_columns = (to_be_updated_columns or []) + (to_be_appended_columns or [])
+    ### create or update dst columns
+    dst_table_id, error_resp = create_dst_table_or_update_columns(dst_dtable_uuid, dst_table_id, dst_table_name, to_be_appended_columns, to_be_updated_columns, dst_dtable_server_api, lang)
+    if error_resp:
+        return error_resp
+
+    # fetch all src view rows id
+    src_rows_id_set = set()
+    src_rows_id_list = list()
+    src_metadata = src_dtable_server_api.get_metadata()
+    src_table = [table for table in src_metadata['tables'] if table['name'] == src_table_name][0]
+    src_view = [view for view in src_table['views'] if view['name'] == src_view_name][0]
+    filter_conditions = {
+        'filters': src_view.get('filters', []),
+        'filter_conjunction': src_view.get('filter_conjunction', 'And'),
+        'sorts': src_view.get('sorts', [])
+    }
+    logger.debug('filter_conditions: %s', filter_conditions)
+    try:
+        sql_generator = BaseSQLGenerator(src_table_name, src_table['columns'], filter_conditions=filter_conditions)
+        filter_clause = sql_generator._filter2sql()
+        sort_clause = sql_generator._sort2sql()
+        logger.debug('filter_clause: %s, sort_clause: %s', filter_clause, sort_clause)
+    except Exception as e:
+        logger.error('generate src view sql error: %s', e)
+        return {
+            'dst_table_id': None,
+            'error_msg': 'generate src view sql error: %s' % e,
+            'task_status_code': 500
+        }
+    sql_template = "SELECT %%(fields)s FROM `%(src_table)s` %(filters)s %(sorts)s" % {
+        'src_table': src_table_name,
+        'filters': filter_clause,
+        'sorts': sort_clause
+    }
+    start, step = 0, 10000
+    while True:
+        if server_only and (start + step) > SRC_ROWS_LIMIT:
+            step = SRC_ROWS_LIMIT - start
+        sql = (sql_template + " LIMIT %(offset)s, %(limit)s ") % {
+            'fields': '`_id`',
+            'offset': start,
+            'limit': step
+        }
+        logger.debug('fetch src sql: %s', sql)
+        try:
+            rows = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
+        except Exception as e:
+            logger.error('fetch src rows id error: %s', e)
+            return {
+                'dst_table_id': None,
+                'error_msg': 'fetch src rows id error: %s' % e,
+                'task_status_code': 500
+            }
+        for row in rows:
+            if row['_id'] in src_rows_id_set:
+                continue
+            src_rows_id_list.append(row['_id'])
+            src_rows_id_set.add(row['_id'])
+        ## judge whether break
+        if len(rows) < step or (server_only and (start + step) >= SRC_ROWS_LIMIT):
+            break
+        start += step
+
+    # fetch all dst table rows id
+    dst_rows_id_set = set()
+    start, step = 0, 10000
+    while is_sync and True:
+        sql = "SELECT _id FROM `%(dst_table)s` LIMIT %(offset)s, %(limit)s" % {
+            'dst_table': dst_table_name,
+            'offset': start,
+            'limit': step
+        }
+        try:
+            rows = dst_dtable_db_api.query(sql, convert=False, server_only=(not to_archive))
+        except Exception as e:
+            logger.error('fetch dst rows id error: %s', e)
+            return {
+                'dst_table_id': None,
+                'error_msg': 'fetch dst rows id error: %s' % e,
+                'task_status_code': 500
+            }
+        dst_rows_id_set |= {row['_id'] for row in rows}
+        if len(rows) < step:
+            break
+        start += step
+
+    # calc to-be-appended-rows-id, to-be-updated-rows-id, to-be-deleted-rows-id
+    to_be_appended_rows_id_set = src_rows_id_set - dst_rows_id_set
+    to_be_updated_rows_id_set = src_rows_id_set & dst_rows_id_set
+    to_be_deleted_rows_id_set = dst_rows_id_set - src_rows_id_set
+    logger.debug('to_be_appended_rows_id_set: %s, to_be_updated_rows_id_set: %s, to_be_deleted_rows_id_set: %s', len(to_be_appended_rows_id_set), len(to_be_updated_rows_id_set), len(to_be_deleted_rows_id_set))
+
+    # fetch src to-be-append-rows, append to dst table, step by step
+    ## this list is to record the order of src rows
+    to_be_appended_rows_id_list = [row_id for row_id in src_rows_id_list if row_id in to_be_appended_rows_id_set]
+
+    query_columns = ', '.join(['_id'] + ["`%s`" % col['name'] for col in final_columns])
+
+    sql_template = sql_template % {'fields': query_columns}
+    logger.debug('sql_template: %s', sql_template)
+
+    if 'WHERE' in sql_template:
+        where_index = sql_template.find('WHERE')
+        fetch_src_sql = sql_template[:where_index] + ' WHERE (%s) AND _id IN (%%(rows_id)s)' % sql_template[where_index+len('WHERE'):]
+    else:
+        fetch_src_sql = sql_template + ' WHERE _id IN (%(rows_id)s)'
+
+    step = 10000
+    for i in range(0, len(to_be_appended_rows_id_list), step):
+        logger.debug('to_be_appended_rows_id_list i: %s, step: %s', i, step)
+        step_to_be_appended_rows_id_list = []
+        step_row_sort_dict = {}
+        for j in range(step):
+            if i + j >= len(to_be_appended_rows_id_list):
+                break
+            step_to_be_appended_rows_id_list.append(to_be_appended_rows_id_list[i+j])
+            step_row_sort_dict[to_be_appended_rows_id_list[i+j]] = j
+        sql = (fetch_src_sql % {'rows_id': ', '.join(["'%s'" % row_id for row_id in step_to_be_appended_rows_id_list])}) + ' LIMIT ' + str(step)
+        try:
+            src_rows = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
+        except Exception as e:
+            logger.error('fetch to-be-appended-rows error: %s', e)
+            return {
+                'dst_table_id': None,
+                'error_msg': 'fetch to-be-appended-rows error: %s' % e,
+                'task_status_code': 500
+            }
+        src_rows = sorted(src_rows, key=lambda row: step_row_sort_dict[row['_id']])
+        _, to_be_appended_rows, _ = generate_synced_rows(src_rows, src_columns, final_columns, [], to_archive=to_archive)
+        error_resp = append_dst_rows(dst_dtable_uuid, dst_table_name, to_be_appended_rows, dst_dtable_db_api, dst_dtable_server_api, to_archive=to_archive)
+        if error_resp:
+            return error_resp
+
+    # fetch src to-be-updated-rows and dst to-be-updated-rows, update to dst table, step by step
+    to_be_updated_rows_id_list = list(to_be_updated_rows_id_set)
+    step = 10000
+    sql_template = "SELECT %(fields)s FROM `%%(table)s` WHERE _id IN (%%(rows_id)s) LIMIT %%(limit)s" % {
+        'fields': query_columns
+    }
+    for i in range(0, len(to_be_updated_rows_id_list), step):
+        logger.debug('to_be_updated_rows_id_list i: %s step: %s', i, step)
+        ## fetch src to-be-updated-rows
+        sql = sql_template % {
+            'rows_id': ', '.join(["'%s'" % row_id for row_id in to_be_updated_rows_id_list[i: i+step]]),
+            'table': src_table_name,
+            'limit': step
+        }
+        try:
+            src_rows = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
+        except Exception as e:
+            logger.error('fetch src to-be-updated-rows error: %s', e)
+            return {
+                'dst_table_id': None,
+                'error_msg': 'fetch src to-be-updated-rows error: %s' % e,
+                'task_status_code': 500
+            }
+
+        ## fetch src to-be-updated-rows
+        sql = sql_template % {
+            'rows_id': ', '.join(["'%s'" % row_id for row_id in to_be_updated_rows_id_list[i: i+step]]),
+            'table': dst_table_name,
+            'limit': step
+        }
+        try:
+            dst_rows = dst_dtable_db_api.query(sql, convert=False, server_only=(not to_archive))
+        except Exception as e:
+            logger.error('fetch dst to-be-updated-rows error: %s', e)
+            return {
+                'dst_table_id': None,
+                'error_msg': 'fetch dst to-be-updated-rows error: %s' % e,
+                'task_status_code': 500
+            }
+
+        ## update
+        to_be_updated_rows, _, _ = generate_synced_rows(src_rows, src_columns, final_columns, dst_rows=dst_rows, to_archive=to_archive)
+        error_resp = update_dst_rows(dst_dtable_uuid, dst_table_name, to_be_updated_rows, dst_dtable_db_api, dst_dtable_server_api, to_archive)
+        if error_resp:
+            return error_resp
+
+    # delete dst to-be-deleted-rows
+    delete_dst_rows(dst_dtable_uuid, dst_table_name, list(to_be_deleted_rows_id_set), dst_dtable_db_api, dst_dtable_server_api, to_archive)
+
+    return {
+        'dst_table_id': dst_table_id,
+        'error_msg': '',
+        'task_status_code': 200
+    }
+
+
 def set_common_dataset_invalid(dataset_id, db_session):
     sql = "UPDATE dtable_common_dataset SET is_valid=0 WHERE id=:dataset_id"
     try:
