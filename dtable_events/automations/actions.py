@@ -1225,10 +1225,8 @@ class LinkRecordsAction(BaseAction):
 
     def can_do_action(self):
         linked_table_name = self.get_table_name(self.linked_table_id)
-        if not linked_table_name or not self.data \
-                or self.auto_rule.trigger.get('condition') not in (CONDITION_FILTERS_SATISFY, CONDITION_ROWS_ADDED):
-            self.auto_rule.set_invalid()
-            return False
+        if not linked_table_name:
+            raise RuleInvalidException('link-records link_table_id table not found')
 
         self.init_linked_row_ids()
 
@@ -1366,18 +1364,11 @@ class AddRecordToOtherTableAction(BaseAction):
 
         self.row_data['row'] = filtered_updates
 
-    def can_do_action(self):
-        if not self.data or self.auto_rule.trigger.get('condition') not in (CONDITION_FILTERS_SATISFY, CONDITION_ROWS_ADDED):
-            return False
-
-        return True
-
     def do_action(self):
 
         table_name = self.get_table_name(self.dst_table_id)
-        if not self.can_do_action() or not table_name:
-            self.auto_rule.set_invalid()
-            return
+        if not table_name:
+            raise RuleInvalidException('add-record dst_table_id table not found')
 
         self.init_append_rows()
         if not self.row_data.get('row'):
@@ -1579,20 +1570,17 @@ class CalculateAction(BaseAction):
         elif self.action_type == 'calculate_rank':
             self.rank_rows.extend(rows)
 
-    def _init_updates(self):
+    def init_updates(self):
         calculate_col = self.column_key_dict.get(self.calculate_column_key, {})
         result_col = self.column_key_dict.get(self.result_column_key, {})
         if not calculate_col or not result_col or result_col.get('type') not in self.VALID_RESULT_COLUMN_TYPES:
-            self.auto_rule.set_invalid()
-            return
+            raise RuleInvalidException('calculate_col not found, result_col not found or result_col type invalid')
         if self.action_type == 'calculate_rank':
             if calculate_col.get('type') not in self.VALID_RANK_COLUMN_TYPES:
-                self.auto_rule.set_invalid()
-                return
+                raise RuleInvalidException('calculate_rank calculate_col type invalid')
         else:
             if calculate_col.get('type') not in self.VALID_CALCULATE_COLUMN_TYPES:
-                self.auto_rule.set_invalid()
-                return
+                raise RuleInvalidException('calculate_col type invalid')
 
         calculate_col_name = calculate_col.get('name')
         result_col_name = result_col.get('name')
@@ -1639,9 +1627,7 @@ class CalculateAction(BaseAction):
 
                 self.update_rows.append({'row_id': row_id, 'row': result_row})
 
-    def _can_do_action(self):
-        if self.auto_rule.trigger.get('condition') != CONDITION_PERIODICALLY:
-            return False
+    def can_do_action(self):
         if not self.auto_rule.current_valid:
             return False
         if not self.calculate_column_key or not self.result_column_key:
@@ -1649,10 +1635,10 @@ class CalculateAction(BaseAction):
         return True
 
     def do_action(self):
-        if not self._can_do_action():
+        if not self.can_do_action():
             return
 
-        self._init_updates()
+        self.init_updates()
 
         table_name = self.auto_rule.table_info.get('name')
         step = 1000
@@ -1726,7 +1712,7 @@ class LookupAndCopyAction(BaseAction):
                 break
         return result_rows
 
-    def _init_updates(self):
+    def init_updates(self):
         from_table_id = self.table_condition.get('from_table_id')
         copy_to_table_id = self.table_condition.get('copy_to_table_id')
 
@@ -1738,8 +1724,7 @@ class LookupAndCopyAction(BaseAction):
         self.copy_to_table_name = table_name_dict.get(copy_to_table_id)
 
         if not self.from_table_name or not self.copy_to_table_name:
-            self.auto_rule.set_invalid()
-            return
+            raise RuleInvalidException('from_table_name or copy_to_table_name not found')
 
         equal_from_columns = []
         equal_copy_to_columns = []
@@ -1751,8 +1736,7 @@ class LookupAndCopyAction(BaseAction):
                 from_column = from_column_dict[col['from_column_key']]
                 copy_to_column = copy_to_column_dict[col['copy_to_column_key']]
                 if from_column.get('type') not in self.VALID_COLUMN_TYPES or copy_to_column.get('type') not in self.VALID_COLUMN_TYPES:
-                    self.auto_rule.set_invalid()
-                    return
+                    raise RuleInvalidException('from_column or copy_to_column type invalid')
                 equal_from_columns.append(from_column.get('name'))
                 equal_copy_to_columns.append(copy_to_column.get('name'))
 
@@ -1760,14 +1744,12 @@ class LookupAndCopyAction(BaseAction):
                 from_column = from_column_dict[col['from_column_key']]
                 copy_to_column = copy_to_column_dict[col['copy_to_column_key']]
                 if from_column.get('type') not in self.VALID_COLUMN_TYPES or copy_to_column.get('type') not in self.VALID_COLUMN_TYPES:
-                    self.auto_rule.set_invalid()
-                    return
+                    raise RuleInvalidException('from_column or copy_to_column type invalid')
                 fill_from_columns.append(from_column.get('name'))
                 fill_copy_to_columns.append(copy_to_column.get('name'))
         except KeyError as e:
             logger.error('dtable: %s, from_table: %s or copy_to_table:%s column key error: %s', self.auto_rule.dtable_uuid, self.from_table_name, self.copy_to_table_name, e)
-            self.auto_rule.set_invalid()
-            return
+            raise RuleInvalidException('from_column or copy_to_column not found')
 
         from_columns = equal_from_columns + fill_from_columns
         copy_to_columns = equal_copy_to_columns + fill_copy_to_columns
@@ -1829,9 +1811,7 @@ class LookupAndCopyAction(BaseAction):
 
             self.update_rows.append({'row_id': copy_to_row['_id'], 'row': row})
 
-    def _can_do_action(self):
-        if self.auto_rule.trigger.get('condition') != CONDITION_PERIODICALLY:
-            return False
+    def can_do_action(self):
         if not self.auto_rule.current_valid:
             return False
         if not self.table_condition or not self.equal_column_conditions or not self.fill_column_conditions:
@@ -1839,9 +1819,9 @@ class LookupAndCopyAction(BaseAction):
         return True
 
     def do_action(self):
-        if not self._can_do_action():
+        if not self.can_do_action():
             return
-        self._init_updates()
+        self.init_updates()
 
         step = 1000
         for i in range(0, len(self.update_rows), step):
@@ -1889,15 +1869,14 @@ class ExtractUserNameAction(BaseAction):
                 break
         return result_rows
 
-    def _init_updates(self):
+    def init_updates(self):
         extract_column = self.column_key_dict.get(self.extract_column_key, {})
         result_column = self.column_key_dict.get(self.result_column_key, {})
         result_column_type = result_column.get('type')
         extract_column_type = extract_column.get('type')
         if not extract_column or not result_column or result_column_type not in self.VALID_RESULT_COLUMN_TYPES \
                 or extract_column_type not in self.VALID_EXTRACT_COLUMN_TYPES:
-            self.auto_rule.set_invalid()
-            return
+            raise RuleInvalidException('extract_column not found, result_column not found, result_column_type invalid or extract_column_type invalid')
 
         extract_column_name = extract_column.get('name')
         result_column_name = result_column.get('name')
@@ -1976,9 +1955,7 @@ class ExtractUserNameAction(BaseAction):
             if result_col_value != update_result_value:
                 self.update_rows.append({'row_id': user_row.get('_id'), 'row': {result_column_name: update_result_value}})
 
-    def _can_do_action(self):
-        if self.auto_rule.trigger.get('condition') != CONDITION_PERIODICALLY:
-            return False
+    def can_do_action(self):
         if not self.auto_rule.current_valid:
             return False
         if not self.extract_column_key or not self.result_column_key:
@@ -1986,10 +1963,10 @@ class ExtractUserNameAction(BaseAction):
         return True
 
     def do_action(self):
-        if not self._can_do_action():
+        if not self.can_do_action():
             return
 
-        self._init_updates()
+        self.init_updates()
 
         table_name = self.auto_rule.table_info.get('name')
         step = 1000
@@ -2311,8 +2288,15 @@ class AutomationRule:
             if run_condition in CRON_CONDITIONS and trigger_condition == CONDITION_PERIODICALLY:
                 return True
             return False
+        elif action_type in AUTO_RULE_CALCULATE_TYPES:
+            if run_condition in CRON_CONDITIONS and trigger_condition == CONDITION_PERIODICALLY:
+                return True
+            return False
+        elif action_type in ['lookup_and_copy', 'extract_user_name']:
+            if run_condition in CRON_CONDITIONS and trigger_condition == CONDITION_PERIODICALLY:
+                return True
+            return False
         return False
-
 
     def do_actions(self, with_test=False):
         if (not self.can_do_actions()) and (not with_test):
@@ -2323,6 +2307,8 @@ class AutomationRule:
             if not self.can_condition_trigger_action(action_info):
                 logger.debug('rule: %s forbidden trigger action: %s type: %s when run_condition: %s trigger_condition: %s', self.rule_id, action_info.get('_id'), action_info['type'], self.run_condition, self.trigger.get('condition'))
                 continue
+            if not self.current_valid:
+                break
             try:
                 if action_info.get('type') == 'update_record':
                     updates = action_info.get('updates')
