@@ -734,9 +734,9 @@ def import_sync_CDS(context):
     # to-be-appended-rows-id = S - D
     # to-be-updated-rows-id = S & D
     # to-be-deleted-rows-id = D - S
-    # fetch src to-be-append-rows, append to dst table, step by step
+    # delete dst to-be-deleted-rows, step by step
     # fetch src to-be-updated-rows and dst to-be-updated-rows, update to dst table, step by step
-    # delete dst to-be-deleted-rows
+    # fetch src to-be-append-rows, append to dst table, step by step
 
     # fetch create dst table or update dst table columns
     # use src_columns from context temporary !
@@ -830,41 +830,11 @@ def import_sync_CDS(context):
     to_be_deleted_rows_id_set = dst_rows_id_set - src_rows_id_set
     logger.debug('to_be_appended_rows_id_set: %s, to_be_updated_rows_id_set: %s, to_be_deleted_rows_id_set: %s', len(to_be_appended_rows_id_set), len(to_be_updated_rows_id_set), len(to_be_deleted_rows_id_set))
 
-    # fetch src to-be-append-rows, append to dst table, step by step
-    ## this list is to record the order of src rows
-    to_be_appended_rows_id_list = [row_id for row_id in src_rows_id_list if row_id in to_be_appended_rows_id_set]
+    # delete dst to-be-deleted-rows
+    logger.debug('will delete %s rows', len(to_be_deleted_rows_id_set))
+    delete_dst_rows(dst_dtable_uuid, dst_table_name, list(to_be_deleted_rows_id_set), dst_dtable_db_api, dst_dtable_server_api, to_archive)
 
     query_columns = ', '.join(['_id'] + ["`%s`" % col['name'] for col in final_columns])
-
-    step = 10000
-    for i in range(0, len(to_be_appended_rows_id_list), step):
-        logger.debug('to_be_appended_rows_id_list i: %s, step: %s', i, step)
-        step_to_be_appended_rows_id_list = []
-        step_row_sort_dict = {}
-        for j in range(step):
-            if i + j >= len(to_be_appended_rows_id_list):
-                break
-            step_to_be_appended_rows_id_list.append(to_be_appended_rows_id_list[i+j])
-            step_row_sort_dict[to_be_appended_rows_id_list[i+j]] = j
-        rows_id_str = ', '.join(["'%s'" % row_id for row_id in step_to_be_appended_rows_id_list])
-        if filter_clause:
-            sql = f"SELECT {query_columns} FROM `{src_table_name}` WHERE (({filter_clause[len('WHERE'):]}) AND `_id` IN ({rows_id_str})) LIMIT {step}"
-        else:
-            sql = f"SELECT {query_columns} FROM `{src_table_name}` WHERE `_id` IN ({rows_id_str}) LIMIT {step}"
-        try:
-            src_rows = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
-        except Exception as e:
-            logger.error('fetch to-be-appended-rows error: %s', e)
-            return {
-                'dst_table_id': None,
-                'error_msg': 'fetch to-be-appended-rows error: %s' % e,
-                'task_status_code': 500
-            }
-        src_rows = sorted(src_rows, key=lambda row: step_row_sort_dict[row['_id']])
-        _, to_be_appended_rows, _ = generate_synced_rows(src_rows, src_columns, final_columns, [], to_archive=to_archive)
-        error_resp = append_dst_rows(dst_dtable_uuid, dst_table_name, to_be_appended_rows, dst_dtable_db_api, dst_dtable_server_api, to_archive=to_archive)
-        if error_resp:
-            return error_resp
 
     # fetch src to-be-updated-rows and dst to-be-updated-rows, update to dst table, step by step
     to_be_updated_rows_id_list = list(to_be_updated_rows_id_set)
@@ -903,9 +873,39 @@ def import_sync_CDS(context):
         if error_resp:
             return error_resp
 
-    # delete dst to-be-deleted-rows
-    logger.debug('will delete %s rows', len(to_be_deleted_rows_id_set))
-    delete_dst_rows(dst_dtable_uuid, dst_table_name, list(to_be_deleted_rows_id_set), dst_dtable_db_api, dst_dtable_server_api, to_archive)
+    # fetch src to-be-append-rows, append to dst table, step by step
+    ## this list is to record the order of src rows
+    to_be_appended_rows_id_list = [row_id for row_id in src_rows_id_list if row_id in to_be_appended_rows_id_set]
+
+    step = 10000
+    for i in range(0, len(to_be_appended_rows_id_list), step):
+        logger.debug('to_be_appended_rows_id_list i: %s, step: %s', i, step)
+        step_to_be_appended_rows_id_list = []
+        step_row_sort_dict = {}
+        for j in range(step):
+            if i + j >= len(to_be_appended_rows_id_list):
+                break
+            step_to_be_appended_rows_id_list.append(to_be_appended_rows_id_list[i+j])
+            step_row_sort_dict[to_be_appended_rows_id_list[i+j]] = j
+        rows_id_str = ', '.join(["'%s'" % row_id for row_id in step_to_be_appended_rows_id_list])
+        if filter_clause:
+            sql = f"SELECT {query_columns} FROM `{src_table_name}` WHERE (({filter_clause[len('WHERE'):]}) AND `_id` IN ({rows_id_str})) LIMIT {step}"
+        else:
+            sql = f"SELECT {query_columns} FROM `{src_table_name}` WHERE `_id` IN ({rows_id_str}) LIMIT {step}"
+        try:
+            src_rows = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
+        except Exception as e:
+            logger.error('fetch to-be-appended-rows error: %s', e)
+            return {
+                'dst_table_id': None,
+                'error_msg': 'fetch to-be-appended-rows error: %s' % e,
+                'task_status_code': 500
+            }
+        src_rows = sorted(src_rows, key=lambda row: step_row_sort_dict[row['_id']])
+        _, to_be_appended_rows, _ = generate_synced_rows(src_rows, src_columns, final_columns, [], to_archive=to_archive)
+        error_resp = append_dst_rows(dst_dtable_uuid, dst_table_name, to_be_appended_rows, dst_dtable_db_api, dst_dtable_server_api, to_archive=to_archive)
+        if error_resp:
+            return error_resp
 
     return {
         'dst_table_id': dst_table_id,
