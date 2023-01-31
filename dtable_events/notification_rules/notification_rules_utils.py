@@ -462,7 +462,7 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
         columns = target_table['columns']
         column_blanks, col_name_dict = get_column_blanks(blanks, columns)
 
-    if op_type == 'modify_row' and trigger['condition'] == CONDITION_ROWS_MODIFIED:
+    if op_type in ('modify_row', 'modify_rows') and trigger['condition'] == CONDITION_ROWS_MODIFIED:
         if not is_trigger_time_satisfy(last_trigger_time):
             return
 
@@ -499,7 +499,7 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
                 })
         send_notification(dtable_uuid, user_msg_list, dtable_server_access_token)
 
-    elif (op_type == 'modify_row' and trigger['condition'] == CONDITION_FILTERS_SATISFY) or \
+    elif (op_type in ('modify_row', 'modify_rows') and trigger['condition'] == CONDITION_FILTERS_SATISFY) or \
          (op_type in ('insert_row', 'append_rows') and trigger['condition'] == CONDITION_ROWS_ADDED):
         detail = {
             'table_id': table_id,
