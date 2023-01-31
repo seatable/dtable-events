@@ -778,21 +778,13 @@ def import_sync_CDS(context):
             'error_msg': 'generate src view sql error: %s' % e,
             'task_status_code': 500
         }
-    sql_template = "SELECT %%(fields)s FROM `%(src_table)s` %(filters)s %(sorts)s" % {
-        'src_table': src_table_name,
-        'filters': filter_clause,
-        'sorts': sort_clause
-    }
+    sql_template = f"SELECT `_id` FROM `{src_table_name}` {filter_clause} {sort_clause}"
     start, step = 0, 10000
     while True:
         if server_only and (start + step) > SRC_ROWS_LIMIT:
             step = SRC_ROWS_LIMIT - start
-        sql = (sql_template + " LIMIT %(offset)s, %(limit)s ") % {
-            'fields': '`_id`',
-            'offset': start,
-            'limit': step
-        }
-        logger.debug('fetch src sql: %s', sql)
+        sql = sql_template + (" LIMIT {offset}, {limit}".format(offset=start, limit=step))
+        logger.debug('fetch src rows-id sql: %s', sql)
         try:
             rows = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
         except Exception as e:
@@ -816,11 +808,8 @@ def import_sync_CDS(context):
     dst_rows_id_set = set()
     start, step = 0, 10000
     while is_sync and True:
-        sql = "SELECT _id FROM `%(dst_table)s` LIMIT %(offset)s, %(limit)s" % {
-            'dst_table': dst_table_name,
-            'offset': start,
-            'limit': step
-        }
+        sql = f"SELECT `_id` FROM `{dst_table_name}` LIMIT {start}, {step}"
+        logger.debug('fetch dst rows-id sql: %s', sql)
         try:
             rows = dst_dtable_db_api.query(sql, convert=False, server_only=(not to_archive))
         except Exception as e:
@@ -847,15 +836,6 @@ def import_sync_CDS(context):
 
     query_columns = ', '.join(['_id'] + ["`%s`" % col['name'] for col in final_columns])
 
-    sql_template = sql_template % {'fields': query_columns}
-    logger.debug('sql_template: %s', sql_template)
-
-    if 'WHERE' in sql_template:
-        where_index = sql_template.find('WHERE')
-        fetch_src_sql = sql_template[:where_index] + ' WHERE (%s) AND _id IN (%%(rows_id)s)' % sql_template[where_index+len('WHERE'):]
-    else:
-        fetch_src_sql = sql_template + ' WHERE _id IN (%(rows_id)s)'
-
     step = 10000
     for i in range(0, len(to_be_appended_rows_id_list), step):
         logger.debug('to_be_appended_rows_id_list i: %s, step: %s', i, step)
@@ -866,7 +846,11 @@ def import_sync_CDS(context):
                 break
             step_to_be_appended_rows_id_list.append(to_be_appended_rows_id_list[i+j])
             step_row_sort_dict[to_be_appended_rows_id_list[i+j]] = j
-        sql = (fetch_src_sql % {'rows_id': ', '.join(["'%s'" % row_id for row_id in step_to_be_appended_rows_id_list])}) + ' LIMIT ' + str(step)
+        rows_id_str = ', '.join(["'%s'" % row_id for row_id in step_to_be_appended_rows_id_list])
+        if filter_clause:
+            sql = f"SELECT {query_columns} FROM `{src_table_name}` WHERE (({filter_clause[len('WHERE'):]}) AND `_id` IN ({rows_id_str})) LIMIT {step}"
+        else:
+            sql = f"SELECT {query_columns} FROM `{src_table_name}` WHERE `_id` IN ({rows_id_str}) LIMIT {step}"
         try:
             src_rows = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
         except Exception as e:
@@ -885,17 +869,11 @@ def import_sync_CDS(context):
     # fetch src to-be-updated-rows and dst to-be-updated-rows, update to dst table, step by step
     to_be_updated_rows_id_list = list(to_be_updated_rows_id_set)
     step = 10000
-    sql_template = "SELECT %(fields)s FROM `%%(table)s` WHERE _id IN (%%(rows_id)s) LIMIT %%(limit)s" % {
-        'fields': query_columns
-    }
     for i in range(0, len(to_be_updated_rows_id_list), step):
         logger.debug('to_be_updated_rows_id_list i: %s step: %s', i, step)
         ## fetch src to-be-updated-rows
-        sql = sql_template % {
-            'rows_id': ', '.join(["'%s'" % row_id for row_id in to_be_updated_rows_id_list[i: i+step]]),
-            'table': src_table_name,
-            'limit': step
-        }
+        rows_id_str = ', '.join(["'%s'" % row_id for row_id in to_be_updated_rows_id_list[i: i+step]])
+        sql = f"SELECT {query_columns} FROM `{src_table_name}` WHERE _id IN ({rows_id_str}) LIMIT {step}"
         try:
             src_rows = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
         except Exception as e:
@@ -907,11 +885,7 @@ def import_sync_CDS(context):
             }
 
         ## fetch src to-be-updated-rows
-        sql = sql_template % {
-            'rows_id': ', '.join(["'%s'" % row_id for row_id in to_be_updated_rows_id_list[i: i+step]]),
-            'table': dst_table_name,
-            'limit': step
-        }
+        sql = f"SELECT {query_columns} FROM `{dst_table_name}` WHERE _id IN ({rows_id_str}) LIMIT {step}"
         try:
             dst_rows = dst_dtable_db_api.query(sql, convert=False, server_only=(not to_archive))
         except Exception as e:
@@ -924,11 +898,13 @@ def import_sync_CDS(context):
 
         ## update
         to_be_updated_rows, _, _ = generate_synced_rows(src_rows, src_columns, final_columns, dst_rows=dst_rows, to_archive=to_archive)
+        logger.debug('step src update-rows: %s to-be-updated-rows: %s', len(to_be_updated_rows_id_list[i: i+step]), len(to_be_updated_rows))
         error_resp = update_dst_rows(dst_dtable_uuid, dst_table_name, to_be_updated_rows, dst_dtable_db_api, dst_dtable_server_api, to_archive)
         if error_resp:
             return error_resp
 
     # delete dst to-be-deleted-rows
+    logger.debug('will delete %s rows', len(to_be_deleted_rows_id_set))
     delete_dst_rows(dst_dtable_uuid, dst_table_name, list(to_be_deleted_rows_id_set), dst_dtable_db_api, dst_dtable_server_api, to_archive)
 
     return {
