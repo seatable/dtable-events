@@ -12,6 +12,16 @@ logger = logging.getLogger(__name__)
 
 
 class MessageHandler(Thread):
+    SUPPORT_OPERATION_TYPES = [
+        'insert_row',
+        'insert_rows',
+        'append_rows',
+        'delete_row',
+        'delete_rows',
+        'modify_row',
+        'modify_rows'
+    ]
+
     def __init__(self, config):
         Thread.__init__(self)
         self._finished = Event()
@@ -27,6 +37,8 @@ class MessageHandler(Thread):
                 message = subscriber.get_message()
                 if message is not None:
                     event = json.loads(message['data'])
+                    if event['op_type'] not in self.SUPPORT_OPERATION_TYPES:
+                        continue
                     session = self._db_session_class()
                     try:
                         save_or_update_or_delete(session, event)
