@@ -37,6 +37,11 @@ class TableActivityDetail(object):
 
 
 def save_or_update_or_delete(session, event):
+    # ignore a few cloumn data: creator, ctime, last-modifier, mtime
+    for cell_data in event['row_data']:
+        if cell_data.get('column_type', '') in ['creator', 'ctime', 'last-modifier', 'mtime']:
+            event['row_data'].remove(cell_data)
+
     if event['op_type'] == 'modify_row':
         op_time = datetime.utcfromtimestamp(event['op_time'])
         _timestamp = op_time - timedelta(minutes=5)
