@@ -1,7 +1,8 @@
 import openpyxl
 import os
+import shutil
 
-from dtable_events.dtable_io.excel import parse_row, write_xls_with_type, TEMP_EXPORT_VIEW_DIR
+from dtable_events.dtable_io.excel import parse_row, write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR
 from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, get_metadata_from_dtable_server
 from dtable_events.utils import get_inner_dtable_server_url, get_location_tree_json
 from dtable_events.utils.constants import ColumnTypes
@@ -349,7 +350,7 @@ def update_excel_to_db(
     return
 
 
-def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, task_id, tasks_status_map):
+def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, task_id, tasks_status_map, repo_id, is_support_image=False):
     from dtable_events.dtable_io import dtable_io_logger
 
     # init task_status_map for exporting big data process
@@ -414,6 +415,12 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
     sheet_name = table_name + ('_' + view_name if view_name else '')
     excel_name = name + '_' + table_name + ('_' + view_name if view_name else '') + '.xlsx'
     target_path = os.path.join(target_dir, excel_name)
+
+    images_target_dir = IMAGE_TMP_DIR + dtable_uuid
+    if not os.path.exists(images_target_dir):
+        os.makedirs(images_target_dir)
+    image_param = {'num': 0, 'is_support': is_support_image}
+
     wb = openpyxl.Workbook(write_only=True)
     ws = wb.create_sheet(sheet_name)
 
@@ -452,7 +459,7 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
 
         row_num = start
         try:
-            write_xls_with_type(head_list, data_list, {}, email2nickname, ws, row_num)
+            write_xls_with_type(head_list, data_list, {}, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param)
         except Exception as e:
             dtable_io_logger.exception(e)
             dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
@@ -469,3 +476,8 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
 
     tasks_status_map[task_id]['status'] = 'success'
     wb.save(target_path)
+    # remove tmp images
+    try:
+        shutil.rmtree(images_target_dir)
+    except:
+        pass

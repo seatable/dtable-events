@@ -89,12 +89,12 @@ class BigDataTaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
-    def add_convert_big_data_view_to_execl_task(self, dtable_uuid, table_id, view_id, username, name):
+    def add_convert_big_data_view_to_execl_task(self, dtable_uuid, table_id, view_id, username, name, repo_id, is_support_image):
         from dtable_events.dtable_io import convert_big_data_view_to_execl
 
         task_id = str(int(time.time()*1000))
         task = (convert_big_data_view_to_execl,
-                (dtable_uuid, table_id, view_id, username, name, task_id, self.tasks_status_map))
+                (dtable_uuid, table_id, view_id, username, name, task_id, self.tasks_status_map, repo_id, is_support_image))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
 

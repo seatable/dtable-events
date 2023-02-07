@@ -52,6 +52,18 @@ TEMP_EXPORT_VIEW_DIR = '/tmp/dtable-io/export-view-to-excel/'
 
 ILLEGAL_CHARACTERS_RE = re.compile(r'[\000-\010]|[\013-\014]|[\016-\037]')
 
+# image offset in excel cell
+FROM_COL_START_OFFSET = 20000
+FROM_ROW_START_OFFSET = 20000
+TO_COL_START_OFFSET = -300000
+TO_ROW_START_OFFSET = -200000
+IMAGE_CELL_ROW_HEIGHT = 50
+IMAGE_CELL_COLUMN_WIDTH = 30
+
+IMAGE_TMP_DIR = '/tmp/dtable-io/export-excel/images/'
+
+EXPORT_IMAGE_LIMIT = 1000
+
 
 class EmptyCell(object):
     value = None
@@ -1232,7 +1244,91 @@ def parse_dtable_long_text(cell_value):
     return parse_dtable_long_text(cell_value.replace('\n\n', '\n'))
 
 
-def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list):
+def get_file_download_url(file_url, dtable_uuid, repo_id):
+    from urllib.parse import unquote
+    from seaserv import seafile_api
+    from dtable_events.utils import uuid_str_to_36_chars, normalize_file_path, gen_file_get_url
+
+    file_path = unquote('/'.join(file_url.split('/')[-3:]).strip())
+    asset_path = normalize_file_path(os.path.join('/asset', uuid_str_to_36_chars(dtable_uuid), file_path))
+    asset_id = seafile_api.get_file_id_by_path(repo_id, asset_path)
+    asset_name = os.path.basename(normalize_file_path(file_path))
+    if not asset_id:
+        return None
+
+    token = seafile_api.get_fileserver_access_token(
+        repo_id, asset_id, 'download', '', use_onetime=False
+    )
+
+    url = gen_file_get_url(token, asset_name)
+    return url
+
+def add_image_to_excel(ws, row, col_num, row_num, dtable_uuid, repo_id, image_num):
+    import requests
+    from openpyxl.drawing.image import Image
+    from PIL import Image as PILImage
+    from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, TwoCellAnchor
+    from urllib.parse import unquote
+
+    images = row[col_num]
+    row_pos = str(row_num + 1)
+    # set image cell height
+    ws.row_dimensions[int(row_pos)].height = IMAGE_CELL_ROW_HEIGHT
+
+    offset_increment = 0
+    images_target_dir = IMAGE_TMP_DIR + dtable_uuid
+    for image_url in images:
+        if image_num >= EXPORT_IMAGE_LIMIT:
+            return image_num
+        image_path = unquote('/'.join(image_url.split('/')[-2:]).strip())
+
+        image_month_dir = os.path.join(images_target_dir, '/'.join(image_url.split('/')[-2:-1]))
+        if not os.path.exists(image_month_dir):
+            os.mkdir(image_month_dir)
+
+        image_download_url = get_file_download_url(image_url, dtable_uuid, repo_id)
+        if not image_download_url:
+            continue
+
+        response = requests.get(image_download_url)
+        image_content = response.content
+
+        tmp_image_path = os.path.join(images_target_dir, image_path)
+        with open(tmp_image_path, 'wb') as f:
+            f.write(image_content)
+
+        try:
+            img = Image(tmp_image_path)
+        except:
+            continue
+        image_format = img.format
+        # convert webp to png
+        if image_format in ('webp', ):
+            img = PILImage.open(tmp_image_path)
+            img.load()
+            image_name = image_path.split('.')[0] + '.png'
+            new_tmp_image_path = os.path.join(images_target_dir, image_name)
+            img.save(new_tmp_image_path, format='png')
+            # remove webp image
+            os.remove(tmp_image_path)
+            img = Image(new_tmp_image_path)
+
+        from_col_offset = FROM_COL_START_OFFSET + offset_increment
+        from_row_offset = FROM_ROW_START_OFFSET + offset_increment
+        to_col_offset = TO_COL_START_OFFSET + offset_increment
+        to_row_offset = TO_ROW_START_OFFSET + offset_increment
+
+        from_anchor = AnchorMarker(col_num, from_col_offset, row_num, from_row_offset)
+        to_anchor = AnchorMarker(col_num + 1, to_col_offset, row_num + 1, to_row_offset)
+        img.anchor = TwoCellAnchor('twoCell', from_anchor, to_anchor)
+
+        ws.add_image(img)
+        offset_increment += 20000
+        image_num += 1
+    return image_num
+
+
+def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id, image_param):
     from openpyxl.cell import WriteOnlyCell
     cell_list = []
     for col_num in range(len(row)):
@@ -1294,6 +1390,12 @@ def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unkn
             formula_value, number_format = parse_formula_number(row[col_num], head[col_num][2])
             c = WriteOnlyCell(ws, value=formula_value)
             c.number_format = number_format
+        elif head[col_num][1] == ColumnTypes.IMAGE and row[col_num] and image_param['is_support']:
+            c = WriteOnlyCell(ws)
+            image_num = image_param.get('num')
+            if image_num < EXPORT_IMAGE_LIMIT:
+                num = add_image_to_excel(ws, row, col_num, row_num, dtable_uuid, repo_id, image_num)
+                image_param['num'] = num
         else:
             if head[col_num][1] == ColumnTypes.GEOLOCATION:
                 cell_value = parse_geolocation(row[col_num])
@@ -1319,13 +1421,14 @@ def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unkn
     return cell_list
 
 
-def write_xls_with_type(head, data_list, grouped_row_num_map, email2nickname, ws, row_num):
+def write_xls_with_type(head, data_list, grouped_row_num_map, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param):
     """ write listed data into excel
         head is a list of tuples,
         e.g. head = [(col_name, col_type, col_date), (...), ...]
     """
     from dtable_events.dtable_io import dtable_io_logger
     from openpyxl.cell import WriteOnlyCell
+    from openpyxl.utils import get_column_letter
 
     if row_num == 0:
         # write table head
@@ -1334,6 +1437,10 @@ def write_xls_with_type(head, data_list, grouped_row_num_map, email2nickname, ws
         for col_num in range(len(head)):
             try:
                 c = WriteOnlyCell(ws, value=head[col_num][0])
+                if head[col_num][1] == ColumnTypes.IMAGE:
+                    col_pos = get_column_letter(col_num + 1)
+                    # set image column width
+                    ws.column_dimensions[col_pos].width = IMAGE_CELL_COLUMN_WIDTH
             except Exception as e:
                 if not column_error_log_exists:
                     dtable_io_logger.error('Error column in exporting excel: {}'.format(e))
@@ -1350,7 +1457,7 @@ def write_xls_with_type(head, data_list, grouped_row_num_map, email2nickname, ws
     for row in data_list:
         row_num += 1  # for grouped row num
         try:
-            row_cells = handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list)
+            row_cells = handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id, image_param)
         except Exception as e:
             if not row_error_log_exists:
                 dtable_io_logger.exception(e)
