@@ -500,7 +500,7 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
         send_notification(dtable_uuid, user_msg_list, dtable_server_access_token)
 
     elif (op_type in ('modify_row', 'modify_rows') and trigger['condition'] == CONDITION_FILTERS_SATISFY) or \
-         (op_type in ('insert_row', 'append_rows') and trigger['condition'] == CONDITION_ROWS_ADDED):
+         (op_type in ('insert_row', 'append_rows', 'insert_rows') and trigger['condition'] == CONDITION_ROWS_ADDED):
         detail = {
             'table_id': table_id,
             'view_id': view_id,

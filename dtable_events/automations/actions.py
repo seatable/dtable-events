@@ -1631,7 +1631,7 @@ class AutomationRule:
             return False
 
         if self.trigger.get('condition') == CONDITION_ROWS_ADDED:
-            if self.data.get('op_type') not in ['insert_row', 'append_rows']:
+            if self.data.get('op_type') not in ['insert_row', 'append_rows', 'insert_rows']:
                 return False
 
         if self.trigger.get('condition') in [CONDITION_FILTERS_SATISFY, CONDITION_ROWS_MODIFIED]:
