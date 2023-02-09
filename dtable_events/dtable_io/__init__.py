@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import time
+import traceback
 
 import requests
 import smtplib
@@ -574,7 +575,7 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
         success = True
     except Exception as e:
         dtable_message_logger.warning(
-            'Email sending failed. email: %s, error: %s' % (host_user, e))
+            'Email sending failed. sender email: %s, error: %s' % (host_user, traceback.format_exc()))
         result['err_msg'] = 'Email server username or password invalid'
     else:
         dtable_message_logger.info('Email sending success!')
@@ -665,7 +666,7 @@ def batch_send_email_msg(auth_info, send_info_list, username, config=None, db_se
             smtp.sendmail(host_user, recevers, msg_obj.as_string())
             success = True
         except Exception as e:
-            dtable_message_logger.warning('Email sending failed. email: %s, error: %s' % (host_user, e))
+            dtable_message_logger.warning('Email sending failed. sender email: %s, error: %s' % (host_user, traceback.format_exc()))
         else:
             dtable_message_logger.info('Email sending success!')
         send_state_list.append(success)
