@@ -305,7 +305,7 @@ def upload_attachments(seatable, email_list):
                 file_info_list.append(file_info)
                 filename2url[file_name] = file_info['url']
             except Exception as e:
-                logger.error('upload email: %s attachment: %s error: %s', email.get('Message ID'), file_name, e)
+                logger.exception('upload email: %s attachment: %s error: %s', email.get('Message ID'), file_name, e)
         email['Attachment'] = file_info_list
 
         # deal html content image

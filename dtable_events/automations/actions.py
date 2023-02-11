@@ -2399,7 +2399,7 @@ class AutomationRule:
                     ExtractUserNameAction(self, self.data, extract_column_key, result_column_key).do_action()
 
             except RuleInvalidException as e:
-                logger.error('auto rule: %s, invalid error: %s', self.rule_id, e)
+                logger.warning('auto rule: %s, invalid error: %s', self.rule_id, e)
                 self.task_run_success = False
                 self.set_invalid()
                 break
