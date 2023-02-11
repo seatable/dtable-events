@@ -353,7 +353,7 @@ class TaskManager(object):
                 self.tasks_map[task_id] = 'error_' + str(e.args[0])
                 self.current_task_info.pop(task_id, None)
             finally:
-                if task[0].__name__ == 'sync_common_dataset':
+                if hasattr(task[0], '__name__') and task[0].__name__ == 'sync_common_dataset':
                     context = task[1][0]
                     self.finish_dataset_id_sync(context.get('dataset_sync_id'))
 
