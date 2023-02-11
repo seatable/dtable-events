@@ -160,6 +160,8 @@ def import_table_from_base(context):
             raise Exception(error_msg)
 
         src_columns = src_table.get('columns', [])
+        # These column types refer to the data of other columns, so not support to import.
+        unsupported_columns = ['link', 'formula', 'link-formula']
 
         # trans asset url and copy asset
         succeed, new_table = trans_and_copy_asset(
@@ -186,7 +188,7 @@ def import_table_from_base(context):
                 'column_name': col.get('name'),
                 'column_type': col.get('type'),
                 'column_data': col.get('data')
-            } for col in src_columns] if src_columns else []
+            } for col in src_columns if col.get('type') not in unsupported_columns] if src_columns else []
         data = {
             'lang': lang,
             'table_name': dst_table_name,
