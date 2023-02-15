@@ -2181,6 +2181,10 @@ class AutoAddLinkAction(BaseAction):
             return False
         if not self.table_condition or not self.equal_column_conditions:
             return False
+        table_id = self.table_condition.get('table_id')
+        other_table_id = self.table_condition.get('other_table_id')
+        if not (table_id and other_table_id):
+            return False
         return True
 
     def do_action(self):
