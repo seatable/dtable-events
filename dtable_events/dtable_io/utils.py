@@ -465,7 +465,7 @@ def update_page_design_static_image(page_design_settings, repo_id, workspace_id,
         dtable_io_logger.warning('update page design static image failed. ERROR: {}'.format(e))
 
 
-def update_universal_app_custom_page_static_image(pages, repo_id, workspace_id, dtable_uuid, content_json_tmp_path, dtable_web_service_url, file_server_port, username):
+def update_universal_app_custom_page_static_image(pages, app_id, repo_id, workspace_id, dtable_uuid, content_json_tmp_path, dtable_web_service_url, file_server_port, username):
     if not isinstance(pages, list):
         return
 
@@ -479,8 +479,22 @@ def update_universal_app_custom_page_static_image(pages, repo_id, workspace_id, 
             page_id = page['id']
             page_content_file_name = '%s.json'%(page_id)
             page_content_url = page['content_url']
-            parent_dir = '/asset/%s/external-apps/%s'%(dtable_uuid, page_id)
-            page_json_file_id = seafile_api.get_file_id_by_path(repo_id, '/asset' + page_content_url.split('asset')[1])
+            app_parent_dir = '/asset/%s/external-apps'%(dtable_uuid)
+            parent_dir_re = r'/\d+-%s/%s.json'%(page_id, page_id)
+            new_content_parent_dir_name = '%s-%s'%(app_id, page_id)
+
+            # rename dir
+            if re.search(parent_dir_re, page_content_url):
+                old_content_parent_dir_name = page_content_url.split('/')[-2]
+                if old_content_parent_dir_name != new_content_parent_dir_name:
+                    seafile_api.rename_file(repo_id, app_parent_dir, old_content_parent_dir_name, new_content_parent_dir_name, username)
+                parent_dir = '/asset/%s/external-apps/%s-%s'%(dtable_uuid, app_id, page_id)
+                page_content_url = re.sub(parent_dir_re, '/%s-%s/%.json'%(app_id, page_id, page_id), page_content_url)
+            else:
+                parent_dir = '/asset/%s/external-apps/%s'%(dtable_uuid, page_id)
+
+            file_path = parent_dir + '/' + page_content_file_name
+            page_json_file_id = seafile_api.get_file_id_by_path(repo_id, file_path)
             token = seafile_api.get_fileserver_access_token(
                 repo_id, page_json_file_id, 'view', '', use_onetime=False
             )
@@ -506,9 +520,13 @@ def update_universal_app_custom_page_static_image(pages, repo_id, workspace_id, 
                         element_type = element.get('type', '')
                         if element_type == 'static_image':
                             static_image_url = element.get('value', '')
-                            file_name = '/'.join(static_image_url.split('/')[-2:])
+                            file_name = '/'.join(static_image_url.split('/')[-1:])
+                            if re.search(r'/\d+\%s/'%(page_id), static_image_url):
+                                image_parent_dir = '%s-%s'%(app_id, page_id)
+                            else:
+                                image_parent_dir = page_id
                             element['value'] = '/'.join([valid_dtable_web_service_url, 'workspace', str(workspace_id),
-                                                        'asset', str(dtable_uuid), 'external-apps', file_name])
+                                                    'asset', str(dtable_uuid), 'external-apps', image_parent_dir, file_name])
                             is_changed = True
                         elif element_type == 'static_long_text':
                             old_value_text = element['value']['text']
