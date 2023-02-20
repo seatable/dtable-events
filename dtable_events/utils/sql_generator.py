@@ -72,7 +72,7 @@ class Operator(object):
         return "`%s` %s '%%%s%%'" % (
             self.column_name,
             'like' if self.case_sensitive is True else 'ilike',
-            self.filter_term
+            self.filter_term.replace('\\', '\\\\') # special characters require translation
         )
 
     def op_does_not_contain(self):
@@ -81,7 +81,7 @@ class Operator(object):
         return "`%s` %s '%%%s%%'" % (
             self.column_name,
             'not like' if self.case_sensitive is True else 'not ilike',
-            self.filter_term
+            self.filter_term.replace('\\', '\\\\') # special characters require translation
         )
 
     def op_equal(self):
