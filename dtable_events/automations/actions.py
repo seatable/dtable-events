@@ -19,7 +19,7 @@ from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY,
     SEATABLE_FAAS_AUTH_TOKEN, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL
 from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg, batch_send_email_msg
 from dtable_events.notification_rules.notification_rules_utils import fill_msg_blanks_with_converted_row, \
-    send_notification
+    send_notification, fill_msg_blanks_with_sql_row
 from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url, \
     normalize_file_path, gen_file_get_url
 from dtable_events.utils.constants import ColumnTypes
@@ -494,6 +494,11 @@ class NotifyAction(BaseAction):
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
         return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, row, db_session, dtable_metadata)
 
+    def fill_msg_blanks_with_sql(self, row):
+        msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
+        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
+        return fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, row, db_session)
+
     def per_update_notify(self):
         dtable_uuid, row, raw_row = self.auto_rule.dtable_uuid, self.data['converted_row'], self.data['row']
         table_id, view_id = self.auto_rule.table_id, self.auto_rule.view_id
@@ -577,7 +582,7 @@ class NotifyAction(BaseAction):
                              for key in row}
             msg = self.msg
             if self.column_blanks:
-                msg = self.fill_msg_blanks(converted_row)
+                msg = self.fill_msg_blanks_with_sql(row)
 
             detail = {
                 'table_id': table_id,
@@ -656,6 +661,11 @@ class SendWechatAction(BaseAction):
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
         return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, row, db_session, dtable_metadata)
 
+    def fill_msg_blanks_with_sql(self, row):
+        msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
+        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
+        return fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, row, db_session)
+
     def per_update_notify(self):
         row = self.data['converted_row']
         msg = self.msg
@@ -674,15 +684,10 @@ class SendWechatAction(BaseAction):
 
     def condition_cron_notify(self):
         rows_data = self.auto_rule.get_trigger_conditions_rows()[:WECHAT_CONDITION_ROWS_LIMIT]
-        col_key_dict = {col.get('key'): col for col in self.auto_rule.view_columns}
-
         for row in rows_data:
-            converted_row = {col_key_dict.get(key).get('name') if col_key_dict.get(key) else key:
-                             self.parse_column_value(col_key_dict.get(key), row.get(key)) if col_key_dict.get(key) else row.get(key)
-                             for key in row}
             msg = self.msg
             if self.column_blanks:
-                msg = self.fill_msg_blanks(converted_row)
+                msg = self.fill_msg_blanks_with_sql(row)
             try:
                 send_wechat_msg(self.webhook_url, msg, self.msg_type)
                 time.sleep(0.01)
@@ -733,6 +738,11 @@ class SendDingtalkAction(BaseAction):
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
         return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, row, db_session, dtable_metadata)
 
+    def fill_msg_blanks_with_sql(self, row):
+        msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
+        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
+        return fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, row, db_session)
+
     def per_update_notify(self):
         row = self.data['converted_row']
         msg = self.msg
@@ -751,15 +761,11 @@ class SendDingtalkAction(BaseAction):
 
     def condition_cron_notify(self):
         rows_data = self.auto_rule.get_trigger_conditions_rows()[:DINGTALK_CONDITION_ROWS_LIMIT]
-        col_key_dict = {col.get('key'): col for col in self.auto_rule.view_columns}
-
         for row in rows_data:
-            converted_row = {col_key_dict.get(key).get('name') if col_key_dict.get(key) else key:
-                             self.parse_column_value(col_key_dict.get(key), row.get(key)) if col_key_dict.get(key) else row.get(key)
-                             for key in row}
             msg = self.msg
             if self.column_blanks:
-                msg = self.fill_msg_blanks(converted_row)
+                msg = self.fill_msg_blanks_with_sql(row)
+                print(msg, 'dingtalk')
             try:
                 send_dingtalk_msg(self.webhook_url, msg, self.msg_type, self.msg_title)
                 time.sleep(0.01)
@@ -853,6 +859,12 @@ class SendEmailAction(BaseAction):
         col_name_dict = self.col_name_dict
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
         return fill_msg_blanks_with_converted_row(text, blanks, col_name_dict, row, db_session, dtable_metadata)
+
+
+    def fill_msg_blanks_with_sql(self, row, text, blanks):
+        col_name_dict = self.col_name_dict
+        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
+        return fill_msg_blanks_with_sql_row(text, blanks, col_name_dict, row, db_session)
 
     def get_file_down_url(self, file_url):
         file_path = unquote('/'.join(file_url.split('/')[-3:]).strip())
@@ -951,7 +963,7 @@ class SendEmailAction(BaseAction):
             copy_to_list = send_info.get('copy_to', [])
             attachment_list = send_info.get('attachment_list', [])
             if self.column_blanks:
-                msg = self.fill_msg_blanks(converted_row, msg, self.column_blanks)
+                msg = self.fill_msg_blanks_with_sql(row, msg, self.column_blanks)
             if self.column_blanks_send_to:
                 send_to_list = [self.fill_msg_blanks(converted_row, send_to, self.column_blanks_send_to) for send_to in send_to_list]
             if self.column_blanks_copy_to:

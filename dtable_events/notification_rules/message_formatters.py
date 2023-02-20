@@ -333,10 +333,13 @@ class FormulaMessageFormatter(BaseMessageFormatter):
         result_type = column_data.get('result_type')
         array_type = column_data.get('array_type')
         array_data = column_data.get('array_data')
+        format = column_data.get('format')
 
         if result_type == FormulaResultType.STRING:
             return TextMessageFormatter({'data': column_data}).format_message(value)
         elif result_type == FormulaResultType.NUMBER:
+            if format == 'duration':
+                return DurationMessageFormatter({'data': column_data}).format_message(value)
             return NumberMessageFormatter({'data': column_data}).format_message(value)
         elif result_type == FormulaResultType.DATE:
             return DateMessageFormatter({'data': column_data}).format_message(value)
