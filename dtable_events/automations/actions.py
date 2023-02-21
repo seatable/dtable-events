@@ -1693,13 +1693,12 @@ class LookupAndCopyAction(BaseAction):
         return column_dict
 
     def query_table_rows(self, table_name, column_names):
-        sql_columns = ', '.join(column_names)
+        sql_columns = ', '.join(['`' + col_name + '`' for col_name in column_names])
         limit = 0
         step = 10000
         result_rows = []
         while True:
-            # sql = f"select `_id`, {sql_columns} from `{table_name}` limit {limit},{step}"
-            sql = f"select * from `{table_name}`"
+            sql = f"select `_id`, {sql_columns} from `{table_name}` limit {limit},{step}"
             try:
                 results = self.auto_rule.dtable_db_api.query(sql)
             except Exception as e:
