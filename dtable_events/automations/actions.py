@@ -765,7 +765,6 @@ class SendDingtalkAction(BaseAction):
             msg = self.msg
             if self.column_blanks:
                 msg = self.fill_msg_blanks_with_sql(row)
-                print(msg, 'dingtalk')
             try:
                 send_dingtalk_msg(self.webhook_url, msg, self.msg_type, self.msg_title)
                 time.sleep(0.01)
