@@ -27,6 +27,7 @@ from dtable_events.utils.dtable_server_api import DTableServerAPI, WrongFilterEx
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.notification_rules.utils import get_nickname_by_usernames
+from dtable_events.utils.sql_generator import BaseSQLGenerator
 
 
 logger = logging.getLogger(__name__)
@@ -1130,6 +1131,20 @@ class LinkRecordsAction(BaseAction):
         ColumnTypes.RATE: "equal",
     }
 
+    VALID_COLUMN_TYPES = [
+        ColumnTypes.TEXT,
+        ColumnTypes.NUMBER,
+        ColumnTypes.CHECKBOX,
+        ColumnTypes.DATE,
+        ColumnTypes.LONG_TEXT,
+        ColumnTypes.COLLABORATOR,
+        ColumnTypes.GEOLOCATION,
+        ColumnTypes.URL,
+        ColumnTypes.DURATION,
+        ColumnTypes.EMAIL,
+        ColumnTypes.RATE,
+    ]
+
     def __init__(self, auto_rule, data, linked_table_id, link_id, match_conditions):
         super().__init__(auto_rule, data=data)
         self.action_type = 'link_record'
@@ -1186,6 +1201,13 @@ class LinkRecordsAction(BaseAction):
             if table.get('_id') == table_id:
                 return table.get('name')
 
+    def get_table_by_name(self, table_name):
+        dtable_metadata = self.auto_rule.dtable_metadata
+        tables = dtable_metadata.get('tables', [])
+        for table in tables:
+            if table.get('name') == table_name:
+                return table
+
     def get_column(self, table_id, column_key):
         for col in self.get_columns(table_id):
             if col.get('key') == column_key:
@@ -1234,7 +1256,7 @@ class LinkRecordsAction(BaseAction):
         linked_rows_data = self.get_linked_table_rows()
         self.linked_row_ids = linked_rows_data and [row.get('_id') for row in linked_rows_data] or []
 
-    def can_do_action(self):
+    def per_update_can_do_action(self):
         linked_table_name = self.get_table_name(self.linked_table_id)
         if not linked_table_name:
             raise RuleInvalidException('link-records link_table_id table not found')
@@ -1256,8 +1278,8 @@ class LinkRecordsAction(BaseAction):
                 return False
         return True
 
-    def do_action(self):
-        if not self.can_do_action():
+    def per_update_link_records(self):
+        if not self.per_update_can_do_action():
             return
 
         try:
@@ -1265,8 +1287,135 @@ class LinkRecordsAction(BaseAction):
         except Exception as e:
             logger.error('link dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
-        else:
-            self.auto_rule.set_done_actions()
+
+    def get_columns_dict(self, table_id):
+        dtable_metadata = self.auto_rule.dtable_metadata
+        column_dict = {}
+        for table in dtable_metadata.get('tables', []):
+            if table.get('_id') == table_id:
+                for col in table.get('columns'):
+                    column_dict[col.get('key')] = col
+        return column_dict
+
+    def query_table_rows(self, table_name, filter_conditions=None):
+        start = 0
+        step = 10000
+        result_rows = []
+        filter_clause = ''
+        if filter_conditions:
+            table = self.get_table_by_name(table_name)
+            filter_clause = BaseSQLGenerator(table_name, table['columns'], filter_conditions=filter_conditions)._filter2sql()
+        while True:
+            sql = f"select * from `{table_name}` {filter_clause}"
+            try:
+                results = self.auto_rule.dtable_db_api.query(sql)
+            except Exception as e:
+                logger.exception(e)
+                logger.error('query dtable: %s, sql: %s, filters: %s, error: %s', self.auto_rule.dtable_uuid, sql, filter_conditions, e)
+                return []
+            result_rows += results
+            start += step
+            if len(results) < step:
+                break
+        return result_rows
+
+    def cron_link_records(self):
+        table_id = self.auto_rule.table_id
+        other_table_id = self.linked_table_id
+
+        table_name = self.get_table_name(table_id)
+        other_table_name = self.get_table_name(table_id)
+
+        if not table_name or not other_table_name:
+            raise RuleInvalidException('table_name or other_table_name not found')
+
+        column_dict = self.get_columns_dict(table_id)
+        other_column_dict = self.get_columns_dict(other_table_id)
+
+        link_column = None
+        for col in column_dict.values():
+            if col['type'] != 'link':
+                continue
+            if col.get('data', {}).get('link_id') != self.link_id:
+                continue
+            link_column = col
+            break
+        if not link_column:
+            raise RuleInvalidException('link column not found')
+
+        equal_columns = []
+        equal_other_columns = []
+        # check column valid
+        try:
+            for condition in self.match_conditions:
+                if not condition.get('column_key') or not condition.get('other_column_key'):
+                    raise RuleInvalidException('column or other_column invalid')
+                column = column_dict[condition['column_key']]
+                other_column = other_column_dict[condition['other_column_key']]
+                if column.get('type') not in self.VALID_COLUMN_TYPES or other_column.get('type') not in self.VALID_COLUMN_TYPES:
+                    raise RuleInvalidException('column or other_column type invalid')
+                equal_columns.append(column.get('name'))
+                equal_other_columns.append(other_column.get('name'))
+        except KeyError:
+            raise RuleInvalidException('column or other_column not found')
+
+        view_filter_conditions = {
+            'filters': self.auto_rule.view_info.get('filters', []),
+            'filter_conjunction': self.auto_rule.view_info.get('filter_conjunction', 'And')
+        }
+        table_rows = self.query_table_rows(table_name, filters=view_filter_conditions)
+        other_table_rows = self.query_table_rows(other_table_name)
+
+        table_rows_dict = {}
+        row_id_list, other_rows_ids_map = [], {}
+        for row in table_rows:
+            key = '-'
+            for equal_condition in self.match_conditions:
+                column_key = equal_condition['column_key']
+                column = column_dict[column_key]
+                column_name = column.get('name')
+                value = row.get(column_name)
+                key += value + column_key + '-'
+            key = str(hash(key))
+            table_rows_dict[key] = row
+
+        for other_row in other_table_rows:
+            other_key = '-'
+            for equal_condition in self.match_conditions:
+                column_key = equal_condition['column_key']
+                other_column_key = equal_condition['other_column_key']
+                other_column = other_column_dict[other_column_key]
+                other_column_name = other_column['name']
+                other_value = other_row.get(other_column_name)
+                other_value = cell_data2str(other_value)
+                other_key += other_value + column_key + '-'
+            other_key = str(hash(other_key))
+            row = table_rows_dict.get(other_key)
+            if not table_rows_dict.get(other_key):
+                continue
+            # add link rows
+            if row['_id'] in other_rows_ids_map:
+                other_rows_ids_map[row['_id']].append(other_row['_id'])
+            else:
+                row_id_list.append(row['_id'])
+                other_rows_ids_map[row['_id']] = [other_row['_id']]
+        # update links
+        step = 1000
+        for i in range(0, len(self.row_id_list), step):
+            try:
+                self.auto_rule.dtable_server_api.batch_update_links(self.link_id, table_id, other_table_id, row_id_list[i: i+step], {key: value for key, value in other_rows_ids_map.items() if key in row_id_list[i: i+step]})
+            except Exception as e:
+                logger.error('batch update links: %s, error: %s', self.auto_rule.dtable_uuid, e)
+                return
+
+    def do_action(self):
+        if self.auto_rule.run_condition == PER_UPDATE:
+            self.per_update_link_records()
+        elif self.auto_rule.run_condition in CRON_CONDITIONS:
+            if self.auto_rule.trigger['condition'] == CONDITION_PERIODICALLY:
+                self.cron_link_records()
+
+        self.auto_rule.set_done_actions()
 
 
 class AddRecordToOtherTableAction(BaseAction):
@@ -1864,18 +2013,18 @@ class ExtractUserNameAction(BaseAction):
         self.update_rows = []
 
     def query_user_rows(self, table_name, extract_column_name, result_column_name):
-        start = 0
+        limit = 0
         step = 10000
         result_rows = []
         while True:
-            sql = f"select `_id`, `{extract_column_name}`, `{result_column_name}` from `{table_name}` limit {start},{step}"
+            sql = f"select `_id`, `{extract_column_name}`, `{result_column_name}` from `{table_name}` limit {limit},{step}"
             try:
                 results = self.auto_rule.dtable_db_api.query(sql)
             except Exception as e:
                 logger.error('query dtable: %s, table name: %s, error: %s', self.auto_rule.dtable_uuid, table_name, e)
                 return []
             result_rows += results
-            start += step
+            limit += step
             if len(results) < step:
                 break
         return result_rows
@@ -2520,7 +2669,7 @@ class AutomationRule:
             if run_condition in CRON_CONDITIONS and trigger_condition == CONDITION_PERIODICALLY:
                 return True
             return False
-        elif action_type in ['lookup_and_copy', 'extract_user_name', 'auto_add_link']:
+        elif action_type in ['lookup_and_copy', 'extract_user_name']:
             if run_condition in CRON_CONDITIONS and trigger_condition == CONDITION_PERIODICALLY:
                 return True
             return False
@@ -2626,12 +2775,6 @@ class AutomationRule:
                     result_column_key = action_info.get('result_column_key')
                     ExtractUserNameAction(self, self.data, extract_column_key, result_column_key).do_action()
 
-                elif action_info.get('type') == 'auto_add_link':
-                    link_column_key = action_info.get('link_column_key')
-                    table_condition = action_info.get('table_condition')
-                    equal_column_conditions = action_info.get('equal_column_conditions')
-                    AutoAddLinkAction(self, self.data, table_condition, equal_column_conditions, link_column_key).do_action()
-
             except RuleInvalidException as e:
                 logger.warning('auto rule: %s, invalid error: %s', self.rule_id, e)
                 self.task_run_success = False
@@ -2736,3 +2879,4 @@ class AutomationRule:
             self.db_session.commit()
         except Exception as e:
             logger.error('set rule: %s invalid error: %s', self.rule_id, e)
+
