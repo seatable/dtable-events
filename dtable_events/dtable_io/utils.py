@@ -21,7 +21,7 @@ from uuid import UUID
 from django.utils.http import urlquote
 from seaserv import seafile_api
 
-from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL
+from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL
 from dtable_events.dtable_io.external_app import APP_USERS_COUMNS_TYPE_MAP, match_user_info, update_app_sync, \
     get_row_ids_for_delete, get_app_users
 from dtable_events.dtable_io.task_manager import task_manager
@@ -817,37 +817,16 @@ def upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, json_fil
     if res.status_code != 200:
         raise ConnectionError('failed to import excel json %s %s' % (dtable_uuid, res.text))
 
-def append_rows_by_dtable_server(username, dtable_uuid, rows_data, table_name):
-    api_url = get_inner_dtable_server_url()
-    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/batch-append-rows/?from=dtable_events'
-    dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
-    headers = {'Authorization': 'Token ' + dtable_server_access_token}
+
+def append_rows_by_dtable_server(dtable_server_api, rows_data, table_name):
     offset = 0
     while True:
         rows = rows_data[offset: offset + 1000]
         offset = offset + 1000
         if not rows:
             break
-        json_data = {
-            'table_name': table_name,
-            'rows': rows,
-        }
-        res = requests.post(url, headers=headers, json=json_data, timeout=180)
-        if res.status_code != 200:
-            raise ConnectionError('failed to append excel json %s %s' % (dtable_uuid, res.text))
+        dtable_server_api.batch_append_rows(table_name, rows_data)
         time.sleep(0.5)
-
-
-def get_columns_from_dtable_server(username, dtable_uuid, table_name):
-    api_url = get_inner_dtable_server_url()
-    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/columns/?from=dtable_events&table_name=' + urlquote(table_name)
-    dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
-    headers = {'Authorization': 'Token ' + dtable_server_access_token}
-
-    res = requests.get(url, headers=headers, timeout=180)
-    if res.status_code != 200:
-        raise ConnectionError('failed to get columns %s %s' % (dtable_uuid, res.text))
-    return json.loads(res.content.decode()).get('columns', [])
 
 
 def get_csv_file(repo_id, file_name):
@@ -964,59 +943,6 @@ def get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, i
     if res.status_code != 200:
         raise Exception(res.json().get('error_msg'))
     return res.json()
-
-
-def convert_db_rows(metadata, results):
-    """ Convert dtable-db rows data to readable rows data
-    :param metadata: list
-    :param results: list
-    :return: list
-    """
-    from dtable_events.dtable_io import dtable_io_logger
-    converted_results = []
-    column_map = {column['key']: column for column in metadata}
-    select_map = {}
-    for column in metadata:
-            column_type = column['type']
-            if column_type in ('single-select', 'multiple-select'):
-                column_data = column['data']
-                if not column_data:
-                    continue
-                column_key = column['key']
-                column_options = column['data']['options']
-                select_map[column_key] = {
-                    select['id']: select['name'] for select in column_options}
-
-    for result in results:
-        item = {}
-        for column_key, value in result.items():
-            if column_key in column_map:
-                column = column_map[column_key]
-                column_name = column['name']
-                column_type = column['type']
-                s_map = select_map.get(column_key)
-                if column_type == 'single-select' and value and s_map:
-                    item[column_name] = s_map.get(value, value)
-                elif column_type == 'multiple-select' and value and s_map:
-                    item[column_name] = [s_map.get(s, s) for s in value]
-                elif column_type == 'date' and value:
-                    try:
-                        date_value = parser.isoparse(value)
-                        date_format = column['data']['format']
-                        if date_format == 'YYYY-MM-DD':
-                            value = date_value.strftime('%Y-%m-%d')
-                        else:
-                            value = date_value.strftime('%Y-%m-%d %H:%M')
-                    except Exception as e:
-                        pass
-                    item[column_name] = value
-                else:
-                    item[column_name] = value
-            else:
-                item[column_key] = value
-        converted_results.append(item)
-
-    return converted_results
 
 
 def get_related_nicknames_from_dtable(dtable_uuid, username, permission):
@@ -1169,3 +1095,54 @@ def to_python_boolean(string):
     if string in ('f', 'false', '0'):
         return False
     raise ValueError("Invalid boolean value: '%s'" % string)
+
+
+def get_rows_from_dtable_db(dtable_db_api, table_name, limit=50000):
+    offset = 10000
+    start = 0
+    dtable_rows = []
+    while True:
+        # exported row number should less than limit
+        if (start + offset) > limit:
+            offset = limit - start
+
+        sql = f"SELECT * FROM `{table_name}` LIMIT {start}, {offset}"
+
+        response_rows = dtable_db_api.query(sql, server_only=True)
+        dtable_rows.extend(response_rows)
+
+        start += offset
+        if start >= limit or len(response_rows) < offset:
+            break
+
+    return dtable_rows
+
+
+def update_rows_by_dtable_db(dtable_db_api, update_rows, table_name):
+    offset = 0
+    while True:
+        rows = update_rows[offset: offset + 1000]
+        offset = offset + 1000
+        if not rows:
+            break
+        dtable_db_api.batch_update_rows(table_name, rows)
+        time.sleep(0.5)
+
+
+def extract_select_options(rows, column_name_to_column):
+    select_column_options = {}
+    for row in rows:
+        # get column options for adding single-select or multiple-select columns
+        for col_name in row:
+            col_type = column_name_to_column.get(col_name, {}).get('type')
+            column_data = row.get(col_name)
+            if col_type in ['multiple-select', 'single-select']:
+                col_options = select_column_options.get(col_name, set())
+                if not col_options:
+                    select_column_options[col_name] = col_options
+                if col_type == 'multiple-select':
+                    col_options.update(set(column_data))
+                else:
+                    col_options.add(column_data)
+
+    return select_column_options

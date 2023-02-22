@@ -9,10 +9,12 @@ from openpyxl.styles import PatternFill
 from openpyxl import load_workbook
 from copy import deepcopy
 from datetime import datetime, time
-from dtable_events.app.config import EXPORT2EXCEL_DEFAULT_STRING, TIME_ZONE
-from dtable_events.utils import utc_to_tz
+from dtable_events.app.config import EXPORT2EXCEL_DEFAULT_STRING, TIME_ZONE, INNER_DTABLE_DB_URL
+from dtable_events.utils import utc_to_tz, get_inner_dtable_server_url, gen_random_option
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.geo_location_parser import parse_geolocation_from_tree
+from dtable_events.utils.dtable_db_api import DTableDBAPI
+from dtable_events.utils.dtable_server_api import DTableServerAPI
 
 timezone = TIME_ZONE
 VIRTUAL_ID_EMAIL_DOMAIN = '@auth.local'
@@ -451,47 +453,80 @@ def parse_and_import_excel_csv_to_table(repo_id, file_name, dtable_uuid, usernam
 
 
 def parse_and_update_file_to_table(repo_id, file_name, username, dtable_uuid, table_name, selected_columns, file_type):
-    from dtable_events.dtable_io.utils import update_rows_by_dtable_server, delete_file, \
-        get_rows_from_dtable_server, append_rows_by_dtable_server, get_columns_from_dtable_server, \
-        get_related_nicknames_from_dtable
+    from dtable_events.dtable_io.utils import delete_file, append_rows_by_dtable_server, \
+        get_related_nicknames_from_dtable, get_rows_from_dtable_db, update_rows_by_dtable_db
 
     related_users = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
     name_to_email = {user.get('name'): user.get('email') for user in related_users}
 
+    dtable_server_url = get_inner_dtable_server_url()
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, dtable_server_url)
+    columns = dtable_server_api.list_columns(table_name)
+
     if file_type == 'xlsx':
-        file_rows = parse_dtable_excel_file(repo_id, file_name, username, dtable_uuid, table_name, name_to_email)
+        file_rows = parse_dtable_excel_file(repo_id, file_name, table_name, columns, name_to_email)
     else:
-        file_rows = parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name, name_to_email)
+        file_rows = parse_csv_file(repo_id, file_name, table_name, columns, name_to_email)
 
     file_rows = file_rows[0].get('rows', [])
-    dtable_rows = get_rows_from_dtable_server(username, dtable_uuid, table_name)
     key_columns = selected_columns.split(',')
 
-    columns = get_columns_from_dtable_server(username, dtable_uuid, table_name)
-    dtable_col_name_to_type = {col['name']: col['type'] for col in columns}
+    dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
+    dtable_rows = get_rows_from_dtable_db(dtable_db_api, table_name)
 
-    insert_rows, update_rows = get_insert_update_rows(dtable_col_name_to_type, file_rows, dtable_rows, key_columns)
+    dtable_col_name_to_column = {col['name']: col for col in columns}
+
+    insert_rows, update_rows, excel_select_column_options = \
+        get_insert_update_rows(dtable_col_name_to_column, file_rows, dtable_rows, key_columns, need_select_option=True)
+
+    # add select column options
+    for col_name, excel_options in excel_select_column_options.items():
+        column = dtable_col_name_to_column.get(col_name)
+        dtable_options = column.get('data').get('options')
+        to_be_added_options = excel_options - set([op.get('name') for op in dtable_options])
+        if to_be_added_options:
+            options = [gen_random_option(option) for option in to_be_added_options]
+            dtable_server_api.add_column_options(table_name, col_name, options)
 
     # delete excel,json,csv file
     delete_file(username, repo_id, file_name)
-    # upload json file to dtable-server
-    update_rows_by_dtable_server(username, dtable_uuid, update_rows, table_name)
-    append_rows_by_dtable_server(username, dtable_uuid, insert_rows, table_name)
+    update_rows_by_dtable_db(dtable_db_api, update_rows, table_name)
+    append_rows_by_dtable_server(dtable_server_api, insert_rows, table_name)
 
 
 def parse_and_append_excel_csv_to_table(username, repo_id, file_name, dtable_uuid, table_name, file_type):
-    from dtable_events.dtable_io.utils import append_rows_by_dtable_server, delete_file, get_related_nicknames_from_dtable
+    from dtable_events.dtable_io.utils import append_rows_by_dtable_server, delete_file, \
+        get_related_nicknames_from_dtable, extract_select_options
 
     related_users = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
     name_to_email = {user.get('name'): user.get('email') for user in related_users}
 
+    dtable_server_url = get_inner_dtable_server_url()
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, dtable_server_url)
+    columns = dtable_server_api.list_columns(table_name)
+
     if file_type == 'xlsx':
-        content = parse_dtable_excel_file(repo_id, file_name, username, dtable_uuid, table_name, name_to_email)
+        content = parse_dtable_excel_file(repo_id, file_name, table_name, columns, name_to_email)
     elif file_type == 'csv':
-        content = parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name, name_to_email)
+        content = parse_csv_file(repo_id, file_name, table_name, columns, name_to_email)
     # delete excel、csv、json  file
     delete_file(username, repo_id, file_name)
-    append_rows_by_dtable_server(username, dtable_uuid, content[0]['rows'], table_name)
+
+    rows = content[0]['rows']
+
+    dtable_col_name_to_column = {col['name']: col for col in columns}
+    excel_select_column_options = extract_select_options(rows, dtable_col_name_to_column)
+
+    # add single-select or multiple-select column options
+    for col_name, excel_options in excel_select_column_options.items():
+        column = dtable_col_name_to_column.get(col_name)
+        dtable_options = column.get('data').get('options')
+        to_be_added_options = excel_options - set([op.get('name') for op in dtable_options])
+        if to_be_added_options:
+            options = [gen_random_option(option) for option in to_be_added_options]
+            dtable_server_api.add_column_options(table_name, col_name, options)
+
+    append_rows_by_dtable_server(dtable_server_api, rows, table_name)
 
 
 def parse_excel_csv_to_json(repo_id, dtable_name, file_type, custom=False):
@@ -529,8 +564,8 @@ def import_excel_csv_add_table_by_dtable_server(username, repo_id, dtable_uuid, 
 
 
 def append_parsed_file_by_dtable_server(username, repo_id, dtable_uuid, file_name, table_name):
-    from dtable_events.dtable_io.utils import get_excel_json_file, \
-        append_rows_by_dtable_server, delete_file
+    from dtable_events.dtable_io.utils import get_excel_json_file, append_rows_by_dtable_server, \
+        delete_file, extract_select_options
 
     # get json file
     json_file = get_excel_json_file(repo_id, file_name)
@@ -538,7 +573,25 @@ def append_parsed_file_by_dtable_server(username, repo_id, dtable_uuid, file_nam
     delete_file(username, repo_id, file_name)
     # upload json file to dtable-server
     rows = json.loads(json_file.decode())[0]['rows']
-    append_rows_by_dtable_server(username, dtable_uuid, rows, table_name)
+
+    dtable_server_url = get_inner_dtable_server_url()
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, dtable_server_url)
+    columns = dtable_server_api.list_columns(table_name)
+
+    dtable_col_name_to_column = {col['name']: col for col in columns}
+    excel_select_column_options = extract_select_options(rows, dtable_col_name_to_column)
+
+    # add single-select or multiple-select column options
+    for col_name, excel_options in excel_select_column_options.items():
+        column = dtable_col_name_to_column.get(col_name)
+        dtable_options = column.get('data').get('options')
+        to_be_added_options = excel_options - set([op.get('name') for op in dtable_options])
+
+        if to_be_added_options:
+            options = [gen_random_option(option) for option in to_be_added_options]
+            dtable_server_api.add_column_options(table_name, col_name, options)
+
+    append_rows_by_dtable_server(dtable_server_api, rows, table_name)
 
 
 def parse_append_excel_csv_upload_file_to_json(repo_id, file_name, username, dtable_uuid, table_name, file_type):
@@ -547,10 +600,14 @@ def parse_append_excel_csv_upload_file_to_json(repo_id, file_name, username, dta
     # parse
     related_users = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
     name_to_email = {user.get('name'): user.get('email') for user in related_users}
+
+    dtable_server_url = get_inner_dtable_server_url()
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, dtable_server_url)
+    columns = dtable_server_api.list_columns(table_name)
     if file_type == 'csv':
-        tables = parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name, name_to_email)
+        tables = parse_csv_file(repo_id, file_name, table_name, columns, name_to_email)
     else:
-        tables = parse_dtable_excel_file(repo_id, file_name, username, dtable_uuid, table_name, name_to_email)
+        tables = parse_dtable_excel_file(repo_id, file_name, table_name, columns, name_to_email)
 
     # upload json to file server
     content = json.dumps(tables)
@@ -597,27 +654,42 @@ def get_dtable_row_data(dtable_rows, key_columns, excel_col_name_to_type):
 
 
 def update_parsed_file_by_dtable_server(username, repo_id, dtable_uuid, file_name, table_name, selected_columns):
-    from dtable_events.dtable_io.utils import get_excel_json_file, update_rows_by_dtable_server, delete_file, \
-        get_rows_from_dtable_server, append_rows_by_dtable_server, get_columns_from_dtable_server
+    from dtable_events.dtable_io.utils import get_excel_json_file, delete_file, append_rows_by_dtable_server, \
+        get_rows_from_dtable_db, update_rows_by_dtable_db
 
     # get json file
     json_file = get_excel_json_file(repo_id, file_name)
     sheet_content = json_file.decode()
     excel_rows = json.loads(sheet_content)
     excel_rows = excel_rows[0].get('rows', [])
-    dtable_rows = get_rows_from_dtable_server(username, dtable_uuid, table_name)
     key_columns = selected_columns.split(',')
 
-    columns = get_columns_from_dtable_server(username, dtable_uuid, table_name)
-    dtable_col_name_to_type = {col['name']: col['type'] for col in columns}
+    dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
+    dtable_rows = get_rows_from_dtable_db(dtable_db_api, table_name)
 
-    insert_rows, update_rows = get_insert_update_rows(dtable_col_name_to_type, excel_rows, dtable_rows, key_columns)
+    dtable_server_url = get_inner_dtable_server_url()
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, dtable_server_url)
+
+    columns = dtable_server_api.list_columns(table_name)
+
+    dtable_col_name_to_column = {col['name']: col for col in columns}
+
+    insert_rows, update_rows, excel_select_column_options = \
+        get_insert_update_rows(dtable_col_name_to_column, excel_rows, dtable_rows, key_columns, need_select_option=True)
+
+    # add select column options
+    for col_name, excel_options in excel_select_column_options.items():
+        column = dtable_col_name_to_column.get(col_name)
+        dtable_options = column.get('data').get('options')
+        to_be_added_options = excel_options - set([op.get('name') for op in dtable_options])
+        if to_be_added_options:
+            options = [gen_random_option(option) for option in to_be_added_options]
+            dtable_server_api.add_column_options(table_name, col_name, options)
 
     # delete excel,json,csv file
     delete_file(username, repo_id, file_name)
-    # upload json file to dtable-server
-    update_rows_by_dtable_server(username, dtable_uuid, update_rows, table_name)
-    append_rows_by_dtable_server(username, dtable_uuid, insert_rows, table_name)
+    update_rows_by_dtable_db(dtable_db_api, update_rows, table_name)
+    append_rows_by_dtable_server(dtable_server_api, insert_rows, table_name)
 
 
 def get_cell_value(row, col, excel_col_name_to_type):
@@ -632,13 +704,14 @@ def get_cell_value(row, col, excel_col_name_to_type):
     return cell_value
 
 
-def get_insert_update_rows(dtable_col_name_to_type, excel_rows, dtable_rows, key_columns):
+def get_insert_update_rows(dtable_col_name_to_column, excel_rows, dtable_rows, key_columns, need_select_option=False):
     if not excel_rows:
         return [], []
     update_rows = []
     insert_rows = []
-    excel_col_name_to_type = {col_name: dtable_col_name_to_type.get(col_name) for col_name in excel_rows[0].keys()
-                              if dtable_col_name_to_type.get(col_name) in UPDATE_TYPE_LIST}
+    excel_select_column_options = {}
+    excel_col_name_to_type = {col_name: dtable_col_name_to_column.get(col_name).get('type') for col_name in excel_rows[0].keys()
+                              if dtable_col_name_to_column.get(col_name, {}).get('type') in UPDATE_TYPE_LIST}
 
     dtable_row_data = get_dtable_row_data(dtable_rows, key_columns, excel_col_name_to_type)
     keys_of_excel_rows = {}
@@ -649,6 +722,20 @@ def get_insert_update_rows(dtable_col_name_to_type, excel_rows, dtable_rows, key
             continue
         keys_of_excel_rows[key] = True
 
+        if need_select_option:
+            # get column options for update single-select or multiple-select columns
+            for col_name in excel_row:
+                col_type = excel_col_name_to_type.get(col_name)
+                column_data = excel_row.get(col_name)
+                if col_type in ['multiple-select', 'single-select']:
+                    col_options = excel_select_column_options.get(col_name, set())
+                    if not col_options:
+                        excel_select_column_options[col_name] = col_options
+                    if col_type == 'multiple-select':
+                        col_options.update(set(column_data))
+                    else:
+                        col_options.add(column_data)
+
         dtable_row = dtable_row_data.get(key)
         if not dtable_row:
             insert_rows.append(excel_row)
@@ -656,11 +743,11 @@ def get_insert_update_rows(dtable_col_name_to_type, excel_rows, dtable_rows, key
             update_row = get_update_row_data(excel_row, dtable_row, excel_col_name_to_type)
             if update_row:
                 update_rows.append(update_row)
-    return insert_rows, update_rows
+    return insert_rows, update_rows, excel_select_column_options
 
 
-def parse_dtable_excel_file(repo_id, file_name, username, dtable_uuid, table_name, name_to_email):
-    from dtable_events.dtable_io.utils import get_excel_file, get_columns_from_dtable_server
+def parse_dtable_excel_file(repo_id, file_name, table_name, columns, name_to_email):
+    from dtable_events.dtable_io.utils import get_excel_file
     from dtable_events.dtable_io import dtable_io_logger
 
     # parse
@@ -670,7 +757,6 @@ def parse_dtable_excel_file(repo_id, file_name, username, dtable_uuid, table_nam
     sheet = wb.get_sheet_by_name(wb.sheetnames[0])
 
     sheet_rows = list(sheet.rows)
-    columns = get_columns_from_dtable_server(username, dtable_uuid, table_name)
     if not sheet_rows:
         wb.close()
         table = {
@@ -721,7 +807,11 @@ def parse_update_excel_upload_excel_to_json(repo_id, file_name, username, dtable
     related_users = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
     name_to_email = {user.get('name'): user.get('email') for user in related_users}
 
-    content = parse_dtable_excel_file(repo_id, file_name, username, dtable_uuid, table_name, name_to_email)
+    dtable_server_url = get_inner_dtable_server_url()
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, dtable_server_url)
+    columns = dtable_server_api.list_columns(table_name)
+
+    content = parse_dtable_excel_file(repo_id, file_name, table_name, columns, name_to_email)
     upload_excel_json_file(repo_id, file_name, json.dumps(content))
 
 
@@ -761,14 +851,13 @@ def parse_dtable_excel_rows(sheet_rows, columns, column_length, name_to_email):
     return rows
 
 
-def parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name, name_to_email):
-    from dtable_events.dtable_io.utils import get_csv_file, get_columns_from_dtable_server
+def parse_csv_file(repo_id, file_name, table_name, columns, name_to_email):
+    from dtable_events.dtable_io.utils import get_csv_file
     from dtable_events.dtable_io import dtable_io_logger
 
     # parse
     csv_file = get_csv_file(repo_id, file_name)
     tables = []
-    columns = get_columns_from_dtable_server(username, dtable_uuid, table_name)
 
     max_column = 500  # columns limit
     rows, max_column, csv_row_num, csv_column_num = parse_csv_rows(csv_file, columns, max_column, name_to_email)
@@ -798,7 +887,12 @@ def parse_update_csv_upload_csv_to_json(repo_id, file_name, username, dtable_uui
 
     related_users = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
     name_to_email = {user.get('name'): user.get('email') for user in related_users}
-    content = parse_csv_file(repo_id, file_name, username, dtable_uuid, table_name, name_to_email)
+
+    dtable_server_url = get_inner_dtable_server_url()
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, dtable_server_url)
+    columns = dtable_server_api.list_columns(table_name)
+
+    content = parse_csv_file(repo_id, file_name, table_name, columns, name_to_email)
     upload_excel_json_file(repo_id, file_name, json.dumps(content))
 
 

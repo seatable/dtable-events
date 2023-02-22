@@ -808,8 +808,7 @@ def parse_view_rows(response_rows, head_list, summary_col_info, cols_without_hid
 
 
 def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, permission, name, repo_id, is_support_image=False):
-    from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_view_rows_from_dtable_server, \
-        convert_db_rows
+    from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_view_rows_from_dtable_server
     from dtable_events.dtable_io.excel import write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR
     from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
     import openpyxl
@@ -898,8 +897,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
 
 
 def convert_table_to_execl(dtable_uuid, table_id, username, permission, name, repo_id, is_support_image=False):
-    from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_rows_from_dtable_server, \
-        convert_db_rows
+    from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_rows_from_dtable_server
     from dtable_events.dtable_io.excel import write_xls_with_type, IMAGE_TMP_DIR
     from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
     import openpyxl

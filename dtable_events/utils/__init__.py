@@ -227,3 +227,15 @@ def gen_file_get_url(token, filename):
     Format: http://<domain:port>/files/<token>/<filename>
     """
     return '%s/files/%s/%s' % (file_server_root, token, quote(filename))
+
+
+def gen_random_option(option_name):
+    from dtable_events.utils.constants import VALID_OPTION_TAGS
+    import random
+    index = random.randint(0, len(VALID_OPTION_TAGS) - 1)
+    option = {
+        'name': option_name,
+        'color': VALID_OPTION_TAGS[index]['color'],
+        'text_color': VALID_OPTION_TAGS[index]['text_color']
+    }
+    return option

@@ -199,6 +199,19 @@ class DTableServerAPI(object):
         response = requests.put(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
+    def add_column_options(self, table_name, column_name, options):
+        logger.debug('add column options, table_name: %s , column name: %s, options: %s', table_name, column_name, options)
+        url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/column-options/?from=dtable_events'
+
+        data = {
+            'table_name': table_name,
+            'column': column_name,
+            'options': options
+        }
+
+        response = requests.post(url, json=data, headers=self.headers, timeout=self.timeout)
+        return parse_response(response)
+
     def batch_delete_rows(self, table_name, row_ids):
         logger.debug('batch delete rows table_name: %s row_ids: %s', table_name, row_ids)
         url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/batch-delete-rows/?from=dtable_events'
