@@ -1306,13 +1306,13 @@ class LinkRecordsAction(BaseAction):
             table = self.get_table_by_name(table_name)
             filter_clause = BaseSQLGenerator(table_name, table['columns'], filter_conditions=filter_conditions)._filter2sql()
         while True:
-            sql = f"select * from `{table_name}` {filter_clause}"
+            sql = f"select * from `{table_name}` {filter_clause} limit {start}, {step}"
             try:
                 results = self.auto_rule.dtable_db_api.query(sql)
             except Exception as e:
                 logger.exception(e)
                 logger.error('query dtable: %s, sql: %s, filters: %s, error: %s', self.auto_rule.dtable_uuid, sql, filter_conditions, e)
-                return []
+                return result_rows
             result_rows += results
             start += step
             if len(results) < step:
@@ -1346,18 +1346,17 @@ class LinkRecordsAction(BaseAction):
         equal_columns = []
         equal_other_columns = []
         # check column valid
-        try:
-            for condition in self.match_conditions:
-                if not condition.get('column_key') or not condition.get('other_column_key'):
-                    raise RuleInvalidException('column or other_column invalid')
-                column = column_dict[condition['column_key']]
-                other_column = other_column_dict[condition['other_column_key']]
-                if column.get('type') not in self.VALID_COLUMN_TYPES or other_column.get('type') not in self.VALID_COLUMN_TYPES:
-                    raise RuleInvalidException('column or other_column type invalid')
-                equal_columns.append(column.get('name'))
-                equal_other_columns.append(other_column.get('name'))
-        except KeyError:
-            raise RuleInvalidException('column or other_column not found')
+        for condition in self.match_conditions:
+            if not condition.get('column_key') or not condition.get('other_column_key'):
+                raise RuleInvalidException('column or other_column invalid')
+            column = column_dict.get(condition['column_key'])
+            other_column = other_column_dict.get(condition['other_column_key'])
+            if not column or not other_column:
+                raise RuleInvalidException('column or other_column not found')
+            if column.get('type') not in self.VALID_COLUMN_TYPES or other_column.get('type') not in self.VALID_COLUMN_TYPES:
+                raise RuleInvalidException('column or other_column type invalid')
+            equal_columns.append(column.get('name'))
+            equal_other_columns.append(other_column.get('name'))
 
         view_filter_conditions = {
             'filters': self.auto_rule.view_info.get('filters', []),
@@ -1375,6 +1374,7 @@ class LinkRecordsAction(BaseAction):
                 column = column_dict[column_key]
                 column_name = column.get('name')
                 value = row.get(column_name)
+                value = cell_data2str(value)
                 key += value + column_key + '-'
             key = str(hash(key))
             table_rows_dict[key] = row
@@ -1403,7 +1403,6 @@ class LinkRecordsAction(BaseAction):
         step = 1000
         for i in range(0, len(row_id_list), step):
             try:
-                print('link_id: ', self.link_id, ' table_id: ', table_id, ' other_table_id: ', other_table_id, ' row_id_list: ', row_id_list, ' other_rows_ids_map: ', other_rows_ids_map, ' row_id_list: ', row_id_list)
                 self.auto_rule.dtable_server_api.batch_update_links(self.link_id, table_id, other_table_id, row_id_list[i: i+step], {key: value for key, value in other_rows_ids_map.items() if key in row_id_list[i: i+step]})
             except Exception as e:
                 logger.error('batch update links: %s, error: %s', self.auto_rule.dtable_uuid, e)
@@ -1854,13 +1853,11 @@ class LookupAndCopyAction(BaseAction):
         return column_dict
 
     def query_table_rows(self, table_name, column_names):
-        sql_columns = ', '.join(column_names)
-        limit = 0
+        start = 0
         step = 10000
         result_rows = []
         while True:
-            # sql = f"select `_id`, {sql_columns} from `{table_name}` limit {limit},{step}"
-            sql = f"select * from `{table_name}`"
+            sql = f"select * from `{table_name}` limit {start}, {step}"
             try:
                 results = self.auto_rule.dtable_db_api.query(sql)
             except Exception as e:
@@ -1868,7 +1865,7 @@ class LookupAndCopyAction(BaseAction):
                 logger.error('query dtable: %s, table name: %s, error: %s', self.auto_rule.dtable_uuid, table_name, e)
                 return []
             result_rows += results
-            limit += step
+            start += step
             if len(results) < step:
                 break
         return result_rows
@@ -2014,18 +2011,18 @@ class ExtractUserNameAction(BaseAction):
         self.update_rows = []
 
     def query_user_rows(self, table_name, extract_column_name, result_column_name):
-        limit = 0
+        start = 0
         step = 10000
         result_rows = []
         while True:
-            sql = f"select `_id`, `{extract_column_name}`, `{result_column_name}` from `{table_name}` limit {limit},{step}"
+            sql = f"select `_id`, `{extract_column_name}`, `{result_column_name}` from `{table_name}` limit {start},{step}"
             try:
                 results = self.auto_rule.dtable_db_api.query(sql)
             except Exception as e:
                 logger.error('query dtable: %s, table name: %s, error: %s', self.auto_rule.dtable_uuid, table_name, e)
                 return []
             result_rows += results
-            limit += step
+            start += step
             if len(results) < step:
                 break
         return result_rows
