@@ -1324,7 +1324,7 @@ class LinkRecordsAction(BaseAction):
         other_table_id = self.linked_table_id
 
         table_name = self.get_table_name(table_id)
-        other_table_name = self.get_table_name(table_id)
+        other_table_name = self.get_table_name(other_table_id)
 
         if not table_name or not other_table_name:
             raise RuleInvalidException('table_name or other_table_name not found')
@@ -1363,7 +1363,7 @@ class LinkRecordsAction(BaseAction):
             'filters': self.auto_rule.view_info.get('filters', []),
             'filter_conjunction': self.auto_rule.view_info.get('filter_conjunction', 'And')
         }
-        table_rows = self.query_table_rows(table_name, filters=view_filter_conditions)
+        table_rows = self.query_table_rows(table_name, filter_conditions=view_filter_conditions)
         other_table_rows = self.query_table_rows(other_table_name)
 
         table_rows_dict = {}
@@ -1401,8 +1401,9 @@ class LinkRecordsAction(BaseAction):
                 other_rows_ids_map[row['_id']] = [other_row['_id']]
         # update links
         step = 1000
-        for i in range(0, len(self.row_id_list), step):
+        for i in range(0, len(row_id_list), step):
             try:
+                print('link_id: ', self.link_id, ' table_id: ', table_id, ' other_table_id: ', other_table_id, ' row_id_list: ', row_id_list, ' other_rows_ids_map: ', other_rows_ids_map, ' row_id_list: ', row_id_list)
                 self.auto_rule.dtable_server_api.batch_update_links(self.link_id, table_id, other_table_id, row_id_list[i: i+step], {key: value for key, value in other_rows_ids_map.items() if key in row_id_list[i: i+step]})
             except Exception as e:
                 logger.error('batch update links: %s, error: %s', self.auto_rule.dtable_uuid, e)
@@ -2139,223 +2140,6 @@ class ExtractUserNameAction(BaseAction):
         self.auto_rule.set_done_actions()
 
 
-class AutoAddLinkAction(BaseAction):
-    VALID_COLUMN_TYPES = [
-        ColumnTypes.TEXT,
-        ColumnTypes.NUMBER,
-        ColumnTypes.CHECKBOX,
-        ColumnTypes.DATE,
-        ColumnTypes.LONG_TEXT,
-        ColumnTypes.COLLABORATOR,
-        ColumnTypes.GEOLOCATION,
-        ColumnTypes.URL,
-        ColumnTypes.DURATION,
-        ColumnTypes.EMAIL,
-        ColumnTypes.RATE,
-    ]
-
-    def __init__(self, auto_rule, data, table_condition, equal_column_conditions, link_column_key):
-        super().__init__(auto_rule, data=data)
-        self.action_type = 'auto_add_link'
-
-        self.table_condition = table_condition
-        self.equal_column_conditions = equal_column_conditions
-        self.link_column_key = link_column_key
-        self.table_name = ''
-        self.other_table_name = ''
-
-        self.row_id_list = []
-        self.other_rows_ids_map = {}
-
-        self.table_dict = self.get_table_dict()
-
-    def get_table_names_dict(self):
-        dtable_metadata = self.auto_rule.dtable_metadata
-        tables = dtable_metadata.get('tables', [])
-        return {table.get('_id'): table.get('name') for table in tables}
-
-    def get_table_dict(self):
-        dtable_metadata = self.auto_rule.dtable_metadata
-        tables = dtable_metadata.get('tables', [])
-        return {table.get('_id'): table for table in tables}
-
-    def get_columns_dict(self, table_id):
-        dtable_metadata = self.auto_rule.dtable_metadata
-        column_dict = {}
-        for table in dtable_metadata.get('tables', []):
-            if table.get('_id') == table_id:
-                for col in table.get('columns'):
-                    column_dict[col.get('key')] = col
-        return column_dict
-
-    def query_table_rows(self, table_name):
-        start = 0
-        step = 10000
-        result_rows = []
-        while True:
-            sql = f"select * from `{table_name}`"
-            try:
-                results = self.auto_rule.dtable_db_api.query(sql)
-            except Exception as e:
-                logger.exception(e)
-                logger.error('query dtable: %s, table name: %s, error: %s', self.auto_rule.dtable_uuid, table_name, e)
-                return []
-            result_rows += results
-            start += step
-            if len(results) < step:
-                break
-        return result_rows
-
-    def init_updates(self):
-        table_id = self.table_condition.get('table_id')
-        other_table_id = self.table_condition.get('other_table_id')
-
-        column_dict = self.get_columns_dict(table_id)
-        other_column_dict = self.get_columns_dict(other_table_id)
-        table_name_dict = self.get_table_names_dict()
-
-        self.table_name = table_name_dict.get(table_id)
-        self.other_table_name = table_name_dict.get(other_table_id)
-
-        if not self.table_name or not self.other_table_name:
-            raise RuleInvalidException('table_name or other_table_name not found')
-
-        equal_columns = []
-        equal_other_columns = []
-        # check column valid
-        try:
-            for col in self.equal_column_conditions:
-                if not col.get('column_key') or not col.get('other_column_key'):
-                    raise RuleInvalidException('column or other_column invalid')
-                column = column_dict[col['column_key']]
-                other_column = other_column_dict[col['other_column_key']]
-                if column.get('type') not in self.VALID_COLUMN_TYPES or other_column.get('type') not in self.VALID_COLUMN_TYPES:
-                    raise RuleInvalidException('column or other_column type invalid')
-                equal_columns.append(column.get('name'))
-                equal_other_columns.append(other_column.get('name'))
-        except KeyError as e:
-            logger.error('dtable: %s, table: %s or the other table:%s column key error: %s', self.auto_rule.dtable_uuid, self.table_name, self.other_table_name, e)
-            raise RuleInvalidException('column or other_column not found')
-
-        table_rows = self.query_table_rows(self.table_name)
-        other_table_rows = self.query_table_rows(self.other_table_name)
-
-        table_rows_dict = {}
-        row_id_list, other_rows_ids_map = [], {}
-        for row in table_rows:
-            key = '-'
-            for equal_condition in self.equal_column_conditions:
-                column_key = equal_condition['column_key']
-                column = column_dict[column_key]
-                column_name = column.get('name')
-                value = row.get(column_name)
-                value = cell_data2str(value)
-                key += value + column_key + '-'
-            key = str(hash(key))
-            table_rows_dict[key] = row
-
-        for other_row in other_table_rows:
-            other_key = '-'
-            for equal_condition in self.equal_column_conditions:
-                column_key = equal_condition['column_key']
-                other_column_key = equal_condition['other_column_key']
-                other_column = other_column_dict[other_column_key]
-                other_column_name = other_column.get('name')
-                other_value = other_row.get(other_column_name)
-                other_value = cell_data2str(other_value)
-                other_key += other_value + column_key + '-'
-            other_key = str(hash(other_key))
-            row = table_rows_dict.get(other_key)
-            if not table_rows_dict.get(other_key):
-                continue
-            # add link rows
-            if row['_id'] in other_rows_ids_map:
-                other_rows_ids_map[row['_id']].append(other_row['_id'])
-            else:
-                row_id_list.append(row['_id'])
-                other_rows_ids_map[row['_id']] = [other_row['_id']]
-        self.row_id_list = row_id_list
-        self.other_rows_ids_map = other_rows_ids_map
-
-    def create_link_column(self):
-        table = self.table_dict[self.table_condition['table_id']]
-        other_table = self.table_dict[self.table_condition['other_table_id']]
-        existed_columns = list(filter(lambda col: col['name'] == other_table['name'], table['columns']))
-        if not existed_columns:
-            link_name = other_table['name']
-        else:
-            no = 1
-            while True:
-                link_name = f"{other_table['name']} {no}"
-                flag = False
-                for col in table['columns']:
-                    if col['name'] == link_name:
-                        flag = True
-                        break
-                if not flag:
-                    break
-                no += 1
-        link_column = self.auto_rule.dtable_server_api.insert_column(table['name'], link_name, ColumnTypes.LINK, {'other_table': other_table['_id']})
-        return link_column
-
-    def get_link_id(self):
-        """
-        The order of find link column
-        1. find link column with self.link_column_key
-        2. find link columns and checkout the first one link column between table and other table
-        3. if link column with self.link_column_key not exists or no valid link column, create a new one
-        """
-        table = self.table_dict[self.table_condition['table_id']]
-        other_table = self.table_dict[self.table_condition['other_table_id']]
-        link_column, alternative_link_column = None, None
-        for column in table['columns']:
-            if column['type'] != ColumnTypes.LINK:
-                continue
-            data = column['data']
-            table_id = data['table_id']
-            other_table_id = data['other_table_id']
-            if (table_id == table['_id'] and other_table_id == other_table['_id']) or \
-                (table_id == other_table['_id'] and other_table_id == table['_id']):
-                link_column = column if column['key'] == self.link_column_key else link_column
-                alternative_link_column = column
-        if link_column:
-            return link_column['data']['link_id']
-        if alternative_link_column:
-            return alternative_link_column['data']['link_id']
-        new_link_column = self.create_link_column()
-        return new_link_column['data']['link_id']
-
-    def can_do_action(self):
-        if not self.auto_rule.current_valid:
-            return False
-        if not self.table_condition or not self.equal_column_conditions:
-            return False
-        table_id = self.table_condition.get('table_id')
-        other_table_id = self.table_condition.get('other_table_id')
-        if not (table_id and other_table_id):
-            return False
-        return True
-
-    def do_action(self):
-        if not self.can_do_action():
-            return
-        self.init_updates()
-        try:
-            link_id = self.get_link_id()
-        except Exception as e:
-            logger.exception(e)
-            logger.error('get link id error: %s', e)
-            return
-        step = 1000
-        for i in range(0, len(self.row_id_list), step):
-            try:
-                self.auto_rule.dtable_server_api.batch_update_links(link_id, self.table_condition['table_id'], self.table_condition['other_table_id'], self.row_id_list[i: i+step], {key: value for key, value in self.other_rows_ids_map.items() if key in self.row_id_list[i: i+step]})
-            except Exception as e:
-                logger.error('batch update links: %s, error: %s', self.auto_rule.dtable_uuid, e)
-                return
-        self.auto_rule.set_done_actions()
-
-
 class RuleInvalidException(Exception):
     """
     Exception which indicates rule need to be set is_valid=Fasle
@@ -2655,6 +2439,8 @@ class AutomationRule:
             return False
         elif action_type == 'link_records':
             if run_condition == PER_UPDATE:
+                return True
+            if run_condition in CRON_CONDITIONS and trigger_condition == CONDITION_PERIODICALLY:
                 return True
             return False
         elif action_type == 'add_record_to_other_table':
