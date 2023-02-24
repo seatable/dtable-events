@@ -1377,7 +1377,10 @@ class LinkRecordsAction(BaseAction):
                 value = cell_data2str(value)
                 key += value + column_key + '-'
             key = str(hash(key))
-            table_rows_dict[key] = row
+            if key in table_rows_dict:
+                table_rows_dict[key].append(row['_id'])
+            else:
+                table_rows_dict[key] = [row['_id']]
 
         for other_row in other_table_rows:
             other_key = '-'
@@ -1390,15 +1393,16 @@ class LinkRecordsAction(BaseAction):
                 other_value = cell_data2str(other_value)
                 other_key += other_value + column_key + '-'
             other_key = str(hash(other_key))
-            row = table_rows_dict.get(other_key)
-            if not table_rows_dict.get(other_key):
+            row_ids = table_rows_dict.get(other_key)
+            if not row_ids:
                 continue
             # add link rows
-            if row['_id'] in other_rows_ids_map:
-                other_rows_ids_map[row['_id']].append(other_row['_id'])
-            else:
-                row_id_list.append(row['_id'])
-                other_rows_ids_map[row['_id']] = [other_row['_id']]
+            for row_id in row_ids:
+                if row_id in other_rows_ids_map:
+                    other_rows_ids_map[row_id].append(other_row['_id'])
+                else:
+                    row_id_list.append(row_id)
+                    other_rows_ids_map[row_id] = [other_row['_id']]
         # update links
         step = 1000
         for i in range(0, len(row_id_list), step):
