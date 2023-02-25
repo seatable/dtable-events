@@ -1384,6 +1384,7 @@ class LinkRecordsAction(BaseAction):
 
         for other_row in other_table_rows:
             other_key = '-'
+            is_valid = False
             for equal_condition in self.match_conditions:
                 column_key = equal_condition['column_key']
                 other_column_key = equal_condition['other_column_key']
@@ -1391,7 +1392,11 @@ class LinkRecordsAction(BaseAction):
                 other_column_name = other_column['name']
                 other_value = other_row.get(other_column_name)
                 other_value = cell_data2str(other_value)
+                if other_value:
+                    is_valid = True
                 other_key += other_value + column_key + '-'
+            if not is_valid:
+                continue
             other_key = str(hash(other_key))
             row_ids = table_rows_dict.get(other_key)
             if not row_ids:
