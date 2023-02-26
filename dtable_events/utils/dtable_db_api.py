@@ -158,7 +158,6 @@ class DTableDBAPI(object):
         if not sql:
             raise ValueError('sql can not be empty.')
         url = self.dtable_db_url + '/api/v1/query/' + self.dtable_uuid + '/?from=dtable_events'
-        # json_data = {'sql': sql, 'server_only': server_only}
         json_data = {'sql': sql, 'server_only': server_only, 'convert_keys': convert}
         response = requests.post(url, json=json_data, headers=self.headers)
         data = parse_response(response)
@@ -169,33 +168,6 @@ class DTableDBAPI(object):
         metadata = data.get('metadata')
         results = data.get('results')
         return results, metadata
-        # if convert:
-        #     converted_results = convert_db_rows(metadata, results)
-        #     return converted_results
-        # else:
-        #     return results
-
-    # def query_and_metadata(self, sql, convert=True, server_only=True):
-    #     """
-    #     :param sql: str
-    #     :param convert: bool
-    #     :return: list
-    #     """
-    #     if not sql:
-    #         raise ValueError('sql can not be empty.')
-    #     url = self.dtable_db_url + '/api/v1/query/' + self.dtable_uuid + '/?from=dtable_events'
-    #     json_data = {'sql': sql, 'server_only': server_only}
-    #     response = requests.post(url, json=json_data, headers=self.headers)
-    #     data = parse_response(response)
-    #     if not data.get('success'):
-    #         raise Exception(data.get('error_message'))
-    #     metadata = data.get('metadata')
-    #     results = data.get('results')
-    #     if convert:
-    #         converted_results = convert_db_rows(metadata, results)
-    #         return converted_results, metadata
-    #     else:
-    #         return results, metadata
 
     def insert_rows(self, table_name, rows):
         api_url = "%s/api/v1/insert-rows/%s/?from=dtable_events" % (

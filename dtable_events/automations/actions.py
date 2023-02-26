@@ -1305,7 +1305,7 @@ class LinkRecordsAction(BaseAction):
         while True:
             sql = f"select * from `{table_name}` {filter_clause} limit {start}, {step}"
             try:
-                results = self.auto_rule.dtable_db_api.query(sql)
+                results, _ = self.auto_rule.dtable_db_api.query(sql)
             except Exception as e:
                 logger.exception(e)
                 logger.error('query dtable: %s, sql: %s, filters: %s, error: %s', self.auto_rule.dtable_uuid, sql, filter_conditions, e)
@@ -1749,6 +1749,23 @@ class CalculateAction(BaseAction):
         elif self.action_type == 'calculate_rank':
             self.rank_rows.extend(rows)
 
+    def query_table_rows(self, table_name, columns, filter_conditions):
+        offset = 10000
+        start = 0
+        rows = []
+        while True:
+            filter_conditions['start'] = start
+            filter_conditions['limit'] = offset
+
+            sql = filter2sql(table_name, columns, filter_conditions, by_group=False)
+            response_rows, _ = self.auto_rule.dtable_db_api.query(sql)
+            rows.extend(response_rows)
+
+            start += offset
+            if len(response_rows) < offset:
+                break
+        return rows
+
     def init_updates(self):
         calculate_col = self.column_key_dict.get(self.calculate_column_key, {})
         result_col = self.column_key_dict.get(self.result_column_key, {})
@@ -1771,32 +1788,12 @@ class CalculateAction(BaseAction):
         if self.is_group_view:
             view_rows = self.auto_rule.dtable_server_api.view_rows(table_name, view_name, True)
         else:
-            cols_without_hidden = self.auto_rule.view_columns
-
             filter_conditions = {
                 'sorts': self.auto_rule.view_info.get('sorts'),
                 'filters': self.auto_rule.view_info.get('filters'),
                 'filter_conjunction': self.auto_rule.view_info.get('filter_conjunction'),
             }
-            row_limit = 50000
-            offset = 10000
-            start = 0
-            view_rows = []
-            while True:
-                # exported row number should less than limit
-                if (start + offset) > row_limit:
-                    offset = row_limit - start
-
-                filter_conditions['start'] = start
-                filter_conditions['limit'] = offset
-
-                sql = filter2sql(table_name, cols_without_hidden, filter_conditions, by_group=False)
-                response_rows, _ = self.auto_rule.dtable_db_api.query(sql)
-                view_rows.extend(response_rows)
-
-                start += offset
-                if start >= row_limit or len(response_rows) < offset:
-                    break
+            view_rows = self.query_table_rows(table_name, self.auto_rule.view_columns, filter_conditions)
 
         if view_rows and ('rows' in view_rows[0] or 'subgroups' in view_rows[0]):
             self.parse_group_rows(view_rows)

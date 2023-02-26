@@ -1444,7 +1444,6 @@ def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unkn
             else:
                 c.number_format = gen_decimal_format(row[col_num])
         elif head[col_num][1] == ColumnTypes.DATE:
-            print(row[col_num])
             c = WriteOnlyCell(ws, value=_get_strtime_time(row[col_num]))
             if head[col_num][2]:
                 c.number_format = head[col_num][2].get('format', '')
