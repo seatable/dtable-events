@@ -61,7 +61,8 @@ def check_imap_account(imap_server, email_user, email_password, port=None, retur
 
 def fixed_sql_query(seatable, sql):
     try:
-        return seatable.query(sql)
+        rows, _ = seatable.query(sql)
+        return rows
     except TypeError:
         return []
 

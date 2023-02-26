@@ -8,7 +8,7 @@ from dtable_events.utils import get_inner_dtable_server_url, get_location_tree_j
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.app.config import INNER_DTABLE_DB_URL, BIG_DATA_ROW_IMPORT_LIMIT, BIG_DATA_ROW_UPDATE_LIMIT, \
     ARCHIVE_VIEW_EXPORT_ROW_LIMIT
-from dtable_events.utils.dtable_db_api import DTableDBAPI
+from dtable_events.utils.dtable_db_api import DTableDBAPI, convert_db_rows
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.sql_generator import filter2sql
 
@@ -87,7 +87,8 @@ def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column
     rows_for_import = []
     rows_for_update = []
 
-    query_rows_from_base = db_api.query(sql, convert=True, server_only=False)
+    query_rows_from_base, db_metadata = db_api.query(sql, convert=True, server_only=False)
+    query_rows_from_base = convert_db_rows(db_metadata, query_rows_from_base)
     for excel_row in excel_row_datas:
         excel_ref_data = {col: excel_row.get(col) for col in ref_cols if  excel_row.get(col)}
         find_tag = False
@@ -427,7 +428,8 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
     dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
     try:
         row_count_sql = 'select count(*) as total_count from `%s`' % table_name
-        total_row_count = dtable_db_api.query(row_count_sql, server_only=False)[0].get('total_count', 0)
+        result, _ = dtable_db_api.query(row_count_sql, server_only=False)
+        total_row_count = result[0].get('total_count', 0)
     except Exception as e:
         dtable_io_logger.error('get big data rows count error: %s', e)
         tasks_status_map[task_id]['status'] = 'terminated'
@@ -454,7 +456,8 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
         filter_conditions['start'] = start
         filter_conditions['limit'] = offset
         sql = filter2sql(table_name, cols_without_hidden, filter_conditions, by_group=False)
-        response_rows = dtable_db_api.query(sql, server_only=False)
+        response_rows, db_metadata = dtable_db_api.query(sql, convert=False, server_only=False)
+        response_rows = convert_db_rows(db_metadata, response_rows)
         data_list = get_excel_row_data(response_rows, cols_without_hidden)
 
         row_num = start

@@ -10,7 +10,7 @@ import jwt
 import requests
 
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, SEATABLE_FAAS_AUTH_TOKEN, \
-    SEATABLE_FAAS_URL
+    SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL
 from dtable_events.automations.models import BoundThirdPartyAccounts
 from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg
 from dtable_events.notification_rules.notification_rules_utils import fill_msg_blanks_with_converted_row, \
@@ -19,6 +19,8 @@ from dtable_events.utils import is_valid_email, get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI, NotFoundException
 from dtable_events.utils.dtable_web_api import DTableWebAPI
+from dtable_events.utils.dtable_db_api import DTableDBAPI
+from dtable_events.utils.sql_generator import filter2sql
 
 
 logger = logging.getLogger(__name__)
@@ -119,6 +121,7 @@ class BaseContext:
         self.caller = caller
 
         self.dtable_server_api = DTableServerAPI(caller, self.dtable_uuid, get_inner_dtable_server_url())
+        self.dtable_db_api = DTableDBAPI(caller, self.dtable_uuid, INNER_DTABLE_DB_URL)
         self.dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
 
         self._dtable_metadata = None
@@ -717,26 +720,29 @@ class LinkRecordsAction(BaseAction):
         linked_table_row_ids = []
         filter_groups = self._format_filter_groups(self.match_conditions, self.linked_table_id, converted_row)
         if filter_groups:
-            json_data = {
-                'table_id': self.linked_table_id,
-                'filter_conditions': {
-                    'filter_groups': filter_groups,
-                    'group_conjunction': 'And'
-                },
+            filter_conditions = {
+                'filter_groups': filter_groups,
+                'group_conjunction': 'And',
+                'start': 0,
                 'limit': 500,
-                'server_only': True
             }
+            linked_table = self.context.get_table_by_id(self.linked_table_id)
+
+            table_name = linked_table.get('name')
+            columns = linked_table.get('columns')
+
+            sql = filter2sql(table_name, columns, filter_conditions, by_group=True)
+
             try:
-                response = self.context.dtable_server_api.internal_filter_rows(json_data)
-                rows_data = response['rows']
+                rows_data, _ = self.context.dtable_db_api.query(sql, convert=False)
                 logger.debug('Number of dtable link records filter rows: %s, dtable_uuid: %s, details: %s' % (
                     len(rows_data),
                     self.context.dtable_uuid,
-                    json.dumps(json_data)
+                    json.dumps(filter_conditions)
                 ))
                 linked_table_row_ids.extend([row['_id'] for row in rows_data])
             except Exception as e:
-                logger.error('filter dtable: %s data: %s error: %s', self.context.dtable_uuid, json_data, e)
+                logger.error('filter dtable: %s data: %s error: %s', self.context.dtable_uuid, filter_conditions, e)
                 return
         if not linked_table_row_ids:
             return

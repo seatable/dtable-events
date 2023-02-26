@@ -1116,6 +1116,7 @@ def to_python_boolean(string):
 
 
 def get_rows_from_dtable_db(dtable_db_api, table_name, limit=50000):
+    from dtable_events.utils.dtable_db_api import convert_db_rows
     offset = 10000
     start = 0
     dtable_rows = []
@@ -1126,7 +1127,8 @@ def get_rows_from_dtable_db(dtable_db_api, table_name, limit=50000):
 
         sql = f"SELECT * FROM `{table_name}` LIMIT {start}, {offset}"
 
-        response_rows = dtable_db_api.query(sql, server_only=True)
+        response_rows, metadata = dtable_db_api.query(sql, convert=False, server_only=True)
+        response_rows = convert_db_rows(metadata, response_rows)
         dtable_rows.extend(response_rows)
 
         start += offset

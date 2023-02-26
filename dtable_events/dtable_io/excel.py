@@ -1444,16 +1444,19 @@ def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unkn
             else:
                 c.number_format = gen_decimal_format(row[col_num])
         elif head[col_num][1] == ColumnTypes.DATE:
+            print(row[col_num])
             c = WriteOnlyCell(ws, value=_get_strtime_time(row[col_num]))
             if head[col_num][2]:
                 c.number_format = head[col_num][2].get('format', '')
             else:
                 c.number_format = 'YYYY-MM-DD'
         elif head[col_num][1] in (ColumnTypes.CTIME, ColumnTypes.MTIME):
-            if 'Z' in row[col_num]:
-                utc_time = datetime.strptime(row[col_num], '%Y-%m-%dT%H:%M:%S.%fZ')
+            value = row[col_num]
+            if 'Z' in value:
+                utc_time = datetime.strptime(value, '%Y-%m-%dT%H:%M:%S.%fZ')
             else:
-                utc_time = datetime.strptime(row[col_num], '%Y-%m-%dT%H:%M:%S.%f+00:00')
+                value = value[:value.find('+')]
+                utc_time = datetime.strptime(value, '%Y-%m-%dT%H:%M:%S.%f')
             c = WriteOnlyCell(ws, value=utc_to_tz(utc_time, timezone).strftime('%Y-%m-%d %H:%M:%S'))
         elif head[col_num][1] == ColumnTypes.COLLABORATOR:
             nickname_list = []
