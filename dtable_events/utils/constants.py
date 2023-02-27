@@ -150,6 +150,8 @@ class StatisticType:
     LINE_GROUP = 'line_group'
     TABLE = 'table'
     RING = 'ring'
+    HORIZONTAL_BAR = 'horizontal_bar'
+    HORIZONTAL_GROUP_BAR = 'horizontal_group_bar'
 
 
 # single/multiple select options
