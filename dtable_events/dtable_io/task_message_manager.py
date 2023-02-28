@@ -4,6 +4,7 @@ import queue
 import sys
 import threading
 import time
+import uuid
 
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, DTABLE_SERVER_URL
 
@@ -31,7 +32,7 @@ class TaskMessageManager(object):
     
     def add_email_sending_task(self, auth_info, send_info, username):
         from dtable_events.dtable_io import send_email_msg
-        task_id = str(int(time.time() * 1000))
+        task_id = str(uuid.uuid4())
         task = (send_email_msg,(auth_info, send_info, username, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
@@ -39,7 +40,7 @@ class TaskMessageManager(object):
 
     def add_wechat_sending_task(self, webhook_url, msg, msg_type):
         from dtable_events.dtable_io import send_wechat_msg
-        task_id = str(int(time.time() * 1000))
+        task_id = str(uuid.uuid4())
         task = (send_wechat_msg, (webhook_url, msg, msg_type))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
@@ -47,7 +48,7 @@ class TaskMessageManager(object):
 
     def add_dingtalk_sending_task(self, webhook_url, msg ):
         from dtable_events.dtable_io import send_dingtalk_msg
-        task_id = str(int(time.time() * 1000))
+        task_id = str(uuid.uuid4())
         task = (send_dingtalk_msg, (webhook_url, msg))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
@@ -76,6 +77,9 @@ class TaskMessageManager(object):
 
             try:
                 task = self.tasks_map[task_id]
+                if type(task[0]).__name__ != 'function':
+                    continue
+
                 self.current_task_info = task_id + ' ' + str(task[0])
                 dtable_message_logger.info('Run task: %s' % self.current_task_info)
                 start_time = time.time()

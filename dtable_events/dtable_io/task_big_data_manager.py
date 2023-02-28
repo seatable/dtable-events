@@ -1,4 +1,5 @@
 import time
+import uuid
 import queue
 import threading
 
@@ -54,6 +55,9 @@ class BigDataTaskManager(object):
 
             try:
                 task = self.tasks_map[task_id]
+                if type(task[0]).__name__ != 'function':
+                    continue
+
                 self.current_task_info = task_id + ' ' + str(task[0])
                 dtable_io_logger.info('Run task: %s' % self.current_task_info)
                 start_time = time.time()
@@ -73,7 +77,7 @@ class BigDataTaskManager(object):
 
     def add_import_big_excel_task(self, username, dtable_uuid, table_name, file_path):
         from dtable_events.dtable_io import import_big_excel
-        task_id = str(int(time.time()*1000))
+        task_id = str(uuid.uuid4())
         task = (import_big_excel,
                 (username, dtable_uuid, table_name, file_path, task_id, self.tasks_status_map))
         self.tasks_queue.put(task_id)
@@ -82,7 +86,7 @@ class BigDataTaskManager(object):
 
     def add_update_big_excel_task(self, username, dtable_uuid, table_name, file_path, ref_columns, is_insert_new_data=False):
         from dtable_events.dtable_io import update_big_excel
-        task_id = str(int(time.time()*1000))
+        task_id = str(uuid.uuid4())
         task = (update_big_excel,
                 (username, dtable_uuid, table_name, file_path, ref_columns, is_insert_new_data, task_id, self.tasks_status_map))
         self.tasks_queue.put(task_id)
@@ -92,7 +96,7 @@ class BigDataTaskManager(object):
     def add_convert_big_data_view_to_execl_task(self, dtable_uuid, table_id, view_id, username, name, repo_id, is_support_image):
         from dtable_events.dtable_io import convert_big_data_view_to_execl
 
-        task_id = str(int(time.time()*1000))
+        task_id = str(uuid.uuid4())
         task = (convert_big_data_view_to_execl,
                 (dtable_uuid, table_id, view_id, username, name, task_id, self.tasks_status_map, repo_id, is_support_image))
         self.tasks_queue.put(task_id)

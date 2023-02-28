@@ -1,6 +1,7 @@
 import queue
 import threading
 import time
+import uuid
 
 
 class TaskDataSyncManager(object):
@@ -25,7 +26,7 @@ class TaskDataSyncManager(object):
     def add_sync_email_task(self, context):
         from dtable_events.dtable_io import email_sync
 
-        task_id = str(int(time.time() * 1000))
+        task_id = str(uuid.uuid4())
         task = (email_sync, (context, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
@@ -53,6 +54,8 @@ class TaskDataSyncManager(object):
 
             try:
                 task = self.tasks_map[task_id]
+                if type(task[0]).__name__ != 'function':
+                    continue
                 task_info = task_id + ' ' + str(task[0])
                 self.current_task_info[task_id] = task_info
                 dtable_data_sync_logger.info('Run task: %s' % task_info)

@@ -1,3 +1,4 @@
+import uuid
 import queue
 import threading
 import time
@@ -25,7 +26,7 @@ class TaskPluginEmailManager(object):
     def add_send_email_task(self, context):
         from dtable_events.dtable_io import plugin_email_send_email
 
-        task_id = str(int(time.time() * 1000))
+        task_id = str(uuid.uuid4())
         task = (plugin_email_send_email, (context, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
@@ -53,6 +54,9 @@ class TaskPluginEmailManager(object):
 
             try:
                 task = self.tasks_map[task_id]
+                if type(task[0]).__name__ != 'function':
+                    continue
+
                 task_info = task_id + ' ' + str(task[0])
                 self.current_task_info[task_id] = task_info
                 dtable_plugin_email_logger.info('Run task: %s' % task_info)
