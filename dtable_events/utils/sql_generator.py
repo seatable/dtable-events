@@ -1047,9 +1047,9 @@ class StatisticSQLGenerator(object):
         return '%s(`%s`)' % (DTABLE_DB_SUMMARY_METHOD[summary_method], column_name)
 
     def _basic_statistic_2_sql(self):
-        if self.statistic_type == StatisticType.HORIZONTAL_BAR:
+        if self.statistic_type in [StatisticType.HORIZONTAL_BAR, StatisticType.HORIZONTAL_GROUP_BAR]:
             x_axis_column_key = self.statistic.get('vertical_axis_column_key', '')
-            x_axis_date_granularity = self.statistic.get('vertical_axis_date_granularity','')
+            x_axis_date_granularity = self.statistic.get('vertical_axis_date_granularity', '')
             x_axis_geolocation_granularity = self.statistic.get ('vertical_axis_geolocation_granularity', '')
             x_axis_include_empty_cells = self.statistic.get('vertical_axis_include_empty', False) or False
 
@@ -1064,7 +1064,7 @@ class StatisticSQLGenerator(object):
 
             y_axis_summary_type = self.statistic.get('y_axis_summary_type', '')
             y_axis_summary_method = self.statistic.get('y_axis_summary_method', '')
-            y_axis_summary_column_key = self.statistic.get('y_axis_summary_column_key', '')        
+            y_axis_summary_column_key = self.statistic.get('y_axis_summary_column_key', '')  
 
         groupby_column = self._get_column_by_key(x_axis_column_key)
         if not groupby_column:
