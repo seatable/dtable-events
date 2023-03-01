@@ -152,6 +152,7 @@ class StatisticType:
     RING = 'ring'
     HORIZONTAL_BAR = 'horizontal_bar'
     HORIZONTAL_GROUP_BAR = 'horizontal_group_bar'
+    AREA = 'area'
 
 
 # single/multiple select options

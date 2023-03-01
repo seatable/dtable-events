@@ -1307,7 +1307,7 @@ class StatisticSQLGenerator(object):
         if self.error:
             return '', self.error
 
-        if self.statistic_type in [StatisticType.BAR, StatisticType.LINE, StatisticType.HORIZONTAL_BAR]:
+        if self.statistic_type in [StatisticType.BAR, StatisticType.LINE, StatisticType.HORIZONTAL_BAR, StatisticType.AREA]:
             sql = self._basic_statistic_2_sql()
             return sql, self.error
 
