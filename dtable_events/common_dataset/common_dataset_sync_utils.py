@@ -1,11 +1,8 @@
 # -*- coding: utf-8 -*-
 import logging
-import os
 import re
-import sys
 from copy import deepcopy
 
-import requests
 from dateutil import parser
 
 from dtable_events.utils.sql_generator import BaseSQLGenerator

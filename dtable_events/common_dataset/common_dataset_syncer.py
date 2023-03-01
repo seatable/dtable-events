@@ -1,14 +1,10 @@
 import logging
-import time
 from datetime import datetime, timedelta
 from threading import Thread
 
-import jwt
-import requests
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from dtable_events import init_db_session_class
-from dtable_events.app.config import DTABLE_PRIVATE_KEY
 from dtable_events.common_dataset.common_dataset_sync_utils import import_sync_CDS, set_common_dataset_invalid, set_common_dataset_sync_invalid
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars, get_inner_dtable_server_url
 from dtable_events.utils.dtable_server_api import DTableServerAPI
@@ -39,23 +35,6 @@ class CommonDatasetSyncer(object):
 
     def is_enabled(self):
         return self._enabled
-
-
-def get_dtable_server_header(dtable_uuid):
-    try:
-        access_token = jwt.encode({
-            'dtable_uuid': dtable_uuid,
-            'username': 'dtable-events',
-            'permission': 'rw',
-            'exp': int(time.time()) + 60
-        },
-            DTABLE_PRIVATE_KEY,
-            algorithm='HS256'
-        )
-    except Exception as e:
-        logging.error(e)
-        return
-    return {'Authorization': 'Token ' + access_token}
 
 
 def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_id, dst_table_id, dataset_sync_id, dataset_id, db_session):
