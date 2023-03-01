@@ -706,7 +706,9 @@ def import_sync_CDS(context):
 
     src_table_name = context.get('src_table_name')
     src_view_name = context.get('src_view_name')
+    src_view_type = context.get('src_view_type', 'table')
     src_columns = context.get('src_columns')
+    src_enable_archive = context.get('src_enable_archive', False)
 
     dst_table_id = context.get('dst_table_id')
     dst_table_name = context.get('dst_table_name')
@@ -715,16 +717,16 @@ def import_sync_CDS(context):
     operator = context.get('operator')
     lang = context.get('lang', 'en')
 
-    to_archive = False
+    to_archive = context.get('to_archive', False)
 
     src_dtable_server_api = DTableServerAPI(operator, src_dtable_uuid, dtable_server_url)
     src_dtable_db_api = DTableDBAPI(operator, src_dtable_uuid, INNER_DTABLE_DB_URL)
     dst_dtable_server_api = DTableServerAPI(operator, dst_dtable_uuid, dtable_server_url)
     dst_dtable_db_api = DTableDBAPI(operator, dst_dtable_uuid, INNER_DTABLE_DB_URL)
 
-    server_only = True
+    server_only = not (to_archive and src_enable_archive and src_view_type == 'archive')
     is_sync = bool(dst_table_id)
-    logger.debug('to_archive: %s src_enable_archive: %s src_view_type: %s', to_archive, False, 'view')
+    logger.debug('to_archive: %s src_enable_archive: %s src_view_type: %s', to_archive, src_enable_archive, src_view_type)
 
     # fetch create dst table or update dst table columns
     # fetch all src view rows id, S
