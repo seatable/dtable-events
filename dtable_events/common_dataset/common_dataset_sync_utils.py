@@ -783,7 +783,7 @@ def import_sync_CDS(context):
         sql = f"SELECT `_id` FROM `{dst_table_name}` LIMIT {start}, {step}"
         logger.debug('fetch dst rows-id sql: %s', sql)
         try:
-            rows = dst_dtable_db_api.query(sql, convert=False, server_only=(not to_archive))
+            rows = dst_dtable_db_api.query(sql, convert=False, server_only=False)
         except Exception as e:
             logger.error('fetch dst rows id error: %s', e)
             return {
@@ -826,10 +826,10 @@ def import_sync_CDS(context):
                 'task_status_code': 500
             }
 
-        ## fetch src to-be-updated-rows
+        ## fetch dst to-be-updated-rows
         sql = f"SELECT {query_columns} FROM `{dst_table_name}` WHERE _id IN ({rows_id_str}) LIMIT {step}"
         try:
-            dst_rows = dst_dtable_db_api.query(sql, convert=False, server_only=(not to_archive))
+            dst_rows = dst_dtable_db_api.query(sql, convert=False, server_only=False)
         except Exception as e:
             logger.error('fetch dst to-be-updated-rows error: %s', e)
             return {
