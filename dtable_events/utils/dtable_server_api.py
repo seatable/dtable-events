@@ -222,23 +222,6 @@ class DTableServerAPI(object):
         response = requests.delete(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
-    def internal_filter_rows(self, json_data):
-        """
-        for example:
-            json_data = {
-                'table_id': table_id,
-                'filter_conditions': {
-                    'filter_groups':filter_groups,
-                    'group_conjunction': 'And'
-                },
-                'limit': 500
-            }
-        """
-        logger.debug('internal filter rows json_data: %s', json_data)
-        url = self.dtable_server_url + '/api/v1/internal/dtables/' + self.dtable_uuid + '/filter-rows/?from=dtable_events'
-        response = requests.post(url, json=json_data, headers=self.headers, timeout=self.timeout)
-        return parse_response(response)
-
     def lock_rows(self, table_name, row_ids):
         logger.debug('lock rows table_name: %s row_ids: %s', table_name, row_ids)
         url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/lock-rows/?from=dtable_events'

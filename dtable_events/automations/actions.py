@@ -1697,21 +1697,12 @@ class CalculateAction(BaseAction):
     def get_row_value(self, row, column):
         col_name = column.get('name')
         value = row.get(col_name)
-        if not value:
-            value = 0
         if self.is_group_view and column.get('type') in [ColumnTypes.FORMULA, ColumnTypes.LINK_FORMULA]:
             value = parse_formula_number(value, column.get('data'))
         return value
 
     def get_date_value(self, row, col_name):
-        # default_date is for formatting date
-        default_date = '2022-01-01T00:00:00'
-        value = row.get(col_name)
-        if not value:
-            value = default_date
-        if '+' in value:
-            value = value[:value.find('+')]
-        return datetime.fromisoformat(value)
+        return parser.parse(row.get(col_name))
 
     def parse_rows(self, rows):
         calculate_col = self.column_key_dict.get(self.calculate_column_key, {})
@@ -1766,6 +1757,16 @@ class CalculateAction(BaseAction):
                 break
         return rows
 
+    def can_rank_date(self, column):
+        column_type = column.get('type')
+        if column_type == ColumnTypes.DATE:
+            return True
+        elif column_type == ColumnTypes.FORMULA and column.get('data').get('result_type') == 'date':
+            return True
+        elif column_type == ColumnTypes.LINK_FORMULA and column.get('data').get('result_type') == 'date':
+            return True
+        return False
+
     def init_updates(self):
         calculate_col = self.column_key_dict.get(self.calculate_column_key, {})
         result_col = self.column_key_dict.get(self.result_column_key, {})
@@ -1801,34 +1802,30 @@ class CalculateAction(BaseAction):
             self.parse_rows(view_rows)
 
         if self.action_type == 'calculate_rank':
-            calculate_col_type = calculate_col.get('type')
-            if is_number_format(calculate_col):
-                self.rank_rows = sorted(self.rank_rows, key=lambda x: float(self.get_row_value(x, calculate_col)), reverse=True)
+            to_be_sorted_rows = []
+            for row in self.rank_rows:
+                if row.get(calculate_col_name):
+                    to_be_sorted_rows.append(row)
+                    continue
+                self.update_rows.append({'row_id': row.get('_id'), 'row': {result_col_name: None}})
 
-            elif calculate_col_type == ColumnTypes.DATE or \
-                    calculate_col_type == ColumnTypes.FORMULA and calculate_col.get('data').get('result_type') == 'date':
-                self.rank_rows = sorted(self.rank_rows,
-                                        key=lambda x: self.get_date_value(x, calculate_col_name),
-                                        reverse=True)
-            elif calculate_col_type == ColumnTypes.LINK_FORMULA and calculate_col.get('data').get('result_type') == 'date':
-                self.rank_rows = sorted(self.rank_rows,
-                                        key=lambda x: self.get_date_value(x, calculate_col_name),
-                                        reverse=True)
+            if is_number_format(calculate_col):
+                to_be_sorted_rows = sorted(to_be_sorted_rows, key=lambda x: float(self.get_row_value(x, calculate_col)), reverse=True)
+
+            elif self.can_rank_date(calculate_col):
+                to_be_sorted_rows = sorted(to_be_sorted_rows, key=lambda x: self.get_date_value(x, calculate_col_name), reverse=True)
+
             rank = 0
             real_rank = 0
             pre_value = None
-            for row in self.rank_rows:
+            for row in to_be_sorted_rows:
                 cal_value = row.get(calculate_col_name)
                 row_id = row.get('_id')
-                if cal_value is None:
-                    result_row = {result_col_name: None}
-                else:
-                    real_rank += 1
-                    if rank == 0 or cal_value != pre_value:
-                        rank = real_rank
-                        pre_value = cal_value
-                    result_row = {result_col_name: rank}
-
+                real_rank += 1
+                if rank == 0 or cal_value != pre_value:
+                    rank = real_rank
+                    pre_value = cal_value
+                result_row = {result_col_name: rank}
                 self.update_rows.append({'row_id': row_id, 'row': result_row})
 
     def can_do_action(self):

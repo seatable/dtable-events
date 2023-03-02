@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 import openpyxl
+from dateutil import parser
 from openpyxl.styles import PatternFill
 from openpyxl import load_workbook
 from copy import deepcopy
@@ -1422,6 +1423,11 @@ def add_image_to_excel(ws, row, col_num, row_num, dtable_uuid, repo_id, image_nu
     return image_num
 
 
+def format_ctime(cell_value):
+    timestamp = parser.isoparse(cell_value).timestamp()
+    return datetime.utcfromtimestamp(timestamp)
+
+
 def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id, image_param):
     from openpyxl.cell import WriteOnlyCell
     cell_list = []
@@ -1450,12 +1456,7 @@ def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unkn
             else:
                 c.number_format = 'YYYY-MM-DD'
         elif head[col_num][1] in (ColumnTypes.CTIME, ColumnTypes.MTIME):
-            value = row[col_num]
-            if 'Z' in value:
-                utc_time = datetime.strptime(value, '%Y-%m-%dT%H:%M:%S.%fZ')
-            else:
-                value = value[:value.find('+')]
-                utc_time = datetime.strptime(value, '%Y-%m-%dT%H:%M:%S.%f')
+            utc_time = format_ctime(row[col_num])
             c = WriteOnlyCell(ws, value=utc_to_tz(utc_time, timezone).strftime('%Y-%m-%d %H:%M:%S'))
         elif head[col_num][1] == ColumnTypes.COLLABORATOR:
             nickname_list = []
