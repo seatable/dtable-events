@@ -1,10 +1,14 @@
 import logging
+import time
 from datetime import datetime, timedelta
 from threading import Thread
 
+import jwt
+import requests
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from dtable_events import init_db_session_class
+from dtable_events.app.config import DTABLE_PRIVATE_KEY
 from dtable_events.common_dataset.common_dataset_sync_utils import import_sync_CDS, set_common_dataset_invalid, set_common_dataset_sync_invalid
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars, get_inner_dtable_server_url
 from dtable_events.utils.dtable_server_api import DTableServerAPI
@@ -37,6 +41,23 @@ class CommonDatasetSyncer(object):
         return self._enabled
 
 
+def get_dtable_server_header(dtable_uuid):
+    try:
+        access_token = jwt.encode({
+            'dtable_uuid': dtable_uuid,
+            'username': 'dtable-events',
+            'permission': 'rw',
+            'exp': int(time.time()) + 60
+        },
+            DTABLE_PRIVATE_KEY,
+            algorithm='HS256'
+        )
+    except Exception as e:
+        logging.error(e)
+        return
+    return {'Authorization': 'Token ' + access_token}
+
+
 def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_id, dst_table_id, dataset_sync_id, dataset_id, db_session):
     """
     return assets -> dict
@@ -59,7 +80,7 @@ def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_
     if not src_table:
         set_common_dataset_invalid(dataset_id, db_session)
         set_common_dataset_sync_invalid(dataset_sync_id, db_session)
-        logging.warning('Source table not found.')
+        logging.error('Source table not found.')
         return None
     for view in src_table.get('views', []):
         if view['_id'] == src_view_id:
@@ -68,11 +89,12 @@ def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_
     if not src_view:
         set_common_dataset_invalid(dataset_id, db_session)
         set_common_dataset_sync_invalid(dataset_sync_id, db_session)
-        logging.warning('Source view not found.')
+        logging.error('Source view not found.')
         return None
 
-    src_columns = [col for col in src_table.get('columns', []) if col['key'] not in src_view.get('hidden_columns', [])]
+    src_columns = [col for col in src_table.get('columns', []) if col not in src_view.get('hidden_columns', [])]
 
+    src_enable_archive = (src_dtable_metadata.get('settings') or {}).get('enable_archive', False)
     src_version = src_dtable_metadata.get('version')
 
     dst_table = None
@@ -82,14 +104,17 @@ def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_
                 dst_table = table
                 break
         if not dst_table:
+            set_common_dataset_invalid(dataset_id, db_session)
             set_common_dataset_sync_invalid(dataset_sync_id, db_session)
-            logging.warning('Destination table not found.')
+            logging.error('Destination table not found.')
             return None
 
     return {
         'src_table_name': src_table['name'],
         'src_view_name': src_view['name'],
+        'src_view_type': src_view.get('type', 'table'),
         'src_columns': src_columns,
+        'src_enable_archive': src_enable_archive,
         'src_version': src_version,
         'dst_table_name': dst_table['name'] if dst_table else None,
         'dst_columns': dst_table['columns'] if dst_table else None
@@ -136,7 +161,7 @@ def update_sync_time_and_version(db_session, update_map):
 
 
 def check_common_dataset(db_session):
-    dataset_sync_list = list(list_pending_common_dataset_syncs(db_session))
+    dataset_sync_list = list_pending_common_dataset_syncs(db_session)
     sync_count = 0
     dataset_update_map = {}
     for dataset_sync in dataset_sync_list:
