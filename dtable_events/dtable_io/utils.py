@@ -843,7 +843,7 @@ def append_rows_by_dtable_server(dtable_server_api, rows_data, table_name):
         offset = offset + 1000
         if not rows:
             break
-        dtable_server_api.batch_append_rows(table_name, rows_data)
+        dtable_server_api.batch_append_rows(table_name, rows)
         time.sleep(0.5)
 
 
@@ -1155,16 +1155,14 @@ def extract_select_options(rows, column_name_to_column):
         # get column options for adding single-select or multiple-select columns
         for col_name in row:
             col_type = column_name_to_column.get(col_name, {}).get('type')
-            cell_value = row.get(col_name)
-            if not cell_value:
-                continue
+            column_data = row.get(col_name)
             if col_type in ['multiple-select', 'single-select']:
                 col_options = select_column_options.get(col_name, set())
                 if not col_options:
                     select_column_options[col_name] = col_options
                 if col_type == 'multiple-select':
-                    col_options.update(set(cell_value))
+                    col_options.update(set(column_data))
                 else:
-                    col_options.add(cell_value)
+                    col_options.add(column_data)
 
     return select_column_options
