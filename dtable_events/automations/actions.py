@@ -1486,6 +1486,7 @@ class AddRecordToOtherTableAction(BaseAction):
             return cur_datetime_offset.strftime("%Y-%m-%d")
 
     def init_append_rows(self):
+        raw_row = self.data['row']
         src_row = self.data['converted_row']
         self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
 
@@ -1522,6 +1523,9 @@ class AddRecordToOtherTableAction(BaseAction):
                         elif set_type == 'relative_date':
                             offset = time_dict.get('offset')
                             filtered_updates[col_name] = self.format_time_by_offset(int(offset), format_length)
+                        elif set_type == 'date_column':
+                            date_column_key = time_dict.get('date_column_key')
+                            filtered_updates[col_name] = raw_row.get(date_column_key)
                     except Exception as e:
                         logger.error(e)
                         filtered_updates[col_name] = self.row.get(col_key)
