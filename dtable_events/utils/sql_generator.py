@@ -16,11 +16,11 @@ from dtable_events.utils.dtable_column_utils import is_numeric_column, is_date_c
 logger = logging.getLogger(__name__)
 
 DTABLE_DB_SUMMARY_METHOD = {
-  'MEAN': 'AVG',
-  'MAX': 'MAX',
-  'SUM': 'SUM',
-  'MIN': 'MIN',
-  'COUNT': 'COUNT'
+    'MEAN': 'AVG',
+    'MAX': 'MAX',
+    'SUM': 'SUM',
+    'MIN': 'MIN',
+    'COUNT': 'COUNT'
 }
 
 class Operator(object):
@@ -1037,6 +1037,16 @@ class StatisticSQLGenerator(object):
             if date_granularity == 'MIN':
                 return 'MIN(%s)' % valid_column_name
             return 'ISOMONTH(%s)' % column_name
+        if type == ColumnTypes.GEOLOCATION:
+            geolocation_granularity = group_by.get('geolocation_granularity', '')
+            geolocation_granularity = geolocation_granularity.upper()
+            if geolocation_granularity == 'PROVINCE':
+                return 'PROVINCE(%s)' % (valid_column_name)
+            if geolocation_granularity == 'CITY':
+                return 'CITY(%s)' % (valid_column_name)
+            if geolocation_granularity == 'DISTRICT':
+                return 'DISTRICT(%s)' % (valid_column_name)
+            return valid_column_name
         else:
             return valid_column_name
 
