@@ -1155,14 +1155,16 @@ def extract_select_options(rows, column_name_to_column):
         # get column options for adding single-select or multiple-select columns
         for col_name in row:
             col_type = column_name_to_column.get(col_name, {}).get('type')
-            column_data = row.get(col_name)
+            cell_value = row.get(col_name)
+            if not cell_value:
+                continue
             if col_type in ['multiple-select', 'single-select']:
                 col_options = select_column_options.get(col_name, set())
                 if not col_options:
                     select_column_options[col_name] = col_options
                 if col_type == 'multiple-select':
-                    col_options.update(set(column_data))
+                    col_options.update(set(cell_value))
                 else:
-                    col_options.add(column_data)
+                    col_options.add(cell_value)
 
     return select_column_options

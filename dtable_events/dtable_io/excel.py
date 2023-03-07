@@ -707,7 +707,7 @@ def get_cell_value(row, col, excel_col_name_to_type):
 
 def get_insert_update_rows(dtable_col_name_to_column, excel_rows, dtable_rows, key_columns, need_select_option=False):
     if not excel_rows:
-        return [], []
+        return [], [], {}
     update_rows = []
     insert_rows = []
     excel_select_column_options = {}
@@ -727,15 +727,17 @@ def get_insert_update_rows(dtable_col_name_to_column, excel_rows, dtable_rows, k
             # get column options for update single-select or multiple-select columns
             for col_name in excel_row:
                 col_type = excel_col_name_to_type.get(col_name)
-                column_data = excel_row.get(col_name)
+                cell_value = excel_row.get(col_name)
+                if not cell_value:
+                    continue
                 if col_type in ['multiple-select', 'single-select']:
                     col_options = excel_select_column_options.get(col_name, set())
                     if not col_options:
                         excel_select_column_options[col_name] = col_options
                     if col_type == 'multiple-select':
-                        col_options.update(set(column_data))
+                        col_options.update(set(cell_value))
                     else:
-                        col_options.add(column_data)
+                        col_options.add(cell_value)
 
         dtable_row = dtable_row_data.get(key)
         if not dtable_row:
@@ -1278,27 +1280,6 @@ def gen_decimal_format(num):
     return '0.' + '0' * decimal_cnt
 
 
-def _get_strtime_time(time_str):
-    from dtable_events.dtable_io import dtable_io_logger
-
-    try:
-        time_str = time_str.strip()
-    except:
-        return ''
-
-    if not time_str:
-        return ''
-
-    try:
-        if ' ' in time_str:
-            return datetime.strptime(time_str, '%Y-%m-%d %H:%M')
-        else:
-            return datetime.strptime(time_str, '%Y-%m-%d')
-    except Exception as e:
-        dtable_io_logger.debug(e)
-    return time_str
-
-
 def check_and_replace_sheet_name(sheet_name):
     """/ ?\ * [ ] chars is invalid excel sheet name, replace these chars with _ """
 
@@ -1344,7 +1325,7 @@ def get_file_download_url(file_url, dtable_uuid, repo_id):
     from seaserv import seafile_api
     from dtable_events.utils import uuid_str_to_36_chars, normalize_file_path, gen_file_get_url
 
-    file_path = unquote('/'.join(file_url.split('/')[-3:]).strip())
+    file_path = unquote('/'.join(file_url.split('/')[7:]).strip())
     asset_path = normalize_file_path(os.path.join('/asset', uuid_str_to_36_chars(dtable_uuid), file_path))
     asset_id = seafile_api.get_file_id_by_path(repo_id, asset_path)
     asset_name = os.path.basename(normalize_file_path(file_path))
@@ -1363,7 +1344,6 @@ def add_image_to_excel(ws, row, col_num, row_num, dtable_uuid, repo_id, image_nu
     from openpyxl.drawing.image import Image
     from PIL import Image as PILImage
     from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, TwoCellAnchor
-    from urllib.parse import unquote
 
     images = row[col_num]
     row_pos = str(row_num + 1)
@@ -1375,11 +1355,10 @@ def add_image_to_excel(ws, row, col_num, row_num, dtable_uuid, repo_id, image_nu
     for image_url in images:
         if image_num >= EXPORT_IMAGE_LIMIT:
             return image_num
-        image_path = unquote('/'.join(image_url.split('/')[-2:]).strip())
 
-        image_month_dir = os.path.join(images_target_dir, '/'.join(image_url.split('/')[-2:-1]))
-        if not os.path.exists(image_month_dir):
-            os.mkdir(image_month_dir)
+        image_name = image_url.split('/')[-1].strip()
+        image_dir = os.path.join(images_target_dir, '/'.join(image_url.split('/')[7:-1]))
+        os.makedirs(image_dir, exist_ok=True)
 
         image_download_url = get_file_download_url(image_url, dtable_uuid, repo_id)
         if not image_download_url:
@@ -1388,7 +1367,7 @@ def add_image_to_excel(ws, row, col_num, row_num, dtable_uuid, repo_id, image_nu
         response = requests.get(image_download_url)
         image_content = response.content
 
-        tmp_image_path = os.path.join(images_target_dir, image_path)
+        tmp_image_path = os.path.join(images_target_dir, image_dir, image_name)
         with open(tmp_image_path, 'wb') as f:
             f.write(image_content)
 
@@ -1401,8 +1380,8 @@ def add_image_to_excel(ws, row, col_num, row_num, dtable_uuid, repo_id, image_nu
         if image_format in ('webp', ):
             img = PILImage.open(tmp_image_path)
             img.load()
-            image_name = image_path.split('.')[0] + '.png'
-            new_tmp_image_path = os.path.join(images_target_dir, image_name)
+            image_name = image_name.split('.')[0] + '.png'
+            new_tmp_image_path = os.path.join(images_target_dir, image_dir, image_name)
             img.save(new_tmp_image_path, format='png')
             # remove webp image
             os.remove(tmp_image_path)
@@ -1450,7 +1429,8 @@ def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unkn
             else:
                 c.number_format = gen_decimal_format(row[col_num])
         elif head[col_num][1] == ColumnTypes.DATE:
-            c = WriteOnlyCell(ws, value=_get_strtime_time(row[col_num]))
+            utc_time = format_ctime(row[col_num])
+            c = WriteOnlyCell(ws, value=utc_to_tz(utc_time, timezone))
             if head[col_num][2]:
                 c.number_format = head[col_num][2].get('format', '')
             else:

@@ -861,7 +861,7 @@ class SendEmailAction(BaseAction):
         return fill_msg_blanks_with_sql_row(text, blanks, col_name_dict, row, db_session)
 
     def get_file_down_url(self, file_url):
-        file_path = unquote('/'.join(file_url.split('/')[-3:]).strip())
+        file_path = unquote('/'.join(file_url.split('/')[7:]).strip())
 
         asset_path = normalize_file_path(os.path.join('/asset', uuid_str_to_36_chars(self.auto_rule.dtable_uuid), file_path))
         asset_id = seafile_api.get_file_id_by_path(self.repo_id, asset_path)

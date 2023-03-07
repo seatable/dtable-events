@@ -567,7 +567,7 @@ class DateOperator(Operator):
         start_date, end_date = self._other_date()
         if not (start_date, end_date):
             return ""
-        return "`%(column_name)s` >= '%(start_date)s' and `%(column_name)s` < '%(end_date)s'" % ({
+        return "`%(column_name)s` >= '%(start_date)s' and `%(column_name)s` <= '%(end_date)s'" % ({
             "column_name": self.column_name,
             "start_date": self._format_date(start_date),
             "end_date": self._format_date(end_date)
