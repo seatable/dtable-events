@@ -1573,6 +1573,7 @@ class TriggerWorkflowAction(BaseAction):
             'row': {}
         }
         self.token = token
+        self.is_valid = True
         self.init_updates()
 
     def format_time_by_offset(self, offset, format_length):
@@ -1597,7 +1598,8 @@ class TriggerWorkflowAction(BaseAction):
         return workflow_table_id == self.auto_rule.table_id
 
     def init_updates(self):
-        if not self.is_workflow_valid():
+        self.is_valid = self.is_workflow_valid()
+        if not self.is_valid:
             return
         # filter columns in view and type of column is in VALID_COLUMN_TYPES
         filtered_updates = {}
@@ -1630,6 +1632,8 @@ class TriggerWorkflowAction(BaseAction):
         self.row_data['row'] = filtered_updates
 
     def do_action(self):
+        if not self.is_valid:
+            return
         try:
             logger.debug('rule: %s new workflow: %s task row data: %s', self.auto_rule.rule_id, self.token, self.row_data)
             resp_data = self.auto_rule.dtable_server_api.append_row(self.auto_rule.table_info['name'], self.row_data['row'])

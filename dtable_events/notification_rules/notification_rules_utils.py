@@ -449,7 +449,7 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
     temp_users = []
     for user in users:
         if user and user not in related_users_dict:
-            logger.error('notify rule: %s has invalid user: %s', rule_id, user)
+            logger.warning('notify rule: %s has invalid user: %s', rule_id, user)
             deal_invalid_rule(rule_id, db_session)
             return
         if user:
@@ -599,7 +599,7 @@ def trigger_near_deadline_notification_rule(rule, db_session):
     temp_users = []
     for user in users:
         if user and user not in related_users_dict:
-            logger.error('notify rule: %s has invalid user: %s', rule_id, user)
+            logger.warning('notify rule: %s has invalid user: %s', rule_id, user)
             deal_invalid_rule(rule_id, db_session)
             return
         if user:

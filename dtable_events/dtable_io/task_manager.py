@@ -353,6 +353,7 @@ class TaskManager(object):
                     # Including source/destination table not found...
                     dtable_io_logger.warning('Failed to handle task %s error: %s \n' % (task_id, e))
                 else:
+                    dtable_io_logger.exception(e)
                     dtable_io_logger.error('Failed to handle task %s, error: %s \n' % (task_id, e))
                 self.tasks_map[task_id] = 'error_' + str(e.args[0])
                 self.current_task_info.pop(task_id, None)
