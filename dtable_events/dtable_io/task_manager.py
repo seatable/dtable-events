@@ -329,11 +329,10 @@ class TaskManager(object):
                 continue
 
             task = self.tasks_map.get(task_id)
+            if type(task[0]).__name__ != 'function':
+                continue
+            task_info = task_id + ' ' + str(task[0])
             try:
-                if type(task[0]).__name__ != 'function':
-                    continue
-
-                task_info = task_id + ' ' + str(task[0])
                 self.current_task_info[task_id] = task_info
                 dtable_io_logger.info('Run task: %s' % task_info)
                 start_time = time.time()
@@ -347,14 +346,14 @@ class TaskManager(object):
                 self.current_task_info.pop(task_id, None)
             except Exception as e:
                 if str(e.args[0]) == 'the number of cells accessing the table exceeds the limit':
-                    dtable_io_logger.warning('Failed to handle task %s, error: %s \n' % (task_id, e))
+                    dtable_io_logger.warning('Failed to handle task %s, error: %s \n' % (task_info, e))
                 elif str(e.args[0]).startswith('import_sync_common_dataset:'):
                     # Errors in import/sync common dataset, those have been record in real task code, so no duplicated error logs here
                     # Including source/destination table not found...
-                    dtable_io_logger.warning('Failed to handle task %s error: %s \n' % (task_id, e))
+                    dtable_io_logger.warning('Failed to handle task %s error: %s \n' % (task_info, e))
                 else:
                     dtable_io_logger.exception(e)
-                    dtable_io_logger.error('Failed to handle task %s, error: %s \n' % (task_id, e))
+                    dtable_io_logger.error('Failed to handle task %s, error: %s \n' % (task_info, e))
                 self.tasks_map[task_id] = 'error_' + str(e.args[0])
                 self.current_task_info.pop(task_id, None)
             finally:
