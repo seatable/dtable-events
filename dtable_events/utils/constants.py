@@ -155,6 +155,7 @@ class StatisticType:
     AREA = 'area'
     BASIC_NUMBER_CARD = 'basic_number_card'
     TREE_MAP = 'tree_map'
+    COMBINATION = 'combination'
 
 
 # single/multiple select options

@@ -1176,6 +1176,86 @@ class StatisticSQLGenerator(object):
         column_groupby_column_name = self._statistic_column_name_to_sql(column_groupby_column, { 'date_granularity': column_groupby_date_granularity, 'geolocation_granularity': column_groupby_geolocation_granularity })
         return 'SELECT %s, %s, %s FROM %s %s GROUP BY %s, %s LIMIT 0, 5000' % (groupby_column_name, column_groupby_column_name, summary_column_name, self.table_name, self.filter_sql, groupby_column_name, column_groupby_column_name)
 
+    def _combination_chart_statistic_2_sql(self):
+        x_axis_column_key = self.statistic.get('x_axis_column_key', '')
+        x_axis_date_granularity = self.statistic.get('x_axis_date_granularity', '')
+        x_axis_geolocation_granularity = self.statistic.get('x_axis_geolocation_granularity', '')
+        x_axis_include_empty_cells = self.statistic.get('x_axis_include_empty_cells', False) or False
+        y_axis_left_summary_type = self.statistic.get('y_axis_left_summary_type', '')
+        y_axis_left_summary_method = self.statistic.get('y_axis_left_summary_method', '')
+        y_axis_left_summary_column = self.statistic.get('y_axis_left_summary_column', '')
+        y_axis_left_group_by_multiple_numeric_column = self.statistic.get('y_axis_left_group_by_multiple_numeric_column', False) or False
+        y_axis_left_group_by_numeric_columns = self.statistic.get('y_axis_left_group_by_numeric_columns', []) or []
+
+        y_axis_right_summary_type = self.statistic.get('y_axis_right_summary_type', '')
+        y_axis_right_summary_method = self.statistic.get('y_axis_right_summary_method', '') 
+        y_axis_right_summary_column = self.statistic.get('y_axis_right_summary_column', '') 
+
+        groupby_column = self._get_column_by_key(x_axis_column_key)
+        if not groupby_column:
+            self.error = 'Group by column not found'
+            return ''
+
+        self._update_filter_sql(x_axis_include_empty_cells, groupby_column)
+        groupby_column_name = self._statistic_column_name_to_sql(groupby_column, { 'date_granularity': x_axis_date_granularity, 'geolocation_granularity': x_axis_geolocation_granularity })
+        left_summary_type = y_axis_left_summary_type.upper()
+        right_summary_type = y_axis_right_summary_type.upper()
+        if left_summary_type == 'COUNT':
+            # column_groupby_column = self._get_column_by_key(column_groupby_column_key)
+            summary_column_name = None
+            if right_summary_type == 'COUNT': 
+                summary_column_name = self._summary_column_2_sql('COUNT', groupby_column)
+            else:
+                right_summary_column = self._get_column_by_key(y_axis_right_summary_column)
+                if right_summary_column:
+                    right_summary_method = y_axis_right_summary_method.upper()
+                    summary_column_name = self._summary_column_2_sql(right_summary_method, right_summary_column)
+            if summary_column_name:
+                return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, summary_column_name, self.table_name, self.filter_sql, groupby_column_name)
+            return 'SELECT %s FROM %s %s GROUP BY %s LIMIT 0, 5000`' % (groupby_column_name, self.table_name, self.filter_sql, groupby_column_name)
+        
+        if y_axis_left_group_by_multiple_numeric_column:
+            column_groupby_numeric_columns = y_axis_left_group_by_numeric_columns
+            column_groupby_numeric_columns.insert(0, { 'column_key': y_axis_left_summary_column, 'summary_method': y_axis_left_summary_method })
+
+            column_groupby_numeric_column_names = []
+            for summary_column_obj in column_groupby_numeric_columns:
+                summary_column_key = summary_column_obj.get('column_key', '')
+                summary_method = summary_column_obj.get('summary_method', '').upper()
+                if not summary_column_key:
+                    continue
+                summary_column = self._get_column_by_key(summary_column_key)
+                if not summary_column:
+                    continue
+                summary_column_name = self._summary_column_2_sql(summary_method, summary_column)
+                column_groupby_numeric_column_names.append(summary_column_name)
+            column_groupby_numeric_column_names_string = ', '.join(column_groupby_numeric_column_names)
+            if right_summary_type == 'COUNT': 
+                summary_column_name = self._summary_column_2_sql('COUNT', groupby_column)
+            else:
+                right_summary_column = self._get_column_by_key(y_axis_right_summary_column)
+                if right_summary_column:
+                    right_summary_method = y_axis_right_summary_method.upper()
+                    summary_column_name = self._summary_column_2_sql(right_summary_method, right_summary_column)
+            if summary_column_name:
+                return 'SELECT %s, %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, summary_column_name, column_groupby_numeric_column_names_string, self.table_name, self.filter_sql, groupby_column_name)
+            return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, column_groupby_numeric_column_names_string, self.table_name, self.filter_sql, groupby_column_name)
+        summary_column = self._get_column_by_key(y_axis_left_summary_column)
+
+        summary_method = y_axis_left_summary_method.upper()
+        left_summary_column_name = self._summary_column_2_sql(summary_method, summary_column)
+
+        if right_summary_type == 'COUNT': 
+            summary_column_name = self._summary_column_2_sql('COUNT', groupby_column)
+        else:
+            right_summary_column = self._get_column_by_key(y_axis_right_summary_column)
+            if right_summary_column:
+                right_summary_method = y_axis_right_summary_method.upper()
+                summary_column_name = self._summary_column_2_sql(right_summary_method, right_summary_column)
+        if summary_column_name:
+            return 'SELECT %s, %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, summary_column_name, left_summary_column_name, self.table_name, self.filter_sql, groupby_column_name)
+        return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, left_summary_column_name, self.table_name, self.filter_sql, groupby_column_name)
+        
     def _one_dimension_statistic_table_2_sql(self):
         groupby_column_key = self.statistic.get('groupby_column_key', '')
         summary_type = self.statistic.get('summary_type', '')
@@ -1346,6 +1426,10 @@ class StatisticSQLGenerator(object):
                 return sql, self.error
             
             sql = self._grouping_statistic_2_sql()
+            return sql, self.error
+        
+        if self.statistic_type == StatisticType.COMBINATION:
+            sql = self._combination_chart_statistic_2_sql()
             return sql, self.error
 
         if self.statistic_type in [ StatisticType.PIE, StatisticType.RING, StatisticType.TREE_MAP]:
