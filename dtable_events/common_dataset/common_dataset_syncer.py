@@ -99,7 +99,7 @@ def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_
         logging.error('Source view not found.')
         return None
 
-    src_columns = [col for col in src_table.get('columns', []) if col not in src_view.get('hidden_columns', [])]
+    src_columns = [col for col in src_table.get('columns', []) if col['key'] not in src_view.get('hidden_columns', [])]
 
     src_enable_archive = (src_dtable_metadata.get('settings') or {}).get('enable_archive', False)
     src_version = src_dtable_metadata.get('version')

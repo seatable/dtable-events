@@ -786,7 +786,7 @@ def import_sync_CDS(context):
         sql = sql_template + (" LIMIT {offset}, {limit}".format(offset=start, limit=step))
         logger.debug('fetch src rows-id sql: %s', sql)
         try:
-            rows = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
+            rows, _ = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
         except Exception as e:
             logger.error('fetch src rows id error: %s', e)
             return {
@@ -811,7 +811,7 @@ def import_sync_CDS(context):
         sql = f"SELECT `_id` FROM `{dst_table_name}` LIMIT {start}, {step}"
         logger.debug('fetch dst rows-id sql: %s', sql)
         try:
-            rows = dst_dtable_db_api.query(sql, convert=False, server_only=(not to_archive))
+            rows, _ = dst_dtable_db_api.query(sql, convert=False, server_only=(not to_archive))
         except Exception as e:
             logger.error('fetch dst rows id error: %s', e)
             return {
@@ -845,7 +845,7 @@ def import_sync_CDS(context):
         rows_id_str = ', '.join(["'%s'" % row_id for row_id in to_be_updated_rows_id_list[i: i+step]])
         sql = f"SELECT {query_columns} FROM `{src_table_name}` WHERE _id IN ({rows_id_str}) LIMIT {step}"
         try:
-            src_rows = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
+            src_rows, _ = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
         except Exception as e:
             logger.error('fetch src to-be-updated-rows error: %s', e)
             return {
@@ -857,7 +857,7 @@ def import_sync_CDS(context):
         ## fetch src to-be-updated-rows
         sql = f"SELECT {query_columns} FROM `{dst_table_name}` WHERE _id IN ({rows_id_str}) LIMIT {step}"
         try:
-            dst_rows = dst_dtable_db_api.query(sql, convert=False, server_only=(not to_archive))
+            dst_rows, _ = dst_dtable_db_api.query(sql, convert=False, server_only=(not to_archive))
         except Exception as e:
             logger.error('fetch dst to-be-updated-rows error: %s', e)
             return {
@@ -893,7 +893,7 @@ def import_sync_CDS(context):
         else:
             sql = f"SELECT {query_columns} FROM `{src_table_name}` WHERE `_id` IN ({rows_id_str}) LIMIT {step}"
         try:
-            src_rows = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
+            src_rows, _ = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
         except Exception as e:
             logger.error('fetch to-be-appended-rows error: %s', e)
             return {
