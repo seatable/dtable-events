@@ -902,7 +902,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
             filter_conditions['start'] = start
             filter_conditions['limit'] = offset
 
-            sql = filter2sql(table_name, cols_without_hidden, filter_conditions, by_group=False)
+            sql = filter2sql(table_name, cols, filter_conditions, by_group=False)
 
             response_rows, _ = dtable_db_api.query(sql)
             dtable_rows.extend(response_rows)
@@ -910,7 +910,6 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
             start += offset
             if start >= export_limit or len(response_rows) < offset:
                 break
-
     data_list, grouped_row_num_map = parse_view_rows(dtable_rows, head_list, summary_col_info, cols_without_hidden)
 
     try:
