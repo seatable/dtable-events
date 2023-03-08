@@ -455,7 +455,7 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
 
         filter_conditions['start'] = start
         filter_conditions['limit'] = offset
-        sql = filter2sql(table_name, cols_without_hidden, filter_conditions, by_group=False)
+        sql = filter2sql(table_name, cols, filter_conditions, by_group=False)
         response_rows, db_metadata = dtable_db_api.query(sql, convert=False, server_only=False)
         response_rows = convert_db_rows(db_metadata, response_rows)
         data_list = get_excel_row_data(response_rows, cols_without_hidden)

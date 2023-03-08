@@ -34,9 +34,7 @@ from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.statistics.db import save_email_sending_records, batch_save_email_sending_records
 from dtable_events.data_sync.data_sync_utils import run_sync_emails
 from dtable_events.utils import get_inner_dtable_server_url
-from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.utils.dtable_server_api import DTableServerAPI
-from dtable_events.utils.sql_generator import filter2sql
 
 dtable_io_logger = setup_logger('dtable_events_io.log')
 dtable_message_logger = setup_logger('dtable_events_message.log')
@@ -877,39 +875,9 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
     wb = openpyxl.Workbook(write_only=True)
     ws = wb.create_sheet(sheet_name)
 
-    if target_view.get('groupbys'):
-        res_json = get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username,
-                                                    id_in_org, permission, table_name, view_name)
-        dtable_rows = res_json.get('rows', [])
-    else:
-        filter_conditions = {
-            'sorts': target_view.get('sorts'),
-            'filters': target_view.get('filters'),
-            'filter_conjunction': target_view.get('filter_conjunction'),
-        }
-
-        dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
-
-        export_limit = 50000
-        offset = 10000
-        start = 0
-        dtable_rows = []
-        while True:
-            # exported row number should less than limit
-            if (start + offset) > export_limit:
-                offset = export_limit - start
-
-            filter_conditions['start'] = start
-            filter_conditions['limit'] = offset
-
-            sql = filter2sql(table_name, cols_without_hidden, filter_conditions, by_group=False)
-
-            response_rows, _ = dtable_db_api.query(sql)
-            dtable_rows.extend(response_rows)
-
-            start += offset
-            if start >= export_limit or len(response_rows) < offset:
-                break
+    res_json = get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username,
+                                                id_in_org, permission, table_name, view_name)
+    dtable_rows = res_json.get('rows', [])
 
     data_list, grouped_row_num_map = parse_view_rows(dtable_rows, head_list, summary_col_info, cols_without_hidden)
 
