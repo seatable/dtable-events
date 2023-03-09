@@ -1402,9 +1402,24 @@ def add_image_to_excel(ws, row, col_num, row_num, dtable_uuid, repo_id, image_nu
     return image_num
 
 
-def format_ctime(cell_value):
-    timestamp = parser.isoparse(cell_value).timestamp()
-    return datetime.utcfromtimestamp(timestamp)
+def format_time(time_str):
+    from dtable_events.dtable_io import dtable_io_logger
+
+    try:
+        time_str = time_str.strip()
+    except:
+        return ''
+
+    if not time_str:
+        return ''
+
+    try:
+        timestamp = parser.isoparse(time_str).timestamp()
+        utc_time = datetime.utcfromtimestamp(timestamp)
+        return utc_to_tz(utc_time, timezone)
+    except Exception as e:
+        dtable_io_logger.debug(e)
+    return time_str
 
 
 def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id, image_param):
@@ -1429,15 +1444,13 @@ def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unkn
             else:
                 c.number_format = gen_decimal_format(row[col_num])
         elif head[col_num][1] == ColumnTypes.DATE:
-            utc_time = format_ctime(row[col_num])
-            c = WriteOnlyCell(ws, value=utc_to_tz(utc_time, timezone))
+            c = WriteOnlyCell(ws, value=format_time(row[col_num]))
             if head[col_num][2]:
                 c.number_format = head[col_num][2].get('format', '')
             else:
                 c.number_format = 'YYYY-MM-DD'
         elif head[col_num][1] in (ColumnTypes.CTIME, ColumnTypes.MTIME):
-            utc_time = format_ctime(row[col_num])
-            c = WriteOnlyCell(ws, value=utc_to_tz(utc_time, timezone).strftime('%Y-%m-%d %H:%M:%S'))
+            c = WriteOnlyCell(ws, value=format_time(row[col_num]))
         elif head[col_num][1] == ColumnTypes.COLLABORATOR:
             nickname_list = []
             collaborator_email_list = []
