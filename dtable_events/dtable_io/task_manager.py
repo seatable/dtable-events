@@ -329,7 +329,7 @@ class TaskManager(object):
                 continue
 
             task = self.tasks_map.get(task_id)
-            if type(task) != tuple:
+            if type(task) != tuple or len(task) < 1:
                 continue
             if type(task[0]).__name__ != 'function':
                 continue
