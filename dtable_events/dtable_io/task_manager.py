@@ -329,6 +329,8 @@ class TaskManager(object):
                 continue
 
             task = self.tasks_map.get(task_id)
+            if type(task) != tuple:
+                continue
             if type(task[0]).__name__ != 'function':
                 continue
             task_info = task_id + ' ' + str(task[0])
