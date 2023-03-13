@@ -1015,8 +1015,8 @@ def get_summary(summary, summary_col_info, column_name, head_name_to_head):
     column_info = head_name_to_head.get(column_name)
     # return summary info if column type is formula and result type is number for excel value
     # because grouped summary row does not contain format symbol like $, ￥, %, etc
-    if column_info and column_info[1] == 'formula' and column_info[2].get('result_type') == 'number':
-        return parse_summary_value(summary.get(summary_type), column_info[2])
+    if column_info and column_info.get('type') == 'formula' and column_info.get('data').get('result_type') == 'number':
+        return parse_summary_value(summary.get(summary_type), column_info.get('data'))
     return summary.get(summary_type)
 
 
@@ -1025,7 +1025,14 @@ def parse_grouped_rows(grouped_rows, first_col_name, summary_col_info, head_name
         for group in grouped_rows:
             summaries = group.get('summaries', {})
             grouped_row = {column_name: get_summary(summary, summary_col_info, column_name, head_name_to_head) for column_name, summary in summaries.items()}
-            grouped_row[first_col_name] = group.get('cell_value')
+            group_column = head_name_to_head.get(group.get('column_name'))
+            if group_column and group_column.get('type') == 'formula' and group_column.get('data').get(
+                    'result_type') == 'number':
+                # grouped row first column value does not contain format symbol like $, ￥, %, etc
+                grouped_row[first_col_name] = {'column_name': group.get('column_name'),
+                                               'value': parse_summary_value(group.get('cell_value'), group_column.get('data'))}
+            else:
+                grouped_row[first_col_name] = {'column_name': group.get('column_name'), 'value': group.get('cell_value')}
             rows.append(grouped_row)
             grouped_row_num_map[len(rows)] = sub_level
 
@@ -1089,7 +1096,9 @@ def parse_link_formula(cell_data, email2nickname):
 
 
 def cell_data2str(cell_data):
-    if isinstance(cell_data, list):
+    if not cell_data:
+        return ''
+    elif isinstance(cell_data, list):
         return ' '.join(cell_data2str(item) for item in cell_data)
     else:
         return str(cell_data)
@@ -1250,15 +1259,15 @@ def email_to_nickname(email2nickname, cell):
         return ''
     return email2nickname.get(cell.get('display_value'), '')
 
-def parse_link(col_head, cell_data, email2nickname):
+def parse_link(column, cell_data, email2nickname):
     if isinstance(cell_data, list):
-        if col_head[2].get('array_type') == ColumnTypes.SINGLE_SELECT:
-            options = col_head[2].get('array_data', {}).get('options')
+        if column.get('data').get('array_type') == ColumnTypes.SINGLE_SELECT:
+            options = column.get('data').get('array_data', {}).get('options')
             id2name = {op.get('id'): op.get('name') for op in options}
             return ', '.join([select_option_to_name(id2name, cell) for cell in cell_data])
-        elif col_head[2].get('array_type') in (ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER):
+        elif column.get('data').get('array_type') in (ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER):
             return ', '.join([email_to_nickname(email2nickname, cell) for cell in cell_data])
-        elif col_head[2].get('array_type') in (ColumnTypes.CTIME, ColumnTypes.MTIME):
+        elif column.get('data').get('array_type') in (ColumnTypes.CTIME, ColumnTypes.MTIME):
             return ', '.join([convert_time_to_utc_str(cell.get('display_value')) if cell.get('display_value') else '' for cell in cell_data])
         # display_value may be array
         return ', '.join([cell_data2str(cell.get('display_value')) if cell.get('display_value') else '' for cell in cell_data])
@@ -1302,14 +1311,14 @@ def add_nickname_to_cell(unknown_user_set, unknown_cell_list):
         start += step
 
     email2nickname = {nickname['email']: nickname['name'] for nickname in user_list}
-    for c in unknown_cell_list:
-        if c[2] == ColumnTypes.COLLABORATOR:
-            nickname_list, collaborator_email_list = c[1]
+    for excel_cell, user_info, col_type in unknown_cell_list:
+        if col_type == ColumnTypes.COLLABORATOR:
+            nickname_list, collaborator_email_list = user_info
             for email in collaborator_email_list:
                 nickname_list.append(email2nickname.get(email, ''))
-            c[0].value = ', '.join(nickname_list)
+            excel_cell.value = ', '.join(nickname_list)
         else:
-            c[0].value = email2nickname.get(c[1], '')
+            excel_cell.value = email2nickname.get(user_info, '')
 
 
 def parse_dtable_long_text(cell_value):
@@ -1339,13 +1348,14 @@ def get_file_download_url(file_url, dtable_uuid, repo_id):
     url = gen_file_get_url(token, asset_name)
     return url
 
-def add_image_to_excel(ws, row, col_num, row_num, dtable_uuid, repo_id, image_num):
+def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, image_num):
     import requests
     from openpyxl.drawing.image import Image
     from PIL import Image as PILImage
     from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, TwoCellAnchor
 
-    images = row[col_num]
+    # images = row[col_num]
+    images = cell_value
     row_pos = str(row_num + 1)
     # set image cell height
     ws.row_dimensions[int(row_pos)].height = IMAGE_CELL_ROW_HEIGHT
@@ -1402,59 +1412,81 @@ def add_image_to_excel(ws, row, col_num, row_num, dtable_uuid, repo_id, image_nu
     return image_num
 
 
-def format_time(time_str):
+def format_time(cell_data):
     from dtable_events.dtable_io import dtable_io_logger
 
     try:
-        time_str = time_str.strip()
-    except:
-        return ''
-
-    if not time_str:
-        return ''
-
-    try:
-        timestamp = parser.isoparse(time_str).timestamp()
+        timestamp = parser.isoparse(cell_data.strip()).timestamp()
         utc_time = datetime.utcfromtimestamp(timestamp)
         return utc_to_tz(utc_time, timezone)
     except Exception as e:
         dtable_io_logger.debug(e)
-    return time_str
+    return cell_data2str(cell_data)
 
 
-def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id, image_param):
+def handle_row(row, row_num, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id, image_param, column_name_to_column, cols_without_hidden):
     from openpyxl.cell import WriteOnlyCell
     cell_list = []
-    for col_num in range(len(row)):
+    group_level = grouped_row_num_map.get(row_num)
+    col_num = 0
+    for column in cols_without_hidden:
+        col_name = column.get('name')
+        col_type = column.get('type')
+        cell_value = row.get(col_name)
+        # parse group
+        if group_level is not None:
+            # parse group first column
+            if col_num == 0:
+                group_column = column_name_to_column.get(cell_value.get('column_name'))
+                cell_value = cell_data2str(cell_value.get('value'))
+                if group_column.get('type') == ColumnTypes.FORMULA and isinstance(group_column.get('data'), dict) \
+                        and group_column.get('data').get('result_type') == 'number':
+                    formula_value, number_format = parse_formula_number(cell_value, group_column.get('data'))
+                    c = WriteOnlyCell(ws, value=formula_value)
+                    c.number_format = number_format
+                else:
+                    cell_value = cell_data2str(cell_value)
+                    c = WriteOnlyCell(ws, value=cell_value)
+            else:
+                c = WriteOnlyCell(ws, value=cell_value)
 
-        if not row[col_num] and not isinstance(row[col_num], int) and not isinstance(row[col_num], float):
+            fill_num = grouped_row_num_map[row_num]
+            try:
+                c.fill = grouped_row_fills[fill_num]
+            except:
+                pass
+            cell_list.append(c)
+            col_num += 1
+            continue
+
+        if not cell_value and not isinstance(cell_value, int) and not isinstance(cell_value, float):
             c = WriteOnlyCell(ws, value=None)
 
         # excel format see
         # https://support.office.com/en-us/article/Number-format-codes-5026bbd6-04bc-48cd-bf33-80f18b4eae68
-        elif head[col_num][1] == ColumnTypes.NUMBER:
+        elif col_type == ColumnTypes.NUMBER:
             # if value cannot convert to float or int, just pass, e.g. empty srt ''
             try:
-                if is_int_str(row[col_num]):
-                    c = WriteOnlyCell(ws, value=int(row[col_num]))
+                if is_int_str(cell_value):
+                    c = WriteOnlyCell(ws, value=int(cell_value))
                 else:
-                    c = WriteOnlyCell(ws, value=float(row[col_num]))
+                    c = WriteOnlyCell(ws, value=float(cell_value))
             except Exception as e:
                 c = WriteOnlyCell(ws, value=None)
             else:
-                c.number_format = gen_decimal_format(row[col_num])
-        elif head[col_num][1] == ColumnTypes.DATE:
-            c = WriteOnlyCell(ws, value=format_time(row[col_num]))
-            if head[col_num][2]:
-                c.number_format = head[col_num][2].get('format', '')
+                c.number_format = gen_decimal_format(cell_value)
+        elif col_type == ColumnTypes.DATE:
+            c = WriteOnlyCell(ws, value=format_time(cell_value))
+            if column.get('data'):
+                c.number_format = column.get('data').get('format', '')
             else:
                 c.number_format = 'YYYY-MM-DD'
-        elif head[col_num][1] in (ColumnTypes.CTIME, ColumnTypes.MTIME):
-            c = WriteOnlyCell(ws, value=format_time(row[col_num]))
-        elif head[col_num][1] == ColumnTypes.COLLABORATOR:
+        elif col_type in (ColumnTypes.CTIME, ColumnTypes.MTIME):
+            c = WriteOnlyCell(ws, value=format_time(cell_value))
+        elif col_type == ColumnTypes.COLLABORATOR:
             nickname_list = []
             collaborator_email_list = []
-            for user in row[col_num]:
+            for user in cell_value:
                 if not email2nickname.get(user, ''):
                     unknown_user_set.add(user)
                     collaborator_email_list.append(user)
@@ -1463,55 +1495,50 @@ def handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unkn
             nicknames = ', '.join(nickname_list)
             c = WriteOnlyCell(ws, value=nicknames)
             if collaborator_email_list:
-                unknown_cell_list.append((c, (nickname_list, collaborator_email_list), head[col_num][1]))
+                unknown_cell_list.append((c, (nickname_list, collaborator_email_list), col_type))
             c.value = ', '.join(nickname_list)
-        elif head[col_num][1] == ColumnTypes.CREATOR:
-            c = WriteOnlyCell(ws, value=email2nickname.get(cell_data2str(row[col_num]), ''))
-            if not email2nickname.get(cell_data2str(row[col_num]), ''):
-                unknown_user_set.add(cell_data2str(row[col_num]))
-                unknown_cell_list.append((c, cell_data2str(row[col_num]), head[col_num][1]))
-        elif head[col_num][1] == ColumnTypes.LAST_MODIFIER:
-            c = WriteOnlyCell(ws, value=email2nickname.get(cell_data2str(row[col_num]), ''))
-            if not email2nickname.get(cell_data2str(row[col_num]), ''):
-                unknown_user_set.add(cell_data2str(row[col_num]))
-                unknown_cell_list.append((c, cell_data2str(row[col_num]), head[col_num][1]))
-        elif head[col_num][1] == ColumnTypes.FORMULA \
-                and isinstance(head[col_num][2], dict) and head[col_num][2].get('result_type') == 'number':
-            formula_value, number_format = parse_formula_number(row[col_num], head[col_num][2])
+        elif col_type == ColumnTypes.CREATOR:
+            c = WriteOnlyCell(ws, value=email2nickname.get(cell_data2str(cell_value), ''))
+            if not email2nickname.get(cell_data2str(cell_value), ''):
+                unknown_user_set.add(cell_data2str(cell_value))
+                unknown_cell_list.append((c, cell_data2str(cell_value), col_type))
+        elif col_type == ColumnTypes.LAST_MODIFIER:
+            c = WriteOnlyCell(ws, value=email2nickname.get(cell_data2str(cell_value), ''))
+            if not email2nickname.get(cell_data2str(cell_value), ''):
+                unknown_user_set.add(cell_data2str(cell_value))
+                unknown_cell_list.append((c, cell_data2str(cell_value), col_type))
+        elif col_type == ColumnTypes.FORMULA \
+                and isinstance(column.get('data'), dict) and column.get('data').get('result_type') == 'number':
+            formula_value, number_format = parse_formula_number(cell_value, column.get('data'))
             c = WriteOnlyCell(ws, value=formula_value)
             c.number_format = number_format
-        elif head[col_num][1] == ColumnTypes.IMAGE and row[col_num] and image_param['is_support']:
+        elif col_type == ColumnTypes.IMAGE and cell_value and image_param['is_support']:
             c = WriteOnlyCell(ws)
             image_num = image_param.get('num')
             if image_num < EXPORT_IMAGE_LIMIT:
-                num = add_image_to_excel(ws, row, col_num, row_num, dtable_uuid, repo_id, image_num)
+                num = add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, image_num)
                 image_param['num'] = num
         else:
-            if head[col_num][1] == ColumnTypes.GEOLOCATION:
-                cell_value = parse_geolocation(row[col_num])
-            elif head[col_num][1] == ColumnTypes.LINK_FORMULA:
-                cell_value = parse_link_formula(row[col_num], email2nickname)
-            elif head[col_num][1] == ColumnTypes.MULTIPLE_SELECT:
-                cell_value = parse_multiple_select_formula(row[col_num])
-            elif head[col_num][1] == ColumnTypes.LINK:
-                cell_value = parse_link(head[col_num], row[col_num], email2nickname)
-            elif head[col_num][1] == ColumnTypes.LONG_TEXT:
-                cell_value = parse_dtable_long_text(row[col_num])
+            if col_type == ColumnTypes.GEOLOCATION:
+                cell_value = parse_geolocation(cell_value)
+            elif col_type == ColumnTypes.LINK_FORMULA:
+                cell_value = parse_link_formula(cell_value, email2nickname)
+            elif col_type == ColumnTypes.MULTIPLE_SELECT:
+                cell_value = parse_multiple_select_formula(cell_value)
+            elif col_type == ColumnTypes.LINK:
+                cell_value = parse_link(column, cell_value, email2nickname)
+            elif col_type == ColumnTypes.LONG_TEXT:
+                cell_value = parse_dtable_long_text(cell_value)
             else:
-                cell_value = cell_data2str(row[col_num])
+                cell_value = cell_data2str(cell_value)
             c = WriteOnlyCell(ws, value=ILLEGAL_CHARACTERS_RE.sub('', cell_value))
 
-        if row_num in grouped_row_num_map:
-            fill_num = grouped_row_num_map[row_num]
-            try:
-                c.fill = grouped_row_fills[fill_num]
-            except:
-                pass
         cell_list.append(c)
+        col_num += 1
     return cell_list
 
 
-def write_xls_with_type(head, data_list, grouped_row_num_map, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param):
+def write_xls_with_type(data_list, grouped_row_num_map, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param, column_name_to_column, cols_without_hidden):
     """ write listed data into excel
         head is a list of tuples,
         e.g. head = [(col_name, col_type, col_date), (...), ...]
@@ -1524,10 +1551,11 @@ def write_xls_with_type(head, data_list, grouped_row_num_map, email2nickname, ws
         # write table head
         column_error_log_exists = False
         head_cell_list = []
-        for col_num in range(len(head)):
+        col_num = 0
+        for col in cols_without_hidden:
             try:
-                c = WriteOnlyCell(ws, value=head[col_num][0])
-                if head[col_num][1] == ColumnTypes.IMAGE:
+                c = WriteOnlyCell(ws, value=col.get('name'))
+                if col.get('type') == ColumnTypes.IMAGE:
                     col_pos = get_column_letter(col_num + 1)
                     # set image column width
                     ws.column_dimensions[col_pos].width = IMAGE_CELL_COLUMN_WIDTH
@@ -1537,6 +1565,7 @@ def write_xls_with_type(head, data_list, grouped_row_num_map, email2nickname, ws
                     column_error_log_exists = True
                 c = WriteOnlyCell(ws, value=EXPORT2EXCEL_DEFAULT_STRING)
             head_cell_list.append(c)
+            col_num += 1
         ws.append(head_cell_list)
 
     # write table data
@@ -1547,7 +1576,7 @@ def write_xls_with_type(head, data_list, grouped_row_num_map, email2nickname, ws
     for row in data_list:
         row_num += 1  # for grouped row num
         try:
-            row_cells = handle_row(row, row_num, head, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id, image_param)
+            row_cells = handle_row(row, row_num, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id, image_param, column_name_to_column, cols_without_hidden)
         except Exception as e:
             if not row_error_log_exists:
                 dtable_io_logger.exception(e)

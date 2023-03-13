@@ -105,17 +105,6 @@ def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column
     return rows_for_import, rows_for_update
 
 
-def get_excel_row_data(response_rows, columns):
-    data_list = []
-    for response_row in response_rows:
-        row = []
-        for col in columns:
-            cell_data = response_row.get(col['name'], '')
-            row.append(cell_data)
-        data_list.append(row)
-    return data_list
-
-
 def import_excel_to_db(
         username,
         dtable_uuid,
@@ -405,11 +394,9 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
     summary_configs = target_table.get('summary_configs', {})
     cols_without_hidden = []
     summary_col_info = {}
-    head_list = []
     for col in cols:
         if col.get('key', '') not in hidden_cols_key:
             cols_without_hidden.append(col)
-            head_list.append((col.get('name', ''), col.get('type', ''), col.get('data', '')))
         if summary_configs.get(col.get('key')):
             summary_col_info.update({col.get('name'): summary_configs.get(col.get('key'))})
 
@@ -435,6 +422,9 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
         tasks_status_map[task_id]['status'] = 'terminated'
         tasks_status_map[task_id]['err_msg'] = 'get big data rows count failed'
         return
+
+    column_name_to_column = {col.get('name'): col for col in cols}
+
     # exported row number should less than ARCHIVE_VIEW_EXPORT_ROW_LIMIT
     if total_row_count > int(ARCHIVE_VIEW_EXPORT_ROW_LIMIT):
         total_row_count = int(ARCHIVE_VIEW_EXPORT_ROW_LIMIT)
@@ -456,16 +446,14 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
         filter_conditions['start'] = start
         filter_conditions['limit'] = offset
         sql = filter2sql(table_name, cols, filter_conditions, by_group=False)
-        response_rows, db_metadata = dtable_db_api.query(sql, convert=False, server_only=False)
-        response_rows = convert_db_rows(db_metadata, response_rows)
-        data_list = get_excel_row_data(response_rows, cols_without_hidden)
+        response_rows, db_metadata = dtable_db_api.query(sql, convert=True, server_only=False)
 
         row_num = start
         try:
-            write_xls_with_type(head_list, data_list, {}, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param)
+            write_xls_with_type(response_rows, {}, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param, column_name_to_column, cols_without_hidden)
         except Exception as e:
             dtable_io_logger.exception(e)
-            dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
+            dtable_io_logger.error('head_list = {}\n{}'.format(cols_without_hidden, e))
             tasks_status_map[task_id]['status'] = 'terminated'
             tasks_status_map[task_id]['err_msg'] = 'write xls error'
             return

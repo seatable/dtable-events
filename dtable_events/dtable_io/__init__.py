@@ -784,26 +784,19 @@ def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token, session_id):
         driver.quit()
 
 
-def parse_view_rows(response_rows, head_list, summary_col_info, cols_without_hidden):
+def parse_view_rows(response_rows, summary_col_info, cols_without_hidden):
     """
     return data_list for rows data, grouped_row_num_map like {1: 0, 2: 1, 5: 1, 8: 0, 9: 1} means position of summary row
     """
     from dtable_events.dtable_io.excel import parse_grouped_rows
     if response_rows and ('rows' in response_rows[0] or 'subgroups' in response_rows[0]):
-        first_col_name = head_list[0][0]
-        head_name_to_head = {head[0]: head for head in head_list}
+        first_col_name = cols_without_hidden[0].get('name')
+        head_name_to_head = {head.get('name'): head for head in cols_without_hidden}
         result_rows, grouped_row_num_map = parse_grouped_rows(response_rows, first_col_name, summary_col_info, head_name_to_head)
     else:
         result_rows, grouped_row_num_map = response_rows, {}
 
-    data_list = []
-    for row_from_server in result_rows:
-        row = []
-        for col in cols_without_hidden:
-            cell_data = row_from_server.get(col['name'], '')
-            row.append(cell_data)
-        data_list.append(row)
-    return data_list, grouped_row_num_map
+    return result_rows, grouped_row_num_map
 
 
 def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, permission, name, repo_id, is_support_image=False):
@@ -856,11 +849,9 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
     summary_configs = target_table.get('summary_configs', {})
     cols_without_hidden = []
     summary_col_info = {}
-    head_list = []
     for col in cols:
         if col.get('key', '') not in hidden_cols_key:
             cols_without_hidden.append(col)
-            head_list.append((col.get('name', ''), col.get('type', ''), col.get('data', '')))
         if summary_configs.get(col.get('key')):
             summary_col_info.update({col.get('name'): summary_configs.get(col.get('key'))})
 
@@ -879,12 +870,13 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
                                                 id_in_org, permission, table_name, view_name)
     dtable_rows = res_json.get('rows', [])
 
-    data_list, grouped_row_num_map = parse_view_rows(dtable_rows, head_list, summary_col_info, cols_without_hidden)
+    column_name_to_column = {col.get('name'): col for col in cols}
+    result_rows, grouped_row_num_map = parse_view_rows(dtable_rows, summary_col_info, cols_without_hidden)
 
     try:
-        write_xls_with_type(head_list, data_list, grouped_row_num_map, email2nickname, ws, 0, dtable_uuid, repo_id, image_param)
+        write_xls_with_type(result_rows, grouped_row_num_map, email2nickname, ws, 0, dtable_uuid, repo_id, image_param, column_name_to_column, cols_without_hidden)
     except Exception as e:
-        dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
+        dtable_io_logger.error('head_list = {}\n{}'.format(cols_without_hidden, e))
         return
     target_path = os.path.join(target_dir, excel_name)
     wb.save(target_path)
@@ -930,19 +922,9 @@ def convert_table_to_execl(dtable_uuid, table_id, username, permission, name, re
 
     table_name = target_table.get('name', '')
     cols = target_table.get('columns', [])
-    head_list = []
-    for col in cols:
-        head_list.append((col.get('name', ''), col.get('type', ''), col.get('data', '')))
 
     result_rows = get_rows_from_dtable_server(username, dtable_uuid, table_name)
-
-    data_list = []
-    for row_from_server in result_rows:
-        row = []
-        for col in cols:
-            cell_data = row_from_server.get(col['name'], '')
-            row.append(cell_data)
-        data_list.append(row)
+    column_name_to_column = {col.get('name'): col for col in cols}
 
     images_target_dir = IMAGE_TMP_DIR + dtable_uuid
     if not os.path.exists(images_target_dir):
@@ -955,9 +937,9 @@ def convert_table_to_execl(dtable_uuid, table_id, username, permission, name, re
     ws = wb.create_sheet(sheet_name)
     image_param = {'num': 0, 'is_support': is_support_image}
     try:
-        write_xls_with_type(head_list, data_list, {}, email2nickname, ws, 0, dtable_uuid, repo_id, image_param)
+        write_xls_with_type(result_rows, {}, email2nickname, ws, 0, dtable_uuid, repo_id, image_param, column_name_to_column, cols)
     except Exception as e:
-        dtable_io_logger.error('head_list = {}\n{}'.format(head_list, e))
+        dtable_io_logger.error('head_list = {}\n{}'.format(cols, e))
         return
     wb.save(target_path)
     # remove tmp images
