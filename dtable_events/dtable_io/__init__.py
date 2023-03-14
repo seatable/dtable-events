@@ -784,21 +784,6 @@ def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token, session_id):
         driver.quit()
 
 
-def parse_view_rows(response_rows, summary_col_info, cols_without_hidden):
-    """
-    return data_list for rows data, grouped_row_num_map like {1: 0, 2: 1, 5: 1, 8: 0, 9: 1} means position of summary row
-    """
-    from dtable_events.dtable_io.excel import parse_grouped_rows
-    if response_rows and ('rows' in response_rows[0] or 'subgroups' in response_rows[0]):
-        first_col_name = cols_without_hidden[0].get('name')
-        head_name_to_head = {head.get('name'): head for head in cols_without_hidden}
-        result_rows, grouped_row_num_map = parse_grouped_rows(response_rows, first_col_name, summary_col_info, head_name_to_head)
-    else:
-        result_rows, grouped_row_num_map = response_rows, {}
-
-    return result_rows, grouped_row_num_map
-
-
 def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, permission, name, repo_id, is_support_image=False):
     from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_view_rows_from_dtable_server
     from dtable_events.dtable_io.excel import write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR
@@ -866,16 +851,18 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
     wb = openpyxl.Workbook(write_only=True)
     ws = wb.create_sheet(sheet_name)
 
-    res_json = get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username,
-                                                id_in_org, permission, table_name, view_name)
+    res_json = get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission, table_name, view_name)
     dtable_rows = res_json.get('rows', [])
 
     column_name_to_column = {col.get('name'): col for col in cols}
-    result_rows, grouped_row_num_map = parse_view_rows(dtable_rows, summary_col_info, cols_without_hidden)
+    is_group_view = bool(target_view.get('groupbys'))
+
+    params = (dtable_rows, email2nickname, ws, 0, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, is_group_view, summary_col_info)
 
     try:
-        write_xls_with_type(result_rows, grouped_row_num_map, email2nickname, ws, 0, dtable_uuid, repo_id, image_param, column_name_to_column, cols_without_hidden)
+        write_xls_with_type(*params)
     except Exception as e:
+        dtable_io_logger.exception(e)
         dtable_io_logger.error('head_list = {}\n{}'.format(cols_without_hidden, e))
         return
     target_path = os.path.join(target_dir, excel_name)
@@ -937,7 +924,7 @@ def convert_table_to_execl(dtable_uuid, table_id, username, permission, name, re
     ws = wb.create_sheet(sheet_name)
     image_param = {'num': 0, 'is_support': is_support_image}
     try:
-        write_xls_with_type(result_rows, {}, email2nickname, ws, 0, dtable_uuid, repo_id, image_param, column_name_to_column, cols)
+        write_xls_with_type(result_rows, email2nickname, ws, 0, dtable_uuid, repo_id, image_param, cols, column_name_to_column)
     except Exception as e:
         dtable_io_logger.error('head_list = {}\n{}'.format(cols, e))
         return

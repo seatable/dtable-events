@@ -1020,35 +1020,6 @@ def get_summary(summary, summary_col_info, column_name, head_name_to_head):
     return summary.get(summary_type)
 
 
-def parse_grouped_rows(grouped_rows, first_col_name, summary_col_info, head_name_to_head):
-    def parse(grouped_rows, sub_level, rows, grouped_row_num_map):
-        for group in grouped_rows:
-            summaries = group.get('summaries', {})
-            grouped_row = {column_name: get_summary(summary, summary_col_info, column_name, head_name_to_head) for column_name, summary in summaries.items()}
-            group_column = head_name_to_head.get(group.get('column_name'))
-            if group_column and group_column.get('type') == 'formula' and group_column.get('data').get(
-                    'result_type') == 'number':
-                # grouped row first column value does not contain format symbol like $, ￥, %, etc
-                grouped_row[first_col_name] = {'column_name': group.get('column_name'),
-                                               'value': parse_summary_value(group.get('cell_value'), group_column.get('data'))}
-            else:
-                grouped_row[first_col_name] = {'column_name': group.get('column_name'), 'value': group.get('cell_value')}
-            rows.append(grouped_row)
-            grouped_row_num_map[len(rows)] = sub_level
-
-            group_subgroups = group.get('subgroups')
-            group_rows = group.get('rows')
-            if group_rows is None and group_subgroups:
-                parse(group_subgroups, sub_level + 1, rows, grouped_row_num_map)
-            else:
-                rows.extend(group_rows)
-
-    rows = []
-    grouped_row_num_map = {}
-    parse(grouped_rows, 0, rows, grouped_row_num_map)
-    return rows, grouped_row_num_map
-
-
 def parse_geolocation(cell_data):
     if not isinstance(cell_data, dict):
         return str(cell_data)
@@ -1354,7 +1325,6 @@ def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, i
     from PIL import Image as PILImage
     from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, TwoCellAnchor
 
-    # images = row[col_num]
     images = cell_value
     row_pos = str(row_num + 1)
     # set image cell height
@@ -1424,17 +1394,16 @@ def format_time(cell_data):
     return cell_data2str(cell_data)
 
 
-def handle_row(row, row_num, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id, image_param, column_name_to_column, cols_without_hidden):
+def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, sub_level=None):
     from openpyxl.cell import WriteOnlyCell
     cell_list = []
-    group_level = grouped_row_num_map.get(row_num)
     col_num = 0
     for column in cols_without_hidden:
         col_name = column.get('name')
         col_type = column.get('type')
         cell_value = row.get(col_name)
         # parse group
-        if group_level is not None:
+        if sub_level is not None:
             # parse group first column
             if col_num == 0:
                 group_column = column_name_to_column.get(cell_value.get('column_name'))
@@ -1446,13 +1415,12 @@ def handle_row(row, row_num, ws, grouped_row_num_map, email2nickname, unknown_us
                     c.number_format = number_format
                 else:
                     cell_value = cell_data2str(cell_value)
-                    c = WriteOnlyCell(ws, value=cell_value)
+                    c = WriteOnlyCell(ws, value=ILLEGAL_CHARACTERS_RE.sub('', cell_value))
             else:
                 c = WriteOnlyCell(ws, value=cell_value)
 
-            fill_num = grouped_row_num_map[row_num]
             try:
-                c.fill = grouped_row_fills[fill_num]
+                c.fill = grouped_row_fills[sub_level]
             except:
                 pass
             cell_list.append(c)
@@ -1538,10 +1506,8 @@ def handle_row(row, row_num, ws, grouped_row_num_map, email2nickname, unknown_us
     return cell_list
 
 
-def write_xls_with_type(data_list, grouped_row_num_map, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param, column_name_to_column, cols_without_hidden):
+def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, is_group_view=False, summary_col_info=None):
     """ write listed data into excel
-        head is a list of tuples,
-        e.g. head = [(col_name, col_type, col_date), (...), ...]
     """
     from dtable_events.dtable_io import dtable_io_logger
     from openpyxl.cell import WriteOnlyCell
@@ -1572,18 +1538,29 @@ def write_xls_with_type(data_list, grouped_row_num_map, email2nickname, ws, row_
     row_error_log_exists = False
     unknown_user_set = set()
     unknown_cell_list = []
-    row_list = []
-    for row in data_list:
-        row_num += 1  # for grouped row num
-        try:
-            row_cells = handle_row(row, row_num, ws, grouped_row_num_map, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id, image_param, column_name_to_column, cols_without_hidden)
-        except Exception as e:
-            if not row_error_log_exists:
-                dtable_io_logger.exception(e)
-                dtable_io_logger.error('Error row in exporting excel: {}'.format(e))
-                row_error_log_exists = True
-            continue
-        row_list.append(row_cells)
+
+    if is_group_view:
+        row_list = []
+        # for insert image
+        row_num_info = {'row_num': row_num + 1}
+        sub_level = 0
+        handle_grouped_view_rows(data_list, row_num_info, ws, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid,
+                         repo_id, image_param, cols_without_hidden, column_name_to_column, summary_col_info, row_list, sub_level)
+    else:
+        row_list = []
+        for row in data_list:
+            row_num += 1  # for big data view
+            try:
+                params = (row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id,
+                          image_param, cols_without_hidden, column_name_to_column)
+                row_cells = handle_row(*params)
+            except Exception as e:
+                if not row_error_log_exists:
+                    dtable_io_logger.exception(e)
+                    dtable_io_logger.error('Error row in exporting excel: {}'.format(e))
+                    row_error_log_exists = True
+                continue
+            row_list.append(row_cells)
 
     if unknown_cell_list:
         try:
@@ -1592,3 +1569,48 @@ def write_xls_with_type(data_list, grouped_row_num_map, email2nickname, ws, row_
             dtable_io_logger.error('add nickname to cell error: {}'.format(e))
     for row in row_list:
         ws.append(row)
+
+
+def handle_grouped_view_rows(view_rows, row_num_info, ws, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid,
+                    repo_id, image_param, cols_without_hidden, column_name_to_column, summary_col_info, row_list, sub_level):
+    head_name_to_head = {head.get('name'): head for head in cols_without_hidden}
+    first_col_name = cols_without_hidden[0].get('name')
+    for row in view_rows:
+        group_subgroups = row.get('subgroups')
+        group_rows = row.get('rows')
+        summaries = row.get('summaries', {})
+
+        grouped_row = parse_group_row(summary_col_info, head_name_to_head, summaries, row, first_col_name)
+
+        # write grouped row to ws
+        row_cells = handle_row(grouped_row, row_num_info.get('row_num'), ws, email2nickname, unknown_user_set, unknown_cell_list,
+                               dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, sub_level)
+        row_num_info['row_num'] += 1
+        row_list.append(row_cells)
+
+        if group_rows is None and group_subgroups:
+            handle_grouped_view_rows(group_subgroups, row_num_info, ws, email2nickname, unknown_user_set, unknown_cell_list,
+                            dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, summary_col_info, row_list, sub_level + 1)
+        else:
+            for group_row in group_rows:
+                # write normal row to ws
+                row_cells = handle_row(group_row, row_num_info.get('row_num'), ws, email2nickname, unknown_user_set, unknown_cell_list,
+                                       dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column)
+                row_list.append(row_cells)
+                row_num_info['row_num'] += 1
+
+
+def parse_group_row(summary_col_info, head_name_to_head, summaries, row, first_col_name):
+    grouped_row = {column_name: get_summary(summary, summary_col_info, column_name, head_name_to_head) for
+                   column_name, summary in summaries.items()}
+
+    group_column = head_name_to_head.get(row.get('column_name'))
+    if group_column and group_column.get('type') == 'formula' and group_column.get('data').get(
+            'result_type') == 'number':
+        # grouped row first column value does not contain format symbol like $, ￥, %, etc
+        grouped_row[first_col_name] = {'column_name': row.get('column_name'),
+                                       'value': parse_summary_value(row.get('cell_value'), group_column.get('data'))}
+    else:
+        grouped_row[first_col_name] = {'column_name': row.get('column_name'), 'value': row.get('cell_value')}
+
+    return grouped_row
