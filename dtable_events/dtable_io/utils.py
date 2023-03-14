@@ -1168,3 +1168,24 @@ def extract_select_options(rows, column_name_to_column):
                     col_options.add(cell_value)
 
     return select_column_options
+
+def width_transfer(pixel):
+
+    # convert pixel of seatable to excel width
+    # the default width of excel is 8.38 (width of "0" in font size of 11) which is 72px
+
+    return round((pixel * 8.38) / 72, 2)
+
+def height_transfer(base_row_height='default'):
+    # convert pixel of seatable height to excel height
+    # the default unit of height in excel is 24 pixel, which is 14.4 pound
+    height_dict = {
+        'default': 1,
+        'double':  2,
+        'triple': 3,
+        'quadruple': 4
+    }
+
+    row_height_mul = (height_dict.get(base_row_height, 1))
+
+    return round((32 * row_height_mul * 14.4 ) / 24, 2)

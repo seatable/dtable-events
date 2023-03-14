@@ -1529,6 +1529,7 @@ def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, rep
     from dtable_events.dtable_io import dtable_io_logger
     from openpyxl.cell import WriteOnlyCell
     from openpyxl.utils import get_column_letter
+    from dtable_events.dtable_io.utils import width_transfer, height_transfer
 
     if row_num == 0:
         # write table head
