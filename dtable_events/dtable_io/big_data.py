@@ -394,6 +394,7 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
     summary_configs = target_table.get('summary_configs', {})
     cols_without_hidden = []
     summary_col_info = {}
+    row_height = target_view.get('row_height', 'default')
     for col in cols:
         if col.get('key', '') not in hidden_cols_key:
             cols_without_hidden.append(col)
@@ -450,7 +451,7 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
 
         row_num = start
         try:
-            write_xls_with_type(response_rows, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column)
+            write_xls_with_type(response_rows, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, row_height=row_height)
         except Exception as e:
             dtable_io_logger.exception(e)
             dtable_io_logger.error('head_list = {}\n{}'.format(cols_without_hidden, e))

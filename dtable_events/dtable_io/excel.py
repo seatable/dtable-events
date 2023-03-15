@@ -1523,7 +1523,7 @@ def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_
     return cell_list
 
 
-def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, is_group_view=False, summary_col_info=None):
+def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, is_group_view=False, summary_col_info=None, row_height='default'):
     """ write listed data into excel
     """
     from dtable_events.dtable_io import dtable_io_logger
@@ -1539,10 +1539,17 @@ def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, rep
         for col in cols_without_hidden:
             try:
                 c = WriteOnlyCell(ws, value=col.get('name'))
+                col_pos = get_column_letter(col_num + 1)
                 if col.get('type') == ColumnTypes.IMAGE:
-                    col_pos = get_column_letter(col_num + 1)
+
                     # set image column width
                     ws.column_dimensions[col_pos].width = IMAGE_CELL_COLUMN_WIDTH
+
+                else:
+                    col_width = col.get('width', 200)
+                    col_width_xls = width_transfer(col_width)
+                    ws.column_dimensions[col_pos].width = col_width_xls
+
             except Exception as e:
                 if not column_error_log_exists:
                     dtable_io_logger.error('Error column in exporting excel: {}'.format(e))
@@ -1572,6 +1579,7 @@ def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, rep
                 params = (row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id,
                           image_param, cols_without_hidden)
                 row_cells = handle_row(*params)
+                ws.row_dimensions[row_num + 1].height = height_transfer(row_height)
             except Exception as e:
                 if not row_error_log_exists:
                     dtable_io_logger.exception(e)

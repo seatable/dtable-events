@@ -828,6 +828,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
 
     table_name = target_table.get('name', '')
     view_name = target_view.get('name', '')
+    row_height = target_view.get('row_height', 'default')
 
     cols = target_table.get('columns', [])
     hidden_cols_key = target_view.get('hidden_columns', [])
@@ -857,7 +858,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
     column_name_to_column = {col.get('name'): col for col in cols}
     is_group_view = bool(target_view.get('groupbys'))
 
-    params = (dtable_rows, email2nickname, ws, 0, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, is_group_view, summary_col_info)
+    params = (dtable_rows, email2nickname, ws, 0, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, is_group_view, summary_col_info, row_height)
 
     try:
         write_xls_with_type(*params)
