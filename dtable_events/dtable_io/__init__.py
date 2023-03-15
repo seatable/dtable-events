@@ -829,6 +829,10 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
     table_name = target_table.get('name', '')
     view_name = target_view.get('name', '')
     row_height = target_view.get('row_height', 'default')
+    header_height = 'default'
+    header_settings = target_table.get('header_settings')
+    if header_settings:
+        header_height = header_settings.get('header_height', 'default')
 
     cols = target_table.get('columns', [])
     hidden_cols_key = target_view.get('hidden_columns', [])
@@ -858,7 +862,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
     column_name_to_column = {col.get('name'): col for col in cols}
     is_group_view = bool(target_view.get('groupbys'))
 
-    params = (dtable_rows, email2nickname, ws, 0, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, is_group_view, summary_col_info, row_height)
+    params = (dtable_rows, email2nickname, ws, 0, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, is_group_view, summary_col_info, row_height, header_height)
 
     try:
         write_xls_with_type(*params)
@@ -910,6 +914,10 @@ def convert_table_to_execl(dtable_uuid, table_id, username, permission, name, re
 
     table_name = target_table.get('name', '')
     cols = target_table.get('columns', [])
+    header_height = 'default'
+    header_settings = target_table.get('header_settings')
+    if header_settings:
+        header_height = header_settings.get('header_height', 'default')
 
     result_rows = get_rows_from_dtable_server(username, dtable_uuid, table_name)
     column_name_to_column = {col.get('name'): col for col in cols}
@@ -925,7 +933,7 @@ def convert_table_to_execl(dtable_uuid, table_id, username, permission, name, re
     ws = wb.create_sheet(sheet_name)
     image_param = {'num': 0, 'is_support': is_support_image}
     try:
-        write_xls_with_type(result_rows, email2nickname, ws, 0, dtable_uuid, repo_id, image_param, cols, column_name_to_column)
+        write_xls_with_type(result_rows, email2nickname, ws, 0, dtable_uuid, repo_id, image_param, cols, column_name_to_column, header_height=header_height)
     except Exception as e:
         dtable_io_logger.error('head_list = {}\n{}'.format(cols, e))
         return

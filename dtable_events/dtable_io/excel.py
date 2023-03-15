@@ -1523,7 +1523,7 @@ def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_
     return cell_list
 
 
-def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, is_group_view=False, summary_col_info=None, row_height='default'):
+def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, is_group_view=False, summary_col_info=None, row_height='default', header_height='default'):
     """ write listed data into excel
     """
     from dtable_events.dtable_io import dtable_io_logger
@@ -1531,6 +1531,7 @@ def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, rep
     from openpyxl.utils import get_column_letter
     from dtable_events.dtable_io.utils import width_transfer, height_transfer
 
+    ws.row_dimensions[1].height = height_transfer(header_height) # set header height
     if row_num == 0:
         # write table head
         column_error_log_exists = False
