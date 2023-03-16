@@ -153,6 +153,7 @@ class StatisticType:
     HORIZONTAL_BAR = 'horizontal_bar'
     HORIZONTAL_GROUP_BAR = 'horizontal_group_bar'
     AREA = 'area'
+    BASIC_NUMBER_CARD = 'basic_number_card'
 
 
 # single/multiple select options

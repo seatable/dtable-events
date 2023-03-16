@@ -1054,6 +1054,8 @@ class StatisticSQLGenerator(object):
         column_name = column.get('name', '')
         if summary_method == 'DISTINCT_VALUES':
             return 'COUNT(DISTINCT %s)' % column_name
+        if summary_method == 'ROW_COUNT':
+            return 'COUNT(%s)' % column_name
         return '%s(`%s`)' % (DTABLE_DB_SUMMARY_METHOD[summary_method], column_name)
 
     def _basic_statistic_2_sql(self):
@@ -1312,6 +1314,21 @@ class StatisticSQLGenerator(object):
         if summary_column_name:
             return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, summary_column_name, self.table_name, self.filter_sql, groupby_column_name)
         return 'SELECT %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, self.table_name, self.filter_sql, groupby_column_name)
+
+    def _basic_number_card_chart_statistic_2_sql(self):
+        numeric_column_key = self.statistic.get('numeric_column_key', '')
+        summary_method = self.statistic.get('summary_method', '')
+        numeric_column = self._get_column_by_key(numeric_column_key)
+        if not numeric_column:
+            self.error = 'Numeric column not found'
+            return ''
+        if not summary_method:
+            self.error = 'Summary method is not valid'
+            return ''
+        summary_method = summary_method.upper()
+        summary_column_name = self._summary_column_2_sql(summary_method, numeric_column)
+        return 'SELECT %s FROM %s LIMIT 0, 5000' % (summary_column_name, self.table_name)
+
     
     def to_sql(self):
         if self.error:
@@ -1333,6 +1350,10 @@ class StatisticSQLGenerator(object):
 
         if self.statistic_type == StatisticType.PIE or self.statistic_type == StatisticType.RING:
             sql = self._pie_chart_statistic_2_sql()
+            return sql, self.error
+
+        if self.statistic_type == StatisticType.BASIC_NUMBER_CARD:
+            sql = self._basic_number_card_chart_statistic_2_sql()
             return sql, self.error
         
         if self.statistic_type == StatisticType.TABLE:
