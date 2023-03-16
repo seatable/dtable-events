@@ -8,13 +8,14 @@ from dtable_events.tasks.dtables_cleaner import DTablesCleaner
 from dtable_events.tasks.dtable_updates_sender import DTableUpdatesSender
 from dtable_events.tasks.dtable_real_time_rows_counter import DTableRealTimeRowsCounter
 from dtable_events.tasks.ldap_syncer import LDAPSyncer
+from dtable_events.tasks.big_data_storage_stats_worker import BigDataStorageStatsWorker
+from dtable_events.tasks.dtable_asset_stats_worker import DTableAssetStatsWorker
 from dtable_events.notification_rules.handler import NotificationRuleHandler
 from dtable_events.notification_rules.dtable_notification_rules_scanner import DTableNofiticationRulesScanner
 from dtable_events.automations.handler import AutomationRuleHandler
 from dtable_events.automations.dtable_automation_rules_scanner import DTableAutomationRulesScanner
 from dtable_events.webhook.webhook import Webhooker
 from dtable_events.common_dataset.common_dataset_syncer import CommonDatasetSyncer
-from dtable_events.tasks.big_data_storage_stats_worker import BigDataStorageStatsWorker
 from dtable_events.data_sync.data_syncer import DataSyncer
 from dtable_events.workflow.workflow_actions import WorkflowActionsHandler
 from dtable_events.workflow.workflow_schedules_scanner import WorkflowSchedulesScanner
@@ -37,6 +38,8 @@ class App(object):
             self._dtable_real_time_rows_counter = DTableRealTimeRowsCounter(config)
             self._workflow_actions_handler = WorkflowActionsHandler(config)
             self._webhooker = Webhooker(config)
+            # seaf events
+            self._dtable_asset_stat_worker = DTableAssetStatsWorker(config)
             # cron jobs
             self._instant_notices_sender = InstantNoticeSender(config)
             self._email_notices_sender = EmailNoticesSender(config)
@@ -63,6 +66,8 @@ class App(object):
             self._dtable_real_time_rows_counter.start()      # default True
             self._workflow_actions_handler.start()           # always True
             self._webhooker.start()                          # always True
+            # seaf events
+            self._dtable_asset_stat_worker.start()           # always True
             # cron jobs
             self._instant_notices_sender.start()             # default True
             self._email_notices_sender.start()               # default True
