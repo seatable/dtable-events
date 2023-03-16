@@ -49,7 +49,7 @@ class DTableAssetStatsWorker(Thread):
         self._finished = Event()
         self._db_session_class = init_db_session_class(config)
         self.interval = 5 * 60  # listen to seafile event for 5 mins and then calc dtable asset storage
-        self.last_stat_time = time.time()
+        self.last_stats_time = time.time()
         self._redis_client = RedisClient(config)
 
     def run(self):
@@ -60,9 +60,9 @@ class DTableAssetStatsWorker(Thread):
         logger.info('Starting handle dtable asset stats...')
         repo_id_ctime_dict = {}
         while not self._finished.is_set():
-            if repo_id_ctime_dict and time.time() - self.last_stat_time > self.interval:
-                Thread(target=self.stat_dtable_asset_storage, args=(repo_id_ctime_dict,), daemon=True).start()
-                self.last_stat_time = time.time()
+            if repo_id_ctime_dict and time.time() - self.last_stats_time > self.interval:
+                Thread(target=self.stats_dtable_asset_storage, args=(repo_id_ctime_dict,), daemon=True).start()
+                self.last_stats_time = time.time()
                 repo_id_ctime_dict = {}
             msg = seafile_api.pop_event('seaf_server.event')
             if not msg:
@@ -84,7 +84,7 @@ class DTableAssetStatsWorker(Thread):
                 continue
             repo_id_ctime_dict[repo_id] = ctime
 
-    def stat_dtable_asset_storage(self, repo_id_ctime_dict):
+    def stats_dtable_asset_storage(self, repo_id_ctime_dict):
         dtable_uuid_sizes = []
         for repo_id, ctime in repo_id_ctime_dict.items():
             logger.debug('start stat repo: %s ctime: %s', repo_id, ctime)
@@ -133,7 +133,7 @@ class DTableAssetStatsWorker(Thread):
                     dtable_uuid_repo_ids = json.loads(message['data'])
                     session = self._db_session_class()
                     try:
-                        self.stat_dtable_uuids(dtable_uuid_repo_ids, session)
+                        self.stats_dtable_uuids(dtable_uuid_repo_ids, session)
                     except Exception as e:
                         logger.error('Handle table rows count: %s' % e)
                     finally:
@@ -144,7 +144,7 @@ class DTableAssetStatsWorker(Thread):
                 logger.error('Failed get message from redis: %s' % e)
                 subscriber = self._redis_client.get_subscriber('count-rows')
 
-    def stat_dtable_uuids(self, dtable_uuid_repo_ids, db_session):
+    def stats_dtable_uuids(self, dtable_uuid_repo_ids, db_session):
         dtable_uuid_sizes = []
         for dtable_uuid, repo_id in dtable_uuid_repo_ids:
             try:
