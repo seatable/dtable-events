@@ -154,6 +154,7 @@ class StatisticType:
     HORIZONTAL_GROUP_BAR = 'horizontal_group_bar'
     AREA = 'area'
     BASIC_NUMBER_CARD = 'basic_number_card'
+    TREE_MAP = 'tree_map'
 
 
 # single/multiple select options

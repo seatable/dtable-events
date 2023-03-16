@@ -1348,7 +1348,7 @@ class StatisticSQLGenerator(object):
             sql = self._grouping_statistic_2_sql()
             return sql, self.error
 
-        if self.statistic_type == StatisticType.PIE or self.statistic_type == StatisticType.RING:
+        if self.statistic_type in [ StatisticType.PIE, StatisticType.RING, StatisticType.TREE_MAP]:
             sql = self._pie_chart_statistic_2_sql()
             return sql, self.error
 
