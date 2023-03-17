@@ -21,7 +21,7 @@ from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingta
 from dtable_events.notification_rules.notification_rules_utils import fill_msg_blanks_with_converted_row, \
     send_notification, fill_msg_blanks_with_sql_row
 from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url, \
-    normalize_file_path, gen_file_get_url
+    normalize_file_path, gen_file_get_url, gen_random_option
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_web_api import DTableWebAPI
@@ -1487,6 +1487,19 @@ class AddRecordToOtherTableAction(BaseAction):
         if format_length == 1:
             return cur_datetime_offset.strftime("%Y-%m-%d")
 
+    def add_or_create_options(self, column, value):
+        table_name = self.row_data['table_name']
+        select_options = column.get('data', {}).get('options', [])
+        for option in select_options:
+            if value == option.get('name'):
+                return value
+        self.auto_rule.dtable_server_api.add_column_options(
+            table_name,
+            column['name'],
+            options = [gen_random_option(value)]
+        )
+        return value
+
     def init_append_rows(self):
         raw_row = self.data['row']
         src_row = self.data['converted_row']
@@ -1528,6 +1541,22 @@ class AddRecordToOtherTableAction(BaseAction):
                         elif set_type == 'date_column':
                             date_column_key = time_dict.get('date_column_key')
                             filtered_updates[col_name] = raw_row.get(date_column_key)
+                    except Exception as e:
+                        logger.error(e)
+                        filtered_updates[col_name] = self.row.get(col_key)
+                if col_type == ColumnTypes.SINGLE_SELECT:
+                    try:
+                        data_dict = self.row.get(col_key)
+                        if not data_dict:
+                            continue
+                        set_type = data_dict.get('set_type')
+                        if set_type == 'default':
+                            value = data_dict.get('value')
+                            filtered_updates[col_name] = self.parse_column_value(col, value)
+                        elif set_type == 'manual':
+                            value = data_dict.get('value')
+                            value = self.fill_msg_blanks(src_row, value, self.column_blanks)
+                            filtered_updates[col_name] = self.add_or_create_options(col, value)
                     except Exception as e:
                         logger.error(e)
                         filtered_updates[col_name] = self.row.get(col_key)
