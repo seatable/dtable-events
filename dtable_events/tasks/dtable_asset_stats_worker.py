@@ -53,10 +53,6 @@ class DTableAssetStatsWorker(Thread):
         self._redis_client = RedisClient(config)
 
     def run(self):
-        Thread(target=self.listen_seaf_events_and_update, daemon=True).start()
-        Thread(target=self.listen_redis_and_update, daemon=True).start()
-
-    def listen_seaf_events_and_update(self):
         logger.info('Starting handle dtable asset stats...')
         repo_id_ctime_dict = {}
         while not self._finished.is_set():
@@ -87,30 +83,29 @@ class DTableAssetStatsWorker(Thread):
     def stats_dtable_asset_storage(self, repo_id_ctime_dict):
         dtable_uuid_sizes = []
         for repo_id, ctime in repo_id_ctime_dict.items():
-            logger.debug('start stat repo: %s ctime: %s', repo_id, ctime)
-            asset_dir_id = seafile_api.get_dir_id_by_path(repo_id, '/asset')
-            if not asset_dir_id:
-                continue
+            logger.debug('start stats repo: %s ctime: %s', repo_id, ctime)
             try:
+                repo = seafile_api.get_repo(repo_id)
+                if not repo:
+                    continue
+                asset_dir_id = seafile_api.get_dir_id_by_path(repo_id, '/asset')
+                if not asset_dir_id:
+                    continue
                 dirents = seafile_api.list_dir_by_path(repo_id, '/asset', offset=-1, limit=-1)
-            except Exception as e:
-                logger.error('repo: %s, get dirents error: %s', repo_id, e)
-                continue
-            for dirent in dirents:
-                if not stat.S_ISDIR(dirent.mode):
-                    continue
-                if not is_valid_uuid(dirent.obj_name):
-                    continue
-                logger.debug('start stat repo: %s dirent: %s', repo_id, dirent.obj_name)
-                if dirent.mtime > ctime - 5:
-                    dtable_uuid = dirent.obj_name
-                    try:
-                        size = seafile_api.get_file_count_info_by_path(repo_id, f'/asset/{dtable_uuid}').size
-                        logger.debug('start stat repo: %s dirent: %s size: %s', repo_id, dirent.obj_name, size)
-                    except Exception as e:
-                        logger.error('get dtable: %s asset error: %s', dtable_uuid, e)
+                for dirent in dirents:
+                    if not stat.S_ISDIR(dirent.mode):
                         continue
-                    dtable_uuid_sizes.append([uuid_str_to_32_chars(dtable_uuid), size])
+                    if not is_valid_uuid(dirent.obj_name):
+                        continue
+                    logger.debug('start stats repo: %s dirent: %s', repo_id, dirent.obj_name)
+                    if dirent.mtime > ctime - 5:
+                        dtable_uuid = dirent.obj_name
+                        size = seafile_api.get_file_count_info_by_path(repo_id, f'/asset/{dtable_uuid}').size
+                        logger.debug('start stats repo: %s dirent: %s size: %s', repo_id, dirent.obj_name, size)
+                        dtable_uuid_sizes.append([uuid_str_to_32_chars(dtable_uuid), size])
+            except Exception as e:
+                logger.exception(e)
+                logger.error('stats repo: %s error: %s', repo_id, e)
         if not dtable_uuid_sizes:
             return
         logger.debug('totally need to update dtable: %s', len(dtable_uuid_sizes))

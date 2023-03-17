@@ -1155,3 +1155,25 @@ def query_plugin_email_send_status():
 
     resp = dict(is_finished=is_finished)
     return make_response((resp, 200))
+
+
+@app.route('/add-calc-dtable-asset-stats', methods=['POST'])
+def add_calc_dtable_asset_stats():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+    try:
+        data = json.loads(request.data)
+    except Exception as e:
+        logger.warning('add_calc_dtable_asset_stats parse json body error: %s', e)
+        return make_response(('request invalid, error: %s' % e, 400))
+    repo_id_dtable_uuids_dict = data.get('repo_id_dtable_uuids_dict')
+    if not repo_id_dtable_uuids_dict or not isinstance(repo_id_dtable_uuids_dict, dict):
+        return make_response(('repo_id_dtable_uuids_dict invalid', 400))
+    try:
+        task_id = task_manager.add_calc_dtable_asset_task(repo_id_dtable_uuids_dict)
+    except Exception as e:
+        logger.error('add_calc_dtable_asset_stats error: %s', e)
+        return make_response((e, 500))
+
+    return make_response(({'task_id': task_id}, 200))

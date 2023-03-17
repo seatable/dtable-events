@@ -310,6 +310,15 @@ class TaskManager(object):
 
         return task_id
 
+    def add_calc_dtable_asset_task(self, repo_id_dtable_uuids_dict):
+        from dtable_events.dtable_io import calc_dtable_asset_stats
+        task_id = str(uuid.uuid4())
+        task = (calc_dtable_asset_stats, (repo_id_dtable_uuids_dict, self.config))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+
+        return task_id
+
     def threads_is_alive(self):
         info = {}
         for t in self.threads:
