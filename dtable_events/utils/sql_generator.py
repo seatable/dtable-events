@@ -1409,6 +1409,35 @@ class StatisticSQLGenerator(object):
         summary_column_name = self._summary_column_2_sql(summary_method, numeric_column)
         return 'SELECT %s FROM %s LIMIT 0, 5000' % (summary_column_name, self.table_name)
 
+    def _dashboard_chart_statistic_2_sql(self): 
+        target_column_key = self.statistic.get('target_value_column_key', '')
+        target_summary_method = self.statistic.get('target_value_column_summary_method', '')
+        print('target_column_key:     ', target_column_key)
+        print('target_summary_method:     ', target_summary_method)
+        total_column_key = self.statistic.get('total_value_column_key', '')
+        total_summary_method = self.statistic.get('total_value_column_summary_method', '')
+        target_column = self._get_column_by_key(target_column_key)
+        if not target_column:
+            self.error = 'Numeric column not found'
+            return ''
+        if not target_summary_method:
+            self.error = 'Summary method is not valid'
+            return ''
+
+        target_summary_method = target_summary_method.upper()
+        target_summary_column_name = self._summary_column_2_sql(target_summary_method, target_column)
+        print('total_column_key:     ', total_column_key)
+        print('total_summary_method:     ', total_summary_method)
+        total_column = self._get_column_by_key(total_column_key)
+        if not total_column:
+            self.error = 'Numeric column not found'
+            return ''
+        if not total_summary_method:
+            self.error = 'Summary method is not valid'
+            return ''
+        total_summary_method = total_summary_method.upper()
+        total_summary_column_name = self._summary_column_2_sql(total_summary_method, total_column)
+        return 'SELECT %s, %s FROM %s LIMIT 0, 5000' % (target_summary_column_name, total_summary_column_name, self.table_name)
     
     def to_sql(self):
         if self.error:
@@ -1438,6 +1467,11 @@ class StatisticSQLGenerator(object):
 
         if self.statistic_type == StatisticType.BASIC_NUMBER_CARD:
             sql = self._basic_number_card_chart_statistic_2_sql()
+            return sql, self.error
+
+        if self.statistic_type == StatisticType.DASHBOARD:
+            sql = self._dashboard_chart_statistic_2_sql()
+            print(sql)
             return sql, self.error
         
         if self.statistic_type == StatisticType.TABLE:
