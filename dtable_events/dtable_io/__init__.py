@@ -36,7 +36,7 @@ from dtable_events.dtable_io.excel import parse_excel_csv_to_json, import_excel_
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.statistics.db import save_email_sending_records, batch_save_email_sending_records
 from dtable_events.data_sync.data_sync_utils import run_sync_emails
-from dtable_events.utils import get_inner_dtable_server_url, uuid_str_to_36_chars
+from dtable_events.utils import get_inner_dtable_server_url, uuid_str_to_32_chars, uuid_str_to_36_chars
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 
 dtable_io_logger = setup_logger('dtable_events_io.log')
@@ -1095,7 +1095,6 @@ def calc_dtable_asset_stats(repo_id_dtable_uuids_dict, config):
     try:
         db_session = init_db_session_class(config)()
     except Exception as e:
-        db_session = None
         dtable_io_logger.error('create db session failed. ERROR: {}'.format(e))
         raise Exception('create db session failed. ERROR: {}'.format(e))
     dtable_uuid_sizes = []
@@ -1108,12 +1107,17 @@ def calc_dtable_asset_stats(repo_id_dtable_uuids_dict, config):
                 asset_path = f'/asset/{uuid_str_to_36_chars(dtable_uuid)}'
                 asset_dir_id = seafile_api.get_dir_id_by_path(repo_id, asset_path)
                 if not asset_dir_id:
-                    dtable_uuid_sizes.append([dtable_uuid, 0])
+                    dtable_uuid_sizes.append([uuid_str_to_32_chars(dtable_uuid), 0])
                     continue
                 size = seafile_api.get_file_count_info_by_path(repo_id, asset_path).size
-                dtable_uuid_sizes.append([dtable_uuid, size])
+                dtable_uuid_sizes.append([uuid_str_to_32_chars(dtable_uuid), size])
         except Exception as e:
             dtable_io_logger.exception(e)
             dtable_io_logger.error('repo_id: %s dtable_uuids: %s stats asset error: %s', repo_id, dtable_uuids, e)
-    update_dtable_asset_sizes(dtable_uuid_sizes, db_session)
-    db_session.close()
+    try:
+        update_dtable_asset_sizes(dtable_uuid_sizes, db_session)
+    except Exception as e:
+        dtable_io_logger.exception(e)
+        dtable_io_logger.error('update dtable asset sizes error: %s', e)
+    finally:
+        db_session.close()

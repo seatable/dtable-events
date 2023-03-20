@@ -31,16 +31,15 @@ def update_dtable_asset_sizes(dtable_uuid_sizes, db_session):
     step = 1000
     updated_at = datetime.utcnow()
     for i in range(0, len(dtable_uuid_sizes), step):
-        updates = ', '.join(["('%s', %s, '%s')" % tuple(dtable_uuid_size + [updated_at]) for dtable_uuid_size in dtable_uuid_sizes[i: i+step]])
+        updates = ', '.join(["('%s', %s, '%s')" % (
+            uuid_str_to_32_chars(dtable_uuid_size[0]), dtable_uuid_size[1], updated_at
+        ) for dtable_uuid_size in dtable_uuid_sizes[i: i+step]])
         sql = '''
         INSERT INTO dtable_asset_stats(dtable_uuid, size, updated_at) VALUES %s
         ON DUPLICATE KEY UPDATE size=VALUES(size), updated_at=VALUES(updated_at)
         ''' % updates
-        try:
-            db_session.execute(sql)
-            db_session.commit()
-        except Exception as e:
-            logger.error('update dtable asset assets error: %s', e)
+        db_session.execute(sql)
+        db_session.commit()
 
 
 class DTableAssetStatsWorker(Thread):
@@ -48,7 +47,7 @@ class DTableAssetStatsWorker(Thread):
         Thread.__init__(self)
         self._finished = Event()
         self._db_session_class = init_db_session_class(config)
-        self.interval = 5 * 60  # listen to seafile event for 5 mins and then calc dtable asset storage
+        self.interval = 5 * 60  # listen to seafile event for some time and then calc dtable asset storage
         self.last_stats_time = time.time()
         self._redis_client = RedisClient(config)
 
@@ -70,6 +69,8 @@ class DTableAssetStatsWorker(Thread):
             content = msg.get('content')
             if not isinstance(content, str) or '\t' not in content:
                 continue
+            if not content.startswith('repo-update'):
+                continue
             ctime = msg.get('ctime')
             if not isinstance(ctime, int) or ctime < time.time() - 30 * 60:  # ignore messages half hour ago
                 continue
@@ -81,6 +82,7 @@ class DTableAssetStatsWorker(Thread):
             repo_id_ctime_dict[repo_id] = ctime
 
     def stats_dtable_asset_storage(self, repo_id_ctime_dict):
+        logger.info('Starting stats repo dtable asset storage...')
         dtable_uuid_sizes = []
         for repo_id, ctime in repo_id_ctime_dict.items():
             logger.debug('start stats repo: %s ctime: %s', repo_id, ctime)
@@ -88,8 +90,8 @@ class DTableAssetStatsWorker(Thread):
                 repo = seafile_api.get_repo(repo_id)
                 if not repo:
                     continue
-                asset_dir_id = seafile_api.get_dir_id_by_path(repo_id, '/asset')
-                if not asset_dir_id:
+                asset_dirent = seafile_api.get_dirent_by_path(repo_id, '/asset')
+                if not asset_dirent or asset_dirent.mtime < ctime:
                     continue
                 dirents = seafile_api.list_dir_by_path(repo_id, '/asset', offset=-1, limit=-1)
                 for dirent in dirents:
@@ -98,7 +100,7 @@ class DTableAssetStatsWorker(Thread):
                     if not is_valid_uuid(dirent.obj_name):
                         continue
                     logger.debug('start stats repo: %s dirent: %s', repo_id, dirent.obj_name)
-                    if dirent.mtime > ctime - 5:
+                    if dirent.mtime >= ctime:
                         dtable_uuid = dirent.obj_name
                         size = seafile_api.get_file_count_info_by_path(repo_id, f'/asset/{dtable_uuid}').size
                         logger.debug('start stats repo: %s dirent: %s size: %s', repo_id, dirent.obj_name, size)
@@ -111,47 +113,9 @@ class DTableAssetStatsWorker(Thread):
         logger.debug('totally need to update dtable: %s', len(dtable_uuid_sizes))
         db_session = self._db_session_class()
         try:
-            update_dtable_asset_sizes(dtable_uuid_sizes)
+            update_dtable_asset_sizes(dtable_uuid_sizes, db_session)
         except Exception as e:
             logger.exception(e)
             logger.error('update dtable asset sizes error: %s', e)
         finally:
             db_session.close()
-
-    def listen_redis_and_update(self):
-        logger.info('Starting handle table rows count...')
-        subscriber = self._redis_client.get_subscriber('stat-asset')
-        while not self._finished.is_set():
-            try:
-                message = subscriber.get_message()
-                if message is not None:
-                    dtable_uuid_repo_ids = json.loads(message['data'])
-                    session = self._db_session_class()
-                    try:
-                        self.stats_dtable_uuids(dtable_uuid_repo_ids, session)
-                    except Exception as e:
-                        logger.error('Handle table rows count: %s' % e)
-                    finally:
-                        session.close()
-                else:
-                    time.sleep(0.5)
-            except Exception as e:
-                logger.error('Failed get message from redis: %s' % e)
-                subscriber = self._redis_client.get_subscriber('count-rows')
-
-    def stats_dtable_uuids(self, dtable_uuid_repo_ids, db_session):
-        dtable_uuid_sizes = []
-        for dtable_uuid, repo_id in dtable_uuid_repo_ids:
-            try:
-                asset_path = f'/asset/{uuid_str_to_36_chars(dtable_uuid)}'
-                asset_dir_id = seafile_api.get_dir_id_by_path(repo_id, asset_path)
-                if not asset_dir_id:
-                    dtable_uuid_sizes.append([uuid_str_to_32_chars(dtable_uuid), 0])
-                size = seafile_api.get_file_count_info_by_path(repo_id, asset_path).size
-                dtable_uuid_sizes.append([uuid_str_to_32_chars(dtable_uuid), size])
-                logger.debug('redis repo: %s dtable_uuid: %s size: %s', repo_id, dtable_uuid, size)
-            except Exception as e:
-                logger.exception(e)
-                logger.error('check repo: %s dtable: %s asset size error: %s', repo_id, dtable_uuid, e)
-        logger.debug('redis totally need to update dtable: %s', len(dtable_uuid_sizes))
-        update_dtable_asset_sizes(dtable_uuid_sizes, db_session)
