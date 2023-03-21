@@ -46,6 +46,8 @@ def do_notify_schedule(schedule_id, task_id, action):
         offset = action['offset']
         token = action['token']
         to_users = action['to_users']
+        if not to_users or not isinstance(to_users, list):
+            return
         detail = {
             'task_id': task_id,
             'token': token,

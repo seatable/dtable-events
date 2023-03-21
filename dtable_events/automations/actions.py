@@ -2373,11 +2373,20 @@ class AutomationRule:
         table_name = self.table_info.get('name')
         columns = self.table_info.get('columns')
 
-        sql = filter2sql(table_name, columns, filter_conditions, by_group=True)
+        try:
+            sql = filter2sql(table_name, columns, filter_conditions, by_group=True)
+        except ValueError as e:
+            logger.warning('wrong filter in rule: %s trigger filters filter_conditions: %s error: %s', self.rule_id, filter_conditions, e)
+            raise RuleInvalidException('wrong filter in rule: %s trigger filters error: %s' % (self.rule_id, e))
+        except Exception as e:
+            logger.exception(e)
+            logger.error('rule: %s filter_conditions: %s filter2sql error: %s', self.rule_id, filter_conditions, e)
+            self._trigger_conditions_rows = []
+            return self._trigger_conditions_rows
         try:
             rows_data, _ = self.dtable_db_api.query(sql, convert=False)
         except RowsQueryError:
-            raise RuleInvalidException('wrong filter in rule: %s trigger filters', self.rule_id)
+            raise RuleInvalidException('wrong filter in rule: %s trigger filters' % self.rule_id)
         except Exception as e:
             logger.error('request filter rows error: %s', e)
             self._trigger_conditions_rows = []
