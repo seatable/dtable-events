@@ -281,28 +281,12 @@ def parse_excel(repo_id, dtable_name, custom=False):
         except Exception as e:
             raise Exception('Excel format error')
         if not sheet_rows:
-            table = {
-                'name': sheet.title,
-                'rows': [],
-                'columns': [],
-                'max_row': 0,
-                'max_column': 0,
-            }
-            tables.append(table)
             continue
 
         # the sheet has some rows, but sheet.max_row maybe get None
         max_row = sheet.max_row if isinstance(sheet.max_row, int) else len(sheet_rows)
         max_column = sheet.max_column if isinstance(sheet.max_column, int) else len(sheet_rows[0])
         if not max_row or not max_column:
-            table = {
-                'name': sheet.title,
-                'rows': [],
-                'columns': [],
-                'max_row': 0,
-                'max_column': 0,
-            }
-            tables.append(table)
             continue
 
         dtable_io_logger.info(
@@ -336,6 +320,15 @@ def parse_excel(repo_id, dtable_name, custom=False):
         }
         tables.append(table)
     wb.close()
+    if not tables:
+        table = {
+            'name': list(wb) and list(wb)[0].title or 'sheet1',
+            'rows': [],
+            'columns': [],
+            'max_row': 0,
+            'max_column': 0,
+        }
+        tables.append(table)
 
     return json.dumps(tables)
 
