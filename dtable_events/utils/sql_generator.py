@@ -1325,9 +1325,10 @@ class StatisticSQLGenerator(object):
         if not summary_method:
             self.error = 'Summary method is not valid'
             return ''
+        self._update_filter_sql(True, numeric_column)
         summary_method = summary_method.upper()
         summary_column_name = self._summary_column_2_sql(summary_method, numeric_column)
-        return 'SELECT %s FROM %s LIMIT 0, 5000' % (summary_column_name, self.table_name)
+        return 'SELECT %s FROM %s %s LIMIT 0, 5000' % (summary_column_name, self.table_name, self.filter_sql)
 
     
     def to_sql(self):
