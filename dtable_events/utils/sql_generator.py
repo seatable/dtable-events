@@ -1190,7 +1190,7 @@ class StatisticSQLGenerator(object):
         y_axis_right_summary_type = self.statistic.get('y_axis_right_summary_type', '')
         y_axis_right_summary_method = self.statistic.get('y_axis_right_summary_method', '') 
         y_axis_right_summary_column = self.statistic.get('y_axis_right_summary_column', '') 
-
+       
         groupby_column = self._get_column_by_key(x_axis_column_key)
         if not groupby_column:
             self.error = 'Group by column not found'
@@ -1201,7 +1201,6 @@ class StatisticSQLGenerator(object):
         left_summary_type = y_axis_left_summary_type.upper()
         right_summary_type = y_axis_right_summary_type.upper()
         if left_summary_type == 'COUNT':
-            # column_groupby_column = self._get_column_by_key(column_groupby_column_key)
             summary_column_name = None
             if right_summary_type == 'COUNT': 
                 summary_column_name = self._summary_column_2_sql('COUNT', groupby_column)
