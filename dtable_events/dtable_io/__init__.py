@@ -3,6 +3,7 @@ import json
 import os
 import shutil
 import time
+import uuid
 
 import requests
 import smtplib
@@ -845,10 +846,8 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
         if summary_configs.get(col.get('key')):
             summary_col_info.update({col.get('name'): summary_configs.get(col.get('key'))})
 
-    images_target_dir = IMAGE_TMP_DIR + dtable_uuid
-    if not os.path.exists(images_target_dir):
-        os.makedirs(images_target_dir)
-    image_param = {'num': 0, 'is_support': is_support_image}
+    images_target_dir = os.path.join(IMAGE_TMP_DIR, dtable_uuid, str(uuid.uuid4()))
+    image_param = {'num': 0, 'is_support': is_support_image, 'images_target_dir': images_target_dir}
 
     sheet_name = table_name + ('_' + view_name if view_name else '')
     excel_name = name + '_' + table_name + ('_' + view_name if view_name else '') + '.xlsx'
@@ -922,16 +921,14 @@ def convert_table_to_execl(dtable_uuid, table_id, username, permission, name, re
     result_rows = get_rows_from_dtable_server(username, dtable_uuid, table_name)
     column_name_to_column = {col.get('name'): col for col in cols}
 
-    images_target_dir = IMAGE_TMP_DIR + dtable_uuid
-    if not os.path.exists(images_target_dir):
-        os.makedirs(images_target_dir)
+    images_target_dir = os.path.join(IMAGE_TMP_DIR, dtable_uuid, str(uuid.uuid4()))
+    image_param = {'num': 0, 'is_support': is_support_image, 'images_target_dir': images_target_dir}
 
     sheet_name = table_name
     excel_name = name + '_' + table_name + '.xlsx'
     target_path = os.path.join(target_dir, excel_name)
     wb = openpyxl.Workbook(write_only=True)
     ws = wb.create_sheet(sheet_name)
-    image_param = {'num': 0, 'is_support': is_support_image}
     try:
         write_xls_with_type(result_rows, email2nickname, ws, 0, dtable_uuid, repo_id, image_param, cols, column_name_to_column, header_height=header_height)
     except Exception as e:

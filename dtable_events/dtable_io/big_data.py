@@ -1,6 +1,7 @@
 import openpyxl
 import os
 import shutil
+import uuid
 
 from dtable_events.dtable_io.excel import parse_row, write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR
 from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, get_metadata_from_dtable_server
@@ -409,10 +410,8 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
     excel_name = name + '_' + table_name + ('_' + view_name if view_name else '') + '.xlsx'
     target_path = os.path.join(target_dir, excel_name)
 
-    images_target_dir = IMAGE_TMP_DIR + dtable_uuid
-    if not os.path.exists(images_target_dir):
-        os.makedirs(images_target_dir)
-    image_param = {'num': 0, 'is_support': is_support_image}
+    images_target_dir = os.path.join(IMAGE_TMP_DIR, dtable_uuid, str(uuid.uuid4()))
+    image_param = {'num': 0, 'is_support': is_support_image, 'images_target_dir': images_target_dir}
 
     wb = openpyxl.Workbook(write_only=True)
     ws = wb.create_sheet(sheet_name)

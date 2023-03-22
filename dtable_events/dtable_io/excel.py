@@ -280,14 +280,29 @@ def parse_excel(repo_id, dtable_name, custom=False):
             sheet_rows = list(sheet.rows)
         except Exception as e:
             raise Exception('Excel format error')
-
         if not sheet_rows:
+            table = {
+                'name': sheet.title,
+                'rows': [],
+                'columns': [],
+                'max_row': 0,
+                'max_column': 0,
+            }
+            tables.append(table)
             continue
 
         # the sheet has some rows, but sheet.max_row maybe get None
         max_row = sheet.max_row if isinstance(sheet.max_row, int) else len(sheet_rows)
         max_column = sheet.max_column if isinstance(sheet.max_column, int) else len(sheet_rows[0])
-        if not max_row or not max_row:
+        if not max_row or not max_column:
+            table = {
+                'name': sheet.title,
+                'rows': [],
+                'columns': [],
+                'max_row': 0,
+                'max_column': 0,
+            }
+            tables.append(table)
             continue
 
         dtable_io_logger.info(
@@ -297,8 +312,6 @@ def parse_excel(repo_id, dtable_name, custom=False):
             max_row = 50000  # rows limit
         if max_column > 500:
             max_column = 500  # columns limit
-        if max_row == 0:
-            continue
 
         if custom:
             head_index = head_index_map.get(sheet.title, 0)
@@ -1085,7 +1098,7 @@ def parse_multiple_select_formula(cell_data):
 def convert_formula_number(value, column_data):
     decimal = column_data.get('decimal')
     thousands = column_data.get('thousands')
-    precision = column_data.get('precision')
+    precision = column_data.get('precision', 0)
     if decimal == 'comma':
         # decimal maybe dot or comma
         value = value.replace(',', '.')
@@ -1319,7 +1332,7 @@ def get_file_download_url(file_url, dtable_uuid, repo_id):
     url = gen_file_get_url(token, asset_name)
     return url
 
-def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, image_num):
+def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, image_num, images_target_dir):
     import requests
     from openpyxl.drawing.image import Image
     from PIL import Image as PILImage
@@ -1331,7 +1344,6 @@ def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, i
     ws.row_dimensions[int(row_pos)].height = IMAGE_CELL_ROW_HEIGHT
 
     offset_increment = 0
-    images_target_dir = IMAGE_TMP_DIR + dtable_uuid
     for image_url in images:
         if image_num >= EXPORT_IMAGE_LIMIT:
             return image_num
@@ -1347,7 +1359,7 @@ def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, i
         response = requests.get(image_download_url)
         image_content = response.content
 
-        tmp_image_path = os.path.join(images_target_dir, image_dir, image_name)
+        tmp_image_path = os.path.join(image_dir, image_name)
         with open(tmp_image_path, 'wb') as f:
             f.write(image_content)
 
@@ -1361,7 +1373,7 @@ def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, i
             img = PILImage.open(tmp_image_path)
             img.load()
             image_name = image_name.split('.')[0] + '.png'
-            new_tmp_image_path = os.path.join(images_target_dir, image_dir, image_name)
+            new_tmp_image_path = os.path.join(image_dir, image_name)
             img.save(new_tmp_image_path, format='png')
             # remove webp image
             os.remove(tmp_image_path)
@@ -1500,8 +1512,9 @@ def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_
         elif col_type == ColumnTypes.IMAGE and cell_value and image_param['is_support']:
             c = WriteOnlyCell(ws)
             image_num = image_param.get('num')
+            images_target_dir = image_param.get('images_target_dir')
             if image_num < EXPORT_IMAGE_LIMIT:
-                num = add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, image_num)
+                num = add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, image_num, images_target_dir)
                 image_param['num'] = num
         else:
             if col_type == ColumnTypes.GEOLOCATION:
