@@ -1227,17 +1227,19 @@ class StatisticSQLGenerator(object):
                 if not summary_column:
                     continue
                 summary_column_name = self._summary_column_2_sql(summary_method, summary_column)
-                column_groupby_numeric_column_names.append(summary_column_name)
-            column_groupby_numeric_column_names_string = ', '.join(column_groupby_numeric_column_names)
+                if summary_column_name not in column_groupby_numeric_column_names:
+                    column_groupby_numeric_column_names.append(summary_column_name)
             if right_summary_type == 'COUNT': 
-                summary_column_name = self._summary_column_2_sql('COUNT', groupby_column)
+                right_summary_column_name = self._summary_column_2_sql('COUNT', groupby_column)
             else:
                 right_summary_column = self._get_column_by_key(y_axis_right_summary_column)
                 if right_summary_column:
                     right_summary_method = y_axis_right_summary_method.upper()
-                    summary_column_name = self._summary_column_2_sql(right_summary_method, right_summary_column)
-            if summary_column_name:
-                return 'SELECT %s, %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, summary_column_name, column_groupby_numeric_column_names_string, self.table_name, self.filter_sql, groupby_column_name)
+                    right_summary_column_name = self._summary_column_2_sql(right_summary_method, right_summary_column)
+            if right_summary_column_name:
+                if right_summary_column_name not in column_groupby_numeric_column_names:
+                    column_groupby_numeric_column_names.append(right_summary_column_name)
+            column_groupby_numeric_column_names_string = ', '.join(column_groupby_numeric_column_names)
             return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, column_groupby_numeric_column_names_string, self.table_name, self.filter_sql, groupby_column_name)
         summary_column = self._get_column_by_key(y_axis_left_summary_column)
 
@@ -1245,14 +1247,16 @@ class StatisticSQLGenerator(object):
         left_summary_column_name = self._summary_column_2_sql(summary_method, summary_column)
 
         if right_summary_type == 'COUNT': 
-            summary_column_name = self._summary_column_2_sql('COUNT', groupby_column)
+            right_summary_column_name = self._summary_column_2_sql('COUNT', groupby_column)
         else:
             right_summary_column = self._get_column_by_key(y_axis_right_summary_column)
             if right_summary_column:
                 right_summary_method = y_axis_right_summary_method.upper()
-                summary_column_name = self._summary_column_2_sql(right_summary_method, right_summary_column)
-        if summary_column_name:
-            return 'SELECT %s, %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, summary_column_name, left_summary_column_name, self.table_name, self.filter_sql, groupby_column_name)
+                right_summary_column_name = self._summary_column_2_sql(right_summary_method, right_summary_column)
+        if right_summary_column_name:
+            if left_summary_column_name == right_summary_column_name:
+                return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, left_summary_column_name, self.table_name, self.filter_sql, groupby_column_name)
+            return 'SELECT %s, %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, right_summary_column_name, left_summary_column_name, self.table_name, self.filter_sql, groupby_column_name)
         return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, left_summary_column_name, self.table_name, self.filter_sql, groupby_column_name)
         
     def _one_dimension_statistic_table_2_sql(self):
