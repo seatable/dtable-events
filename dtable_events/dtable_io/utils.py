@@ -934,8 +934,6 @@ def get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, i
     payload = {
         'exp': int(time.time()) + 60,
         'dtable_uuid': dtable_uuid,
-        'table_id': table_id,
-        'view_id': view_id,
         'username': username,
         'id_in_org': id_in_org,
         'permission': permission,
