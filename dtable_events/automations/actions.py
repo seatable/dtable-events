@@ -52,6 +52,7 @@ MESSAGE_TYPE_AUTOMATION_RULE = 'automation_rule'
 MINUTE_TIMEOUT = 60
 
 CONDITION_ROWS_LIMIT = 50
+CONDITION_ROWS_LOCKED_LIMIT = 200
 WECHAT_CONDITION_ROWS_LIMIT = 20
 DINGTALK_CONDITION_ROWS_LIMIT = 20
 
@@ -318,7 +319,7 @@ class LockRowAction(BaseAction):
             self.update_data['row_ids'].append(row_id)
 
         if self.auto_rule.run_condition in CRON_CONDITIONS:
-            rows_data = self.auto_rule.get_trigger_conditions_rows()[:CONDITION_ROWS_LIMIT]
+            rows_data = self.auto_rule.get_trigger_conditions_rows(warning_rows=CONDITION_ROWS_LOCKED_LIMIT)[:CONDITION_ROWS_LOCKED_LIMIT]
             for row in rows_data:
                 self.update_data['row_ids'].append(row.get('_id'))
 
@@ -2345,7 +2346,7 @@ class AutomationRule:
         temp_api_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
         return temp_api_token
 
-    def get_trigger_conditions_rows(self):
+    def get_trigger_conditions_rows(self, warning_rows=CONDITION_ROWS_LIMIT):
         if self._trigger_conditions_rows is not None:
             return self._trigger_conditions_rows
         filters = self.trigger.get('filters', [])
@@ -2398,10 +2399,10 @@ class AutomationRule:
             json.dumps(filter_conditions)
         ))
         self._trigger_conditions_rows = rows_data
-        if len(self._trigger_conditions_rows) > 50:
+        if len(self._trigger_conditions_rows) > warning_rows:
             self.append_warning({
                 'type': 'condition_rows_exceed',
-                'condition_rows_limit': CONDITION_ROWS_LIMIT
+                'condition_rows_limit': warning_rows
             })
         return self._trigger_conditions_rows
 
