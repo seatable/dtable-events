@@ -1506,7 +1506,7 @@ class BaseSQLGenerator(object):
                     else:
                         continue
 
-            order_condition = '%s %s' % (column.get('name'), sort_type)
+            order_condition = f"`{column.get('name')}` {sort_type}"
             clauses.append(order_condition)
         if not clauses:
             return ''
