@@ -555,6 +555,37 @@ def add_email_sending_task():
 
     return make_response(({'task_id': task_id}, 200))
 
+@app.route('/add-notification-sending-task', methods=['POST'])
+def add_notification_sending_task():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    if message_task_manager.tasks_queue.full():
+        return make_response(('dtable io server busy.', 400))
+
+    data = request.form
+    if not isinstance(data, dict):
+        return make_response(('Bad request', 400))
+
+    emails = data.get('emails')
+    email_list = emails and emails.split(',') or []
+    msg = data.get('msg')
+    table_id = data.get('table_id')
+    row_id = data.get('row_id')
+    username = data.get('username')
+    dtable_uuid = data.get('dtable_uuid')
+
+    try:
+        task_id = message_task_manager.add_notification_sending_task(
+            email_list, msg, dtable_uuid, username, table_id, row_id
+        )
+    except Exception as e:
+        logger.error(e)
+        return make_response((e, 500))
+
+    return make_response(({'task_id': task_id}, 200))
+
 
 @app.route('/add-run-auto-rule-task', methods=['POST'])
 def add_run_auto_rule_task():
