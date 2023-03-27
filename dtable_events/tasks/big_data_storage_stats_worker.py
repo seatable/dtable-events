@@ -79,7 +79,7 @@ class BigDataStorageStatsTask(Thread):
             while 1:
                 api_url = INNER_DTABLE_DB_URL.rstrip('/') + '/api/v1/bases/?offset=%s&limit=%s' % (offset, limit)
                 headers = {'Authorization': 'Token ' + jwt.encode({
-                    'is_db_admin': True, 'exp': int(time.time()) + 60,
+                    'is_db_admin': True, 'exp': int(time.time()) + 60, 'permission': 'rw'
                 }, DTABLE_PRIVATE_KEY, 'HS256')}
                 try:
                     resp = requests.get(api_url, headers=headers).json()
