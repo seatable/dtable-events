@@ -488,18 +488,34 @@ def send_dingtalk_msg(webhook_url, msg, msg_type="text", msg_title=None):
         dtable_message_logger.info('Dingtalk sending success!')
     return result
 
-def send_notification_msg(emails, msg, dtable_uuid, username, table_id=None, row_id=None):
+def send_notification_msg(emails, user_col_key, msg, dtable_uuid, username, table_id=None, row_id=None):
     result = {}
     try:
         dtable_server_url = get_inner_dtable_server_url()
         dtable_server_api = DTableServerAPI(username, dtable_uuid, dtable_server_url)
+        target_row = dtable_server_api.get_row(table_id, row_id, convert=False, user_table_id=True)
+        user_col_info = target_row.get(user_col_key, '')
+
+        sending_list = emails
+
+        if user_col_info:
+
+            if isinstance(user_col_info, list):
+                for user in user_col_info:
+                    if user in sending_list:
+                        continue
+                    sending_list.append(user)
+            else:
+                if user_col_info not in sending_list:
+                    sending_list.append(user_col_info)
+
         detail = {
             'table_id': table_id or '',
             'msg': msg,
             'row_id_list': row_id and [row_id, ] or [],
         }
         user_msg_list = []
-        for user in emails:
+        for user in sending_list:
             if not is_valid_email(user):
                 continue
             user_msg_list.append({

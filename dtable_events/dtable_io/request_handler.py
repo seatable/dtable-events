@@ -575,10 +575,11 @@ def add_notification_sending_task():
     row_id = data.get('row_id')
     username = data.get('username')
     dtable_uuid = data.get('dtable_uuid')
+    user_col_key = data.get('user_col_key')
 
     try:
         task_id = message_task_manager.add_notification_sending_task(
-            email_list, msg, dtable_uuid, username, table_id, row_id
+            email_list, user_col_key, msg, dtable_uuid, username, table_id, row_id
         )
     except Exception as e:
         logger.error(e)

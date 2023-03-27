@@ -54,10 +54,10 @@ class TaskMessageManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
-    def add_notification_sending_task(self, emails, msg, dtable_uuid, username, table_id=None, row_id=None ):
+    def add_notification_sending_task(self, emails, user_col_key, msg, dtable_uuid, username, table_id=None, row_id=None ):
         from dtable_events.dtable_io import send_notification_msg
         task_id = str(uuid.uuid4())
-        task = (send_notification_msg, (emails, msg, dtable_uuid, username, table_id, row_id ))
+        task = (send_notification_msg, (emails, user_col_key, msg, dtable_uuid, username, table_id, row_id ))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         return task_id
