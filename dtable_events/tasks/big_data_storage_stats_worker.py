@@ -77,7 +77,7 @@ class BigDataStorageStatsTask(Thread):
             offset = 0
             limit = 1000
             while 1:
-                api_url = INNER_DTABLE_DB_URL.rstrip('/') + '/api/v1/bases/?offset=%s&limit=%s' % (offset, limit)
+                api_url = INNER_DTABLE_DB_URL.rstrip('/') + '/api/v1/bases/?offset=%s&limit=%s&from=dtable_events' % (offset, limit)
                 headers = {'Authorization': 'Token ' + jwt.encode({
                     'is_db_admin': True, 'exp': int(time.time()) + 60, 'permission': 'rw'
                 }, DTABLE_PRIVATE_KEY, 'HS256')}
