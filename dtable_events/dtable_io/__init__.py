@@ -803,7 +803,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
     email2nickname = {nickname['email']: nickname['name'] for nickname in nicknames}
 
     try:
-        metadata = get_metadata_from_dtable_server(dtable_uuid, username, permission)
+        metadata = get_metadata_from_dtable_server(dtable_uuid, username)
     except Exception as e:
         dtable_io_logger.error('get metadata. ERROR: {}'.format(e))
         return
@@ -896,7 +896,7 @@ def convert_table_to_execl(dtable_uuid, table_id, username, permission, name, re
     email2nickname = {nickname['email']: nickname['name'] for nickname in nicknames}
 
     try:
-        metadata = get_metadata_from_dtable_server(dtable_uuid, username, permission)
+        metadata = get_metadata_from_dtable_server(dtable_uuid, username)
     except Exception as e:
         dtable_io_logger.error('get metadata. ERROR: {}'.format(e))
         return

@@ -364,7 +364,7 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
     email2nickname = {nickname['email']: nickname['name'] for nickname in nicknames}
 
     try:
-        metadata = get_metadata_from_dtable_server(dtable_uuid, username, 'r')
+        metadata = get_metadata_from_dtable_server(dtable_uuid, username)
     except Exception as e:
         dtable_io_logger.error('get metadata. ERROR: {}'.format(e))
         return
