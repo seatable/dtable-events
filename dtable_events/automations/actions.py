@@ -51,6 +51,8 @@ MESSAGE_TYPE_AUTOMATION_RULE = 'automation_rule'
 
 MINUTE_TIMEOUT = 60
 
+NOTIFICATION_CONDITION_ROWS_LIMIT = 50
+EMAIL_CONDITION_ROWS_LIMIT = 50
 CONDITION_ROWS_LIMIT = 50
 CONDITION_ROWS_LOCKED_LIMIT = 200
 WECHAT_CONDITION_ROWS_LIMIT = 20
@@ -568,7 +570,7 @@ class NotifyAction(BaseAction):
         table_id, view_id = self.auto_rule.table_id, self.auto_rule.view_id
         dtable_uuid = self.auto_rule.dtable_uuid
 
-        rows_data = self.auto_rule.get_trigger_conditions_rows()[:CONDITION_ROWS_LIMIT]
+        rows_data = self.auto_rule.get_trigger_conditions_rows(warning_rows=NOTIFICATION_CONDITION_ROWS_LIMIT)[:NOTIFICATION_CONDITION_ROWS_LIMIT]
         col_key_dict = {col.get('key'): col for col in self.auto_rule.view_columns}
 
         user_msg_list = []
@@ -679,7 +681,7 @@ class SendWechatAction(BaseAction):
             logger.error('send wechat error: %s', e)
 
     def condition_cron_notify(self):
-        rows_data = self.auto_rule.get_trigger_conditions_rows()[:WECHAT_CONDITION_ROWS_LIMIT]
+        rows_data = self.auto_rule.get_trigger_conditions_rows(warning_rows=WECHAT_CONDITION_ROWS_LIMIT)[:WECHAT_CONDITION_ROWS_LIMIT]
         for row in rows_data:
             msg = self.msg
             if self.column_blanks:
@@ -756,7 +758,7 @@ class SendDingtalkAction(BaseAction):
             logger.error('send dingtalk error: %s', e)
 
     def condition_cron_notify(self):
-        rows_data = self.auto_rule.get_trigger_conditions_rows()[:DINGTALK_CONDITION_ROWS_LIMIT]
+        rows_data = self.auto_rule.get_trigger_conditions_rows(warning_rows=DINGTALK_CONDITION_ROWS_LIMIT)[:DINGTALK_CONDITION_ROWS_LIMIT]
         for row in rows_data:
             msg = self.msg
             if self.column_blanks:
@@ -944,7 +946,7 @@ class SendEmailAction(BaseAction):
             logger.error('send email error: %s', e)
 
     def condition_cron_notify(self):
-        rows_data = self.auto_rule.get_trigger_conditions_rows()[:CONDITION_ROWS_LIMIT]
+        rows_data = self.auto_rule.get_trigger_conditions_rows(warning_rows=EMAIL_CONDITION_ROWS_LIMIT)[:EMAIL_CONDITION_ROWS_LIMIT]
         col_key_dict = {col.get('key'): col for col in self.auto_rule.view_columns}
         send_info_list = []
         for row in rows_data:
@@ -2346,7 +2348,7 @@ class AutomationRule:
         temp_api_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
         return temp_api_token
 
-    def get_trigger_conditions_rows(self, warning_rows=CONDITION_ROWS_LIMIT):
+    def get_trigger_conditions_rows(self, warning_rows=50):
         if self._trigger_conditions_rows is not None:
             return self._trigger_conditions_rows
         filters = self.trigger.get('filters', [])
