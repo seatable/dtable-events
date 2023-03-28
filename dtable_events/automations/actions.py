@@ -1555,7 +1555,9 @@ class AddRecordToOtherTableAction(BaseAction):
                             filtered_updates[col_name] = self.parse_column_value(col, value)
                         elif set_type == 'manual':
                             value = data_dict.get('value')
-                            value = self.fill_msg_blanks(src_row, value, self.column_blanks)
+                            value_blanks = set(re.findall(r'\{([^{]*?)\}', value))
+                            value_column_blanks = [blank for blank in value_blanks if blank in self.col_name_dict]
+                            value = self.fill_msg_blanks(src_row, value, value_column_blanks)
                             filtered_updates[col_name] = self.add_or_create_options(col, value)
                     except Exception as e:
                         logger.error(e)
