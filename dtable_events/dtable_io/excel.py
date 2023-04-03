@@ -1361,6 +1361,10 @@ def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, i
         except:
             continue
         image_format = img.format
+
+        if image_format == 'mpo':
+            continue
+
         # convert webp to png
         if image_format in ('webp', ):
             img = PILImage.open(tmp_image_path)
