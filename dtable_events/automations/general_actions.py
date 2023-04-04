@@ -485,8 +485,8 @@ class SendEmailAction(BaseAction):
         if not self.account_dict:
             raise ActionInvalid('account_id: %s not found' % account_id)
         self.msg = msg
-        self.send_to_list = [email for email in email2list(send_to) if is_valid_username(email)]
-        self.copy_to_list = [email for email in email2list(copy_to) if is_valid_username(email)]
+        self.send_to_list = email2list(send_to)
+        self.copy_to_list = email2list(copy_to)
         self.send_from = send_from
         self.subject = subject
 
@@ -494,6 +494,19 @@ class SendEmailAction(BaseAction):
         return self.do_action_with_row(None)
 
     def do_action_with_row(self, converted_row):
+        final_send_to_list, final_copy_to_list = [], []
+        if self.send_to_list:
+            for send_to in self.send_to_list:
+                real_send_to = self.generate_real_msg(send_to, converted_row)
+                if is_valid_email(real_send_to):
+                    final_send_to_list.append(real_send_to)
+        if not final_send_to_list:
+            return
+        if self.copy_to_list:
+            for copy_to in self.copy_to_list:
+                real_copy_to = self.generate_real_msg(copy_to, converted_row)
+                if is_valid_email(real_copy_to):
+                    final_copy_to_list.append(real_copy_to)
         account_detail = self.account_dict.get('detail', {})
         auth_info = {
             'email_host': account_detail.get('email_host', ''),
@@ -502,8 +515,8 @@ class SendEmailAction(BaseAction):
             'password': account_detail.get('password', '')
         }
         send_info = {
-            'send_to': self.send_to_list,
-            'copy_to': self.copy_to_list,
+            'send_to': final_send_to_list,
+            'copy_to': final_copy_to_list,
             'subject': self.subject
         }
         try:
