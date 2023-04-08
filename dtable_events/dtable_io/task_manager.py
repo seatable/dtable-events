@@ -13,6 +13,7 @@ class TaskManager(object):
 
     def __init__(self):
         self.tasks_map = {}
+        self.task_results_map = {}
         self.tasks_queue = queue.Queue(10)
         self.config = None
         self.current_task_info = {}
@@ -29,7 +30,7 @@ class TaskManager(object):
         self.config = config
 
     def is_valid_task_id(self, task_id):
-        return task_id in self.tasks_map.keys()
+        return task_id in (self.tasks_map.keys() | self.task_results_map.keys())
 
     def add_export_task(self, username, repo_id, workspace_id, dtable_uuid, dtable_name, ignore_asset):
         from dtable_events.dtable_io import get_dtable_export_content
@@ -222,13 +223,11 @@ class TaskManager(object):
         return task_id
 
     def query_status(self, task_id):
-        task = self.tasks_map[task_id]
-        if task == 'success':
-            self.tasks_map.pop(task_id, None)
+        task_result = self.task_results_map.pop(task_id, None)
+        if task_result == 'success':
             return True, None
-        if isinstance(task, str) and task.startswith('error_'):
-            self.tasks_map.pop(task_id, None)
-            return True, task[6:]
+        if isinstance(task_result, str) and task_result.startswith('error_'):
+            return True, task_result[6:]
         return False, None
 
     def convert_page_to_pdf(self, dtable_uuid, page_id, row_id, access_token, session_id):
@@ -341,12 +340,13 @@ class TaskManager(object):
 
                 # run
                 task[0](*task[1])
-                self.tasks_map[task_id] = 'success'
+                self.task_results_map[task_id] = 'success'
 
                 finish_time = time.time()
                 dtable_io_logger.info('Run task success: %s cost %ds \n' % (task_info, int(finish_time - start_time)))
                 self.current_task_info.pop(task_id, None)
             except Exception as e:
+                self.task_results_map[task_id] = 'error_' + str(e.args[0])
                 if str(e.args[0]) == 'the number of cells accessing the table exceeds the limit':
                     dtable_io_logger.warning('Failed to handle task %s, error: %s \n' % (task_info, e))
                 elif str(e.args[0]).startswith('import_sync_common_dataset:'):
@@ -356,9 +356,9 @@ class TaskManager(object):
                 else:
                     dtable_io_logger.exception(e)
                     dtable_io_logger.error('Failed to handle task %s, error: %s \n' % (task_info, e))
-                self.tasks_map[task_id] = 'error_' + str(e.args[0])
                 self.current_task_info.pop(task_id, None)
             finally:
+                self.tasks_map.pop(task_id, None)
                 if hasattr(task[0], '__name__') and task[0].__name__ == 'sync_common_dataset':
                     context = task[1][0]
                     self.finish_dataset_id_sync(context.get('dataset_sync_id'))
