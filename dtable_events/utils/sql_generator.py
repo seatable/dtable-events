@@ -615,7 +615,7 @@ class DateOperator(Operator):
             return ""
         start_date = target_date - timedelta(days=1)
         end_date = target_date + timedelta(days=1)
-        return "(`%(column_name)s` >= '%(end_date)s' or `%(column_name)s` <= '%(start_date)s') and `%(column_name)s` is not null" % (
+        return "(`%(column_name)s` >= '%(end_date)s' or `%(column_name)s` <= '%(start_date)s') or `%(column_name)s` is null" % (
         {
             "column_name": self.column_name,
             "start_date": self._format_date(start_date),
@@ -684,7 +684,7 @@ class CollaboratorOperator(Operator):
             select_collaborators = [select_collaborators, ]
         collaborator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
         filter_term_str = ", ".join(collaborator_list)
-        return "`%(column_name)s` has one of (%(filter_term_str)s)" % ({
+        return "`%(column_name)s` has none of (%(filter_term_str)s)" % ({
             "column_name": self.column_name,
             "filter_term_str": filter_term_str
         })
@@ -713,6 +713,30 @@ class CreatorOperator(Operator):
         FilterPredicateTypes.IS_NOT,
         FilterPredicateTypes.INCLUDE_ME,
     ]
+
+    def op_is(self):
+        term = self.filter_term
+        if not term:
+            return ""
+        if isinstance(self.filter_term, list):
+            term = term[0]
+        return "`%s` %s '%s'" % (
+            self.column_name,
+            '=',
+            term,
+        )
+
+    def op_is_not(self):
+        term = self.filter_term
+        if not term:
+            return ""
+        if isinstance(self.filter_term, list):
+            term = term[0]
+        return "`%s` %s '%s'" % (
+            self.column_name,
+            '<>',
+            term
+        )
 
     def op_contains(self):
         select_collaborators = self.filter_term
