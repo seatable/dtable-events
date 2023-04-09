@@ -9,7 +9,6 @@ from threading import Thread, Event
 
 from seaserv import seafile_api
 
-from dtable_events.app.event_redis import RedisClient
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import uuid_str_to_36_chars, uuid_str_to_32_chars
 
@@ -49,16 +48,17 @@ class DTableAssetStatsWorker(Thread):
         self._db_session_class = init_db_session_class(config)
         self.interval = 5 * 60  # listen to seafile event for some time and then calc dtable asset storage
         self.last_stats_time = time.time()
-        self._redis_client = RedisClient(config)
+        self.flag_worker_running = False
 
     def run(self):
         logger.info('Starting handle dtable asset stats...')
         repo_id_ctime_dict = {}
         while not self._finished.is_set():
-            if repo_id_ctime_dict and time.time() - self.last_stats_time > self.interval:
+            if not self.flag_worker_running and repo_id_ctime_dict and time.time() - self.last_stats_time > self.interval:
                 Thread(target=self.stats_dtable_asset_storage, args=(repo_id_ctime_dict,), daemon=True).start()
                 self.last_stats_time = time.time()
                 repo_id_ctime_dict = {}
+                self.flag_worker_running = True
             msg = seafile_api.pop_event('seaf_server.event')
             if not msg:
                 time.sleep(0.5)
@@ -81,7 +81,7 @@ class DTableAssetStatsWorker(Thread):
                 continue
             repo_id_ctime_dict[repo_id] = ctime
 
-    def stats_dtable_asset_storage(self, repo_id_ctime_dict):
+    def _stats_dtable_asset_storage(self, repo_id_ctime_dict):
         logger.info('Starting stats repo dtable asset storage...')
         dtable_uuid_sizes = []
         for repo_id, ctime in repo_id_ctime_dict.items():
@@ -119,3 +119,11 @@ class DTableAssetStatsWorker(Thread):
             logger.error('update dtable asset sizes error: %s', e)
         finally:
             db_session.close()
+
+    def stats_dtable_asset_storage(self, repo_id_ctime_dict):
+        try:
+            self._stats_dtable_asset_storage(repo_id_ctime_dict)
+        except Exception as e:
+            logger.exception(e)
+        finally:
+            self.flag_worker_running = False
