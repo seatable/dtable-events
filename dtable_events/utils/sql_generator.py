@@ -615,7 +615,7 @@ class DateOperator(Operator):
             return ""
         start_date = target_date - timedelta(days=1)
         end_date = target_date + timedelta(days=1)
-        return "(`%(column_name)s` >= '%(end_date)s' or `%(column_name)s` <= '%(start_date)s') or `%(column_name)s` is null" % (
+        return "(`%(column_name)s` >= '%(end_date)s' or `%(column_name)s` <= '%(start_date)s' or `%(column_name)s` is null)" % (
         {
             "column_name": self.column_name,
             "start_date": self._format_date(start_date),
