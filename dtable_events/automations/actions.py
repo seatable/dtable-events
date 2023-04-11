@@ -1709,7 +1709,10 @@ class CalculateAction(BaseAction):
         value = row.get(col_name)
         if self.is_group_view and column.get('type') in [ColumnTypes.FORMULA, ColumnTypes.LINK_FORMULA]:
             value = parse_formula_number(value, column.get('data'))
-        return value
+        try:
+            return float(value)
+        except:
+            return 0
 
     def get_date_value(self, row, col_name):
         return parser.parse(row.get(col_name))
