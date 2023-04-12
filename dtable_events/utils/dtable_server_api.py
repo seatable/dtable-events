@@ -387,3 +387,4 @@ class DTableServerAPI(object):
         }
         response = requests.post(url, json=body, headers=self.headers)
         return parse_response(response)
+    
