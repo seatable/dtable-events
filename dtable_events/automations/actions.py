@@ -1492,25 +1492,18 @@ class AddRecordToOtherTableAction(BaseAction):
         if format_length == 1:
             return cur_datetime_offset.strftime("%Y-%m-%d")
 
-    def add_or_create_options(self, src_column, dst_column, value):
+    def add_or_create_options(self, column, value):
         table_name = self.row_data['table_name']
-        if src_column['type'] != ColumnTypes.SINGLE_SELECT:
-            return ''
-        src_select_options = src_column.get('data', {}).get('options', [])
-        option_name = ''
-        for option in src_select_options:
-            if value == option.get('id'):
-                option_name = option.get('name')
-        dst_select_options = src_column.get('data', {}).get('options', [])
-        for option in dst_select_options:
-            if option_name == option.get('name'):
-                return option_name
+        select_options = column.get('data', {}).get('options', [])
+        for option in select_options:
+            if value == option.get('name'):
+                return value
         self.auto_rule.dtable_server_api.add_column_options(
             table_name,
-            dst_column['name'],
-            options = [gen_random_option(option_name)]
+            column['name'],
+            options = [gen_random_option(value)]
         )
-        return option_name
+        return value
 
     def init_append_rows(self):
         raw_row = self.data['row']
@@ -1554,7 +1547,8 @@ class AddRecordToOtherTableAction(BaseAction):
                             filtered_updates[col_name] = self.format_time_by_offset(int(offset), format_length)
                         elif set_type == 'date_column':
                             date_column_key = time_dict.get('date_column_key')
-                            filtered_updates[col_name] = raw_row.get(date_column_key)
+                            src_col = self.col_key_dict.get(date_column_key)
+                            filtered_updates[col_name] = src_row.get(src_col['name'])
                     except Exception as e:
                         logger.error(e)
                         filtered_updates[col_name] = self.row.get(col_key)
@@ -1572,8 +1566,8 @@ class AddRecordToOtherTableAction(BaseAction):
                             elif set_type == 'select_column':
                                 src_col_key = data_dict.get('value')
                                 src_col = self.col_key_dict.get(src_col_key)
-                                value = raw_row.get(src_col_key)
-                                filtered_updates[col_name] = self.add_or_create_options(src_col, col, value)
+                                value = src_row.get(src_col['name'])
+                                filtered_updates[col_name] = self.add_or_create_options(col, value)
                         else:
                             value = data_dict # compatible with the old data strcture
                             filtered_updates[col_name] = self.parse_column_value(col, value)
