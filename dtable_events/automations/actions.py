@@ -1588,7 +1588,8 @@ class AddRecordToOtherTableAction(BaseAction):
                                 filtered_updates[col_name] = self.parse_column_value(col, value)
                             elif set_type == 'select_column':
                                 src_col_key = data_dict.get('value')
-                                value = raw_row.get(src_col_key)
+                                src_col = self.col_key_dict.get(src_col_key)
+                                value = src_row.get(src_col['name'])
                                 if not isinstance(value, list):
                                     value = [value, ]
                                 filtered_updates[col_name] = value
@@ -1614,8 +1615,9 @@ class AddRecordToOtherTableAction(BaseAction):
                                 filtered_updates[col_name] = self.parse_column_value(col, value)
                             elif set_type == 'select_column':
                                 src_col_key = data_dict.get('value')
-                                value = raw_row.get(src_col_key)
-                                filtered_updates[col_name] = raw_row.get(src_col_key)
+                                src_col = self.col_key_dict.get(src_col_key)
+                                value = src_row.get(src_col['name'])
+                                filtered_updates[col_name] = value
                         else:
                             value = data_dict # compatible with the old data strcture
                             filtered_updates[col_name] = self.parse_column_value(col, value)
