@@ -105,8 +105,21 @@ class DTableServerAPI(object):
         response = requests.get(url, params=params, headers=self.headers, timeout=self.timeout)
         data = parse_response(response)
         return data.get('rows')
+    
+    def get_row_by_table_id(self, table_id, row_id, convert_link_id=False, convert=True):
+        logger.debug('get row table_id: %s row_id: %s', table_id, row_id)
+        url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/rows/' + row_id + '/?from=dtable_events'
+        params = {
+            'table_id': table_id,
+            'convert_link_id': convert_link_id,
+            'convert': 'true' if convert else 'false',
+        }
+        
+        response = requests.get(url, params=params, headers=self.headers, timeout=self.timeout)
+        data = parse_response(response)
+        return data
 
-    def get_row(self, table_name, row_id, convert_link_id=False, convert=True, user_table_id=False):
+    def get_row(self, table_name, row_id, convert_link_id=False):
         """
         :param table_name: str
         :param row_id: str
@@ -116,11 +129,8 @@ class DTableServerAPI(object):
         url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/rows/' + row_id + '/?from=dtable_events'
         params = {
             'table_name': table_name,
-            'convert_link_id': convert_link_id,
-            'convert': 'true' if convert else 'false',
+            'convert_link_id': convert_link_id
         }
-        if user_table_id:
-            params['table_id'] = table_name
         response = requests.get(url, params=params, headers=self.headers, timeout=self.timeout)
         data = parse_response(response)
         return data
