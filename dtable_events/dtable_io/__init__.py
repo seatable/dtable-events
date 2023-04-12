@@ -493,7 +493,7 @@ def send_notification_msg(emails, user_col_key, msg, dtable_uuid, username, tabl
     try:
         dtable_server_url = get_inner_dtable_server_url()
         dtable_server_api = DTableServerAPI(username, dtable_uuid, dtable_server_url)
-        target_row = dtable_server_api.get_row(table_id, row_id, convert=False, user_table_id=True)
+        target_row = dtable_server_api.get_row_by_table_id(table_id, row_id, convert=False)
         user_col_info = target_row.get(user_col_key, '')
 
         sending_list = emails
