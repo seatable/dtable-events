@@ -1711,8 +1711,6 @@ class AddRecordToOtherTableAction(BaseAction):
                     except Exception as e:
                         logger.error(e)
                         filtered_updates[col_name] = self.row.get(col_key)
-                    
-
                 else:
                     filtered_updates[col_name] = self.parse_column_value(col, self.row.get(col_key))
 
