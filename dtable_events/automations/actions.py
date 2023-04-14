@@ -1506,7 +1506,6 @@ class AddRecordToOtherTableAction(BaseAction):
         return value
 
     def init_append_rows(self):
-        raw_row = self.data['row']
         src_row = self.data['converted_row']
         src_columns = self.auto_rule.table_info['columns']
         self.col_name_dict = {col.get('name'): col for col in src_columns}
@@ -1567,7 +1566,8 @@ class AddRecordToOtherTableAction(BaseAction):
                                 src_col_key = data_dict.get('value')
                                 src_col = self.col_key_dict.get(src_col_key)
                                 value = src_row.get(src_col['name'])
-                                filtered_updates[col_name] = self.add_or_create_options(col, value)
+                                if value:
+                                    filtered_updates[col_name] = self.add_or_create_options(col, value)
                         else:
                             value = data_dict # compatible with the old data strcture
                             filtered_updates[col_name] = self.parse_column_value(col, value)
