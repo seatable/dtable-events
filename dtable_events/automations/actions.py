@@ -287,7 +287,7 @@ class UpdateAction(BaseAction):
                             if set_type == 'default':
                                 value = data_dict.get('value')
                                 filtered_updates[col_name] = self.parse_column_value(col, value)
-                            elif set_type == 'select_column':
+                            elif set_type == 'column':
                                 src_col_key = data_dict.get('value')
                                 src_col = self.col_key_dict.get(src_col_key)
                                 value = src_row.get(src_col['name'])
@@ -311,7 +311,7 @@ class UpdateAction(BaseAction):
                             if set_type == 'default':
                                 value = data_dict.get('value')
                                 filtered_updates[col_name] = self.parse_column_value(col, value)
-                            elif set_type == 'select_column':
+                            elif set_type == 'column':
                                 src_col_key = data_dict.get('value')
                                 src_col = self.col_key_dict.get(src_col_key)
                                 value = src_row.get(src_col['name'])
@@ -338,7 +338,7 @@ class UpdateAction(BaseAction):
                             if set_type == 'default':
                                 value = data_dict.get('value')
                                 filtered_updates[col_name] = self.parse_column_value(col, value)
-                            elif set_type == 'select_column':
+                            elif set_type == 'column':
                                 src_col_key = data_dict.get('value')
                                 src_col = self.col_key_dict.get(src_col_key)
                                 value = src_row.get(src_col['name'])
@@ -1648,7 +1648,7 @@ class AddRecordToOtherTableAction(BaseAction):
                             if set_type == 'default':
                                 value = data_dict.get('value')
                                 filtered_updates[col_name] = self.parse_column_value(col, value)
-                            elif set_type == 'select_column':
+                            elif set_type == 'column':
                                 src_col_key = data_dict.get('value')
                                 src_col = self.col_key_dict.get(src_col_key)
                                 value = src_row.get(src_col['name'])
@@ -1672,7 +1672,7 @@ class AddRecordToOtherTableAction(BaseAction):
                             if set_type == 'default':
                                 value = data_dict.get('value')
                                 filtered_updates[col_name] = self.parse_column_value(col, value)
-                            elif set_type == 'select_column':
+                            elif set_type == 'column':
                                 src_col_key = data_dict.get('value')
                                 src_col = self.col_key_dict.get(src_col_key)
                                 value = src_row.get(src_col['name'])
@@ -1699,7 +1699,7 @@ class AddRecordToOtherTableAction(BaseAction):
                             if set_type == 'default':
                                 value = data_dict.get('value')
                                 filtered_updates[col_name] = self.parse_column_value(col, value)
-                            elif set_type == 'select_column':
+                            elif set_type == 'column':
                                 src_col_key = data_dict.get('value')
                                 src_col = self.col_key_dict.get(src_col_key)
                                 value = src_row.get(src_col['name'])
