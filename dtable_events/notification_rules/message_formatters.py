@@ -141,7 +141,7 @@ class CollaboratorMessageFormatter(BaseMessageFormatter):
             value = [value]
         names_dict = get_nickname_by_usernames(value, db_session)
         names = [names_dict.get(str(user)) for user in value if user in names_dict]
-        return '[%s]' % ', '.join(names)
+        return '%s' % ', '.join(names)
 
 
 class NumberMessageFormatter(BaseMessageFormatter):

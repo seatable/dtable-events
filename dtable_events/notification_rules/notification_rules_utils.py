@@ -267,7 +267,7 @@ def fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, conver
             else:
                 names_dict = get_nickname_by_usernames(users, db_session)
                 names = [names_dict.get(user) for user in users if user in names_dict]
-            msg = msg.replace('{' + blank + '}', '[' + ', '.join(names) + ']')
+            msg = msg.replace('{' + blank + '}', ', '.join(names))
 
         elif col_name_dict[blank]['type'] in [ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
             value = converted_row.get(blank, '')
