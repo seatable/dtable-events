@@ -1686,6 +1686,65 @@ class BaseSQLGenerator(object):
         return sql
 
 
+class LinkRecordsSQLGenerator(object):
+
+    def __init__(self, current_table, link_column, link_record_ids, tables):
+        if not current_table or not link_column or not tables or not link_record_ids:
+            pass
+        else:
+            self.link_record_ids = tuple(link_record_ids)
+            table_id = current_table.get('_id', '')
+            link_column_data = link_column.get('data', {})
+            config_table_id = link_column_data.get('table_id', '')
+            config_other_table_id = link_column_data.get('other_table_id', '')
+            self.link_column_sorts = link_column_data.get('sorts', [])
+            linked_table_id = config_other_table_id if config_table_id == table_id else config_table_id
+            linked_table = None
+            for table in tables:
+                if table.get('_id') == linked_table_id:
+                    linked_table = table
+                    break
+            if linked_table:
+                self.linked_table_name = linked_table.get('name', '')
+                self.linked_table_columns = linked_table.get('columns', [])
+            else:
+                self.linked_table_name = ''
+                self.linked_table_columns = []
+
+    def _get_column_by_key(self, col_key):
+        for col in self.linked_table_columns:
+            if col.get('key') == col_key:
+                return col
+        return None
+    
+    def _generator_sorts_SQL(self):
+        if not self.link_column_sorts:
+            return ''
+
+        order_header = 'ORDER BY '
+        clauses = []
+        for sort in self.link_column_sorts:
+            column_key = sort.get('column_key', '')
+            sort_type = sort.get('sort_type', 'DESC') == 'up' and 'ASC' or 'DESC'
+            column = self._get_column_by_key(column_key)
+            if column:
+                order_condition = '`%s` %s' % (column.get('name'), sort_type)
+                clauses.append(order_condition)
+
+        return  "%s%s" % (order_header, ', '.join(clauses)) if clauses else ''
+
+    def to_sql(self):
+        if not self.linked_table_name:
+            return ''
+
+        base_sql = "SELECT * FROM `%s` WHERE `_id` in %s" % (
+            self.linked_table_name,
+            str(self.link_record_ids)
+        )
+        sorts_sql = self._generator_sorts_SQL()
+        return '%s %s' % (base_sql, sorts_sql) if sorts_sql else base_sql
+
+
 def filter2sql(table_name, columns, filter_conditions, by_group=False):
     if by_group:
         sql_generator = BaseSQLGenerator(table_name, columns, filter_condition_groups=filter_conditions)
@@ -1727,4 +1786,8 @@ def db_query(dtable_uuid, sql):
 
 def statistic2sql(table, statistic_type, statistic, username='', id_in_org=''):
     sql_generator = StatisticSQLGenerator(table, statistic_type, statistic, username, id_in_org)
+    return sql_generator.to_sql()
+
+def linkRecords2sql(current_table, link_column, link_record_ids, tables):
+    sql_generator = LinkRecordsSQLGenerator(current_table, link_column, link_record_ids, tables)
     return sql_generator.to_sql()
