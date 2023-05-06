@@ -524,7 +524,7 @@ def send_notification_msg(emails, user_col_key, msg, dtable_uuid, username, tabl
                 'detail': detail,
                 })
 
-        dtable_server_api.batch_send_notification(dtable_uuid, user_msg_list)
+        dtable_server_api.batch_send_notification(user_msg_list)
     except Exception as e:
         dtable_message_logger.error('Notification sending failed. ERROR: {}'.format(e))
         result['err_msg'] = 'Notification send failed'
