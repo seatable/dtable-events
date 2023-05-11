@@ -51,7 +51,7 @@ class DTableAssetTrashCleanerTimer(Thread):
     def run(self):
         sched = BlockingScheduler()
         # fire at 0 o'clock in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute=45)
+        @sched.scheduled_job('cron', day_of_week='*', hour='0')
         def timed_job():
             logging.info('Starts to clean dtable asset trash...')
 
