@@ -61,7 +61,7 @@ class DTableAssetTrashCleanerTimer(Thread):
 
             sql = '''
                 DELETE FROM dtable_asset_trash
-                WHERE deleted_at <= :inactive_time_limiti
+                WHERE deleted_at <= :inactive_time_limit
             '''
 
             try:
