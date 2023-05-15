@@ -72,7 +72,7 @@ class DTableServerAPI(object):
         self._init()
 
     def _init(self):
-        dtable_server_access_token = get_dtable_server_token(self.username, self.dtable_uuid)
+        dtable_server_access_token = get_dtable_server_token(self.username, self.dtable_uuid, timeout=3600)
         self.headers = {'Authorization': 'Token ' + dtable_server_access_token}
 
     def get_metadata(self):
@@ -80,6 +80,11 @@ class DTableServerAPI(object):
         response = requests.get(url, headers=self.headers, timeout=self.timeout)
         data = parse_response(response)
         return data.get('metadata')
+
+    def get_base(self):
+        url = self.dtable_server_url + '/dtables/' + self.dtable_uuid + '?from=dtable_events'
+        response = requests.get(url, headers=self.headers, timeout=self.timeout)
+        return parse_response(response)
 
     def add_table(self, table_name, lang='cn', columns=None):
         logger.debug('add table table_name: %s columns: %s', table_name, columns)
@@ -158,13 +163,35 @@ class DTableServerAPI(object):
         data = parse_response(response)
         return data
 
-    def batch_append_rows(self, table_name, rows_data):
+    def batch_append_columns_by_table_id(self, table_id, columns):
+        logger.debug('batch append columns by table id table_id: %s columns: %s', table_id, columns)
+        url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/batch-append-columns/?from=dtable_events'
+        json_data = {
+            'table_id': table_id,
+            'columns': columns
+        }
+        response = requests.post(url, json=json_data, headers=self.headers, timeout=self.timeout)
+        return parse_response(response)
+
+    def batch_update_columns_by_table_id(self, table_id, columns):
+        logger.debug('batch update columns by table id table_id: %s columns: %s', table_id, columns)
+        url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/batch-update-columns/?from=dtable_events'
+        json_data = {
+            'table_id': table_id,
+            'columns': columns
+        }
+        response = requests.put(url, json=json_data, headers=self.headers)
+        return parse_response(response)
+
+    def batch_append_rows(self, table_name, rows_data, need_convert_back=None):
         logger.debug('batch append rows table_name: %s rows_data: %s', table_name, rows_data)
         url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/batch-append-rows/?from=dtable_events'
         json_data = {
             'table_name': table_name,
             'rows': rows_data,
         }
+        if need_convert_back is not None:
+            json_data['need_convert_back'] = need_convert_back
         response = requests.post(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
@@ -189,13 +216,15 @@ class DTableServerAPI(object):
         response = requests.put(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
-    def batch_update_rows(self, table_name, rows_data):
+    def batch_update_rows(self, table_name, rows_data, need_convert_back=None):
         logger.debug('batch update rows table_name: %s rows_data: %s', table_name, rows_data)
         url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/batch-update-rows/?from=dtable_events'
         json_data = {
             'table_name': table_name,
             'updates': rows_data,
         }
+        if need_convert_back is not None:
+            json_data['need_convert_back'] = need_convert_back
         response = requests.put(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 

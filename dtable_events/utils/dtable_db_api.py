@@ -20,6 +20,9 @@ class RowUpdatedError(Exception):
 class RowsQueryError(Exception):
     pass
 
+class RowDeletedError(Exception):
+    pass
+
 def parse_response(response):
     if response.status_code >= 400:
         raise ConnectionError(response.status_code, response.text)
@@ -181,11 +184,12 @@ class DTableDBAPI(object):
         }
         resp = requests.post(api_url, json=params, headers=self.headers, timeout=TIMEOUT)
         if not resp.status_code == 200:
-           raise RowInsertedError
+            logger.error('error insert rows resp: %s', resp.text)
+            raise RowInsertedError
         return resp.json()
 
     def batch_update_rows(self, table_name, rows_data):
-        url = "%s/api/v1/update-rows/%s" % (
+        url = "%s/api/v1/update-rows/%s?from=dtable_events" % (
             self.dtable_db_url,
             self.dtable_uuid
         )
@@ -199,3 +203,37 @@ class DTableDBAPI(object):
             raise RowUpdatedError
         return resp.json()
 
+    def batch_delete_rows(self, table_name, row_ids):
+        url = "%s/api/v1/delete-rows/%s?from=dtable_events" % (
+            self.dtable_db_url,
+            self.dtable_uuid
+        )
+
+        json_data = {
+            'table_name': table_name,
+            'row_ids': row_ids
+        }
+        resp = requests.delete(url, json=json_data, headers=self.headers, timeout=TIMEOUT)
+        if not resp.status_code == 200:
+            raise RowDeletedError
+        return resp.json()
+
+    def get_metadata(self):
+        url = '%s/api/v1/metadata/%s?from=dtable_events' % (
+            self.dtable_db_url,
+            self.dtable_uuid
+        )
+        resp = requests.get(url, headers=self.headers, timeout=TIMEOUT)
+        return parse_response(resp)
+
+    def add_index(self, table_id, column_names):
+        url = '%s/api/v1/index/%s?from=dtable_events' % (
+            self.dtable_db_url,
+            self.dtable_uuid
+        )
+        json_data = {
+            'table_id': table_id,
+            'columns': column_names
+        }
+        resp = requests.post(url, json=json_data, headers=self.headers, timeout=TIMEOUT)
+        return parse_response(resp)
