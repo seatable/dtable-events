@@ -31,7 +31,7 @@ try:
     SECRET_KEY = getattr(seahub_settings, 'SECRET_KEY')
     SESSION_COOKIE_NAME = getattr(seahub_settings, 'SESSION_COOKIE_NAME', 'sessionid')
     EXPORT2EXCEL_DEFAULT_STRING = getattr(seahub_settings, 'EXPORT2EXCEL_DEFAULT_STRING', 'illegal character in excel')
-    TIME_ZONE = getattr(seahub_settings, 'TIME_ZONE', 'UTC')
+    TIME_ZONE = os.environ.get('TIME_ZONE', 'UTC')
     INNER_DTABLE_DB_URL = getattr(seahub_settings, 'INNER_DTABLE_DB_URL')
     ENABLE_WEIXIN = getattr(seahub_settings, 'ENABLE_WEIXIN', False)
     ENABLE_WORK_WEIXIN = getattr(seahub_settings, 'ENABLE_WORK_WEIXIN', False)
