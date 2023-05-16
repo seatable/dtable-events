@@ -493,21 +493,35 @@ def send_notification_msg(emails, user_col_key, msg, dtable_uuid, username, tabl
     try:
         dtable_server_url = get_inner_dtable_server_url()
         dtable_server_api = DTableServerAPI(username, dtable_uuid, dtable_server_url)
-        target_row = dtable_server_api.get_row_by_table_id(table_id, row_id, convert=False)
-        user_col_info = target_row.get(user_col_key, '')
-
+        metadata = dtable_server_api.get_metadata()
+        table = None
+        for tmp_table in metadata['tables']:
+            if tmp_table['_id'] == table_id:
+                table = tmp_table
+                break
+        if not table:
+            return
+        
+        target_row = dtable_server_api.get_row(table['name'], row_id)
+        
         sending_list = emails
+        if user_col_key:
+            column = None
+            for tmp_col in table['columns']:
+                if tmp_col['key'] == user_col_key:
+                    column = tmp_col
+                    break
 
-        if user_col_info:
-
-            if isinstance(user_col_info, list):
-                for user in user_col_info:
-                    if user in sending_list:
-                        continue
-                    sending_list.append(user)
-            else:
-                if user_col_info not in sending_list:
-                    sending_list.append(user_col_info)
+            user_col_info = column and target_row.get(column['name']) or None
+            if user_col_info:
+                if isinstance(user_col_info, list):
+                    for user in user_col_info:
+                        if user in sending_list:
+                            continue
+                        sending_list.append(user)
+                else:
+                    if user_col_info not in sending_list:
+                        sending_list.append(user_col_info)
 
         detail = {
             'table_id': table_id or '',
