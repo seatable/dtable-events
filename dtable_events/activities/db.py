@@ -10,12 +10,6 @@ from dtable_events.activities.models import Activities
 
 logger = logging.getLogger(__name__)
 
-try:
-    to_tz = time.strftime('%z')[:3] + ':' + time.strftime('%z')[3:]
-except Exception as error:
-    to_tz = '+00:00'
-    logger.warning('Get utc_offset failed: %s.' % error)
-
 
 class TableActivityDetail(object):
     def __init__(self, activity):
@@ -117,7 +111,7 @@ def update_activity_timestamp(session, activity_id, op_time, detail):
     session.commit()
 
 
-def get_table_activities(session, uuid_list, start, limit):
+def get_table_activities(session, uuid_list, start, limit, to_tz):
     if start < 0:
         logger.error('start must be non-negative')
         raise RuntimeError('start must be non-negative')
@@ -144,7 +138,7 @@ def get_table_activities(session, uuid_list, start, limit):
     return table_activities
 
 
-def get_activities_detail(session, dtable_uuid, start_time, end_time, start, limit):
+def get_activities_detail(session, dtable_uuid, start_time, end_time, start, limit, to_tz):
     if start < 0:
         logger.error('start must be non-negative')
         raise RuntimeError('start must be non-negative')
