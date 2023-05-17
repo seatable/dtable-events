@@ -274,6 +274,8 @@ class UpdateAction(BaseAction):
                             col = self.col_key_dict.get(col_key)
                             value = src_row.get(col['name'])
                             filtered_updates[col_name] = value
+                        elif set_type == 'set_empty':
+                            filtered_updates[col_name] = None
                     except Exception as e:
                         logger.error(e)
                         filtered_updates[col_name] = self.updates.get(col_key)
@@ -293,6 +295,8 @@ class UpdateAction(BaseAction):
                                 value = src_row.get(src_col['name'])
                                 if value:
                                     filtered_updates[col_name] = self.add_or_create_options(col, value)
+                            elif set_type == 'set_empty':
+                                filtered_updates[col_name] = None
                         else:
                             value = data_dict  # compatible with the old data strcture
                             filtered_updates[col_name] = self.parse_column_value(col, value)
@@ -318,6 +322,8 @@ class UpdateAction(BaseAction):
                                 if not isinstance(value, list):
                                     value = [value, ]
                                 filtered_updates[col_name] = value
+                            elif set_type == 'set_empty':
+                                filtered_updates[col_name] = None
                         else:
                             value = data_dict  # compatible with the old data strcture
                             filtered_updates[col_name] = self.parse_column_value(col, value)
@@ -343,6 +349,8 @@ class UpdateAction(BaseAction):
                                 src_col = self.col_key_dict.get(src_col_key)
                                 value = src_row.get(src_col['name'])
                                 filtered_updates[col_name] = value
+                            elif set_type == 'set_empty':
+                                filtered_updates[col_name] = None
                         else:
                             value = data_dict  # compatible with the old data strcture
                             filtered_updates[col_name] = self.parse_column_value(col, value)
