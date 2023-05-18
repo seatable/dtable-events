@@ -1265,12 +1265,16 @@ class LinkRecordsAction(BaseAction):
         filters = []
         for match_condition in self.match_conditions:
             column_key = match_condition.get("column_key")
-            column = self.get_column(self.auto_rule.table_id, column_key) or {}
+            column = self.get_column(self.auto_rule.table_id, column_key)
+            if not column:
+                raise RuleInvalidException('match column not found')
             row_value = self.data['converted_row'].get(column.get('name'))
             if not row_value:
                 return []
             other_column_key = match_condition.get("other_column_key")
-            other_column = self.get_column(self.linked_table_id, other_column_key) or {}
+            other_column = self.get_column(self.linked_table_id, other_column_key)
+            if not other_column:
+                raise RuleInvalidException('match other column not found')
             parsed_row_value = self.parse_column_value(other_column, row_value)
             filter_item = {
                 "column_key": other_column_key,
