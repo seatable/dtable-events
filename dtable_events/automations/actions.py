@@ -2531,7 +2531,7 @@ class AutomationRule:
             payload['username'] = username
         if app_name:
             payload['app_name'] = app_name
-        temp_api_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
+        temp_api_token = jwt.encode(payload, SEATABLE_FAAS_AUTH_TOKEN, algorithm='HS256')
         return temp_api_token
 
     def get_trigger_conditions_rows(self, warning_rows=50):

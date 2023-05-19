@@ -267,7 +267,7 @@ class BaseContext:
             payload['username'] = username
         if app_name:
             payload['app_name'] = app_name
-        temp_api_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
+        temp_api_token = jwt.encode(payload, SEATABLE_FAAS_AUTH_TOKEN, algorithm='HS256')
         return temp_api_token
 
     def get_converted_row(self, table_id, row_id):
