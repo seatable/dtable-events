@@ -60,7 +60,7 @@ def gen_file_upload_url(token, op, replace=False):
 class DTableServerAPI(object):
     # simple version of python sdk without authorization for base or table manipulation
 
-    def __init__(self, username, dtable_uuid, dtable_server_url, server_url=None, repo_id=None, workspace_id=None, timeout=180):
+    def __init__(self, username, dtable_uuid, dtable_server_url, server_url=None, repo_id=None, workspace_id=None, timeout=180, access_token_timeout=300):
         self.username = username
         self.dtable_uuid = dtable_uuid
         self.headers = None
@@ -69,11 +69,13 @@ class DTableServerAPI(object):
         self.repo_id = repo_id
         self.workspace_id = workspace_id
         self.timeout = timeout
+        self.access_token_timeout = access_token_timeout
+        self.access_token = ''
         self._init()
 
     def _init(self):
-        dtable_server_access_token = get_dtable_server_token(self.username, self.dtable_uuid)
-        self.headers = {'Authorization': 'Token ' + dtable_server_access_token}
+        self.access_token = get_dtable_server_token(self.username, self.dtable_uuid, timeout=self.access_token_timeout)
+        self.headers = {'Authorization': 'Token ' + self.access_token}
 
     def get_metadata(self):
         url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/metadata/?from=dtable_events'

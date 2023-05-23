@@ -73,10 +73,9 @@ def scan_triggered_notification_rules(event_data, db_session):
           "AND dtable_uuid=:dtable_uuid AND is_valid=1 AND id=:rule_id"
     rules = db_session.execute(sql, {'dtable_uuid': message_dtable_uuid, 'rule_id': rule_id})
 
-    dtable_server_access_token = get_dtable_server_token(message_dtable_uuid)
     for rule in rules:
         try:
-            trigger_notification_rule(rule, table_id, row, converted_row, dtable_server_access_token, db_session, op_type)
+            trigger_notification_rule(rule, table_id, row, converted_row, db_session, op_type)
         except Exception as e:
             logger.exception(e)
             logger.error(f'check rule failed. {rule}, error: {e}')
@@ -407,7 +406,7 @@ def get_column_by_key(dtable_metadata, table_id, column_key):
     return None
 
 
-def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable_server_access_token, db_session, op_type):
+def trigger_notification_rule(rule, message_table_id, row, converted_row, db_session, op_type):
     rule_id = rule[0]
     trigger = rule[1]
     action = rule[2]
@@ -426,7 +425,7 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
     if message_table_id != table_id:
         return
 
-    dtable_server_api = DTableServerAPI('notification-rule', dtable_uuid, get_inner_dtable_server_url())
+    dtable_server_api = DTableServerAPI('notification-rule', dtable_uuid, get_inner_dtable_server_url(), access_token_timeout=3600)
     dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
     dtable_metadata = dtable_server_api.get_metadata()
     target_table, target_view = None, None
@@ -497,7 +496,7 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
                 'msg_type': 'notification_rules',
                 'detail': detail,
                 })
-        send_notification(dtable_uuid, user_msg_list, dtable_server_access_token)
+        send_notification(dtable_uuid, user_msg_list, dtable_server_api.access_token)
 
     elif (op_type in ('modify_row', 'modify_rows') and trigger['condition'] == CONDITION_FILTERS_SATISFY) or \
          (op_type in ('insert_row', 'append_rows', 'insert_rows') and trigger['condition'] == CONDITION_ROWS_ADDED):
@@ -531,7 +530,7 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, dtable
                 'msg_type': 'notification_rules',
                 'detail': detail,
                 })
-        send_notification(dtable_uuid, user_msg_list, dtable_server_access_token)
+        send_notification(dtable_uuid, user_msg_list, dtable_server_api.access_token)
 
     else:
         return
@@ -557,7 +556,7 @@ def trigger_near_deadline_notification_rule(rule, db_session):
     if trigger['condition'] != CONDITION_NEAR_DEADLINE:
         return
 
-    dtable_server_api = DTableServerAPI('notification-rule', dtable_uuid, get_inner_dtable_server_url())
+    dtable_server_api = DTableServerAPI('notification-rule', dtable_uuid, get_inner_dtable_server_url(), access_token_timeout=3600)
     dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
     dtable_db_api = DTableDBAPI('dtable-events', dtable_uuid, INNER_DTABLE_DB_URL)
     dtable_metadata = dtable_server_api.get_metadata()
@@ -606,7 +605,6 @@ def trigger_near_deadline_notification_rule(rule, db_session):
             temp_users.append(user)
     users = temp_users
 
-    dtable_server_access_token = get_dtable_server_token(dtable_uuid)
     try:
         rows_near_deadline, sql_metadata, is_valid = list_rows_near_deadline_with_dtable_db(dtable_metadata, table_id, view_id, date_column_name, alarm_days, dtable_db_api)
     except Exception as e:
@@ -663,6 +661,6 @@ def trigger_near_deadline_notification_rule(rule, db_session):
                 'msg_type': 'notification_rules',
                 'detail': detail,
             })
-        send_notification(dtable_uuid, user_msg_list, dtable_server_access_token)
+        send_notification(dtable_uuid, user_msg_list, dtable_server_api.access_token)
 
     update_rule_last_trigger_time(rule_id, db_session)
