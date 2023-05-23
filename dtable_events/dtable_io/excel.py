@@ -687,7 +687,8 @@ def update_parsed_file_by_dtable_server(username, repo_id, dtable_uuid, file_nam
     # add select column options
     for col_name, excel_options in excel_select_column_options.items():
         column = dtable_col_name_to_column.get(col_name)
-        dtable_options = column.get('data').get('options')
+        col_data = column.get('data')
+        dtable_options = col_data and col_data.get('options') or []
         to_be_added_options = excel_options - set([op.get('name') for op in dtable_options])
         if to_be_added_options:
             options = [gen_random_option(option) for option in to_be_added_options]
@@ -1329,6 +1330,7 @@ def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, i
     import requests
     from openpyxl.drawing.image import Image
     from PIL import Image as PILImage
+    from urllib.parse import unquote
     from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, TwoCellAnchor
 
     images = cell_value
@@ -1341,7 +1343,7 @@ def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, i
         if image_num >= EXPORT_IMAGE_LIMIT:
             return image_num
 
-        image_name = image_url.split('/')[-1].strip()
+        image_name = unquote(image_url.split('/')[-1].strip())
         image_dir = os.path.join(images_target_dir, '/'.join(image_url.split('/')[7:-1]))
         os.makedirs(image_dir, exist_ok=True)
 

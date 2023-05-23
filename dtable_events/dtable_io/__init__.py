@@ -268,9 +268,9 @@ def parse_excel_csv(username, repo_id, workspace_id, dtable_name, file_type, cus
     try:
         parse_excel_csv_to_json(repo_id, dtable_name, file_type, custom)
     except Exception as e:
-        dtable_io_logger.exception('parse excel or csv failed. ERROR: {}'.format(e))
         if str(e.args[0]) == 'Excel format error':
             raise Exception('Excel format error')
+        dtable_io_logger.exception('parse excel or csv failed. ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('parse excel %s.xlsx success!' % dtable_name)
 
@@ -331,7 +331,7 @@ def update_excel_csv_update_parsed_file(username, repo_id, dtable_uuid, file_nam
     try:
         update_parsed_file_by_dtable_server(username, repo_id, dtable_uuid, file_name, table_name, selected_columns)
     except Exception as e:
-        dtable_io_logger.error('update excel,csv failed. ERROR: {}'.format(e))
+        dtable_io_logger.exception('update excel,csv failed. ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('update excel,csv %s success!' % file_name)
 
