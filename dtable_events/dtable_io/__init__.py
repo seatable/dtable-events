@@ -24,7 +24,7 @@ from dtable_events.dtable_io.utils import setup_logger, \
     prepare_dtable_json_from_memory, update_page_design_static_image, \
     copy_src_auto_rules_to_json, create_auto_rules_from_src_dtable, sync_app_users_to_table, \
     copy_src_workflows_to_json, create_workflows_from_src_dtable, copy_src_external_app_to_json,\
-    create_external_apps_from_src_dtable, zip_big_data_screen
+    create_external_apps_from_src_dtable, zip_big_data_screen, post_big_data_screen_zip_file
 from dtable_events.db import init_db_session_class
 from dtable_events.dtable_io.excel import parse_excel_csv_to_json, import_excel_csv_by_dtable_server, \
     append_parsed_file_by_dtable_server, parse_append_excel_csv_upload_file_to_json, \
@@ -275,7 +275,23 @@ def get_dtable_export_big_data_screen(username, repo_id, dtable_uuid, page_id, t
     except Exception as e:
         dtable_io_logger.error('export big data screen from dtable failed. ERROR: {}'.format(e))
     else:
-        dtable_io_logger.info('export bit data screen from dtable: %s success!', dtable_uuid)
+        dtable_io_logger.info('export big data screen from dtable: %s success!', dtable_uuid)
+
+def import_big_data_screen(username, repo_id, dtable_uuid, page_id):
+    """
+    parse the zip in tmp folders and upload it
+    """
+    tmp_extracted_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'big_data_screen_zip_extracted/')
+    try:
+        post_big_data_screen_zip_file(username, repo_id, dtable_uuid, page_id, tmp_extracted_path)
+    except Exception as e:
+        dtable_io_logger.error('import big data screen from dtable failed. ERROR: {}'.format(e))
+    else:
+        dtable_io_logger.info('import big data screen to dtable: %s success!', dtable_uuid)
+    try:
+        shutil.rmtree(tmp_extracted_path)
+    except Exception as e:
+        dtable_io_logger.error('rm extracted tmp file failed. ERROR: {}'.format(e))
 
 def parse_excel_csv(username, repo_id, workspace_id, dtable_name, file_type, custom, config):
     """

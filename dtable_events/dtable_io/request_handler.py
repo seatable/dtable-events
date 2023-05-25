@@ -128,6 +128,33 @@ def add_big_data_screen_export_task():
 
     return make_response(({'task_id': task_id}, 200))
 
+@app.route('/add-big-data-screen-import-task', methods=['GET'])
+def add_big_data_screen_import_task():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    if task_manager.tasks_queue.full():
+        from dtable_events.dtable_io import dtable_io_logger
+        dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
+                                 % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
+                                    task_manager.threads_is_alive()))
+        return make_response(('dtable io server busy.', 400))
+
+    username = request.args.get('username')
+    repo_id = request.args.get('repo_id')
+    dtable_uuid = request.args.get('dtable_uuid')
+    page_id = request.args.get('page_id')
+
+    try:
+        task_id = task_manager.add_import_dtable_big_data_screen_task(
+            username, repo_id, dtable_uuid, page_id)
+    except Exception as e:
+        logger.error(e)
+        return make_response((e, 500))
+
+    return make_response(({'task_id': task_id}, 200))
+
 
 @app.route('/add-parse-excel-csv-task', methods=['GET'])
 def add_parse_excel_csv_task():

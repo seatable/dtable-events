@@ -1263,4 +1263,53 @@ def zip_big_data_screen(username, repo_id, dtable_uuid, page_id, tmp_file_path):
         with open('%s/%s' % (image_save_path, image_name), 'wb') as f:
             f.write(resp.content)
 
+def post_big_data_screen_zip_file(username, repo_id, dtable_uuid, page_id, tmp_extracted_path):
+
+    content_json_file_path = os.path.join(tmp_extracted_path, 'content.json')
+    image_path = os.path.join(tmp_extracted_path, 'images/')
+    with open(content_json_file_path, 'r') as f:
+        content_json = f.read()
+    try:
+        content = json.loads(content_json)
+    except:
+        content = {}
+
+    
+    base_dir = '/asset/' + dtable_uuid
+    big_data_file_path = 'files/plugins/big-data-screen/%(page_id)s/' % ({
+            'page_id': page_id,
+        })
+    image_file_path = 'files/plugins/big-data-screen/bg_images/'
+    current_file_path = os.path.join(base_dir, big_data_file_path)
+    current_image_path = os.path.join(base_dir, image_file_path)
+    
+    # 1. handle page_content
+    page_content_dict = content.get('page_content')
+    page_content_dict['page_id'] = page_id # update page_id
+    tmp_page_json_path = os.path.join(tmp_extracted_path, '%s.json' % page_id)
+    with open(tmp_page_json_path, 'wb') as f:
+        f.write(json.dumps(page_content_dict).encode('utf-8'))
+    path_id = seafile_api.get_dir_id_by_path(repo_id, current_file_path)
+    if not path_id:
+        seafile_api.mkdir_with_parents(repo_id, '/', current_file_path[1:], username)
+    file_name = os.path.basename(tmp_page_json_path)
+    dtable_file_id = seafile_api.get_file_id_by_path(
+        repo_id, current_file_path + file_name)
+    if dtable_file_id:
+        seafile_api.del_file(repo_id, current_file_path, json.dumps([file_name]), '')
+    seafile_api.post_file(repo_id, tmp_page_json_path, current_file_path, file_name, username)
+
+    # 2. handle images
+    image_path_id = seafile_api.get_dir_id_by_path(repo_id, current_image_path)
+    if not image_path_id:
+        seafile_api.mkdir_with_parents(repo_id, '/', current_image_path[1:], username)
+    for dirpath, _, filenames in os.walk(image_path):
+        for image_name in filenames:
+            tmp_image_path = os.path.join(dirpath, image_name)
+            dtable_file_id = seafile_api.get_file_id_by_path(
+                repo_id, current_image_path + image_name
+            )
+            if not dtable_file_id:
+                seafile_api.post_file(repo_id, tmp_image_path, current_image_path, image_name, username)
+
 
