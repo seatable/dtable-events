@@ -1187,3 +1187,80 @@ def height_transfer(base_row_height='default'):
     row_height_mul = (height_dict.get(base_row_height, 1))
 
     return round((32 * row_height_mul * 14.4 ) / 24, 2)
+
+def zip_big_data_screen(username, repo_id, dtable_uuid, page_id, tmp_file_path):
+    from dtable_events.utils import uuid_str_to_36_chars, normalize_file_path, gen_file_get_url
+    base_dir = '/asset/' + dtable_uuid
+    big_data_file_path = 'files/plugins/big-data-screen/%(page_id)s/%(page_id)s.json' % ({
+            'page_id': page_id,
+        }) 
+    
+    asset_path = "%s/%s" % (base_dir, big_data_file_path)
+    
+    # 1. get the json file of big-data-screen page
+    asset_id = seafile_api.get_file_id_by_path(repo_id, asset_path)
+    token = seafile_api.get_fileserver_access_token(
+        repo_id, asset_id, 'view', '', use_onetime=False
+    )
+    asset_name = os.path.basename(normalize_file_path(big_data_file_path))
+    url = gen_file_get_url(token, asset_name)
+
+    resp = requests.get(url)
+    page_json = json.loads(resp.content)
+
+    # 2. get the image infos in big-data-screen
+    page_bg_custom_image_list = page_json.get('page_bg_custom_image_list')
+    page_images = []
+    page_elements = page_json.get('page_elements') or {}
+    element_map = page_elements.get('element_map') or {}
+    for key, value in element_map.items():
+        if value.get('element_type') == 'image':
+            image_url = value.get('config',{}).get('imageUrl')
+            if "?" not in image_url:
+                page_images.append(image_url)
+
+
+
+    content_json = {
+        'page_content': page_json,
+        'page_images': page_images
+    }
+
+    # 3. write json file to tmp_file_path , write images to tmp_file_path/images
+    content_json_save_path = tmp_file_path.rstrip('/')
+    image_save_path = os.path.join(content_json_save_path, 'images')
+    with open("%s/content.json" % content_json_save_path, 'wb') as f:
+        f.write(json.dumps(content_json).encode('utf-8'))
+
+    for image_url in page_bg_custom_image_list:
+        target_path = normalize_file_path(os.path.join(base_dir, image_url.strip('/')))
+        asset_id = seafile_api.get_file_id_by_path(repo_id, target_path)
+        if not asset_id:
+            continue
+        token = seafile_api.get_fileserver_access_token(
+            repo_id, asset_id, 'download', username, use_onetime=False
+        )
+        image_name = os.path.basename(normalize_file_path(image_url))
+        url = gen_file_get_url(token, image_name)
+
+        resp = requests.get(url)
+        with open('%s/%s' % (image_save_path, image_name), 'wb') as f:
+            f.write(resp.content)
+
+    for image_url in page_images:
+        target_path = normalize_file_path(os.path.join(base_dir, image_url.strip('/')))
+        asset_id = seafile_api.get_file_id_by_path(repo_id, target_path)
+        if not asset_id:
+            continue
+
+        token = seafile_api.get_fileserver_access_token(
+            repo_id, asset_id, 'download', username, use_onetime=False
+        )
+        image_name = os.path.basename(normalize_file_path(image_url))
+        url = gen_file_get_url(token, image_name)
+
+        resp = requests.get(url)
+        with open('%s/%s' % (image_save_path, image_name), 'wb') as f:
+            f.write(resp.content)
+
+
