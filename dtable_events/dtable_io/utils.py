@@ -1194,10 +1194,16 @@ def zip_big_data_screen(username, repo_id, dtable_uuid, page_id, tmp_file_path):
     big_data_file_path = 'files/plugins/big-data-screen/%(page_id)s/%(page_id)s.json' % ({
             'page_id': page_id,
         }) 
+    big_data_poster_path = 'files/plugins/big-data-screen/%(page_id)s/%(page_id)s.png' % ({
+        'page_id': page_id
+    })
     
     asset_path = "%s/%s" % (base_dir, big_data_file_path)
+
+    poster_asset_path = "%s/%s" % (base_dir, big_data_poster_path)
     
-    # 1. get the json file of big-data-screen page
+    # 1. get the json file and poster of big-data-screen page
+    #   a. json file
     asset_id = seafile_api.get_file_id_by_path(repo_id, asset_path)
     token = seafile_api.get_fileserver_access_token(
         repo_id, asset_id, 'view', '', use_onetime=False
@@ -1207,6 +1213,17 @@ def zip_big_data_screen(username, repo_id, dtable_uuid, page_id, tmp_file_path):
 
     resp = requests.get(url)
     page_json = json.loads(resp.content)
+
+
+    #  b. poster
+
+    poster_asset_id = seafile_api.get_file_id_by_path(repo_id, poster_asset_path)
+    poster_token = seafile_api.get_fileserver_access_token(
+        repo_id, poster_asset_id, 'view', '', use_onetime=False
+    )
+    poster_name = os.path.basename(normalize_file_path(big_data_poster_path))
+    url = gen_file_get_url(poster_token, poster_name)
+    resp_poster = requests.get(url)
 
     # 2. get the image infos in big-data-screen
     page_bg_custom_image_list = page_json.get('page_bg_custom_image_list')
@@ -1231,6 +1248,8 @@ def zip_big_data_screen(username, repo_id, dtable_uuid, page_id, tmp_file_path):
     image_save_path = os.path.join(content_json_save_path, 'images')
     with open("%s/content.json" % content_json_save_path, 'wb') as f:
         f.write(json.dumps(content_json).encode('utf-8'))
+    with open("%s/content.png" % content_json_save_path, 'wb') as f:
+        f.write(resp_poster.content)
 
     for image_url in page_bg_custom_image_list:
         target_path = normalize_file_path(os.path.join(base_dir, image_url.strip('/')))
@@ -1266,6 +1285,10 @@ def zip_big_data_screen(username, repo_id, dtable_uuid, page_id, tmp_file_path):
 def post_big_data_screen_zip_file(username, repo_id, dtable_uuid, page_id, tmp_extracted_path):
 
     content_json_file_path = os.path.join(tmp_extracted_path, 'content.json')
+    content_poster_file_path = os.path.join(tmp_extracted_path, 'content.png')
+    new_content_poster_file_path = os.path.join(tmp_extracted_path, '%s.png' % page_id)
+    poster_file_name = os.path.basename(new_content_poster_file_path)
+    os.rename(content_poster_file_path, new_content_poster_file_path)
     image_path = os.path.join(tmp_extracted_path, 'images/')
     with open(content_json_file_path, 'r') as f:
         content_json = f.read()
@@ -1289,6 +1312,7 @@ def post_big_data_screen_zip_file(username, repo_id, dtable_uuid, page_id, tmp_e
     tmp_page_json_path = os.path.join(tmp_extracted_path, '%s.json' % page_id)
     with open(tmp_page_json_path, 'wb') as f:
         f.write(json.dumps(page_content_dict).encode('utf-8'))
+    
     path_id = seafile_api.get_dir_id_by_path(repo_id, current_file_path)
     if not path_id:
         seafile_api.mkdir_with_parents(repo_id, '/', current_file_path[1:], username)
@@ -1298,6 +1322,7 @@ def post_big_data_screen_zip_file(username, repo_id, dtable_uuid, page_id, tmp_e
     if dtable_file_id:
         seafile_api.del_file(repo_id, current_file_path, json.dumps([file_name]), '')
     seafile_api.post_file(repo_id, tmp_page_json_path, current_file_path, file_name, username)
+    seafile_api.post_file(repo_id, new_content_poster_file_path, current_file_path, poster_file_name, username)
 
     # 2. handle images
     image_path_id = seafile_api.get_dir_id_by_path(repo_id, current_image_path)
