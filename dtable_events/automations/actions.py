@@ -2624,7 +2624,7 @@ class AutomationRule:
                 return False
 
         if self.trigger.get('condition') in [CONDITION_FILTERS_SATISFY, CONDITION_ROWS_MODIFIED]:
-            if self.data.get('op_type') not in ['modify_row', 'modify_rows', 'add_link']:
+            if self.data.get('op_type') not in ['modify_row', 'modify_rows', 'add_link', 'update_links', 'update_rows_links']:
                 return False
 
         if self.run_condition == PER_UPDATE:

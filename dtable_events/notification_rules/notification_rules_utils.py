@@ -431,7 +431,7 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, db_ses
         columns = target_table['columns']
         column_blanks, col_name_dict = get_column_blanks(blanks, columns)
 
-    if op_type in ('modify_row', 'modify_rows', 'add_link') and trigger['condition'] == CONDITION_ROWS_MODIFIED:
+    if op_type in ('modify_row', 'modify_rows', 'add_link', 'update_links', 'update_rows_links') and trigger['condition'] == CONDITION_ROWS_MODIFIED:
         if not is_trigger_time_satisfy(last_trigger_time):
             return
 
@@ -468,7 +468,7 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, db_ses
                 })
         send_notification(dtable_uuid, user_msg_list, dtable_server_api.access_token)
 
-    elif (op_type in ('modify_row', 'modify_rows', 'add_link') and trigger['condition'] == CONDITION_FILTERS_SATISFY) or \
+    elif (op_type in ('modify_row', 'modify_rows', 'add_link', 'update_links', 'update_rows_links') and trigger['condition'] == CONDITION_FILTERS_SATISFY) or \
          (op_type in ('insert_row', 'append_rows', 'insert_rows') and trigger['condition'] == CONDITION_ROWS_ADDED):
         detail = {
             'table_id': table_id,
