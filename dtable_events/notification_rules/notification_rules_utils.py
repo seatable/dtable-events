@@ -431,7 +431,7 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, db_ses
         columns = target_table['columns']
         column_blanks, col_name_dict = get_column_blanks(blanks, columns)
 
-    if op_type in ('modify_row', 'modify_rows', 'add_link', 'update_links', 'update_rows_links') and trigger['condition'] == CONDITION_ROWS_MODIFIED:
+    if op_type in ('modify_row', 'modify_rows', 'add_link', 'update_links', 'update_rows_links', 'remove_link') and trigger['condition'] == CONDITION_ROWS_MODIFIED:
         if not is_trigger_time_satisfy(last_trigger_time):
             return
 
