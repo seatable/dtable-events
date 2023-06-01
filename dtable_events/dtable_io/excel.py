@@ -1187,6 +1187,7 @@ def parse_formula_number(cell_data, column_data):
     value = convert_formula_number(value, column_data)
 
     number_format = '0'
+    # src_format is None, if column format does not be changed
     if src_format == 'number' or not src_format:
         number_format = gen_decimal_format(value)
     elif src_format == 'percent' and isinstance(value, str):
