@@ -395,7 +395,11 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, db_ses
     if message_table_id != table_id:
         return
 
+<<<<<<< HEAD
     dtable_server_api = DTableServerAPI('notification-rule', dtable_uuid, get_inner_dtable_server_url(), access_token_timeout=3600)
+=======
+    dtable_server_api = DTableServerAPI('notification-rule', dtable_uuid, get_inner_dtable_server_url())
+>>>>>>> b8fd213 (Update notification_rules_utils.py)
     dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
     dtable_metadata = dtable_server_api.get_metadata()
     target_table, target_view = None, None
