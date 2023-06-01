@@ -140,16 +140,8 @@ def list_rows_near_deadline_with_dtable_db(dtable_metadata, table_id, view_id, d
     }
     new_filters = []
     for item in filters:
-        if item.get('filter_predicate') == 'include_me':
-            if filter_conjunction == 'And':
-                return [], None, True
-            else:
-                continue
-        elif item.get('filter_predicate') == 'is_current_user_ID':
-            if filter_conjunction == 'And':
-                return [], None, True
-            else:
-                continue
+        if item.get('filter_predicate') in ('include_me', 'is_current_user_ID'):
+            return [], None, False
         new_filters.append(item)
     filter_conditions['filter_groups'] = [{
         'filters': new_filters,

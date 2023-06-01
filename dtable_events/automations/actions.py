@@ -2555,11 +2555,19 @@ class AutomationRule:
         filter_groups = []
 
         if view_filters:
+            for filter_item in view_filters:
+                if filter_item.get('filter_predicate') in ('include_me', 'is_current_user_ID'):
+                    raise RuleInvalidException('view filter has invalid filter')
             filter_groups.append({'filters': view_filters, 'filter_conjunction': view_filter_conjunction})
 
         if filters:
             # remove the duplicate filter which may already exist in view filter
-            trigger_filters = [trigger_filter for trigger_filter in filters if trigger_filter not in view_filters]
+            trigger_filters = []
+            for filter_item in filters:
+                if filter_item.get('filter_predicate') in ('include_me', 'is_current_user_ID'):
+                    raise RuleInvalidException('rule filter has invalid filter')
+                if filter_item not in view_filters:
+                    trigger_filters.append(filter_item)
             if trigger_filters:
                 filter_groups.append({'filters': trigger_filters, 'filter_conjunction': filter_conjunction})
 
