@@ -713,7 +713,8 @@ def create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uui
         add_a_workflow_to_db(username, workflow, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, db_session)
 
 
-def create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_id):
+def create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_id, workspace_id):
+    from dtable_events.dtable_io.import_table_from_base import trans_page_content_url
     if not db_session:
         return
     external_apps_json_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted/', 'external_apps.json')
@@ -726,6 +727,16 @@ def create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_
     for external_app in external_apps:
         if 'app_config' not in external_app:
             continue
+        app_config = external_app['app_config']
+        if app_config['app_type'] == 'universal-app':
+             settings = app_config.get('settings', {})
+             pages = settings.get('pages', [])
+             for page in pages:
+                page_type = page.get('type', '')
+                if page_type == 'custom_page':
+                    content_url = page.get('content_url', '')
+                    new_content_url = trans_page_content_url(content_url, workspace_id, dtable_uuid)
+                    page['content_url'] = new_content_url
         add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, org_id)
 
 

@@ -209,7 +209,7 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
     if can_use_external_apps:
         dtable_io_logger.info('create external apps from src dtable.')
         try:
-            create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_id)
+            create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_id, workspace_id)
         except Exception as e:
             dtable_io_logger.error('create external apps failed. ERROR: {}'.format(e))
         finally:

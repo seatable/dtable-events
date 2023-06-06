@@ -32,6 +32,9 @@ def _trans_file_url(file, workspace_id, dtable_uuid):
 def _trans_image_url(image_url, workspace_id, dtable_uuid):
     return _trans_url(image_url, workspace_id, dtable_uuid)
 
+def trans_page_content_url(content_url, workspace_id, dtable_uuid):
+    return _trans_url(content_url, workspace_id, dtable_uuid)
+
 
 def _trans_long_text(long_text, workspace_id, dtable_uuid):
     new_images = []
