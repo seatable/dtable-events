@@ -1047,11 +1047,11 @@ class StatisticSQLGenerator(object):
             date_granularity = group_by.get('date_granularity', '')
             date_granularity = date_granularity.upper()
             if date_granularity == 'DAY':
-                return 'ISODATE(%s)' % column_name
+                return 'ISODATE(%s)' % valid_column_name
             if date_granularity == 'WEEK':
-                return 'ISODATE(STARTOFWEEK(%s, "monday"))' % column_name
+                return 'ISODATE(STARTOFWEEK(%s, "monday"))' % valid_column_name
             if date_granularity == 'MONTH':
-                return 'ISOMONTH(%s)' % column_name
+                return 'ISOMONTH(%s)' % valid_column_name
             if date_granularity == 'QUARTER':
                 return 'CONCATENATE(year(%s), "-Q", quarter(%s))' % (valid_column_name, valid_column_name)
             if date_granularity == 'YEAR':
@@ -1060,7 +1060,7 @@ class StatisticSQLGenerator(object):
                 return 'MAX(%s)' % valid_column_name
             if date_granularity == 'MIN':
                 return 'MIN(%s)' % valid_column_name
-            return 'ISOMONTH(%s)' % column_name
+            return 'ISOMONTH(%s)' % valid_column_name
         if type == ColumnTypes.GEOLOCATION:
             geolocation_granularity = group_by.get('geolocation_granularity', '')
             geolocation_granularity = geolocation_granularity.upper()
@@ -1076,11 +1076,12 @@ class StatisticSQLGenerator(object):
 
     def _summary_column_2_sql(self, summary_method, column):
         column_name = column.get('name', '')
+        valid_column_name = '`%s`' % column_name
         if summary_method == 'DISTINCT_VALUES':
-            return 'COUNT(DISTINCT %s)' % column_name
+            return 'COUNT(DISTINCT %s)' % valid_column_name
         if summary_method == 'ROW_COUNT':
-            return 'COUNT(%s)' % column_name
-        return '%s(`%s`)' % (DTABLE_DB_SUMMARY_METHOD[summary_method], column_name)
+            return 'COUNT(%s)' % valid_column_name
+        return '%s(%s)' % (DTABLE_DB_SUMMARY_METHOD[summary_method], valid_column_name)
 
     def _basic_statistic_2_sql(self):
         if self.statistic_type in [StatisticType.HORIZONTAL_BAR, StatisticType.HORIZONTAL_GROUP_BAR]:
