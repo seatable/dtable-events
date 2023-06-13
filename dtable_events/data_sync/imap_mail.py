@@ -98,10 +98,14 @@ class ImapMail(object):
 
     def parse_addr(self, addr):
         addr_info = parseaddr(addr)
-        nickname = self.decode_str(addr_info[0])
-        if not nickname:
-            nickname = addr_info[1].split('@')[0]
-        return nickname + ' <' + addr_info[1] + '>'
+        try:
+            nickname = self.decode_str(addr_info[0])
+            if not nickname:
+                nickname = addr_info[1].split('@')[0]
+            return nickname + ' <' + addr_info[1] + '>'
+        except Exception as e:
+            logger.exception('parse addr: %s addr_info: %s error: %s', addr, addr_info, e)
+            return '%s <%s>' % (addr_info[1].split('@')[0], addr_info[1])
 
     def get_email_header(self, msg):
         header_info = {}
