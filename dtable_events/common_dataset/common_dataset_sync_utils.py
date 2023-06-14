@@ -619,10 +619,13 @@ def append_dst_rows(dst_dtable_uuid, dst_table_name, to_be_appended_rows, dst_dt
 def update_dst_rows(dst_dtable_uuid, dst_table_name, to_be_updated_rows, dst_dtable_server_api):
     step = INSERT_UPDATE_ROWS_LIMIT
     for i in range(0, len(to_be_updated_rows), step):
-        updates = [{
-            'row_id': row['_id'],
-            'row': row
-        } for row in to_be_updated_rows[i: i+step]]
+        updates = []
+        for row in to_be_updated_rows[i: i+step]:
+            row_id = row.pop('_id', None)
+            updates.append({
+                'row_id': row_id,
+                'row': row
+            })
         try:
             dst_dtable_server_api.batch_update_rows(dst_table_name, updates, need_convert_back=False)
         except Exception as e:
