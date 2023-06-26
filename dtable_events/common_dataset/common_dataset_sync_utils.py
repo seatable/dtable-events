@@ -277,12 +277,12 @@ def generate_synced_rows(dtable_db_rows, src_columns, synced_columns, dst_rows=N
     return to_be_updated_rows, to_be_appended_rows, to_be_deleted_row_ids
 
 
-def get_link_formula_converted_cell_value(transfered_column, converted_cell_value, src_col_type):
+def get_link_formula_converted_cell_value(transfered_column, dtable_db_cell_value, src_col_type):
     transfered_type = transfered_column.get('type')
-    if not isinstance(converted_cell_value, list):
+    if not isinstance(dtable_db_cell_value, list):
         return
     if src_col_type == ColumnTypes.LINK:
-        converted_cell_value = [v['display_value'] for v in converted_cell_value]
+        dtable_db_cell_value = [v['display_value'] for v in dtable_db_cell_value]
     if transfered_type in [
         ColumnTypes.TEXT,
         ColumnTypes.RATE,
@@ -299,36 +299,36 @@ def get_link_formula_converted_cell_value(transfered_column, converted_cell_valu
         ColumnTypes.GEOLOCATION,
         ColumnTypes.SINGLE_SELECT
     ]:
-        if converted_cell_value:
-            return converted_cell_value[0]
+        if dtable_db_cell_value:
+            return dtable_db_cell_value[0]
     elif transfered_type == ColumnTypes.COLLABORATOR:
-        if converted_cell_value:
-            if isinstance(converted_cell_value[0], list):
-                return list(set(converted_cell_value[0]))
+        if dtable_db_cell_value:
+            if isinstance(dtable_db_cell_value[0], list):
+                return list(set(dtable_db_cell_value[0]))
             else:
-                return list(set(converted_cell_value))
+                return list(set(dtable_db_cell_value))
     elif transfered_type in [
         ColumnTypes.IMAGE,
         ColumnTypes.FILE
     ]:
-        if converted_cell_value:
-            if isinstance(converted_cell_value[0], list):
-                return converted_cell_value[0]
+        if dtable_db_cell_value:
+            if isinstance(dtable_db_cell_value[0], list):
+                return dtable_db_cell_value[0]
             else:
-                return converted_cell_value
+                return dtable_db_cell_value
     elif transfered_type == ColumnTypes.LONG_TEXT:
-        if converted_cell_value:
-            return converted_cell_value[0]
+        if dtable_db_cell_value:
+            return dtable_db_cell_value[0]
     elif transfered_type == ColumnTypes.MULTIPLE_SELECT:
-        if converted_cell_value:
-            if isinstance(converted_cell_value[0], list):
-                return sorted(list(set(converted_cell_value[0])))
+        if dtable_db_cell_value:
+            if isinstance(dtable_db_cell_value[0], list):
+                return sorted(list(set(dtable_db_cell_value[0])))
             else:
-                return sorted(list(set(converted_cell_value)))
+                return sorted(list(set(dtable_db_cell_value)))
     elif transfered_type == ColumnTypes.DATE:
-        if converted_cell_value:
+        if dtable_db_cell_value:
             try:
-                value = parser.isoparse(converted_cell_value[0])
+                value = parser.isoparse(dtable_db_cell_value[0])
             except:
                 pass
             else:
@@ -341,7 +341,7 @@ def get_link_formula_converted_cell_value(transfered_column, converted_cell_valu
                     return value.strftime('%Y-%m-%d')
 
 
-def get_converted_cell_value(converted_cell_value, transfered_column, col):
+def get_converted_cell_value(dtable_db_cell_value, transfered_column, col):
     col_type = col.get('type')
     if col_type in [
         ColumnTypes.TEXT,
@@ -363,90 +363,92 @@ def get_converted_cell_value(converted_cell_value, transfered_column, col):
         ColumnTypes.URL,
         ColumnTypes.GEOLOCATION
     ]:
-        return deepcopy(converted_cell_value)
+        return deepcopy(dtable_db_cell_value)
 
     elif col_type == ColumnTypes.SINGLE_SELECT:
-        if not isinstance(converted_cell_value, str):
+        if not isinstance(dtable_db_cell_value, str):
             return
-        return converted_cell_value
+        return dtable_db_cell_value
 
     elif col_type == ColumnTypes.MULTIPLE_SELECT:
-        if not isinstance(converted_cell_value, list):
+        if not isinstance(dtable_db_cell_value, list):
             return
-        return converted_cell_value
+        return dtable_db_cell_value
 
     elif col_type == ColumnTypes.LINK:
-        return get_link_formula_converted_cell_value(transfered_column, converted_cell_value, col_type)
+        return get_link_formula_converted_cell_value(transfered_column, dtable_db_cell_value, col_type)
     elif col_type == ColumnTypes.FORMULA:
         result_type = col.get('data', {}).get('result_type')
         if result_type == 'number':
-            re_number = r'(\-|\+)?\d+(\.\d+)?'
+            if type(dtable_db_cell_value) in (float, int):
+                return dtable_db_cell_value
+            re_number = r'(\-|\+)?\d+(\.\d+)?(e(\-|\+)?\d+)?'
             try:
-                match_obj = re.search(re_number, str(converted_cell_value))
+                match_obj = re.search(re_number, str(dtable_db_cell_value))
                 if not match_obj:
                     return
                 start, end = match_obj.span()
-                return float(str(converted_cell_value)[start: end])
+                return float(str(dtable_db_cell_value)[start: end])
             except Exception as e:
-                logger.error('re search: %s in: %s error: %s', re_number, converted_cell_value, e)
+                logger.error('re search: %s in: %s error: %s', re_number, dtable_db_cell_value, e)
                 return
         elif result_type == 'date':
-            return converted_cell_value
+            return dtable_db_cell_value
         elif result_type == 'bool':
-            if isinstance(converted_cell_value, bool):
-                return converted_cell_value
-            return str(converted_cell_value).upper() == 'TRUE'
+            if isinstance(dtable_db_cell_value, bool):
+                return dtable_db_cell_value
+            return str(dtable_db_cell_value).upper() == 'TRUE'
         elif result_type == 'string':
             col_data = col.get('data', {})
             options = col_data.get('options') if col_data else None
             if options and isinstance(options, list):
                 options_dict = {option.get('id'): option.get('name', '') for option in options}
-                if isinstance(converted_cell_value, list):
-                    values = [options_dict.get(item, item) for item in converted_cell_value]
+                if isinstance(dtable_db_cell_value, list):
+                    values = [options_dict.get(item, item) for item in dtable_db_cell_value]
                     return ', '.join(values)
                 else:
-                    return options_dict.get(converted_cell_value, converted_cell_value)
+                    return options_dict.get(dtable_db_cell_value, dtable_db_cell_value)
             else:
-                if isinstance(converted_cell_value, list):
-                    return ', '.join(str(v) for v in converted_cell_value)
-                elif isinstance(converted_cell_value, dict):
-                    return ', '.join(str(converted_cell_value.get(v)) for v in converted_cell_value)
+                if isinstance(dtable_db_cell_value, list):
+                    return ', '.join(str(v) for v in dtable_db_cell_value)
+                elif isinstance(dtable_db_cell_value, dict):
+                    return ', '.join(str(dtable_db_cell_value.get(v)) for v in dtable_db_cell_value)
                 else:
-                    return converted_cell_value
+                    return dtable_db_cell_value
         else:
-            if isinstance(converted_cell_value, list):
-                return ', '.join(str(v) for v in converted_cell_value)
+            if isinstance(dtable_db_cell_value, list):
+                return ', '.join(str(v) for v in dtable_db_cell_value)
             else:
-                return converted_cell_value
+                return dtable_db_cell_value
 
     elif col_type == ColumnTypes.LINK_FORMULA:
         result_type = col.get('data', {}).get('result_type')
         if result_type == 'number':
             re_number = r'(\-|\+)?\d+(\.\d+)?'
             try:
-                match_obj = re.search(re_number, str(converted_cell_value))
+                match_obj = re.search(re_number, str(dtable_db_cell_value))
                 if not match_obj:
                     return
                 start, end = match_obj.span()
-                if '.' not in str(converted_cell_value)[start: end]:
-                    return int(str(converted_cell_value)[start: end])
+                if '.' not in str(dtable_db_cell_value)[start: end]:
+                    return int(str(dtable_db_cell_value)[start: end])
                 else:
-                    return float(str(converted_cell_value)[start: end])
+                    return float(str(dtable_db_cell_value)[start: end])
             except Exception as e:
-                logger.error('re search: %s in: %s error: %s', re_number, converted_cell_value, e)
+                logger.error('re search: %s in: %s error: %s', re_number, dtable_db_cell_value, e)
                 return
         elif result_type == 'date':
-            return converted_cell_value
+            return dtable_db_cell_value
         elif result_type == 'bool':
-            if isinstance(converted_cell_value, bool):
-                return converted_cell_value
-            return str(converted_cell_value).upper() == 'TRUE'
+            if isinstance(dtable_db_cell_value, bool):
+                return dtable_db_cell_value
+            return str(dtable_db_cell_value).upper() == 'TRUE'
         elif result_type == 'array':
-            return get_link_formula_converted_cell_value(transfered_column, converted_cell_value, col_type)
+            return get_link_formula_converted_cell_value(transfered_column, dtable_db_cell_value, col_type)
         elif result_type == 'string':
-            if converted_cell_value:
-                return str(converted_cell_value)
-    return deepcopy(converted_cell_value)
+            if dtable_db_cell_value:
+                return str(dtable_db_cell_value)
+    return deepcopy(dtable_db_cell_value)
 
 
 def is_equal(v1, v2, column_type):
