@@ -424,7 +424,9 @@ def get_converted_cell_value(dtable_db_cell_value, transfered_column, col):
     elif col_type == ColumnTypes.LINK_FORMULA:
         result_type = col.get('data', {}).get('result_type')
         if result_type == 'number':
-            re_number = r'(\-|\+)?\d+(\.\d+)?'
+            if type(dtable_db_cell_value) in (float, int):
+                return dtable_db_cell_value
+            re_number = r'(\-|\+)?\d+(\.\d+)?(e(\-|\+)?\d+)?'
             try:
                 match_obj = re.search(re_number, str(dtable_db_cell_value))
                 if not match_obj:
