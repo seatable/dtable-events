@@ -2861,7 +2861,7 @@ class AutomationRule:
                 })
                 self.db_session.commit()
         except Exception as e:
-            logger.error('set rule task log: %s invalid error: %s', self.rule_id, e)
+            logger.error('set rule task log: %s error: %s', self.rule_id, e)
 
     def update_last_trigger_time(self):
         try:
@@ -2884,26 +2884,28 @@ class AutomationRule:
                 UPDATE dtable_automation_rules SET last_trigger_time=:trigger_time, trigger_count=:trigger_count WHERE id=:rule_id;
             '''
 
-            org_id = self.org_id
-            if not org_id:
-                sql = set_last_trigger_time_sql
-            else:
-                sql = "%s%s" % (set_last_trigger_time_sql, set_statistic_sql_user if self.org_id == -1 else set_statistic_sql_org)
+            sqls = [set_last_trigger_time_sql]
+            if self.org_id:
+                if self.org_id == -1:
+                    sqls.append(set_statistic_sql_user)
+                else:
+                    sqls.append(set_statistic_sql_org)
 
             cur_date = datetime.now().date()
             cur_year, cur_month = cur_date.year, cur_date.month
             trigger_date = date(year=cur_year, month=cur_month, day=1)
-            self.db_session.execute(sql, {
-                'rule_id': self.rule_id,
-                'trigger_time': datetime.utcnow(),
-                'trigger_date': trigger_date,
-                'trigger_count': self.trigger_count + 1,
-                'username': self.creator,
-                'org_id': self.org_id
-            })
+            for sql in sqls:
+                self.db_session.execute(sql, {
+                    'rule_id': self.rule_id,
+                    'trigger_time': datetime.utcnow(),
+                    'trigger_date': trigger_date,
+                    'trigger_count': self.trigger_count + 1,
+                    'username': self.creator,
+                    'org_id': self.org_id
+                })
             self.db_session.commit()
         except Exception as e:
-            logger.error('set rule: %s invalid error: %s', self.rule_id, e)
+            logger.exception('set rule: %s error: %s', self.rule_id, e)
 
         if self.run_condition == PER_UPDATE and self.per_minute_trigger_limit > 0:
             trigger_times = redis_cache.get(self.cache_key)
