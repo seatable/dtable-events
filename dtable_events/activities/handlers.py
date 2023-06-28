@@ -19,7 +19,9 @@ class MessageHandler(Thread):
         'delete_row',
         'delete_rows',
         'modify_row',
-        'modify_rows'
+        'modify_rows',
+        'add_link',
+        'delete_link',
     ]
 
     def __init__(self, config):
