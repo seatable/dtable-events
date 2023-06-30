@@ -22,7 +22,7 @@ ROWS_OPERATION_TYPES = [
 
 LINK_OPERATION_TYPES = [
     'add_link',
-    'delete_link',
+    'remove_link',
 ]
 
 
