@@ -121,7 +121,7 @@ def save_or_update_or_delete(session, event):
         else:
             save_user_activities(session, event)
     else:  # handle link   
-        if event['op_type'] in ['add_link', 'delete_link']:
+        if event['op_type'] in LINK_OPERATION_TYPES:
             op_time = datetime.utcfromtimestamp(event['op_time'])
             _timestamp = op_time - timedelta(minutes=5)
             # If a row was edited many times by same user in 5 minutes, just update record.
@@ -151,7 +151,7 @@ def save_or_update_or_delete(session, event):
                 detail1['row_name_option'] = event.get('row_name_option', '')
 
                 detail1 = json.dumps(detail1)
-                update_activity_timestamp(session, row1.id, op_time, detail1)
+                update_link_activity_timestamp(session, row1.id, op_time, detail1)
             
             if row2:
                 detail2 = json.loads(row2.detail)
@@ -167,7 +167,7 @@ def save_or_update_or_delete(session, event):
                 detail2['row_name_option'] = event.get('row_name_option', '')
 
                 detail2 = json.dumps(detail2)
-                update_activity_timestamp(session, row2.id, op_time, detail2)
+                update_link_activity_timestamp(session, row2.id, op_time, detail2)
 
         
             save_user_activities_by_link(session, event, row1, row2)
@@ -176,6 +176,14 @@ def save_or_update_or_delete(session, event):
 def update_activity_timestamp(session, activity_id, op_time, detail):
     activity = session.query(Activities).filter(Activities.id == activity_id)
     activity.update({"op_time": op_time, "detail": detail})
+    session.commit()
+
+
+def update_link_activity_timestamp(session, activity_id, op_time, detail, op_type=None):
+    activity = session.query(Activities).filter(Activities.id == activity_id)
+    activity.update({"op_time": op_time, "detail": detail})
+    if op_type:
+        activity.update({'op_type': op_type})
     session.commit()
 
 
