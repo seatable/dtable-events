@@ -1285,6 +1285,8 @@ class LinkRecordsAction(BaseAction):
             if not other_column:
                 raise RuleInvalidException('match other column not found')
             parsed_row_value = self.parse_column_value(other_column, row_value)
+            if not parsed_row_value and other_column['type'] in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
+                raise RuleInvalidException('match other single/multi-select column options: %s not found' % row_value)
             filter_item = {
                 "column_key": other_column_key,
                 "filter_predicate": self.COLUMN_FILTER_PREDICATE_MAPPING.get(other_column.get('type', ''), 'is'),
