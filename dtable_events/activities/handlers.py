@@ -22,6 +22,8 @@ class MessageHandler(Thread):
         'modify_rows',
         'add_link',
         'remove_link',
+        'update_links',
+        'update_rows_links'
     ]
 
     def __init__(self, config):

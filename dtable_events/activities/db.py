@@ -23,6 +23,8 @@ ROWS_OPERATION_TYPES = [
 LINK_OPERATION_TYPES = [
     'add_link',
     'remove_link',
+    'update_links',
+    'update_rows_links'
 ]
 
 
