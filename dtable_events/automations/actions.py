@@ -1402,16 +1402,19 @@ class LinkRecordsAction(BaseAction):
                     column_dict[col.get('key')] = col
         return column_dict
 
-    def query_table_rows(self, table_name, filter_conditions=None):
+    def query_table_rows(self, table_name, filter_conditions=None, query_columns=None):
         start = 0
         step = 10000
         result_rows = []
         filter_clause = ''
+        query_clause = "*"
+        if query_columns:
+            query_clause = ",".join(["`%s`" % cn for cn in query_columns])
         if filter_conditions:
             table = self.get_table_by_name(table_name)
             filter_clause = BaseSQLGenerator(table_name, table['columns'], filter_conditions=filter_conditions)._filter2sql()
         while True:
-            sql = f"select * from `{table_name}` {filter_clause} limit {start}, {step}"
+            sql = f"select {query_clause} from `{table_name}` {filter_clause} limit {start}, {step}"
             try:
                 results, _ = self.auto_rule.dtable_db_api.query(sql)
             except Exception as e:
@@ -1450,6 +1453,7 @@ class LinkRecordsAction(BaseAction):
 
         equal_columns = []
         equal_other_columns = []
+        filter_columns = []
         # check column valid
         for condition in self.match_conditions:
             if not condition.get('column_key') or not condition.get('other_column_key'):
@@ -1463,12 +1467,29 @@ class LinkRecordsAction(BaseAction):
             equal_columns.append(column.get('name'))
             equal_other_columns.append(other_column.get('name'))
 
+        view_filters = self.auto_rule.view_info.get('filters', [])
+        for f in view_filters:
+            column_key = f.get('column_key')
+            column = column_dict.get(column_key)
+            if not column:
+                raise RuleInvalidException('column not found')
+            filter_columns.append(column.get('name'))
+
+
         view_filter_conditions = {
-            'filters': self.auto_rule.view_info.get('filters', []),
+            'filters': view_filters,
             'filter_conjunction': self.auto_rule.view_info.get('filter_conjunction', 'And')
         }
-        table_rows = self.query_table_rows(table_name, filter_conditions=view_filter_conditions)
-        other_table_rows = self.query_table_rows(other_table_name)
+
+        query_columns = list(set(equal_columns + filter_columns))
+        if "_id" not in query_columns:
+            query_columns.append("_id")
+
+        if "_id" not in equal_other_columns:
+            equal_other_columns.append("_id")
+
+        table_rows = self.query_table_rows(table_name, filter_conditions=view_filter_conditions, query_columns=query_columns)
+        other_table_rows = self.query_table_rows(other_table_name, query_columns=equal_other_columns)
 
         table_rows_dict = {}
         row_id_list, other_rows_ids_map = [], {}
