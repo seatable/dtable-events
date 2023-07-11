@@ -1969,15 +1969,21 @@ class CalculateAction(BaseAction):
         elif self.action_type == 'calculate_rank':
             self.rank_rows.extend(rows)
 
-    def query_table_rows(self, table_name, columns, filter_conditions):
+    def query_table_rows(self, table_name, columns, filter_conditions, query_columns):
         offset = 10000
         start = 0
         rows = []
+        query_clause = "*"
+        if query_columns:
+            if "_id" not in query_columns:
+                query_columns.append("_id")
+            query_clause = ",".join(["`%s`" % cn for cn in query_columns])
         while True:
             filter_conditions['start'] = start
             filter_conditions['limit'] = offset
 
             sql = filter2sql(table_name, columns, filter_conditions, by_group=False)
+            sql = sql.replace("*", query_clause)
             response_rows, _ = self.auto_rule.dtable_db_api.query(sql)
             rows.extend(response_rows)
 
@@ -2023,7 +2029,7 @@ class CalculateAction(BaseAction):
                 'filters': self.auto_rule.view_info.get('filters'),
                 'filter_conjunction': self.auto_rule.view_info.get('filter_conjunction'),
             }
-            view_rows = self.query_table_rows(table_name, self.auto_rule.view_columns, filter_conditions)
+            view_rows = self.query_table_rows(table_name, self.auto_rule.view_columns, filter_conditions, [calculate_col_name])
 
         if view_rows and ('rows' in view_rows[0] or 'subgroups' in view_rows[0]):
             self.parse_group_rows(view_rows)
@@ -2127,8 +2133,15 @@ class LookupAndCopyAction(BaseAction):
         start = 0
         step = 10000
         result_rows = []
+        query_clause = '*'
+        if column_names:
+            query_columns = list(set(column_names))
+            if "_id" not in query_columns:
+                query_columns.append("_id")
+            query_clause = ",".join(["`%s`" % cn for cn in query_columns])
+            
         while True:
-            sql = f"select * from `{table_name}` limit {start}, {step}"
+            sql = f"select {query_clause} from `{table_name}` limit {start}, {step}"
             try:
                 results, _ = self.auto_rule.dtable_db_api.query(sql)
             except Exception as e:
