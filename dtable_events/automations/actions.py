@@ -1272,6 +1272,7 @@ class LinkRecordsAction(BaseAction):
 
     def format_filter_groups(self):
         filters = []
+        column_names = []
         for match_condition in self.match_conditions:
             column_key = match_condition.get("column_key")
             column = self.get_column(self.auto_rule.table_id, column_key)
@@ -1284,6 +1285,7 @@ class LinkRecordsAction(BaseAction):
             other_column = self.get_column(self.linked_table_id, other_column_key)
             if not other_column:
                 raise RuleInvalidException('match other column not found')
+            column_names.append(other_column['name'])
             parsed_row_value = self.parse_column_value(other_column, row_value)
             if not parsed_row_value and other_column['type'] in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
                 raise RuleInvalidException('match other single/multi-select column options: %s not found' % row_value)
@@ -1293,7 +1295,13 @@ class LinkRecordsAction(BaseAction):
                 "filter_term": parsed_row_value,
                 "filter_term_modifier":"exact_date"
             }
+
             filters.append(filter_item)
+        if filters:
+            return [{"filters": filters, "filter_conjunction": "And"}], column_names
+        return [], column_names
+
+
         return filters and [{"filters": filters, "filter_conjunction": "And"}] or []
 
     def get_table_name(self, table_id):
@@ -1324,7 +1332,7 @@ class LinkRecordsAction(BaseAction):
         return []
 
     def get_linked_table_rows(self):
-        filter_groups = self.format_filter_groups()
+        filter_groups, column_names = self.format_filter_groups()
         if not filter_groups:
             return []
 
@@ -1338,8 +1346,11 @@ class LinkRecordsAction(BaseAction):
         columns = self.get_columns(self.linked_table_id)
 
         sql = filter2sql(table_name, columns, filter_conditions, by_group=True)
-
+        query_clause = "*"
+        if column_names:
+            query_clause = ", ".join(["`%s`" % n for n in column_names])
         try:
+            sql = sql.replace("*", query_clause)
             rows_data, _ = self.auto_rule.dtable_db_api.query(sql, convert=False)
         except RowsQueryError:
             raise RuleInvalidException('wrong filter in filters in link-records')
