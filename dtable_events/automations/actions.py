@@ -2638,6 +2638,7 @@ class AutomationRule:
                 return True
             trigger_times = trigger_times.split(',')
             if len(trigger_times) >= self.per_minute_trigger_limit and time.time() - int(trigger_times[0]) < 60:
+                logger.warning('automation rule: %s exceed the trigger limit (%s times) within 1 minute', self.rule_id, self.per_minute_trigger_limit)
                 return False
             return True
 
