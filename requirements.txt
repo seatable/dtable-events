@@ -1,9 +1,9 @@
-redis
-SQLAlchemy
-apscheduler
-openpyxl
+redis==4.4.*
+SQLAlchemy==1.4.*
+apscheduler==3.9.*
+openpyxl==3.0.1
 selenium==3.141.0
-gevent
-Flask
-python-dateutil
-imapclient
+gevent==22.10.*
+Flask==2.2.*
+python-dateutil==2.8.*
+imapclient==2.3.*
