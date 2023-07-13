@@ -688,6 +688,10 @@ def import_sync_CDS(context):
 
     # fetch create dst table or update dst table columns
     # use src_columns from context temporary !
+
+    src_columns_key_dict = {col['key']: col for col in src_columns}
+    dst_columns_key_dict = {col['key']: col for col in (dst_columns or [])}
+
     to_be_updated_columns, to_be_appended_columns, error = generate_synced_columns(src_columns, dst_columns=dst_columns)
     if error:
         return {
@@ -781,7 +785,8 @@ def import_sync_CDS(context):
     logger.debug('will delete %s rows', len(to_be_deleted_rows_id_set))
     delete_dst_rows(dst_dtable_uuid, dst_table_name, list(to_be_deleted_rows_id_set), dst_dtable_server_api)
 
-    query_columns = ', '.join(['_id'] + ["`%s`" % col['name'] for col in final_columns])
+    src_query_columns = ', '.join(['_id'] + ["`%s`" % src_columns_key_dict[col['key']]['name'] for col in final_columns])
+    dst_query_columns = ', '.join(['_id'] + ["`%s`" % col['name'] for col in final_columns])
 
     # fetch src to-be-updated-rows and dst to-be-updated-rows, update to dst table, step by step
     to_be_updated_rows_id_list = list(to_be_updated_rows_id_set)
@@ -790,7 +795,7 @@ def import_sync_CDS(context):
         logger.debug('to_be_updated_rows_id_list i: %s step: %s', i, step)
         ## fetch src to-be-updated-rows
         rows_id_str = ', '.join(["'%s'" % row_id for row_id in to_be_updated_rows_id_list[i: i+step]])
-        sql = f"SELECT {query_columns} FROM `{src_table_name}` WHERE _id IN ({rows_id_str}) LIMIT {step}"
+        sql = f"SELECT {src_query_columns} FROM `{src_table_name}` WHERE _id IN ({rows_id_str}) LIMIT {step}"
         try:
             src_rows, _ = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
         except Exception as e:
@@ -802,7 +807,7 @@ def import_sync_CDS(context):
             }
 
         ## fetch dst to-be-updated-rows
-        sql = f"SELECT {query_columns} FROM `{dst_table_name}` WHERE _id IN ({rows_id_str}) LIMIT {step}"
+        sql = f"SELECT {dst_query_columns} FROM `{dst_table_name}` WHERE _id IN ({rows_id_str}) LIMIT {step}"
         try:
             dst_rows, _ = dst_dtable_db_api.query(sql, convert=False, server_only=True)
         except Exception as e:
@@ -836,9 +841,9 @@ def import_sync_CDS(context):
             step_row_sort_dict[to_be_appended_rows_id_list[i+j]] = j
         rows_id_str = ', '.join(["'%s'" % row_id for row_id in step_to_be_appended_rows_id_list])
         if filter_clause:
-            sql = f"SELECT {query_columns} FROM `{src_table_name}` WHERE (({filter_clause[len('WHERE'):]}) AND `_id` IN ({rows_id_str})) LIMIT {step}"
+            sql = f"SELECT {src_query_columns} FROM `{src_table_name}` WHERE (({filter_clause[len('WHERE'):]}) AND `_id` IN ({rows_id_str})) LIMIT {step}"
         else:
-            sql = f"SELECT {query_columns} FROM `{src_table_name}` WHERE `_id` IN ({rows_id_str}) LIMIT {step}"
+            sql = f"SELECT {src_query_columns} FROM `{src_table_name}` WHERE `_id` IN ({rows_id_str}) LIMIT {step}"
         try:
             src_rows, _ = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
         except Exception as e:
