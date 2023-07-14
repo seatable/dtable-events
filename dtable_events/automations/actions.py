@@ -1348,6 +1348,8 @@ class LinkRecordsAction(BaseAction):
         sql = filter2sql(table_name, columns, filter_conditions, by_group=True)
         query_clause = "*"
         if column_names:
+            if "_id" not in column_names:
+                column_names.append("_id")
             query_clause = ", ".join(["`%s`" % n for n in column_names])
         try:
             sql = sql.replace("*", query_clause)
