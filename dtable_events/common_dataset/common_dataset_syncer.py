@@ -179,21 +179,25 @@ def check_common_dataset(db_session):
         if assets.get('src_version') == last_src_version:
             continue
 
+        src_table_name = assets.get('src_table_name')
+        src_view_name = assets.get('src_view_name')
+        dst_table_name = assets.get('dst_table_name')
         try:
             result = import_sync_CDS({
                 'src_dtable_uuid': src_dtable_uuid,
                 'dst_dtable_uuid': dst_dtable_uuid,
-                'src_table_name': assets.get('src_table_name'),
-                'src_view_name': assets.get('src_view_name'),
+                'src_table_name': src_table_name,
+                'src_view_name': src_view_name,
                 'src_columns': assets.get('src_columns'),
                 'dst_table_id': dst_table_id,
-                'dst_table_name': assets.get('dst_table_name'),
+                'dst_table_name': dst_table_name,
                 'dst_columns': assets.get('dst_columns'),
                 'operator': 'dtable-events',
                 'lang': 'en',  # TODO: lang
             })
         except Exception as e:
-            logging.error('sync common dataset error: %s', e)
+            logging.error('sync common dataset src-uuid: %s src-table: %s src-view: %s dst-uuid: %s dst-table: %s error: %s', 
+                          src_dtable_uuid, src_table_name, src_view_name, dst_dtable_uuid, dst_table_name, e)
             continue
         else:
             if result.get('error_msg'):

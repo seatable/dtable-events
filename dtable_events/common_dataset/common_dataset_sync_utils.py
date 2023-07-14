@@ -729,7 +729,7 @@ def import_sync_CDS(context):
             'error_msg': 'generate src view sql error: %s' % e,
             'task_status_code': 500
         }
-    sql_template = f"SELECT `_id` FROM `{src_table_name}` {filter_clause} {sort_clause}"
+    sql_template = f"SELECT `_id` FROM `{src_table_name}` {filter_clause or ''} {sort_clause or ''}"
     start, step = 0, 10000
     while True:
         if server_only and (start + step) > SRC_ROWS_LIMIT:
@@ -739,7 +739,7 @@ def import_sync_CDS(context):
         try:
             rows, _ = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
         except Exception as e:
-            logger.error('fetch src rows id error: %s', e)
+            logger.error('fetch src rows id filter_conditions: %s sql: %s src columns: %s error: %s', filter_conditions, sql, src_table['columns'], e)
             return {
                 'dst_table_id': None,
                 'error_msg': 'fetch src rows id error: %s' % e,
@@ -764,7 +764,7 @@ def import_sync_CDS(context):
         try:
             rows, _ = dst_dtable_db_api.query(sql, convert=False, server_only=True)
         except Exception as e:
-            logger.error('fetch dst rows id error: %s', e)
+            logger.error('fetch dst rows id sql: %s error: %s', sql, e)
             return {
                 'dst_table_id': None,
                 'error_msg': 'fetch dst rows id error: %s' % e,
@@ -799,7 +799,7 @@ def import_sync_CDS(context):
         try:
             src_rows, _ = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
         except Exception as e:
-            logger.error('fetch src to-be-updated-rows error: %s', e)
+            logger.error('fetch src to-be-updated-rows sql: %s error: %s', sql, e)
             return {
                 'dst_table_id': None,
                 'error_msg': 'fetch src to-be-updated-rows error: %s' % e,
@@ -811,7 +811,7 @@ def import_sync_CDS(context):
         try:
             dst_rows, _ = dst_dtable_db_api.query(sql, convert=False, server_only=True)
         except Exception as e:
-            logger.error('fetch dst to-be-updated-rows error: %s', e)
+            logger.error('fetch dst to-be-updated-rows sql: %s error: %s', sql, e)
             return {
                 'dst_table_id': None,
                 'error_msg': 'fetch dst to-be-updated-rows error: %s' % e,
@@ -847,7 +847,7 @@ def import_sync_CDS(context):
         try:
             src_rows, _ = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
         except Exception as e:
-            logger.error('fetch to-be-appended-rows error: %s', e)
+            logger.error('fetch to-be-appended-rows sql: %s error: %s', sql, e)
             return {
                 'dst_table_id': None,
                 'error_msg': 'fetch to-be-appended-rows error: %s' % e,
