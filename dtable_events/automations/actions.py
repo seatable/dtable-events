@@ -1350,7 +1350,7 @@ class LinkRecordsAction(BaseAction):
         if column_names:
             if "_id" not in column_names:
                 column_names.append("_id")
-            query_clause = ", ".join(["`%s`" % n for n in column_names])
+            query_clause = ",".join(["`%s`" % n for n in column_names])
         try:
             sql = sql.replace("*", query_clause)
             rows_data, _ = self.auto_rule.dtable_db_api.query(sql, convert=False)
