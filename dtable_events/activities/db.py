@@ -153,7 +153,7 @@ def save_or_update_or_delete(session, event):
                 detail1['row_name_option'] = event.get('row_name_option', '')
 
                 detail1 = json.dumps(detail1)
-                update_link_activity_timestamp(session, row1.id, op_time, detail1)
+                update_link_activity_timestamp(session, row1.id, op_time, detail1, op_type='modify_row')
             
             if row2:
                 detail2 = json.loads(row2.detail)
@@ -169,7 +169,7 @@ def save_or_update_or_delete(session, event):
                 detail2['row_name_option'] = event.get('row_name_option', '')
 
                 detail2 = json.dumps(detail2)
-                update_link_activity_timestamp(session, row2.id, op_time, detail2)
+                update_link_activity_timestamp(session, row2.id, op_time, detail2, op_type='modify_row')
 
         
             save_user_activities_by_link(session, event, row1, row2)
@@ -280,7 +280,7 @@ def save_user_activities_by_link(session, event, row1, row2):
     dtable_uuid = event['dtable_uuid']
     
     op_user = event['op_user']
-    op_type = event['op_type']
+    op_type = 'modify_row'
     op_time = datetime.utcfromtimestamp(event['op_time'])
     op_app = event.get('op_app')
 
