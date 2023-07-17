@@ -1302,8 +1302,6 @@ class LinkRecordsAction(BaseAction):
         return [], column_names
 
 
-        return filters and [{"filters": filters, "filter_conjunction": "And"}] or []
-
     def get_table_name(self, table_id):
         dtable_metadata = self.auto_rule.dtable_metadata
         tables = dtable_metadata.get('tables', [])
