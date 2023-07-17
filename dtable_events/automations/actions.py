@@ -1280,7 +1280,7 @@ class LinkRecordsAction(BaseAction):
                 raise RuleInvalidException('match column not found')
             row_value = self.data['converted_row'].get(column.get('name'))
             if not row_value:
-                return []
+                return [], []
             other_column_key = match_condition.get("other_column_key")
             other_column = self.get_column(self.linked_table_id, other_column_key)
             if not other_column:
@@ -1352,7 +1352,7 @@ class LinkRecordsAction(BaseAction):
                 column_names.append("_id")
             query_clause = ",".join(["`%s`" % n for n in column_names])
         try:
-            sql = sql.replace("*", query_clause)
+            sql = sql.replace("*", query_clause, 1)
             rows_data, _ = self.auto_rule.dtable_db_api.query(sql, convert=False)
         except RowsQueryError:
             raise RuleInvalidException('wrong filter in filters in link-records')
@@ -1494,14 +1494,13 @@ class LinkRecordsAction(BaseAction):
             'filter_conjunction': self.auto_rule.view_info.get('filter_conjunction', 'And')
         }
 
-        query_columns = list(set(equal_columns + filter_columns))
-        if "_id" not in query_columns:
-            query_columns.append("_id")
+        if "_id" not in equal_columns:
+            equal_columns.append("_id")
 
         if "_id" not in equal_other_columns:
             equal_other_columns.append("_id")
 
-        table_rows = self.query_table_rows(table_name, filter_conditions=view_filter_conditions, query_columns=query_columns)
+        table_rows = self.query_table_rows(table_name, filter_conditions=view_filter_conditions, query_columns=equal_columns)
         other_table_rows = self.query_table_rows(other_table_name, query_columns=equal_other_columns)
 
         table_rows_dict = {}
@@ -1996,7 +1995,7 @@ class CalculateAction(BaseAction):
             filter_conditions['limit'] = offset
 
             sql = filter2sql(table_name, columns, filter_conditions, by_group=False)
-            sql = sql.replace("*", query_clause)
+            sql = sql.replace("*", query_clause, 1)
             response_rows, _ = self.auto_rule.dtable_db_api.query(sql)
             rows.extend(response_rows)
 
