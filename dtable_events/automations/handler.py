@@ -17,7 +17,7 @@ class AutomationRuleHandler(Thread):
         self._finished = Event()
         self._db_session_class = init_db_session_class(config)
         self._redis_client = RedisClient(config)
-        self.per_minute_trigger_limit = 10
+        self.per_minute_trigger_limit = 50
         self._parse_config(config)
 
     def _parse_config(self, config):
@@ -29,12 +29,12 @@ class AutomationRuleHandler(Thread):
         if not config.has_section(section_name):
             return
 
-        per_minute_trigger_limit = get_opt_from_conf_or_env(config, section_name, key_per_minute_trigger_limit, default=10)
+        per_minute_trigger_limit = get_opt_from_conf_or_env(config, section_name, key_per_minute_trigger_limit, default=50)
         try:
             per_minute_trigger_limit = int(per_minute_trigger_limit)
         except Exception as e:
             logger.error('parse section: %s key: %s error: %s', section_name, key_per_minute_trigger_limit, e)
-            per_minute_trigger_limit = 10
+            per_minute_trigger_limit = 50
 
         self.per_minute_trigger_limit = per_minute_trigger_limit
 

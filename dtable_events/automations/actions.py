@@ -2480,7 +2480,7 @@ class AutomationRule:
 
         self.current_valid = True
 
-        self.per_minute_trigger_limit = per_minute_trigger_limit or 10
+        self.per_minute_trigger_limit = per_minute_trigger_limit or 50
 
         self.warnings = []
 
