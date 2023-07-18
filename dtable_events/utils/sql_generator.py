@@ -1727,7 +1727,7 @@ class LinkRecordsSQLGenerator(object):
         if not current_table or not link_column or not tables or not link_record_ids:
             pass
         else:
-            self.link_record_ids = tuple(link_record_ids)
+            self.link_record_ids_str = ', '.join(["'%s'"%(item) for item in link_record_ids])
             table_id = current_table.get('_id', '')
             link_column_data = link_column.get('data', {})
             config_table_id = link_column_data.get('table_id', '')
@@ -1772,9 +1772,9 @@ class LinkRecordsSQLGenerator(object):
         if not self.linked_table_name:
             return ''
 
-        base_sql = "SELECT * FROM `%s` WHERE `_id` in %s" % (
+        base_sql = "SELECT * FROM `%s` WHERE `_id` in (%s)" % (
             self.linked_table_name,
-            str(self.link_record_ids)
+            self.link_record_ids_str
         )
         sorts_sql = self._generator_sorts_SQL()
         return '%s %s' % (base_sql, sorts_sql) if sorts_sql else base_sql
