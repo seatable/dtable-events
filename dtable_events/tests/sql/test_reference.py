@@ -7,7 +7,7 @@ TEST_CONDITIONS = [
             ],
             "filter_predicate": 'And',
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE 名称 = 'LINK' LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `名称` = 'LINK' LIMIT 0, 100",
         "by_group": False,
 
     },
@@ -19,7 +19,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE 名称 like '%LINK%' LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `名称` ilike '%LINK%' LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -30,7 +30,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE 名称 not like '%LINK%' LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `名称` not ilike '%LINK%' LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -41,7 +41,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE 名称 <> 'LINK' LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `名称` <> 'LINK' LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -52,7 +52,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE 名称 is null LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `名称` is null LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -63,7 +63,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE 名称 is not null LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `名称` is not null LIMIT 0, 100",
         "by_group": False,
     },
 
@@ -76,7 +76,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE AutoNo = 'NO-001' LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `AutoNo` = 'NO-001' LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -87,7 +87,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE AutoNo <> 'NO-001' LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `AutoNo` <> 'NO-001' LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -98,7 +98,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE AutoNo like '%NO%' LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `AutoNo` ilike '%NO%' LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -109,7 +109,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE AutoNo not like '%NO%' LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `AutoNo` not ilike '%NO%' LIMIT 0, 100",
         "by_group": False,
     },
 
@@ -122,7 +122,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE Num = 5 LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `Num` = 5 LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -133,7 +133,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE rate > 6 LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `rate` > 6 LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -144,7 +144,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE Du <= 5400 LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `Du` <= 5400 LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -155,7 +155,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE Du >= 1200 LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `Du` >= 1200 LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -166,7 +166,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE Du <> 3800 LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `Du` <> 3800 LIMIT 0, 100",
         "by_group": False,
     },
 
@@ -179,7 +179,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE Time2d < '2021-12-20' and Time2d is not null LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `Time2d` < '2021-12-20' and `Time2d` is not null LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -190,7 +190,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE Time2d >= '2021-12-20' and Time2d < '2021-12-21' LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `Time2d` >= '2021-12-20' and `Time2d` < '2021-12-21' LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -201,7 +201,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE (Time2d >= '2021-12-21' or Time2d <= '2021-12-19') and Time2d is not null LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE (`Time2d` >= '2021-12-21' or `Time2d` <= '2021-12-19' or `Time2d` is null) LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -212,7 +212,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE createTime <= '2021-12-20' and createTime is not null LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `createTime` <= '2021-12-20' and `createTime` is not null LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -223,7 +223,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE createTime >= '2021-12-20' and createTime is not null LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `createTime` >= '2021-12-20' and `createTime` is not null LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -234,7 +234,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE modifyTime > '2021-12-20' LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `modifyTime` > '2021-12-20' LIMIT 0, 100",
         "by_group": False,
     },
 
@@ -247,7 +247,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE Sing = 'a' LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `Sing` = 'a' LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -258,7 +258,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE Sing <> 'b' LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `Sing` <> 'b' LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -269,7 +269,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE Sing in ('a', 'b') LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `Sing` in ('a', 'b') LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -280,7 +280,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE Sing not in ('a', 'b', 'c') LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `Sing` not in ('a', 'b', 'c') LIMIT 0, 100",
         "by_group": False,
     },
 
@@ -293,7 +293,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE Mul in ('aa', 'bb', 'cc', 'dd') LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `Mul` in ('aa', 'bb', 'cc', 'dd') LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -304,7 +304,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE Mul has all of ('aa', 'bb', 'cc') LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `Mul` has all of ('aa', 'bb', 'cc') LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -315,7 +315,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE Mul has none of ('aa', 'bb', 'cc') LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `Mul` has none of ('aa', 'bb', 'cc') LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -326,7 +326,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE Mul is exactly ('aa', 'bb') LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `Mul` is exactly ('aa', 'bb') LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -337,7 +337,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE Colla is exactly ('87d485c2281a42adbddb137a1070f395@auth.local') LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `Colla` is exactly ('87d485c2281a42adbddb137a1070f395@auth.local') LIMIT 0, 100",
         "by_group": False,
     },
 
@@ -350,7 +350,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE Creator in ('87d485c2281a42adbddb137a1070f395@auth.local') LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `Creator` in ('87d485c2281a42adbddb137a1070f395@auth.local') LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -361,10 +361,47 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM Table1 WHERE Modify not in ('87d485c2281a42adbddb137a1070f395@auth.local', 'xxx') LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `Modify` not in ('87d485c2281a42adbddb137a1070f395@auth.local', 'xxx') LIMIT 0, 100",
         "by_group": False,
     },
 
+    # ignore conditions
+    ## filter-term incomplete
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'Num', 'filter_predicate': 'equal', 'filter_term': ''}
+            ],
+            "filter_predicate": 'And',
+            "sorts":[],
+        },
+        "expected_sql": "SELECT * FROM `Table1` LIMIT 0, 100",
+        "by_group": False,
+    },
+    ## filter-predicate incomplete
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'Num', 'filter_term': ''}
+            ],
+            "filter_predicate": 'And',
+            "sorts":[],
+        },
+        "expected_sql": "SELECT * FROM `Table1` LIMIT 0, 100",
+        "by_group": False,
+    },
+    ## date has no modifier
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'Time2d', 'filter_predicate': 'is', 'filter_term': 1}
+            ],
+            "filter_predicate": 'And',
+            "sorts":[],
+        },
+        "expected_sql": "SELECT * FROM `Table1` LIMIT 0, 100",
+        "by_group": False,
+    },
 
     # Query Combination
     {
@@ -381,7 +418,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql":"SELECT * FROM Table1 WHERE 名称 = 'LINK' And AutoNo like '%NO%' And rate > 6 And Mul in ('aa', 'bb', 'cc', 'dd') And modifyTime > '2021-12-20' And Sing not in ('a', 'b', 'c') LIMIT 0, 100",
+        "expected_sql":"SELECT * FROM `Table1` WHERE `名称` = 'LINK' And `AutoNo` ilike '%NO%' And `rate` > 6 And `Mul` in ('aa', 'bb', 'cc', 'dd') And `modifyTime` > '2021-12-20' And `Sing` not in ('a', 'b', 'c') LIMIT 0, 100",
         "by_group": False,
     },
 
@@ -414,6 +451,6 @@ TEST_CONDITIONS = [
             "limit": 500
         },
         "by_group": True,
-        "expected_sql":"SELECT * FROM Table1 WHERE (名称 = 'LINK' And AutoNo like '%NO%') Or (rate > 6 Or Mul in ('aa', 'bb', 'cc', 'dd') Or modifyTime > '2021-12-20') ORDER BY 名称 DESC, AutoNo ASC LIMIT 0, 500"
+        "expected_sql":"SELECT * FROM `Table1` WHERE (`名称` = 'LINK' And `AutoNo` ilike '%NO%') Or (`rate` > 6 Or `Mul` in ('aa', 'bb', 'cc', 'dd') Or `modifyTime` > '2021-12-20') ORDER BY `名称` DESC, `AutoNo` ASC LIMIT 0, 500"
     }
 ]
