@@ -85,7 +85,7 @@ class Operator(object):
         )
 
     def op_equal(self):
-        if self.filter_term is None:
+        if not self.filter_term and self.filter_term != 0:
             return ''
         return "`%(column_name)s` = %(value)s" % ({
             'column_name': self.column_name,
@@ -93,7 +93,7 @@ class Operator(object):
         })
 
     def op_not_equal(self):
-        if self.filter_term is None:
+        if not self.filter_term and self.filter_term != 0:
             return ''
         return "`%(column_name)s` <> %(value)s" % ({
             'column_name': self.column_name,
@@ -101,7 +101,7 @@ class Operator(object):
         })
 
     def op_less(self):
-        if self.filter_term is None:
+        if not self.filter_term and self.filter_term != 0:
             return ''
         return "`%(column_name)s` < %(value)s" % ({
             'column_name': self.column_name,
@@ -109,7 +109,7 @@ class Operator(object):
         })
 
     def op_less_or_equal(self):
-        if self.filter_term is None:
+        if not self.filter_term and self.filter_term != 0:
             return ''
         return "`%(column_name)s` <= %(value)s" % ({
             'column_name': self.column_name,
@@ -117,7 +117,7 @@ class Operator(object):
         })
 
     def op_greater(self):
-        if self.filter_term is None:
+        if not self.filter_term and self.filter_term != 0:
             return ''
         return "`%(column_name)s` > %(value)s" % ({
             'column_name': self.column_name,
@@ -125,7 +125,7 @@ class Operator(object):
         })
 
     def op_greater_or_equal(self):
-        if self.filter_term is None:
+        if not self.filter_term and self.filter_term != 0:
             return ''
         return "`%(column_name)s` >= %(value)s" % ({
             'column_name': self.column_name,
