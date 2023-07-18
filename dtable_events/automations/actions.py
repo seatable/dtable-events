@@ -1412,7 +1412,6 @@ class LinkRecordsAction(BaseAction):
             filter_clause = BaseSQLGenerator(table_name, table['columns'], filter_conditions=filter_conditions)._filter2sql()
         while True:
             sql = f"select * from `{table_name}` {filter_clause} limit {start}, {step}"
-            logger.debug('query table rows sql: %s', sql)
             try:
                 results, _ = self.auto_rule.dtable_db_api.query(sql)
             except Exception as e:
