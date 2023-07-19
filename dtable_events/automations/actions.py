@@ -1239,6 +1239,7 @@ class LinkRecordsAction(BaseAction):
         ColumnTypes.EMAIL,
         ColumnTypes.RATE,
         ColumnTypes.FORMULA,
+        ColumnTypes.AUTO_NUMBER,
     ]
 
     def __init__(self, auto_rule, data, linked_table_id, link_id, match_conditions):
