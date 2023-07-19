@@ -56,13 +56,16 @@ function init() {
         touch $HOME_DIR/dtable_web/seahub/settings.py
         touch $HOME_DIR/dtable_web/seahub/__init__.py
     fi
+}
+
+function set_env() {
     export DTABLE_WEB_DIR=$HOME_DIR/dtable_web
 }
 
 function run_tests() {
+    set_env
     set -e
     # test sql
-    which python
     python ${EVENTS_TESTDIR}/sql/sql_test.py
 }
 
