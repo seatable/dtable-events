@@ -2012,6 +2012,14 @@ class CalculateAction(BaseAction):
             return True
         return False
 
+    
+    def get_columns(self, table_name):
+        dtable_metadata = self.auto_rule.dtable_metadata
+        for table in dtable_metadata.get('tables', []):
+            if table.get('name') == table_name:
+                return table.get('columns', [])
+        return []
+
     def init_updates(self):
         calculate_col = self.column_key_dict.get(self.calculate_column_key, {})
         result_col = self.column_key_dict.get(self.result_column_key, {})
@@ -2029,6 +2037,8 @@ class CalculateAction(BaseAction):
         table_name = self.auto_rule.table_info['name']
         view_name = self.auto_rule.view_info['name']
 
+        columns = self.get_columns(table_name)
+
         self.is_group_view = True if self.auto_rule.view_info.get('groupbys') else False
 
         if self.is_group_view:
@@ -2039,7 +2049,7 @@ class CalculateAction(BaseAction):
                 'filters': self.auto_rule.view_info.get('filters'),
                 'filter_conjunction': self.auto_rule.view_info.get('filter_conjunction'),
             }
-            view_rows = self.query_table_rows(table_name, self.auto_rule.view_columns, filter_conditions, [calculate_col_name])
+            view_rows = self.query_table_rows(table_name, columns, filter_conditions, [calculate_col_name])
 
         if view_rows and ('rows' in view_rows[0] or 'subgroups' in view_rows[0]):
             self.parse_group_rows(view_rows)
