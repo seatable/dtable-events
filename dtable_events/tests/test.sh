@@ -54,6 +54,7 @@ function init() {
     else
         mkdir -p $HOME_DIR/dtable_web/seahub
         touch $HOME_DIR/dtable_web/seahub/settings.py
+        touch $HOME_DIR/dtable_web/seahub/__init__.py
     fi
     export DTABLE_WEB_DIR=$HOME_DIR/dtable_web
 }
