@@ -103,7 +103,7 @@ def parse_long_text(cell_value):
 
     href_reg = re.compile(HREF_REG)
     preview = href_reg.sub(' ', cell_value)
-    preview = preview[:20].replace('\n', ' ')
+    preview = preview[:200].replace('\n', ' ')
 
     images = []
     links = []
