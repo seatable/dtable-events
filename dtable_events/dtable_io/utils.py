@@ -17,8 +17,8 @@ from io import BytesIO
 from zipfile import ZipFile, is_zipfile
 from dateutil import parser
 from uuid import UUID
+from urllib.parse import quote as urlquote
 
-from django.utils.http import urlquote
 from seaserv import seafile_api
 
 from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL
