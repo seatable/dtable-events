@@ -8,7 +8,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 
 from dtable_events import init_db_session_class
 from dtable_events.app.config import DTABLE_PRIVATE_KEY
-from dtable_events.common_dataset.common_dataset_sync_utils import import_sync_CDS, set_common_dataset_invalid, set_common_dataset_sync_invalid
+from dtable_events.common_dataset.common_dataset_sync_utils import import_sync_CDS, set_common_dataset_sync_invalid
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars, get_inner_dtable_server_url
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 
@@ -77,7 +77,6 @@ def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_
             src_table = table
             break
     if not src_table:
-        set_common_dataset_invalid(dataset_id, db_session)
         set_common_dataset_sync_invalid(dataset_sync_id, db_session)
         logging.error('Source table not found.')
         return None
@@ -86,7 +85,6 @@ def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_
             src_view = view
             break
     if not src_view:
-        set_common_dataset_invalid(dataset_id, db_session)
         set_common_dataset_sync_invalid(dataset_sync_id, db_session)
         logging.error('Source view not found.')
         return None
@@ -127,14 +125,12 @@ def list_pending_common_dataset_syncs(db_session):
             INNER JOIN dtables d_dst ON dcds.dst_dtable_uuid=d_dst.uuid AND d_dst.deleted=0
             WHERE dcds.is_sync_periodically=1 AND dcd.is_valid=1 AND dcds.is_valid=1 AND 
             ((dcds.sync_interval='per_day' AND dcds.last_sync_time<:per_day_check_time) OR 
-            (dcds.sync_interval='per_hour' AND dcds.last_sync_time<:per_hour_check_time))
+            (dcds.sync_interval='per_hour'))
         '''
 
     per_day_check_time = datetime.now() - timedelta(hours=23)
-    per_hour_check_time = datetime.now() - timedelta(minutes=59)
     dataset_list = db_session.execute(sql, {
-        'per_day_check_time': per_day_check_time,
-        'per_hour_check_time': per_hour_check_time,
+        'per_day_check_time': per_day_check_time
     })
     return dataset_list
 
