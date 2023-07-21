@@ -126,4 +126,4 @@ TABLES = [{
 			"edit_metadata_permitted_users": [],
 			"description": None
 		}],
-	}],
+	}]
