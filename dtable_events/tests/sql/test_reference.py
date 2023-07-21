@@ -499,3 +499,10 @@ TEST_CONDITIONS = [
         "expected_sql":"SELECT * FROM `Table1` WHERE (`名称` = 'LINK' And `AutoNo` ilike '%NO%') Or (`rate` > 6 Or `Mul` in ('aa', 'bb', 'cc', 'dd') Or `modifyTime` > '2021-12-20') ORDER BY `名称` DESC, `AutoNo` ASC LIMIT 0, 500"
     }
 ]
+
+TEST_CONDITIONS_LINK = [
+    {
+        'row_ids': ["ZBdik2Q2RlWu0BeKVyBtWQ", "M0F507YJS4aAtDV09Tu0Bw"],
+        "expected_sql": "SELECT * FROM `Table2`"
+    }
+]
