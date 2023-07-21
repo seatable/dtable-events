@@ -29,7 +29,7 @@ from dtable_events.utils.dtable_db_api import DTableDBAPI, RowsQueryError
 from dtable_events.notification_rules.utils import get_nickname_by_usernames
 from dtable_events.utils.sql_generator import filter2sql
 from dtable_events.utils.sql_generator import BaseSQLGenerator
-from dtable_events.utils.univeral_app_api import UniversalAppAPI
+from dtable_events.utils.universal_app_api import UniversalAppAPI
 
 
 logger = logging.getLogger(__name__)
