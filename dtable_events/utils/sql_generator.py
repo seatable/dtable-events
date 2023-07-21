@@ -557,7 +557,8 @@ class DateOperator(Operator):
             FilterTermModifier.NUMBER_OF_DAYS_AGO,
             FilterTermModifier.NUMBER_OF_DAYS_FROM_NOW,
             FilterTermModifier.THE_NEXT_NUMBERS_OF_DAYS,
-            FilterTermModifier.THE_PAST_NUMBERS_OF_DAYS
+            FilterTermModifier.THE_PAST_NUMBERS_OF_DAYS,
+            FilterTermModifier.EXACT_DATE
         ]:
             return True
         return False

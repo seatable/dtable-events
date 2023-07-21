@@ -378,6 +378,51 @@ TEST_CONDITIONS = [
         "expected_sql": "SELECT * FROM `Table1` LIMIT 0, 100",
         "by_group": False,
     },
+    ### filter-term imcomplete
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'Time2d', 'filter_predicate': 'is', 'filter_term_modifier': 'number_of_days_ago', 'filter_term': ''}
+            ],
+            "filter_predicate": 'And',
+            "sorts":[],
+        },
+        "expected_sql": "SELECT * FROM `Table1` LIMIT 0, 100",
+        "by_group": False,
+    },
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'Time2d', 'filter_predicate': 'is', 'filter_term_modifier': 'number_of_days_from_now', 'filter_term': ''}
+            ],
+            "filter_predicate": 'And',
+            "sorts":[],
+        },
+        "expected_sql": "SELECT * FROM `Table1` LIMIT 0, 100",
+        "by_group": False,
+    },
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'Time2d', 'filter_predicate': 'is', 'filter_term_modifier': 'the_next_numbers_of_days', 'filter_term': ''}
+            ],
+            "filter_predicate": 'And',
+            "sorts":[],
+        },
+        "expected_sql": "SELECT * FROM `Table1` LIMIT 0, 100",
+        "by_group": False,
+    },
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'Time2d', 'filter_predicate': 'is', 'filter_term_modifier': 'the_past_numbers_of_days', 'filter_term': ''}
+            ],
+            "filter_predicate": 'And',
+            "sorts":[],
+        },
+        "expected_sql": "SELECT * FROM `Table1` LIMIT 0, 100",
+        "by_group": False,
+    },
     ## filter-predicate incomplete
     {
         "filter_conditions": {
