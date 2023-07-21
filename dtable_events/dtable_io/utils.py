@@ -81,6 +81,19 @@ def get_dtable_server_token(username, dtable_uuid, timeout=300):
 
     return access_token
 
+def get_app_access_token(username, app_token):
+    payload = {
+        'exp': int(time.time()) + 300,
+        'app_token': app_token,
+        'username': username,
+        'permission': 'rw',
+    }
+    access_token = jwt.encode(
+        payload, DTABLE_PRIVATE_KEY, algorithm='HS256'
+    )
+
+    return access_token
+
 
 def gen_dir_zip_download_url(token):
     """

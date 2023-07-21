@@ -29,6 +29,7 @@ from dtable_events.utils.dtable_db_api import DTableDBAPI, RowsQueryError
 from dtable_events.notification_rules.utils import get_nickname_by_usernames
 from dtable_events.utils.sql_generator import filter2sql
 from dtable_events.utils.sql_generator import BaseSQLGenerator
+from dtable_events.utils.univeral_app_api import UniversalAppAPI
 
 
 logger = logging.getLogger(__name__)
@@ -796,6 +797,197 @@ class NotifyAction(BaseAction):
                     })
         try:
             send_notification(dtable_uuid, user_msg_list, self.auto_rule.access_token)
+        except Exception as e:
+            logger.error('send users: %s notifications error: %s', e)
+
+    def do_action(self):
+        if self.auto_rule.run_condition == PER_UPDATE:
+            self.per_update_notify()
+        elif self.auto_rule.run_condition in CRON_CONDITIONS:
+            if self.auto_rule.trigger.get('condition') == CONDITION_PERIODICALLY_BY_CONDITION:
+                self.condition_cron_notify()
+            else:
+                self.cron_notify()
+        self.auto_rule.set_done_actions()
+
+class AppNotifyAction(BaseAction):
+
+    def __init__(self, auto_rule, data, msg, users, users_column_key, app_token):
+        """
+        auto_rule: instance of AutomationRule
+        data: if auto_rule.PER_UPDATE, data is event data from redis
+        msg: message set in action
+        users: who will receive notification(s)
+        """
+        super().__init__(auto_rule, data)
+        self.action_type = 'app_notify'
+        self.msg = msg or ''
+        self.users = users
+        self.users_column_key = users_column_key or ''
+        self.app_token = app_token
+
+        self.column_blanks = []
+        self.col_name_dict = {}
+        self.notice_api = UniversalAppAPI('notification-rule', app_token, DTABLE_WEB_SERVICE_URL)
+
+        self.init_notify(msg)
+
+    def is_valid_username(self, user):
+        if not user:
+            return False
+
+        return is_valid_email(user)
+
+    def get_user_column_by_key(self):
+        dtable_metadata = self.auto_rule.dtable_metadata
+        table = None
+        for t in dtable_metadata.get('tables', []):
+            if t.get('_id') == self.auto_rule.table_id:
+                table = t
+                break
+
+        if not table:
+            return None
+
+        for col in table.get('columns'):
+            if col.get('key') == self.users_column_key:
+                return col
+
+        return None
+
+    def init_notify(self, msg):
+        blanks = set(re.findall(r'\{([^{]*?)\}', msg))
+        self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
+        self.column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
+
+    def fill_msg_blanks(self, row):
+        msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
+        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
+        return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, row, db_session, dtable_metadata)
+
+    def fill_msg_blanks_with_sql(self, row):
+        msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
+        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
+        return fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, row, db_session)
+
+    def per_update_notify(self):
+        dtable_uuid, row, raw_row = self.auto_rule.dtable_uuid, self.data['converted_row'], self.data['row']
+        table_id, view_id = self.auto_rule.table_id, self.auto_rule.view_id
+
+        msg = self.msg
+        if self.column_blanks:
+            msg = self.fill_msg_blanks(row)
+
+        detail = {
+            'table_id': table_id,
+            'view_id': view_id,
+            'condition': self.auto_rule.trigger.get('condition'),
+            'rule_id': self.auto_rule.rule_id,
+            'rule_name': self.auto_rule.rule_name,
+            'msg': msg,
+            'row_id_list': [row['_id']],
+        }
+
+        user_msg_list = []
+        users = self.users
+        if self.users_column_key:
+            user_column = self.get_user_column_by_key()
+            if user_column:
+                users_column_name = user_column.get('name')
+                users_from_column = row.get(users_column_name, [])
+                if not users_from_column:
+                    users_from_column = []
+                if not isinstance(users_from_column, list):
+                    users_from_column = [users_from_column, ]
+                users = list(set(self.users + [user for user in users_from_column if user in self.auto_rule.related_users_dict]))
+            else:
+                logger.warning('automation rule: %s notify action user column: %s invalid', self.auto_rule.rule_id, self.users_column_key)
+        for user in users:
+            if not self.is_valid_username(user):
+                continue
+            user_msg_list.append({
+                'to_user': user,
+                'msg_type': 'notification_rules',
+                'detail': detail,
+                })
+        try:
+            self.notice_api.batch_send_notification(user_msg_list)
+        except Exception as e:
+            logger.error('send users: %s notifications error: %s', e)
+
+    def cron_notify(self):
+        dtable_uuid = self.auto_rule.dtable_uuid
+        table_id, view_id = self.auto_rule.table_id, self.auto_rule.view_id
+        detail = {
+            'table_id': table_id,
+            'view_id': view_id,
+            'condition': CONDITION_PERIODICALLY,
+            'rule_id': self.auto_rule.rule_id,
+            'rule_name': self.auto_rule.rule_name,
+            'msg': self.msg,
+            'row_id_list': []
+        }
+        user_msg_list = []
+        for user in self.users:
+            user_msg_list.append({
+                'to_user': user,
+                'msg_type': 'notification_rules',
+                'detail': detail,
+            })
+        try:
+            self.notice_api.batch_send_notification(user_msg_list)
+        except Exception as e:
+            logger.error('send users: %s notifications error: %s', e)
+
+    def condition_cron_notify(self):
+        table_id, view_id = self.auto_rule.table_id, self.auto_rule.view_id
+        dtable_uuid = self.auto_rule.dtable_uuid
+
+        rows_data = self.auto_rule.get_trigger_conditions_rows(warning_rows=NOTIFICATION_CONDITION_ROWS_LIMIT)[:NOTIFICATION_CONDITION_ROWS_LIMIT]
+        col_key_dict = {col.get('key'): col for col in self.auto_rule.view_columns}
+
+        user_msg_list = []
+        for row in rows_data:
+            converted_row = {col_key_dict.get(key).get('name') if col_key_dict.get(key) else key:
+                             self.parse_column_value(col_key_dict.get(key), row.get(key)) if col_key_dict.get(key) else row.get(key)
+                             for key in row}
+            msg = self.msg
+            if self.column_blanks:
+                msg = self.fill_msg_blanks_with_sql(row)
+
+            detail = {
+                'table_id': table_id,
+                'view_id': view_id,
+                'condition': self.auto_rule.trigger.get('condition'),
+                'rule_id': self.auto_rule.rule_id,
+                'rule_name': self.auto_rule.rule_name,
+                'msg': msg,
+                'row_id_list': [converted_row['_id']],
+            }
+
+            users = self.users
+            if self.users_column_key:
+                user_column = self.get_user_column_by_key()
+                if user_column:
+                    users_column_name = user_column.get('name')
+                    users_from_column = converted_row.get(users_column_name, [])
+                    if not users_from_column:
+                        users_from_column = []
+                    if not isinstance(users_from_column, list):
+                        users_from_column = [users_from_column, ]
+                    users = list(set(self.users + users_from_column))
+                else:
+                    logger.warning('automation rule: %s notify action user column: %s invalid', self.auto_rule.rule_id, self.users_column_key)
+            for user in users:
+                if not self.is_valid_username(user):
+                    continue
+                user_msg_list.append({
+                    'to_user': user,
+                    'msg_type': 'notification_rules',
+                    'detail': detail,
+                    })
+        try:
+            self.notice_api.batch_send_notification(user_msg_list)
         except Exception as e:
             logger.error('send users: %s notifications error: %s', e)
 
@@ -2814,7 +3006,7 @@ class AutomationRule:
         action_type = action.get('type')
         run_condition = self.run_condition
         trigger_condition = self.trigger.get('condition')
-        if action_type == 'notify':
+        if action_type in ('notify', 'app_notify'):
             return True
         elif action_type == 'update_record':
             if run_condition == PER_UPDATE:
@@ -2967,6 +3159,13 @@ class AutomationRule:
                     extract_column_key = action_info.get('extract_column_key')
                     result_column_key = action_info.get('result_column_key')
                     ExtractUserNameAction(self, self.data, extract_column_key, result_column_key).do_action()
+
+                elif action_info.get('type') == 'app_notify':
+                    default_msg = action_info.get('default_msg', '')
+                    users = action_info.get('users', [])
+                    users_column_key = action_info.get('users_column_key', '')
+                    app_token = action_info.get('app_token')
+                    AppNotifyAction(self, self.data, default_msg, users, users_column_key, app_token).do_action()
 
             except RuleInvalidException as e:
                 logger.warning('auto rule: %s, invalid error: %s', self.rule_id, e)
