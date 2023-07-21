@@ -14,3 +14,116 @@ TEST_COLUMNS = [
     {'key': '6SJV', 'type': 'duration', 'name': 'Du', 'editable': True, 'width': 200, 'resizable': True, 'draggable': True, 'data': {'format': 'duration', 'duration_format': 'h:mm:ss'}, 'permission_type': '', 'permitted_users': []},
     {'key': '51r0', 'type': 'number', 'name': 'Num', 'editable': True, 'width': 200, 'resizable': True, 'draggable': True, 'data': {'format': 'number', 'precision': 2, 'enable_precision': False, 'enable_fill_default_value': False, 'decimal': 'dot', 'thousands': 'no'}, 'permission_type': '', 'permitted_users': []}
 ]
+
+LINK_COLUMNS = {"key":"G5J9","type":"link","name":"Link","editable":True,"width":200,"resizable":True,"draggable":True,"data":{"display_column_key":"0000","table_id":"0000","other_table_id":"kzvB","is_internal_link":True,"is_multiple":True,"is_row_from_view":False,"other_view_id":"","link_id":"55Sl","array_type":"text","array_data":None,"result_type":"array"},"permission_type":"","permitted_users":[],"edit_metadata_permission_type":"","edit_metadata_permitted_users":[],"description":None}
+
+TABLES = [{
+		"_id": "0000",
+		"name": "Table1",
+		"columns": [{
+			"key": "0000",
+			"name": "名称",
+			"type": "text",
+			"width": 200,
+			"editable": True,
+			"resizable": True
+		}, {
+			"key": "G5J9",
+			"type": "link",
+			"name": "Link",
+			"editable": True,
+			"width": 200,
+			"resizable": True,
+			"draggable": True,
+			"data": {
+				"display_column_key": "0000",
+				"table_id": "0000",
+				"other_table_id": "kzvB",
+				"is_internal_link": True,
+				"is_multiple": True,
+				"is_row_from_view": False,
+				"other_view_id": "",
+				"link_id": "55Sl",
+				"array_type": "text",
+				"array_data": None,
+				"result_type": "array"
+			},
+			"permission_type": "",
+			"permitted_users": [],
+			"edit_metadata_permission_type": "",
+			"edit_metadata_permitted_users": [],
+			"description": None
+		},],
+	
+	}, {
+		"_id": "kzvB",
+		"name": "Table2",
+		"columns": [{
+			"key": "0000",
+			"type": "text",
+			"name": "名称",
+			"editable": True,
+			"width": 200,
+			"resizable": True,
+			"draggable": True,
+			"data": None,
+			"permission_type": "",
+			"permitted_users": [],
+			"edit_metadata_permission_type": "",
+			"edit_metadata_permitted_users": [],
+			"description": None
+		}, {
+			"key": "3NIf",
+			"type": "link",
+			"name": "Table1",
+			"editable": None,
+			"width": 200,
+			"resizable": None,
+			"draggable": None,
+			"data": {
+				"display_column_key": "0000",
+				"table_id": "0000",
+				"other_table_id": "kzvB",
+				"is_internal_link": None,
+				"is_multiple": None,
+				"is_row_from_view": None,
+				"other_view_id": "",
+				"link_id": "55Sl",
+				"array_type": "text",
+				"array_data": None,
+				"result_type": "array"
+			},
+			"permission_type": "",
+			"permitted_users": [],
+			"edit_metadata_permission_type": "",
+			"edit_metadata_permitted_users": [],
+			"description": True
+		}, {
+			"key": "4S9M",
+			"type": "link",
+			"name": "Table1 1",
+			"editable": True,
+			"width": 200,
+			"resizable": True,
+			"draggable": True,
+			"data": {
+				"display_column_key": "0000",
+				"table_id": "0000",
+				"other_table_id": "kzvB",
+				"is_internal_link": True,
+				"is_multiple": True,
+				"only_adding_new_record": False,
+				"is_row_from_view": False,
+				"other_view_id": "",
+				"link_id": "c3Tv",
+				"array_type": "text",
+				"array_data": None,
+				"result_type": "array"
+			},
+			"permission_type": "",
+			"permitted_users": [],
+			"edit_metadata_permission_type": "",
+			"edit_metadata_permitted_users": [],
+			"description": None
+		}],
+	}],
