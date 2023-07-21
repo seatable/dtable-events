@@ -503,6 +503,6 @@ TEST_CONDITIONS = [
 TEST_CONDITIONS_LINK = [
     {
         'row_ids': ["ZBdik2Q2RlWu0BeKVyBtWQ", "M0F507YJS4aAtDV09Tu0Bw"],
-        "expected_sql": "SELECT * FROM `Table2`"
+        "expected_sql": "SELECT * FROM `Table2` WHERE `_id` in ('ZBdik2Q2RlWu0BeKVyBtWQ', 'M0F507YJS4aAtDV09Tu0Bw')"
     }
 ]
