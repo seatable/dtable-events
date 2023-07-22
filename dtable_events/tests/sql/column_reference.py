@@ -17,7 +17,8 @@ TEST_COLUMNS = [
 
 LINK_COLUMN = {"key":"G5J9","type":"link","name":"Link","editable":True,"width":200,"resizable":True,"draggable":True,"data":{"display_column_key":"0000","table_id":"0000","other_table_id":"kzvB","is_internal_link":True,"is_multiple":True,"is_row_from_view":False,"other_view_id":"","link_id":"55Sl","array_type":"text","array_data":None,"result_type":"array"},"permission_type":"","permitted_users":[],"edit_metadata_permission_type":"","edit_metadata_permitted_users":[],"description":None}
 
-TABLES = [{
+TABLES = [
+    {
 		"_id": "0000",
 		"name": "Table1",
 		"columns": [{
@@ -126,4 +127,5 @@ TABLES = [{
 			"edit_metadata_permitted_users": [],
 			"description": None
 		}],
-	}]
+	}
+]
