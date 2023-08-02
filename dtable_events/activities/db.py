@@ -27,6 +27,7 @@ LINK_OPERATION_TYPES = [
     'update_rows_links'
 ]
 
+DETAIL_LIMIT = 65535 # 2^16 - 1
 
 class TableActivityDetail(object):
     def __init__(self, activity):
@@ -176,12 +177,16 @@ def save_or_update_or_delete(session, event):
 
 
 def update_activity_timestamp(session, activity_id, op_time, detail):
+    if len(detail) > DETAIL_LIMIT:
+        return
     activity = session.query(Activities).filter(Activities.id == activity_id)
     activity.update({"op_time": op_time, "detail": detail})
     session.commit()
 
 
 def update_link_activity_timestamp(session, activity_id, op_time, detail, op_type=None):
+    if len(detail) > DETAIL_LIMIT:
+        return
     activity = session.query(Activities).filter(Activities.id == activity_id)
     activity.update({"op_time": op_time, "detail": detail})
     if op_type:
@@ -268,6 +273,8 @@ def save_user_activities(session, event):
     detail_dict["row_name_option"] = row_name_option
     detail_dict["row_data"] = row_data
     detail = json.dumps(detail_dict)
+    if len(detail) > DETAIL_LIMIT:
+        return
 
     activity = Activities(dtable_uuid, row_id, row_count, op_user, op_type, op_time, detail, op_app)
     session.add(activity)
@@ -315,10 +322,10 @@ def save_user_activities_by_link(session, event, row1, row2):
     detail_dict2["row_name_option"] = row_name_option
     detail_dict2["row_data"] = row_data2
     detail2 = json.dumps(detail_dict2)
-    if not row1:
+    if (not row1) and len(detail1) <= DETAIL_LIMIT:
         activity1 = Activities(dtable_uuid, row_id1, row_count1, op_user, op_type, op_time, detail1, op_app)
         session.add(activity1)
-    if not row2:
+    if (not row2) and len(detail2) <= DETAIL_LIMIT:
         activity2 = Activities(dtable_uuid, row_id2, row_count2, op_user, op_type, op_time, detail2, op_app)
         session.add(activity2)
     session.commit()
