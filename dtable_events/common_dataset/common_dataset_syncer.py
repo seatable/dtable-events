@@ -198,8 +198,8 @@ def check_common_dataset(db_session):
             if result.get('error_msg'):
                 logging.error(result['error_msg'])
                 if result.get('error_type') == 'generate_synced_columns_error':
-                    set_common_dataset_sync_invalid(dataset_sync_id, db_session)
-                continue
+                    logging.warning('src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s generate sync-columns error: %s',
+                                    src_dtable_uuid, src_table_id, src_view_id, dst_dtable_uuid, dst_table_id, result)
 
         dataset_update_map[dataset_sync_id] = assets.get('src_version')
         sync_count += 1
