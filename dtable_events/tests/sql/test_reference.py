@@ -253,6 +253,28 @@ TEST_CONDITIONS = [
     {
         "filter_conditions": {
             "filters": [
+                {'column_name': 'Sing', 'filter_predicate': 'is', 'filter_term': ''}
+            ],
+            "filter_predicate": 'And',
+            "sorts":[],
+        },
+        "expected_sql": "SELECT * FROM `Table1` LIMIT 0, 100",
+        "by_group": False,
+    },
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'Sing', 'filter_predicate': 'is_not', 'filter_term': ''}
+            ],
+            "filter_predicate": 'And',
+            "sorts":[],
+        },
+        "expected_sql": "SELECT * FROM `Table1` LIMIT 0, 100",
+        "by_group": False,
+    },
+    {
+        "filter_conditions": {
+            "filters": [
                 {'column_name': 'Sing', 'filter_predicate': 'is_not', 'filter_term': '905189'}
             ],
             "filter_predicate": 'And',
@@ -281,6 +303,28 @@ TEST_CONDITIONS = [
             "sorts":[],
         },
         "expected_sql": "SELECT * FROM `Table1` WHERE `Sing` not in ('a', 'b', 'c') LIMIT 0, 100",
+        "by_group": False,
+    },
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'Sing', 'filter_predicate': 'is_any_of', 'filter_term': []}
+            ],
+            "filter_predicate": 'And',
+            "sorts":[],
+        },
+        "expected_sql": "SELECT * FROM `Table1` LIMIT 0, 100",
+        "by_group": False,
+    },
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'Sing', 'filter_predicate': 'is_none_of', 'filter_term': []}
+            ],
+            "filter_predicate": 'And',
+            "sorts":[],
+        },
+        "expected_sql": "SELECT * FROM `Table1` LIMIT 0, 100",
         "by_group": False,
     },
 

@@ -269,6 +269,8 @@ class SingleSelectOperator(Operator):
         raise ValueError('option is invalid.')
 
     def op_is(self):
+        if not self.filter_term:
+            return ''
         filter_term = self._get_option_name_by_id(self.filter_term)
         if not filter_term:
             return ''
@@ -279,6 +281,8 @@ class SingleSelectOperator(Operator):
         )
 
     def op_is_not(self):
+        if not self.filter_term:
+            return ''
         filter_term = self._get_option_name_by_id(self.filter_term)
         if not filter_term:
             return ''
@@ -290,6 +294,8 @@ class SingleSelectOperator(Operator):
 
     def op_is_any_of(self):
         filter_term = self.filter_term
+        if not filter_term:
+            return ''
         if not isinstance(filter_term, list):
             filter_term = [filter_term, ]
         filter_term = [self._get_option_name_by_id(f) for f in filter_term]
