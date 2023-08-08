@@ -186,12 +186,32 @@ def import_table_from_base(context):
 
         # create dst_table
         url = '%s/api/v1/dtables/%s/tables/?from=dtable_events' % (dtable_server_url, dst_dtable_uuid)
-        dst_columns = [{
-                'column_key': col.get('key'),
-                'column_name': col.get('name'),
-                'column_type': col.get('type'),
-                'column_data': col.get('data')
-            } for col in src_columns if col.get('type') not in unsupported_columns] if src_columns else []
+        dst_columns = []
+
+        for col in src_columns:
+            col_key = col.get('key')
+            col_type = col.get('type')
+            col_name = col.get('name')
+            col_data = col.get('data')
+            if col_type in unsupported_columns:
+                if col_key == '0000':
+                    column_dict = {
+                        'column_key': '0000',
+                        'column_name': col_name,
+                        'column_type': 'text',
+                        'column_data': None
+                    }
+                else:
+                    continue
+            else:
+                column_dict = {
+                    'column_key': col_key,
+                    'column_name': col_name,
+                    'column_type': col_type,
+                    'column_data': col_data
+                }
+            dst_columns.append(column_dict)
+
         data = {
             'lang': lang,
             'table_name': dst_table_name,
