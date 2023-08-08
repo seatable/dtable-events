@@ -135,27 +135,9 @@ def list_pending_common_dataset_syncs(db_session):
     return dataset_list
 
 
-def update_sync_time_and_version(db_session, update_map):
-    """
-    :param update_map: {dataset_sync_id:src_version,dataset_sync_id1:src_version1}
-    """
-    src_version_sql = ""
-    for dataset_sync_id, src_version in update_map.items():
-        sql_str = " WHEN " + str(dataset_sync_id) + " THEN " + str(src_version)
-        src_version_sql += sql_str
-
-    sql = "UPDATE dtable_common_dataset_sync SET last_sync_time=:last_sync_time, src_version=CASE id" \
-          + src_version_sql + " END WHERE id IN :dataset_sync_id_list"
-
-    dataset_sync_id_list = [dataset_sync_id for dataset_sync_id in update_map]
-    db_session.execute(sql, {'dataset_sync_id_list': dataset_sync_id_list, 'last_sync_time': datetime.now()})
-    db_session.commit()
-
-
-def check_common_dataset(db_session):
-    dataset_sync_list = list_pending_common_dataset_syncs(db_session)
-    sync_count = 0
-    dataset_update_map = {}
+def check_common_dataset(session_class):
+    with session_class() as db_session:
+        dataset_sync_list = list_pending_common_dataset_syncs(db_session)
     for dataset_sync in dataset_sync_list:
         dst_dtable_uuid = uuid_str_to_36_chars(dataset_sync[0])
         dst_table_id = dataset_sync[1]
@@ -200,23 +182,17 @@ def check_common_dataset(db_session):
                 if result.get('error_type') == 'generate_synced_columns_error':
                     logging.warning('src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s generate sync-columns error: %s',
                                     src_dtable_uuid, src_table_id, src_view_id, dst_dtable_uuid, dst_table_id, result)
-
-        dataset_update_map[dataset_sync_id] = assets.get('src_version')
-        sync_count += 1
-
-        if sync_count == 1000:
-            try:
-                update_sync_time_and_version(db_session, dataset_update_map)
-            except Exception as e:
-                logging.error(f'update sync time and src_version failed, error: {e}')
-            dataset_update_map = {}
-            sync_count = 0
-
-    if dataset_update_map:
-        try:
-            update_sync_time_and_version(db_session, dataset_update_map)
-        except Exception as e:
-            logging.error(f'update sync time and src_version failed, error: {e}')
+        sql = '''
+            UPDATE dtable_common_dataset_sync SET last_sync_time=:last_sync_time, src_version=:src_version
+            WHERE id=:id
+        '''
+        with session_class() as db_session:
+            db_session.execute(sql, {
+                'last_sync_time': datetime.now(),
+                'src_version': assets.get('src_version'),
+                'id': dataset_sync_id
+            })
+            db_session.commit()
 
 
 class CommonDatasetSyncerTimer(Thread):
@@ -230,12 +206,9 @@ class CommonDatasetSyncerTimer(Thread):
         @sched.scheduled_job('cron', day_of_week='*', hour='*')
         def timed_job():
             logging.info('Starts to scan common dataset syncs...')
-            db_session = self.db_session_class()
             try:
-                check_common_dataset(db_session)
+                check_common_dataset(self.db_session_class)
             except Exception as e:
                 logging.exception('check periodcal common dataset syncs error: %s', e)
-            finally:
-                db_session.close()
 
         sched.start()
