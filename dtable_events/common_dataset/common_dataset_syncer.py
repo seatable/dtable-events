@@ -178,10 +178,12 @@ def check_common_dataset(session_class):
             continue
         else:
             if result.get('error_msg'):
-                logging.error(result['error_msg'])
                 if result.get('error_type') == 'generate_synced_columns_error':
                     logging.warning('src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s generate sync-columns error: %s',
                                     src_dtable_uuid, src_table_id, src_view_id, dst_dtable_uuid, dst_table_id, result)
+                else:
+                    logging.error('src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s error: %s',
+                                  src_dtable_uuid, src_table_id, src_view_id, dst_dtable_uuid, dst_table_id, result)
                 continue
         sql = '''
             UPDATE dtable_common_dataset_sync SET last_sync_time=:last_sync_time, src_version=:src_version
