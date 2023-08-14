@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import json
 import logging
 import re
 from copy import deepcopy
@@ -875,10 +876,15 @@ def set_common_dataset_invalid(dataset_id, db_session):
         logger.error('set state of common dataset: %s error: %s', dataset_id, e)
 
 
-def set_common_dataset_sync_invalid(dataset_sync_id, db_session):
-    sql = "UPDATE dtable_common_dataset_sync SET is_valid=0 WHERE id=:dataset_sync_id"
+def set_common_dataset_sync_invalid(dataset_sync_id, db_session, invalid_detail=None):
+    if invalid_detail:
+        sql = "UPDATE dtable_common_dataset_sync SET is_valid=0 WHERE id=:dataset_sync_id, invalid_detail=:invalid_detail"
+        params = {'dataset_sync_id': dataset_sync_id, 'invalid_detail': json.dumps(invalid_detail)}
+    else:
+        sql = "UPDATE dtable_common_dataset_sync SET is_valid=0 WHERE id=:dataset_sync_id"
+        params = {'dataset_sync_id': dataset_sync_id}
     try:
-        db_session.execute(sql, {'dataset_sync_id': dataset_sync_id})
+        db_session.execute(sql, params)
         db_session.commit()
     except Exception as e:
         logger.error('set state of common dataset sync: %s error: %s', dataset_sync_id, e)
