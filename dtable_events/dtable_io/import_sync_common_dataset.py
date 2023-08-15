@@ -68,6 +68,19 @@ def sync_common_dataset(context, config):
     sync_dataset = list(sync_dataset)
     if sync_dataset:
         dtable_io_logger.debug('sync_dataset: %s', sync_dataset[0])
+        sql = '''
+            UPDATE dtable_common_dataset_sync SET is_valid=1
+            WHERE dataset_id=:dataset_id AND dst_dtable_uuid=:dst_dtable_uuid AND dst_table_id=:dst_table_id
+        '''
+        try:
+            db_session.execute(sql, {
+                'dst_dtable_uuid': uuid_str_to_32_chars(dst_dtable_uuid),
+                'dst_table_id': dst_table_id,
+                'dataset_id': dataset_id,
+            })
+            db_session.commit()
+        except Exception as e:
+            dtable_io_logger.error('update sync reset is_valid error: %s', e)
         return
 
     try:
@@ -107,7 +120,7 @@ def sync_common_dataset(context, config):
 
     sql = '''
         UPDATE dtable_common_dataset_sync SET
-        last_sync_time=:last_sync_time, src_version=:last_src_version
+        last_sync_time=:last_sync_time, src_version=:last_src_version, is_valid=1
         WHERE dataset_id=:dataset_id AND dst_dtable_uuid=:dst_dtable_uuid AND dst_table_id=:dst_table_id
     '''
     try:
