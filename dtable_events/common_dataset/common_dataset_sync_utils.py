@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import json
 import logging
 import re
 from copy import deepcopy
@@ -233,7 +234,7 @@ def generate_synced_columns(src_columns, dst_columns=None):
             to_be_updated_columns.append(dst_col)
         else:
             if dst_column_name_dict.get(col.get('name')):
-                return None, None, 'Column %s exists' % (col.get('name'),)
+                return None, None, {'error_msg': 'Column %s exists' % (col.get('name'),), 'error_detail': {'column_name': col.get('name')}}
             to_be_appended_columns.append(col)
     return to_be_updated_columns, to_be_appended_columns, None
 
@@ -697,7 +698,8 @@ def import_sync_CDS(context):
         return {
             'dst_table_id': None,
             'error_type': 'generate_synced_columns_error',
-            'error_msg': str(error),  # generally, this error is caused by client
+            'error_msg': str(error.get('error_msg')),  # generally, this error is caused by client
+            'error_detail': error.get('error_detail'),
             'task_status_code': 400
         }
     final_columns = (to_be_updated_columns or []) + (to_be_appended_columns or [])
@@ -875,10 +877,15 @@ def set_common_dataset_invalid(dataset_id, db_session):
         logger.error('set state of common dataset: %s error: %s', dataset_id, e)
 
 
-def set_common_dataset_sync_invalid(dataset_sync_id, db_session):
-    sql = "UPDATE dtable_common_dataset_sync SET is_valid=0 WHERE id=:dataset_sync_id"
+def set_common_dataset_sync_invalid(dataset_sync_id, db_session, invalid_detail=None):
+    if invalid_detail:
+        sql = "UPDATE dtable_common_dataset_sync SET is_valid=0, invalid_detail=:invalid_detail WHERE id=:dataset_sync_id"
+        params = {'dataset_sync_id': dataset_sync_id, 'invalid_detail': json.dumps(invalid_detail)}
+    else:
+        sql = "UPDATE dtable_common_dataset_sync SET is_valid=0 WHERE id=:dataset_sync_id"
+        params = {'dataset_sync_id': dataset_sync_id}
     try:
-        db_session.execute(sql, {'dataset_sync_id': dataset_sync_id})
+        db_session.execute(sql, params)
         db_session.commit()
     except Exception as e:
         logger.error('set state of common dataset sync: %s error: %s', dataset_sync_id, e)

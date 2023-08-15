@@ -77,7 +77,10 @@ def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_
             src_table = table
             break
     if not src_table:
-        set_common_dataset_sync_invalid(dataset_sync_id, db_session)
+        invalid_detail = {
+            'error_type': 'source_table_not_found'
+        }
+        set_common_dataset_sync_invalid(dataset_sync_id, db_session, invalid_detail)
         logging.error('Source table not found.')
         return None
     for view in src_table.get('views', []):
@@ -85,7 +88,10 @@ def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_
             src_view = view
             break
     if not src_view:
-        set_common_dataset_sync_invalid(dataset_sync_id, db_session)
+        invalid_detail = {
+            'error_type': 'source_view_not_found'
+        }
+        set_common_dataset_sync_invalid(dataset_sync_id, db_session, invalid_detail)
         logging.error('Source view not found.')
         return None
 
@@ -101,7 +107,10 @@ def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_
                 dst_table = table
                 break
         if not dst_table:
-            set_common_dataset_sync_invalid(dataset_sync_id, db_session)
+            invalid_detail = {
+                'error_type': 'destination_table_not_found'
+            }
+            set_common_dataset_sync_invalid(dataset_sync_id, db_session, invalid_detail)
             logging.error('Destination table not found.')
             return None
 
@@ -178,22 +187,34 @@ def check_common_dataset(session_class):
             continue
         else:
             if result.get('error_msg'):
-                logging.error(result['error_msg'])
                 if result.get('error_type') == 'generate_synced_columns_error':
                     logging.warning('src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s generate sync-columns error: %s',
                                     src_dtable_uuid, src_table_id, src_view_id, dst_dtable_uuid, dst_table_id, result)
+                    invalid_detail = {
+                        'error_type': 'generate_synced_columns_error',
+                        'error_msg': result.get('error_msg'),
+                        'error_detail': result.get('error_detail'),
+                    }
+                    with session_class() as db_session:
+                        set_common_dataset_sync_invalid(dataset_sync_id, db_session, invalid_detail=invalid_detail)
+                else:
+                    logging.error('src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s error: %s',
+                                  src_dtable_uuid, src_table_id, src_view_id, dst_dtable_uuid, dst_table_id, result)
                 continue
         sql = '''
             UPDATE dtable_common_dataset_sync SET last_sync_time=:last_sync_time, src_version=:src_version
             WHERE id=:id
         '''
         with session_class() as db_session:
-            db_session.execute(sql, {
-                'last_sync_time': datetime.now(),
-                'src_version': assets.get('src_version'),
-                'id': dataset_sync_id
-            })
-            db_session.commit()
+            try:
+                db_session.execute(sql, {
+                    'last_sync_time': datetime.now(),
+                    'src_version': assets.get('src_version'),
+                    'id': dataset_sync_id
+                })
+                db_session.commit()
+            except Exception as e:
+                logging.exception('update sync: %s last_sync_time error: %s', dataset_sync_id, e)
 
 
 class CommonDatasetSyncerTimer(Thread):
@@ -204,7 +225,7 @@ class CommonDatasetSyncerTimer(Thread):
     def run(self):
         sched = BlockingScheduler()
         # fire at every hour in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='*')
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='31')
         def timed_job():
             logging.info('Starts to scan common dataset syncs...')
             try:
