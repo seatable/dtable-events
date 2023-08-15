@@ -192,7 +192,8 @@ def check_common_dataset(session_class):
                                     src_dtable_uuid, src_table_id, src_view_id, dst_dtable_uuid, dst_table_id, result)
                     invalid_detail = {
                         'error_type': 'generate_synced_columns_error',
-                        'error_msg': result.get('error_msg')
+                        'error_msg': result.get('error_msg'),
+                        'error_detail': result.get('error_detail'),
                     }
                     with session_class() as db_session:
                         set_common_dataset_sync_invalid(dataset_sync_id, db_session, invalid_detail=invalid_detail)
@@ -224,7 +225,7 @@ class CommonDatasetSyncerTimer(Thread):
     def run(self):
         sched = BlockingScheduler()
         # fire at every hour in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='*')
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='31')
         def timed_job():
             logging.info('Starts to scan common dataset syncs...')
             try:

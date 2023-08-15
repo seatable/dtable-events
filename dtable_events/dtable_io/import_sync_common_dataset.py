@@ -107,7 +107,7 @@ def sync_common_dataset(context, config):
 
     sql = '''
         UPDATE dtable_common_dataset_sync SET
-        last_sync_time=:last_sync_time, src_version=:last_src_version
+        last_sync_time=:last_sync_time, src_version=:last_src_version, is_valid=1, invalid_detail=NULL
         WHERE dataset_id=:dataset_id AND dst_dtable_uuid=:dst_dtable_uuid AND dst_table_id=:dst_table_id
     '''
     try:
