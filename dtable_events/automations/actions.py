@@ -163,7 +163,7 @@ class BaseAction:
                 results.append(column)
         return results
 
-    def send_notis_by_row_data(self, row_data):
+    def send_selected_collaborator_notis(self, row_data):
         """only update/add action can call this
         """
         if self.action_type not in ['update', 'add']:
@@ -444,7 +444,7 @@ class UpdateAction(BaseAction):
             return
         self.auto_rule.set_done_actions()
         try:
-            self.send_notis_by_row_data(self.update_data['row'])
+            self.send_selected_collaborator_notis(self.update_data['row'])
         except Exception as e:
             logger.exception('send selected notifications error: %s', e)
 
@@ -584,7 +584,7 @@ class AddRowAction(BaseAction):
         self.auto_rule.set_done_actions()
         try:
             self.row_data['row']['_id'] = row['_id']
-            self.send_notis_by_row_data(self.row_data['row'])
+            self.send_selected_collaborator_notis(self.row_data['row'])
         except Exception as e:
             logger.exception('send selected notifications error: %s', e)
 
