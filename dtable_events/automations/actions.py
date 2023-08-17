@@ -152,6 +152,57 @@ class BaseAction:
     def do_action(self):
         pass
 
+    def get_need_notify_columns(self):
+        columns = self.auto_rule.table_info['columns']
+        results = []
+        for column in columns:
+            if column['type'] != ColumnTypes.COLLABORATOR:
+                continue
+            data = column.get('data') or {}
+            if data.get('enable_send_notification'):
+                results.append(column)
+        return results
+
+    def send_notis_by_row_data(self, row_data):
+        """only update/add action can call this
+        """
+        if self.action_type not in ['update', 'add']:
+            return
+        notify_column_names = [column['name'] for column in self.get_need_notify_columns()]
+        notify_users = []
+        row_id = None
+        if self.action_type == 'add':
+            row_id = row_data['_id']
+            for column_name, value in row_data.items():
+                if column_name not in notify_column_names:
+                     continue
+                for user in value:
+                    if user not in notify_users:
+                        notify_users.append(user)
+        elif self.action_type == 'update':
+            row_id = converted_row['_id']
+            converted_row = self.auto_rule.data.get('converted_row')
+            for column_name, value in row_data.items():
+                if column_name not in notify_column_names:
+                    continue
+                old_value = converted_row.get(column_name) or []
+                for user in (set(value) - set(old_value)):
+                    if user not in notify_users:
+                        notify_users.append(user)
+        detail = {
+            'author': 'Automation Rule',
+            'row_id': row_id,
+            'table_id': self.auto_rule.table_id
+        }
+        user_msg_list = []
+        for user in notify_users:
+            user_msg_list.append({
+                'to_user': user,
+                'msg_type': 'selected_collaborator',
+                'detail': detail,
+            })
+        send_notification(self.auto_rule.dtable_uuid, user_msg_list, self.auto_rule.access_token)
+
     def parse_column_value(self, column, value):
         if column.get('type') == ColumnTypes.SINGLE_SELECT:
             select_options = column.get('data', {}).get('options', [])
@@ -391,8 +442,12 @@ class UpdateAction(BaseAction):
         except Exception as e:
             logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
-        else:
-            self.auto_rule.set_done_actions()
+        self.auto_rule.set_done_actions()
+        try:
+            self.send_notis_by_row_data(self.update_data['row'])
+        except Exception as e:
+            logger.exception('send selected notifications error: %s', e)
+
 
 class LockRowAction(BaseAction):
 
@@ -523,12 +578,15 @@ class AddRowAction(BaseAction):
             return
         table_name = self.auto_rule.table_info['name']
         try:
-            self.auto_rule.dtable_server_api.append_row(table_name, self.row_data['row'])
+            row = self.auto_rule.dtable_server_api.append_row(table_name, self.row_data['row'])
         except Exception as e:
             logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
-            return
-        else:
-            self.auto_rule.set_done_actions()
+        self.auto_rule.set_done_actions()
+        try:
+            self.row_data['row']['_id'] = row['_id']
+            self.send_notis_by_row_data(self.row_data['row'])
+        except Exception as e:
+            logger.exception('send selected notifications error: %s', e)
 
 class NotifyAction(BaseAction):
 
@@ -1202,11 +1260,12 @@ class RunPythonScriptAction(BaseAction):
         except Exception as e:
             logger.exception(e)
             logger.error(e)
+            return
+
+        if response.status_code != 200:
+            logger.warning('run script error status code: %s', response.status_code)
         else:
-            if response.status_code != 200:
-                logger.warning('run script error status code: %s', response.status_code)
-            else:
-                self.auto_rule.set_done_actions()
+            self.auto_rule.set_done_actions()
 
 
 class LinkRecordsAction(BaseAction):
@@ -1778,8 +1837,7 @@ class AddRecordToOtherTableAction(BaseAction):
         except Exception as e:
             logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
-        else:
-            self.auto_rule.set_done_actions()
+        self.auto_rule.set_done_actions()
 
 
 class TriggerWorkflowAction(BaseAction):
