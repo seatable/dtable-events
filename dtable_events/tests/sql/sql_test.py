@@ -26,9 +26,15 @@ class SqlTest(unittest.TestCase):
         for conditions in TEST_CONDITIONS:
             filter_conditions = conditions.get('filter_conditions')
             expected_sql = conditions.get('expected_sql')
-            by_group = conditions.get('by_group')
-            sql = self._toSql(filter_conditions, by_group=by_group)
-            self.assertEqual(sql, expected_sql)
+            expected_error = conditions.get('expected_error')
+            if expected_sql:
+                by_group = conditions.get('by_group')
+                sql = self._toSql(filter_conditions, by_group=by_group)
+                self.assertEqual(sql, expected_sql)
+            if expected_error:
+                with self.assertRaises(ValueError):
+                    by_group = conditions.get('by_group')
+                    sql = self._toSql(filter_conditions, by_group=by_group)
 
         tables = TABLES
         current_table = TABLES[0]

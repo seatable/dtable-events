@@ -541,7 +541,42 @@ TEST_CONDITIONS = [
         },
         "by_group": True,
         "expected_sql":"SELECT * FROM `Table1` WHERE (`名称` = 'LINK' And `AutoNo` ilike '%NO%') Or (`rate` > 6 Or `Mul` in ('aa', 'bb', 'cc', 'dd') Or `modifyTime` > '2021-12-20') ORDER BY `名称` DESC, `AutoNo` ASC LIMIT 0, 500"
-    }
+    },
+
+    # Not group, column not found raise Exception
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'not exists', 'filter_predicate': 'is', 'filter_term': 1}
+            ],
+            "filter_predicate": 'And',
+            "sorts":[],
+        },
+        "by_group": False,
+        "expected_error": ValueError,
+    },
+
+    # Group, column not found raise Exception
+    {
+        "filter_conditions":{
+            "filter_groups":[
+                {
+                    "filters":[
+                        {'column_name': 'not exists', 'filter_predicate': 'is', 'filter_term': "LINK"},
+                    ],
+                    "filter_conjunction": 'And'
+                },
+            ],
+            "group_conjunction": 'Or',
+            "sorts":[
+                {'column_name': '名称'},
+                {'column_name': 'AutoNo', 'sort_type': 'up'}
+            ],
+            "limit": 500
+        },
+        "by_group": True,
+        "expected_error": ValueError
+    },
 ]
 
 TEST_CONDITIONS_LINK = [
