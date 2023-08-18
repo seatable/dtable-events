@@ -17,6 +17,10 @@ class WrongFilterException(Exception):
     pass
 
 
+class BaseExceedsLimitException(Exception):
+    pass
+
+
 class NotFoundException(Exception):
     pass
 
@@ -32,6 +36,8 @@ def parse_response(response):
         else:
             if response_json.get('error_type') == 'wrong_filter_in_filters':
                 raise WrongFilterException()
+            if response_json.get('error_msg') == 'base_exceeds_limit':
+                raise BaseExceedsLimitException()
         raise ConnectionError(response.status_code, response.text)
     else:
         try:

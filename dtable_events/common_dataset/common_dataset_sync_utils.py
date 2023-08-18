@@ -10,7 +10,7 @@ from dtable_events.app.config import INNER_DTABLE_DB_URL
 from dtable_events.common_dataset.dtable_db_cell_validators import validate_table_db_cell_value
 from dtable_events.utils import get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes
-from dtable_events.utils.dtable_server_api import DTableServerAPI
+from dtable_events.utils.dtable_server_api import BaseExceedsLimitException, DTableServerAPI
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 
 logger = logging.getLogger(__name__)
@@ -562,6 +562,13 @@ def create_dst_table_or_update_columns(dst_dtable_uuid, dst_table_id, dst_table_
         try:
             resp_json = dst_dtable_server_api.add_table(dst_table_name, lang, columns=columns)
             dst_table_id = resp_json.get('_id')
+        except BaseExceedsLimitException:
+            return None, {
+                'dst_table_id': None,
+                'error_msg': 'base exceeds limit',
+                'error_type': 'base_exceeds_limit',
+                'task_status_code': 400
+            }
         except Exception as e:
             logger.error(e)  # TODO: table exists shoud return 400
             return None, {
@@ -580,6 +587,13 @@ def create_dst_table_or_update_columns(dst_dtable_uuid, dst_table_id, dst_table_
             } for col in to_be_appended_columns]
             try:
                 dst_dtable_server_api.batch_append_columns_by_table_id(dst_table_id, columns)
+            except BaseExceedsLimitException:
+                return None, {
+                    'dst_table_id': None,
+                    'error_msg': 'base exceeds limit',
+                    'error_type': 'base_exceeds_limit',
+                    'task_status_code': 400
+                }
             except Exception as e:
                 logger.error('batch append columns to dst dtable: %s, table: %s error: %s', dst_dtable_uuid, dst_table_id, e)
                 return None, {
@@ -596,6 +610,13 @@ def create_dst_table_or_update_columns(dst_dtable_uuid, dst_table_id, dst_table_
             } for col in to_be_updated_columns]
             try:
                 dst_dtable_server_api.batch_update_columns_by_table_id(dst_table_id, columns)
+            except BaseExceedsLimitException:
+                return None, {
+                    'dst_table_id': None,
+                    'error_msg': 'base exceeds limit',
+                    'error_type': 'base_exceeds_limit',
+                    'task_status_code': 400
+                }
             except Exception as e:
                 logger.error('batch update columns to dst dtable: %s, table: %s error: %s', dst_dtable_uuid, dst_table_id, e)
                 return None, {
@@ -611,6 +632,13 @@ def append_dst_rows(dst_dtable_uuid, dst_table_name, to_be_appended_rows, dst_dt
     for i in range(0, len(to_be_appended_rows), step):
         try:
             dst_dtable_server_api.batch_append_rows(dst_table_name, to_be_appended_rows[i: i+step], need_convert_back=False)
+        except BaseExceedsLimitException:
+            return {
+                'dst_table_id': None,
+                'error_msg': 'base exceeds limit',
+                'error_type': 'base_exceeds_limit',
+                'task_status_code': 400
+            }
         except Exception as e:
             logger.error('sync dataset append rows dst dtable: %s dst table: %s error: %s', dst_dtable_uuid, dst_table_name, e)
             return {
@@ -632,6 +660,13 @@ def update_dst_rows(dst_dtable_uuid, dst_table_name, to_be_updated_rows, dst_dta
             })
         try:
             dst_dtable_server_api.batch_update_rows(dst_table_name, updates, need_convert_back=False)
+        except BaseExceedsLimitException:
+            return {
+                'dst_table_id': None,
+                'error_msg': 'base exceeds limit',
+                'error_type': 'base_exceeds_limit',
+                'task_status_code': 400
+            }
         except Exception as e:
             logger.error('sync dataset update rows dst dtable: %s dst table: %s error: %s', dst_dtable_uuid, dst_table_name, e)
             return {

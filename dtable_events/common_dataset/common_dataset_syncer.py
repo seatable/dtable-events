@@ -137,7 +137,7 @@ def list_pending_common_dataset_syncs(db_session):
 
 def check_common_dataset(session_class):
     with session_class() as db_session:
-        dataset_sync_list = list_pending_common_dataset_syncs(db_session)
+        dataset_sync_list = list(list_pending_common_dataset_syncs(db_session))
     for dataset_sync in dataset_sync_list:
         dst_dtable_uuid = uuid_str_to_36_chars(dataset_sync[0])
         dst_table_id = dataset_sync[1]
@@ -178,8 +178,8 @@ def check_common_dataset(session_class):
             continue
         else:
             if result.get('error_msg'):
-                if result.get('error_type') == 'generate_synced_columns_error':
-                    logging.warning('src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s generate sync-columns error: %s',
+                if result.get('error_type') in ('generate_synced_columns_error', 'base_exceeds_limit'):
+                    logging.warning('src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s client error: %s',
                                     src_dtable_uuid, src_table_id, src_view_id, dst_dtable_uuid, dst_table_id, result)
                     with session_class() as db_session:
                         set_common_dataset_sync_invalid(dataset_sync_id, db_session)
