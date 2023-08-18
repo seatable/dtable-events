@@ -1633,8 +1633,13 @@ class BaseSQLGenerator(object):
                 column = column_key and self._get_column_by_key(column_key)
                 if not column:
                     column = column_name and self._get_column_by_name(column_name)
+                if not column:
+                    raise ValueError('Column not found column_key: %s column_name: %s', column_key, column_name)
                 column_type = column.get('type')
-                operator = _get_operator_by_type(column_type)(column, filter_item)
+                operator_cls = _get_operator_by_type(column_type)
+                if not operator_cls:
+                    raise ValueError('filter: %s not support to sql', filter_item)
+                operator = (column, filter_item)
                 sql_condition = _filter2sqlslice(operator)
                 if not sql_condition:
                     continue
