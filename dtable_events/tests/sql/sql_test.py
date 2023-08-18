@@ -32,7 +32,7 @@ class SqlTest(unittest.TestCase):
                 sql = self._toSql(filter_conditions, by_group=by_group)
                 self.assertEqual(sql, expected_sql)
             if expected_error:
-                with self.assertRaises(ValueError):
+                with self.assertRaises(expected_error):
                     by_group = conditions.get('by_group')
                     sql = self._toSql(filter_conditions, by_group=by_group)
 
