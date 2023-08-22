@@ -152,10 +152,18 @@ class BaseAction:
     def do_action(self):
         pass
 
-    def get_need_notify_columns(self):
-        columns = self.auto_rule.table_info['columns']
+    def get_need_notify_columns(self, table_id):
+        # columns = self.auto_rule.table_info['columns']
+        tables = self.auto_rule.dtable_metadata.get('tables') or []
+        table = None
+        for tmp_table in tables:
+            if tmp_table['_id'] == table_id:
+                table = tmp_table
+                break
+        if not table:
+            return []
         results = []
-        for column in columns:
+        for column in table['columns']:
             if column['type'] != ColumnTypes.COLLABORATOR:
                 continue
             data = column.get('data') or {}
@@ -164,11 +172,20 @@ class BaseAction:
         return results
 
     def send_selected_collaborator_notis(self, row_data):
-        """only update/add action can call this
+        """only some kinds of actions can call this
         """
-        if self.action_type not in ['update', 'add']:
+        if self.action_type not in ['update', 'add', 'add_record_to_other_table']:
             return
-        notify_column_names = [column['name'] for column in self.get_need_notify_columns()]
+        table_id = None
+        notify_column_names = []
+        if self.action_type in ['update', 'add']:
+            table_id = self.auto_rule.table_info['_id']
+            notify_column_names = [column['name'] for column in self.get_need_notify_columns(table_id)]
+        elif self.action_type == 'add_record_to_other_table':
+            table_id = self.dst_table_id
+            notify_column_names = [column['name'] for column in self.get_need_notify_columns(table_id)]
+        if not notify_column_names:
+            return
         notify_users = []
         row_id = None
         if self.action_type == 'add':
@@ -189,10 +206,18 @@ class BaseAction:
                 for user in (set(value) - set(old_value)):
                     if user not in notify_users:
                         notify_users.append(user)
+        elif self.action_type == 'add_record_to_other_table':
+            row_id = row_data['_id']
+            for column_name, value in row_data.items():
+                if column_name not in notify_column_names:
+                     continue
+                for user in value:
+                    if user not in notify_users:
+                        notify_users.append(user)
         detail = {
             'author': 'Automation Rule',
             'row_id': row_id,
-            'table_id': self.auto_rule.table_id
+            'table_id': table_id
         }
         user_msg_list = []
         for user in notify_users:
@@ -1833,11 +1858,17 @@ class AddRecordToOtherTableAction(BaseAction):
             return
 
         try:
-            self.auto_rule.dtable_server_api.append_row(self.get_table_name(self.dst_table_id), self.row_data['row'])
+            row = self.auto_rule.dtable_server_api.append_row(self.get_table_name(self.dst_table_id), self.row_data['row'])
         except Exception as e:
             logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
         self.auto_rule.set_done_actions()
+
+        try:
+            self.row_data['row']['_id'] = row['_id']
+            self.send_selected_collaborator_notis(self.row_data['row'])
+        except Exception as e:
+            logger.exception('send selected notifications error: %s', e)
 
 
 class TriggerWorkflowAction(BaseAction):
