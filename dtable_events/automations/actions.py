@@ -180,8 +180,8 @@ class BaseAction:
                     if user not in notify_users:
                         notify_users.append(user)
         elif self.action_type == 'update':
-            row_id = converted_row['_id']
             converted_row = self.auto_rule.data.get('converted_row')
+            row_id = converted_row['_id']
             for column_name, value in row_data.items():
                 if column_name not in notify_column_names:
                     continue
