@@ -911,7 +911,8 @@ class AppNotifyAction(BaseAction):
                 'detail': detail,
                 })
         try:
-            self.notice_api.batch_send_notification(user_msg_list)
+            if user_msg_list:
+                self.notice_api.batch_send_notification(user_msg_list)
         except Exception as e:
             logger.error('send users: %s notifications error: %s', e)
 
