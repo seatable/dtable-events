@@ -1634,7 +1634,7 @@ class LinkRecordsAction(BaseAction):
             raise RuleInvalidException('wrong filter in filters in link-records')
         except Exception as e:
             logger.exception(e)
-            logger.error('request filter rows error: %s', e)
+            logger.error('rule: %s request filter rows error: %s', self.auto_rule.rule_id, e)
             return []
 
         logger.debug('Number of linking dtable rows by auto-rule %s is: %s, dtable_uuid: %s, details: %s' % (
