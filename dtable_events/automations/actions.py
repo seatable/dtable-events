@@ -899,7 +899,7 @@ class AppNotifyAction(BaseAction):
                     users_from_column = []
                 if not isinstance(users_from_column, list):
                     users_from_column = [users_from_column, ]
-                users = list(set(self.users + [user for user in users_from_column if user in self.auto_rule.related_users_dict]))
+                users = list(set(self.users + users_from_column))
             else:
                 logger.warning('automation rule: %s notify action user column: %s invalid', self.auto_rule.rule_id, self.users_column_key)
         for user in users:
