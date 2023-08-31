@@ -1526,6 +1526,7 @@ class LinkRecordsAction(BaseAction):
         self.link_id = link_id
         self.match_conditions = match_conditions or []
         self.linked_row_ids = []
+        self.can_per_update_link = True
 
     def parse_column_value(self, column, value):
         if column.get('type') == ColumnTypes.SINGLE_SELECT:
@@ -1657,6 +1658,7 @@ class LinkRecordsAction(BaseAction):
     def init_linked_row_ids(self):
         linked_rows_data = self.get_linked_table_rows()
         if linked_rows_data is None:
+            self.can_per_update_link = False
             return
         self.linked_row_ids = linked_rows_data and [row.get('_id') for row in linked_rows_data] or []
 
@@ -1666,6 +1668,9 @@ class LinkRecordsAction(BaseAction):
             raise RuleInvalidException('link-records link_table_id table not found')
 
         self.init_linked_row_ids()
+
+        if not self.can_per_update_link:
+            return False
 
         table_columns = self.get_columns(self.auto_rule.table_id)
         link_col_name = ''
