@@ -25,7 +25,7 @@ from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, get_inner_
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_web_api import DTableWebAPI
-from dtable_events.utils.dtable_db_api import DTableDBAPI, RowsQueryError
+from dtable_events.utils.dtable_db_api import DTableDBAPI, RowsQueryError, Request429Error
 from dtable_events.notification_rules.utils import get_nickname_by_usernames
 from dtable_events.utils.sql_generator import filter2sql
 from dtable_events.utils.sql_generator import BaseSQLGenerator
@@ -1608,6 +1608,11 @@ class LinkRecordsAction(BaseAction):
         return []
 
     def get_linked_table_rows(self):
+        """return linked table rows ids
+
+        return a list, meaning a list of rows ids
+        return None, no need to update
+        """
         filter_groups, column_names = self.format_filter_groups()
         if not filter_groups:
             return []
@@ -1632,10 +1637,13 @@ class LinkRecordsAction(BaseAction):
             rows_data, _ = self.auto_rule.dtable_db_api.query(sql, convert=False)
         except RowsQueryError:
             raise RuleInvalidException('wrong filter in filters in link-records')
+        except Request429Error:
+            logger.warning('rule: %s query row too many', self.auto_rule.rule_id)
+            return None
         except Exception as e:
             logger.exception(e)
             logger.error('rule: %s request filter rows error: %s', self.auto_rule.rule_id, e)
-            return []
+            return None
 
         logger.debug('Number of linking dtable rows by auto-rule %s is: %s, dtable_uuid: %s, details: %s' % (
             self.auto_rule.rule_id,
@@ -1648,6 +1656,8 @@ class LinkRecordsAction(BaseAction):
 
     def init_linked_row_ids(self):
         linked_rows_data = self.get_linked_table_rows()
+        if linked_rows_data is None:
+            return
         self.linked_row_ids = linked_rows_data and [row.get('_id') for row in linked_rows_data] or []
 
     def per_update_can_do_action(self):

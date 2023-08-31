@@ -23,8 +23,13 @@ class RowsQueryError(Exception):
 class RowDeletedError(Exception):
     pass
 
+class Request429Error(Exception):
+    pass
+
 def parse_response(response):
     if response.status_code >= 400:
+        if response.status_code == 429:
+            raise Request429Error()
         raise ConnectionError(response.status_code, response.text)
     else:
         try:
