@@ -68,7 +68,7 @@ class LDAPSyncerTimer(Thread):
                         'ldap_user_sync'
                     ]
                     with open(self._logfile, 'a') as fp:
-                        run(cmd, cwd=dtable_web_dir, output=fp)
+                        run_and_wait(cmd, cwd=dtable_web_dir, output=fp)
                 except Exception as e:
                     logging.exception('error when sync ldap user: %s', e)
 
