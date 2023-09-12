@@ -951,7 +951,7 @@ def get_metadata_from_dtable_server(dtable_uuid, username):
     return json.loads(res.content)['metadata']
 
 
-def get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission, table_name, view_name, start=None, limit=None):
+def get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, table_name, view_name, start=None, limit=None):
     api_url = get_inner_dtable_server_url()
     url = api_url.rstrip('/') + '/api/v1/internal/dtables/' + dtable_uuid + '/view-rows/?from=dtable_events'
 
@@ -960,6 +960,7 @@ def get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, i
         'dtable_uuid': dtable_uuid,
         'username': username,
         'id_in_org': id_in_org,
+        'user_department_ids_map': user_department_ids_map,
         'permission': permission,
     }
     access_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')

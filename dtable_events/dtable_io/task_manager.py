@@ -299,11 +299,11 @@ class TaskManager(object):
 
         return task_id, None
 
-    def add_convert_view_to_execl_task(self, dtable_uuid, table_id, view_id, username, id_in_org, permission, name, repo_id, is_support_image):
+    def add_convert_view_to_execl_task(self, dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image):
         from dtable_events.dtable_io import convert_view_to_execl
 
         task_id = str(uuid.uuid4())
-        task = (convert_view_to_execl, (dtable_uuid, table_id, view_id, username, id_in_org, permission, name, repo_id, is_support_image))
+        task = (convert_view_to_execl, (dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
 

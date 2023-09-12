@@ -875,7 +875,7 @@ def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token, session_id):
         driver.quit()
 
 
-def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, permission, name, repo_id, is_support_image=False):
+def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image=False):
     from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_view_rows_from_dtable_server
     from dtable_events.dtable_io.excel import write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR
     from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
@@ -945,7 +945,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, p
     wb = openpyxl.Workbook(write_only=True)
     ws = wb.create_sheet(sheet_name)
 
-    res_json = get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, permission, table_name, view_name)
+    res_json = get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, table_name, view_name)
     dtable_rows = res_json.get('rows', [])
 
     column_name_to_column = {col.get('name'): col for col in cols}
