@@ -240,7 +240,17 @@ def get_dtable_export_asset_files(username, repo_id, dtable_uuid, files, task_id
     """
     export asset files from dtable
     """
-    files = [f.strip().strip('/') for f in files]
+    handled_files = []
+    for file in files:
+        files_map_value = files_map.get(file) if files_map else None
+        if files_map_value:
+            files_map.pop(file)
+        file = file.strip().strip('/')
+        file = file[:file.find('?')] if '?' in file else file
+        handled_files.append(file)
+        if files_map_value:
+            files_map[file] = files_map_value
+    files = handled_files
     tmp_file_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'asset-files',
                                  str(task_id))           # used to store files
     tmp_zip_path  = os.path.join('/tmp/dtable-io', dtable_uuid, 'asset-files',
