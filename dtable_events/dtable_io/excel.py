@@ -1331,7 +1331,7 @@ def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, i
     import requests
     from openpyxl.drawing.image import Image
     from PIL import Image as PILImage
-    from urllib.parse import unquote
+    from urllib.parse import unquote, urljoin, urlparse
     from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, TwoCellAnchor
 
     images = cell_value
@@ -1343,12 +1343,13 @@ def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, i
     for image_url in images:
         if image_num >= EXPORT_IMAGE_LIMIT:
             return image_num
+        real_image_url = urljoin(image_url, urlparse(image_url).path)
 
-        image_name = unquote(image_url.split('/')[-1].strip())
-        image_dir = os.path.join(images_target_dir, '/'.join(image_url.split('/')[7:-1]))
+        image_name = unquote(real_image_url.split('/')[-1].strip())
+        image_dir = os.path.join(images_target_dir, '/'.join(real_image_url.split('/')[7:-1]))
         os.makedirs(image_dir, exist_ok=True)
 
-        image_download_url = get_file_download_url(image_url, dtable_uuid, repo_id)
+        image_download_url = get_file_download_url(real_image_url, dtable_uuid, repo_id)
         if not image_download_url:
             continue
 
