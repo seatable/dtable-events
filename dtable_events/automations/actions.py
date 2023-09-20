@@ -321,7 +321,8 @@ class UpdateAction(BaseAction):
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
         return fill_msg_blanks_with_converted_row(text, blanks, col_name_dict, row, db_session, dtable_metadata)
 
-    def init_updates(self, src_row):
+    
+    def formate_update_datas(self, row):
         src_row = self.data.get('converted_row', None)
         if not src_row:
             return None
@@ -445,12 +446,21 @@ class UpdateAction(BaseAction):
                         column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
                         cell_value = self.fill_msg_blanks(src_row, cell_value, column_blanks)
                     filtered_updates[col_name] = self.parse_column_value(col, cell_value)
+        return filtered_updates
         row_id = self.data['row']['_id']
         self.update_data['row'] = filtered_updates
         self.update_data['row_id'] = row_id
         update_data_dict['row'] = filtered_updates
         update_data_dict['row_id'] = row_id
         return update_data_dict
+
+    def init_updates(self):
+        src_row = self.data.get('converted_row', None)
+        if not src_row:
+            return None
+        filtered_updates = self.formate_update_datas(src_row)
+        self.update_data['row'] = filtered_updates
+        self.update_data['row_id'] = src_row.get('_id')
 
     def can_do_action(self):
         if not self.update_data.get('row') or not self.update_data.get('row_id'):
@@ -462,14 +472,32 @@ class UpdateAction(BaseAction):
         for key in updated_column_keys:
             if key in to_update_keys:
                 return False
-
         return True
+    
+    def per_update(self):
+        table_name = self.auto_rule.table_info['name']
+        try:
+            self.auto_rule.dtable_server_api.update_row(table_name, self.data['row']['_id'], self.update_data['row'])
+        except Exception as e:
+            logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
+            return
+        self.auto_rule.set_done_actions()
+        try:
+            self.send_selected_collaborator_notis(self.update_data['row'])
+        except Exception as e:
+            logger.exception('send selected notifications error: %s', e)
+
 
     def condition_cron_update(self):
         triggered_rows = self.get_trigger_conditions_rows(warning_rows=CONDITION_ROWS_LOCKED_LIMIT)[:CONDITION_ROWS_LOCKED_LIMIT]
         batch_update_list = []
+
         for src_row in triggered_rows:
-            batch_update_list.append(self.init_updates(src_row))
+
+            batch_update_list.append({
+                'row': self.formate_update_datas(src_row),
+                'row_id': src_row.get('_id')
+            })
         table_name = self.auto_rule.table_info['name']
         try:
             self.auto_role.dtable_server_api.batch_update_row(table_name, batch_update_list)
@@ -479,6 +507,19 @@ class UpdateAction(BaseAction):
 
 
     def do_action(self):
+        if self.auto_rule.run_condition == PER_UPDATE:
+            self.per_update()
+        elif self.auto_rule.run_condition in CRON_CONDITIONS:
+            if self.auto_rule.trigger.get('condition') == CONDITION_PERIODICALLY_BY_CONDITION:
+                self.condition_cron_update()
+            else:
+                self.cron_notify()
+        self.auto_rule.set_done_actions()
+
+
+
+
+
         if not self.can_do_action():
             return
         table_name = self.auto_rule.table_info['name']
