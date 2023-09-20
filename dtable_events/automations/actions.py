@@ -489,7 +489,7 @@ class UpdateAction(BaseAction):
 
 
     def condition_cron_update(self):
-        triggered_rows = self.get_trigger_conditions_rows(warning_rows=CONDITION_ROWS_LOCKED_LIMIT)[:CONDITION_ROWS_LOCKED_LIMIT]
+        triggered_rows = self.auto_rule.get_trigger_conditions_rows(warning_rows=CONDITION_ROWS_LOCKED_LIMIT)[:CONDITION_ROWS_LOCKED_LIMIT]
         batch_update_list = []
 
         for src_row in triggered_rows:
