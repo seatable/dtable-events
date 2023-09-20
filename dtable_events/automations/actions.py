@@ -291,8 +291,9 @@ class UpdateAction(BaseAction):
             'table_name': self.auto_rule.table_info['name'],
             'row_id': ''
         }
+        src_row = self.data.get(src_row)
         self.col_name_dict = {}
-        self.init_updates()
+        self.init_updates(src_row)
 
     def add_or_create_options(self, column, value):
         table_name = self.update_data['table_name']
@@ -320,13 +321,15 @@ class UpdateAction(BaseAction):
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
         return fill_msg_blanks_with_converted_row(text, blanks, col_name_dict, row, db_session, dtable_metadata)
 
-    def init_updates(self):
-        src_row = self.data['converted_row']
+    def init_updates(self, src_row):
+        src_row = self.data.get('converted_row', None)
+        if not src_row:
+            return None
         self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
         self.col_key_dict = {col.get('key'):  col for col in self.auto_rule.table_info['columns']}
         # filter columns in view and type of column is in VALID_COLUMN_TYPES
         filtered_updates = {}
-
+        update_data_dict = {}
         for col in self.auto_rule.table_info['columns']:
             if col.get('type') not in self.VALID_COLUMN_TYPES:
                 continue
@@ -445,6 +448,9 @@ class UpdateAction(BaseAction):
         row_id = self.data['row']['_id']
         self.update_data['row'] = filtered_updates
         self.update_data['row_id'] = row_id
+        update_data_dict['row'] = filtered_updates
+        update_data_dict['row_id'] = row_id
+        return update_data_dict
 
     def can_do_action(self):
         if not self.update_data.get('row') or not self.update_data.get('row_id'):
@@ -458,6 +464,19 @@ class UpdateAction(BaseAction):
                 return False
 
         return True
+
+    def condition_cron_update(self):
+        triggered_rows = self.get_trigger_conditions_rows(warning_rows=CONDITION_ROWS_LOCKED_LIMIT)[:CONDITION_ROWS_LOCKED_LIMIT]
+        batch_update_list = []
+        for src_row in triggered_rows:
+            batch_update_list.append(self.init_updates(src_row))
+        table_name = self.auto_rule.table_info['name']
+        try:
+            self.auto_role.dtable_server_api.batch_update_row(table_name, batch_update_list)
+        except Exception as e:
+            logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
+            return
+
 
     def do_action(self):
         if not self.can_do_action():
