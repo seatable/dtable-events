@@ -234,7 +234,7 @@ def get_activities_detail(session, dtable_uuid, start_time, end_time, start, lim
     try:
         q = session.query(Activities).filter(Activities.dtable_uuid == dtable_uuid).\
             filter(func.convert_tz(Activities.op_time, '+00:00', to_tz).between(start_time, end_time))
-        activities = q.order_by(desc(Activities.op_time)).slice(start, start + limit).all()
+        activities = q.order_by(desc(Activities.id)).slice(start, start + limit).all()
     except Exception as e:
         logger.error('Get table activities detail failed: %s' % e)
 
