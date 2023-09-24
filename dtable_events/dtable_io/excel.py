@@ -242,14 +242,20 @@ def parse_excel_columns(sheet_rows, head_index, max_column):
         head_row = sheet_rows[head_index]
         value_rows = sheet_rows[head_index + 1:]
     columns = []
+    column_name_set = set()
 
     for index in range(max_column):
         name = get_excel_cell_value(head_row, index)
-        column_name = str(name) if name else 'Field' + str(index + 1)
+        column_name = str(name.replace('\ufeff', '').strip()) if name else 'Field' + str(index + 1)
+
+        if column_name in column_name_set:
+            raise Exception('Duplicate column names are not supported')
+        column_name_set.add(column_name)
+
         value_list = [get_excel_cell_value(row, index) for row in value_rows]
         column_type, column_data = parse_column_type(value_list)
         column = {
-            'name': column_name.replace('\ufeff', '').strip(),
+            'name': column_name,
             # remove whitespace from both ends of name and BOM char(\ufeff)
             'type': column_type,
             'data': column_data,
@@ -337,9 +343,15 @@ def parse_dtable_csv_columns(sheet_rows, max_column):
     head_row = sheet_rows[0]
 
     columns = []
+    column_name_set = set()
     for index in range(max_column):
         name = get_csv_cell_value(head_row, index)
         column_name = str(name) if name else 'Field' + str(index + 1)
+
+        if column_name in column_name_set:
+            raise Exception('Duplicate column names are not supported')
+        column_name_set.add(column_name)
+
         column = {
             'name': column_name.replace('\ufeff', '').strip(),
             'type': 'text'

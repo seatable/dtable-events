@@ -312,6 +312,8 @@ def parse_excel_csv(username, repo_id, workspace_id, dtable_name, file_type, cus
     except Exception as e:
         if str(e.args[0]) == 'Excel format error':
             raise Exception('Excel format error')
+        if str(e.args[0]) == 'Duplicate column names are not supported':
+            raise Exception('Duplicate column names are not supported')
         dtable_io_logger.exception('parse excel or csv failed. ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('parse excel %s.xlsx success!' % dtable_name)
