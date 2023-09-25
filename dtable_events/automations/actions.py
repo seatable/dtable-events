@@ -296,6 +296,7 @@ class UpdateAction(BaseAction):
 
     def add_or_create_options(self, column, value):
         table_name = self.update_data['table_name']
+        
         select_options = column.get('data', {}).get('options', [])
         for option in select_options:
             if value == option.get('name'):
@@ -303,8 +304,10 @@ class UpdateAction(BaseAction):
         self.auto_rule.dtable_server_api.add_column_options(
             table_name,
             column['name'],
-            options = [gen_random_option(value)]
+            options = [gen_random_option(value)],
         )
+        self.auto_rule.cache_clean()
+        
         return value
 
     def format_time_by_offset(self, offset, format_length):
@@ -327,10 +330,8 @@ class UpdateAction(BaseAction):
         return fill_msg_blanks_with_sql_row(text, blanks, col_name_dict, row, db_session)
 
 
-    def formate_update_datas(self, row, fill_msg_blank_func):
-        src_row = row
-        self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
-        self.col_key_dict = {col.get('key'):  col for col in self.auto_rule.table_info['columns']}
+    def formate_update_datas(self, converted_row, row, fill_msg_blank_func):
+        src_row = converted_row
         # filter columns in view and type of column is in VALID_COLUMN_TYPES
         filtered_updates = {}
         for col in self.auto_rule.table_info['columns']:
@@ -446,17 +447,19 @@ class UpdateAction(BaseAction):
                     if isinstance(cell_value, str):
                         blanks = set(re.findall(r'\{([^{]*?)\}', cell_value))
                         column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
-                        cell_value = fill_msg_blank_func(src_row, cell_value, column_blanks)
+                        cell_value = fill_msg_blank_func(row, cell_value, column_blanks)
                     filtered_updates[col_name] = self.parse_column_value(col, cell_value)
         return filtered_updates
         
     def init_updates(self):
+        self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
+        self.col_key_dict = {col.get('key'):  col for col in self.auto_rule.table_info['columns']}
         if not self.data:
             return None
         src_row = self.data.get('converted_row', None)
         if not src_row:
             return None
-        filtered_updates = self.formate_update_datas(src_row, self.fill_msg_blanks)
+        filtered_updates = self.formate_update_datas(src_row, src_row, self.fill_msg_blanks)
         self.update_data['row'] = filtered_updates
         self.update_data['row_id'] = src_row.get('_id')
 
@@ -490,8 +493,11 @@ class UpdateAction(BaseAction):
         triggered_rows = self.auto_rule.get_trigger_conditions_rows(warning_rows=CONDITION_ROWS_LOCKED_LIMIT)[:CONDITION_ROWS_LOCKED_LIMIT]
         batch_update_list = []
         for row in triggered_rows:
+            converted_row = {self.col_key_dict.get(key).get('name') if self.col_key_dict.get(key) else key:
+                             self.parse_column_value(self.col_key_dict.get(key), row.get(key)) if self.col_key_dict.get(key) else row.get(key)
+                             for key in row}
             batch_update_list.append({
-                'row': self.formate_update_datas(row, self.fill_msg_blanks_with_sql),
+                'row': self.formate_update_datas(converted_row, row, self.fill_msg_blanks_with_sql),
                 'row_id': row.get('_id')
             })
         table_name = self.auto_rule.table_info['name']
@@ -2857,6 +2863,15 @@ class AutomationRule:
     @property
     def headers(self):
         return self.dtable_server_api.headers
+    
+
+    def cache_clean(self):
+        # when some attribute changes, such as option added in single-select column
+        # the cache should be cleared
+        self._table_info = None
+        self._view_info = None
+        self._dtable_metadata = None
+        self._view_columns = None
 
     @property
     def dtable_metadata(self):
