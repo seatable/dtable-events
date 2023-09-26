@@ -249,7 +249,7 @@ def parse_excel_columns(sheet_rows, head_index, max_column):
         column_name = str(name.replace('\ufeff', '').strip()) if name else 'Field' + str(index + 1)
 
         if column_name in column_name_set:
-            raise Exception('Duplicate column names are not supported')
+            raise Exception('Duplicated column names are not supported')
         column_name_set.add(column_name)
 
         value_list = [get_excel_cell_value(row, index) for row in value_rows]
@@ -349,7 +349,7 @@ def parse_dtable_csv_columns(sheet_rows, max_column):
         column_name = str(name) if name else 'Field' + str(index + 1)
 
         if column_name in column_name_set:
-            raise Exception('Duplicate column names are not supported')
+            raise Exception('Duplicated column names are not supported')
         column_name_set.add(column_name)
 
         column = {

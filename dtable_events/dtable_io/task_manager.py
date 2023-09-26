@@ -367,7 +367,7 @@ class TaskManager(object):
             except Exception as e:
                 self.task_results_map[task_id] = 'error_' + str(e.args[0])
                 if str(e.args[0]) in ('the number of cells accessing the table exceeds the limit',
-                                      'Excel format error', 'Duplicate column names are not supported'):
+                                      'Excel format error', 'Duplicated column names are not supported'):
                     dtable_io_logger.warning('Failed to handle task %s, error: %s \n' % (task_info, e))
                 elif str(e.args[0]).startswith('import_sync_common_dataset:'):
                     # Errors in import/sync common dataset, those have been record in real task code, so no duplicated error logs here
