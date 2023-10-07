@@ -55,6 +55,7 @@ MINUTE_TIMEOUT = 60
 NOTIFICATION_CONDITION_ROWS_LIMIT = 50
 EMAIL_CONDITION_ROWS_LIMIT = 50
 CONDITION_ROWS_LOCKED_LIMIT = 200
+CONDITION_ROWS_UPDATE_LIMIT = 50
 WECHAT_CONDITION_ROWS_LIMIT = 20
 DINGTALK_CONDITION_ROWS_LIMIT = 20
 
@@ -304,7 +305,7 @@ class UpdateAction(BaseAction):
         self.auto_rule.dtable_server_api.add_column_options(
             table_name,
             column['name'],
-            options = [gen_random_option(value)],
+            options = [gen_random_option(value)]
         )
         self.auto_rule.cache_clean()
         
@@ -490,7 +491,7 @@ class UpdateAction(BaseAction):
 
 
     def condition_cron_update(self):
-        triggered_rows = self.auto_rule.get_trigger_conditions_rows(warning_rows=CONDITION_ROWS_LOCKED_LIMIT)[:CONDITION_ROWS_LOCKED_LIMIT]
+        triggered_rows = self.auto_rule.get_trigger_conditions_rows(warning_rows=CONDITION_ROWS_UPDATE_LIMIT)[:CONDITION_ROWS_UPDATE_LIMIT]
         batch_update_list = []
         for row in triggered_rows:
             converted_row = {self.col_key_dict.get(key).get('name') if self.col_key_dict.get(key) else key:
