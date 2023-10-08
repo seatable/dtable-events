@@ -1816,7 +1816,7 @@ def db_query(dtable_uuid, sql):
         token = token.decode()
 
     headers = {'Authorization': 'Token ' + token}
-    api_url = INNER_DTABLE_DB_URL.rstrip('/') + '/api/v1/query/' + dtable_uuid + '/'
+    api_url = INNER_DTABLE_DB_URL.rstrip('/') + '/api/v1/query/' + dtable_uuid + '/?from=dtable_events'
     params = {
         'sql':sql
     }
