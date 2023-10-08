@@ -2418,6 +2418,7 @@ class LookupAndCopyAction(BaseAction):
         ColumnTypes.EMAIL,
         ColumnTypes.RATE,
         ColumnTypes.FORMULA,
+        ColumnTypes.AUTO_NUMBER,
     ]
 
     def __init__(self, auto_rule, data, table_condition, equal_column_conditions, fill_column_conditions):
