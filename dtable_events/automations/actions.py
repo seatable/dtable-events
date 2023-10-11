@@ -1220,7 +1220,6 @@ class SendEmailAction(BaseAction):
     def handle_file_path(self, dtable_uuid, repo_id, file_path):
         asset_path = normalize_file_path(os.path.join('/asset', uuid_str_to_36_chars(dtable_uuid), file_path))
         asset_id = seafile_api.get_file_id_by_path(repo_id, asset_path)
-        print('repo: ', repo_id, ' dtable_uuid: ', dtable_uuid, ' asset_path: ', asset_path, ' asset_id: ', asset_id)
         asset_name = os.path.basename(normalize_file_path(file_path))
         if not asset_id:
             return None, None
@@ -1235,12 +1234,10 @@ class SendEmailAction(BaseAction):
     def init_notify_images(self):
         images_info = self.send_info.get('images_info', {})
         for cid, image_path in images_info.items():
-            print('cid: ', cid, 'image_path: ', image_path)
             image_name, image_url = self.handle_file_path(self.auto_rule.dtable_uuid, self.repo_id, image_path)
             if not image_name or not image_url:
                 continue
             self.image_cid_url_map[cid] = image_url
-        print('self.image_cid_url_map: ', self.image_cid_url_map)
 
     def init_notify(self):
         account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id)
@@ -1415,7 +1412,6 @@ class SendEmailAction(BaseAction):
             })
 
             send_info_list.append(send_info)
-        print('send_info_list: ', send_info_list)
 
         step = 10
         for i in range(0, len(send_info_list), step):
