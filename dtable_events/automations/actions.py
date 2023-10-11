@@ -1181,12 +1181,17 @@ class SendEmailAction(BaseAction):
         self.column_blanks_subject = []
         self.col_name_dict = {}
         self.repo_id = repo_id
+        self.image_cid_url_map = {}
 
         self.init_notify()
 
     def init_notify_msg(self):
-        msg = self.send_info.get('message')
-        blanks = set(re.findall(r'\{([^{]*?)\}', msg))
+        if self.send_info.get('is_plain_text', True):
+            msg = self.send_info.get('message')
+            blanks = set(re.findall(r'\{([^{]*?)\}', msg))
+        else:
+            html_msg = self.send_info.get('html_message')
+            blanks = set(re.findall(r'\{([^{]*?)\}', html_msg))
         self.column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
 
     def init_notify_send_to(self):
@@ -1212,6 +1217,31 @@ class SendEmailAction(BaseAction):
         blanks = set(re.findall(r'\{([^{]*?)\}', subject))
         self.column_blanks_subject = [blank for blank in blanks if blank in self.col_name_dict]
 
+    def handle_file_path(self, dtable_uuid, repo_id, file_path):
+        asset_path = normalize_file_path(os.path.join('/asset', uuid_str_to_36_chars(dtable_uuid), file_path))
+        asset_id = seafile_api.get_file_id_by_path(repo_id, asset_path)
+        print('repo: ', repo_id, ' dtable_uuid: ', dtable_uuid, ' asset_path: ', asset_path, ' asset_id: ', asset_id)
+        asset_name = os.path.basename(normalize_file_path(file_path))
+        if not asset_id:
+            return None, None
+
+        token = seafile_api.get_fileserver_access_token(
+            repo_id, asset_id, 'download', '', use_onetime=False
+        )
+
+        url = gen_file_get_url(token, asset_name)
+        return  asset_name, url
+
+    def init_notify_images(self):
+        images_info = self.send_info.get('images_info', {})
+        for cid, image_path in images_info.items():
+            print('cid: ', cid, 'image_path: ', image_path)
+            image_name, image_url = self.handle_file_path(self.auto_rule.dtable_uuid, self.repo_id, image_path)
+            if not image_name or not image_url:
+                continue
+            self.image_cid_url_map[cid] = image_url
+        print('self.image_cid_url_map: ', self.image_cid_url_map)
+
     def init_notify(self):
         account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id)
         if not account_dict:
@@ -1221,6 +1251,7 @@ class SendEmailAction(BaseAction):
         self.init_notify_send_to()
         self.init_notify_copy_to()
         self.init_notify_subject()
+        self.init_notify_images()
 
         account_detail = account_dict.get('detail', {})
 
@@ -1274,13 +1305,18 @@ class SendEmailAction(BaseAction):
     def per_update_notify(self):
         row = self.data['converted_row']
         msg = self.send_info.get('message', '')
+        is_plain_text = self.send_info.get('is_plain_text', True)
+        html_msg = self.send_info.get('html_message', '')
         subject = self.send_info.get('subject', '')
         send_to_list = self.send_info.get('send_to', [])
         copy_to_list = self.send_info.get('copy_to', [])
         attachment_list = self.send_info.get('attachment_list', [])
 
         if self.column_blanks:
-            msg = self.fill_msg_blanks(row, msg, self.column_blanks)
+            if is_plain_text and msg:
+                msg = self.fill_msg_blanks(row, msg, self.column_blanks)
+            if not is_plain_text and html_msg:
+                html_msg = self.fill_msg_blanks(row, html_msg, self.column_blanks)
         if self.column_blanks_send_to:
             send_to_list = [self.fill_msg_blanks(row, send_to, self.column_blanks_send_to) for send_to in send_to_list]
         if self.column_blanks_copy_to:
@@ -1291,9 +1327,16 @@ class SendEmailAction(BaseAction):
         if self.column_blanks_subject:
             subject = self.fill_msg_blanks(row, subject, self.column_blanks_subject)
 
-        self.send_info.update({
+        send_info = deepcopy(self.send_info)
+        if is_plain_text:
+            send_info['message'] = msg
+            send_info.pop('html_message', None)
+        else:
+            send_info['html_message'] = html_msg
+            send_info['image_cid_url_map'] = self.image_cid_url_map
+            send_info.pop('message', None)
+        send_info.update({
             'subject': subject,
-            'message': msg,
             'send_to': [send_to for send_to in send_to_list if self.is_valid_email(send_to)],
             'copy_to': [copy_to for copy_to in copy_to_list if self.is_valid_email(copy_to)],
             'file_download_urls': file_download_urls,
@@ -1301,7 +1344,7 @@ class SendEmailAction(BaseAction):
         try:
             send_email_msg(
                 auth_info=self.auth_info,
-                send_info=self.send_info,
+                send_info=send_info,
                 username='automation-rules',  # username send by automation rules,
                 db_session=self.auto_rule.db_session
             )
@@ -1309,10 +1352,16 @@ class SendEmailAction(BaseAction):
             logger.error('send email error: %s', e)
 
     def cron_notify(self):
+        send_info = deepcopy(self.send_info)
+        if send_info.get('is_plain_text', True):
+            send_info.pop('html_message', None)
+        else:
+            send_info['image_cid_url_map'] = self.image_cid_url_map
+            send_info.pop('message', None)
         try:
             send_email_msg(
                 auth_info=self.auth_info,
-                send_info=self.send_info,
+                send_info=send_info,
                 username='automation-rules',  # username send by automation rules,
                 db_session=self.auto_rule.db_session
             )
@@ -1329,12 +1378,17 @@ class SendEmailAction(BaseAction):
                              for key in row}
             send_info = deepcopy(self.send_info)
             msg = send_info.get('message', '')
+            is_plain_text = send_info.get('is_plain_text', True)
+            html_msg = send_info.get('html_message', '')
             subject = send_info.get('subject', '')
             send_to_list = send_info.get('send_to', [])
             copy_to_list = send_info.get('copy_to', [])
             attachment_list = send_info.get('attachment_list', [])
             if self.column_blanks:
-                msg = self.fill_msg_blanks_with_sql(row, msg, self.column_blanks)
+                if is_plain_text and msg:
+                    msg = self.fill_msg_blanks_with_sql(row, msg, self.column_blanks)
+                if not is_plain_text and html_msg:
+                    html_msg = self.fill_msg_blanks_with_sql(row, html_msg, self.column_blanks)
             if self.column_blanks_send_to:
                 send_to_list = [self.fill_msg_blanks(converted_row, send_to, self.column_blanks_send_to) for send_to in send_to_list]
             if self.column_blanks_copy_to:
@@ -1345,15 +1399,23 @@ class SendEmailAction(BaseAction):
             if self.column_blanks_subject:
                 subject = self.fill_msg_blanks(converted_row, subject, self.column_blanks_subject)
 
+            if is_plain_text:
+                send_info['message'] = msg
+                send_info.pop('html_message', None)
+            else:
+                send_info['html_message'] = html_msg
+                send_info['image_cid_url_map'] = self.image_cid_url_map
+                send_info.pop('message', None)
+
             send_info.update({
                 'subject': subject,
-                'message': msg,
                 'send_to': [send_to for send_to in send_to_list if self.is_valid_email(send_to)],
                 'copy_to': [copy_to for copy_to in copy_to_list if self.is_valid_email(copy_to)],
                 'file_download_urls': file_download_urls,
             })
 
             send_info_list.append(send_info)
+        print('send_info_list: ', send_info_list)
 
         step = 10
         for i in range(0, len(send_info_list), step):
@@ -3121,6 +3183,9 @@ class AutomationRule:
                 elif action_info.get('type') == 'send_email':
                     account_id = int(action_info.get('account_id'))
                     msg = action_info.get('default_msg', '')
+                    is_plain_text = action_info.get('is_plain_text', True)
+                    html_message = action_info.get('html_message', '')
+                    images_info = action_info.get('images_info', {})
                     subject = action_info.get('subject', '')
                     send_to_list = email2list(action_info.get('send_to', ''))
                     copy_to_list = email2list(action_info.get('copy_to', ''))
@@ -3129,6 +3194,9 @@ class AutomationRule:
 
                     send_info = {
                         'message': msg,
+                        'is_plain_text': is_plain_text,
+                        'html_message': html_message,
+                        'images_info': images_info,
                         'send_to': send_to_list,
                         'copy_to': copy_to_list,
                         'subject': subject,

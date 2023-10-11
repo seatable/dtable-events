@@ -731,6 +731,7 @@ def batch_send_email_msg(auth_info, send_info_list, username, config=None, db_se
         copy_to = send_info.get('copy_to', [])
         reply_to = send_info.get('reply_to', '')
         file_download_urls = send_info.get('file_download_urls', None)
+        image_cid_url_map = send_info.get('image_cid_url_map', {})
 
         if not msg and not html_msg:
             dtable_message_logger.warning('Email message invalid')
@@ -753,6 +754,14 @@ def batch_send_email_msg(auth_info, send_info_list, username, config=None, db_se
         if html_msg:
             html_content_body = MIMEText(html_msg, 'html')
             msg_obj.attach(html_content_body)
+
+        if html_msg and image_cid_url_map:
+            for cid, image_url in image_cid_url_map.items():
+                response = requests.get(image_url)
+                from email.mime.image import MIMEImage
+                msg_image = MIMEImage(response.content)
+                msg_image.add_header('Content-ID', '<%s>' % cid)
+                msg_obj.attach(msg_image)
 
         if file_download_urls:
             for file_name, file_url in file_download_urls.items():
