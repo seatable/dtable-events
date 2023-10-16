@@ -1626,7 +1626,11 @@ class LinkRecordsAction(BaseAction):
         table_name = self.get_table_name(self.linked_table_id)
         columns = self.get_columns(self.linked_table_id)
 
-        sql = filter2sql(table_name, columns, filter_conditions, by_group=True)
+        try:
+            sql = filter2sql(table_name, columns, filter_conditions, by_group=True)
+        except Exception as e:
+            logger.error('rule: %s dtable: %s table: %s condition: %s to sql error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, table_name, filter_conditions, e)
+            return []
         query_clause = "*"
         if column_names:
             if "_id" not in column_names:

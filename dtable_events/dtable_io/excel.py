@@ -246,7 +246,7 @@ def parse_excel_columns(sheet_rows, head_index, max_column):
 
     for index in range(max_column):
         name = get_excel_cell_value(head_row, index)
-        column_name = str(name.replace('\ufeff', '').strip()) if name else 'Field' + str(index + 1)
+        column_name = str(name).replace('\ufeff', '').strip() if name else 'Field' + str(index + 1)
 
         if column_name in column_name_set:
             raise Exception('Duplicated column names are not supported')
