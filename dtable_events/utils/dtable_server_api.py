@@ -23,19 +23,6 @@ class BaseExceedsException(Exception):
         self.error_type = error_type
         self.error_msg = error_msg
 
-
-class BaseExceedsLimitException(BaseExceedsException):
-    pass
-
-
-class BaseExceedsRowsLimitException(BaseExceedsException):
-    pass
-
-
-class BaseExceedsColumnsLimitException(BaseExceedsException):
-    pass
-
-
 class NotFoundException(Exception):
     pass
 
@@ -56,11 +43,11 @@ def parse_response(response):
         if error_type == 'wrong_filter_in_filters':
             raise WrongFilterException()
         if error_type == 'exceed_rows_limit' or error_msg == 'Exceed the rows limit':
-            raise BaseExceedsRowsLimitException('exceed_rows_limit', 'Exceed the rows limit')
+            raise BaseExceedsException('exceed_rows_limit', 'Exceed the rows limit')
         if error_type == 'exceed_columns_limit' or error_msg == 'Exceed the columns limit':
-            raise BaseExceedsColumnsLimitException('exceed_columns_limit', 'Exceed the columns limit')
+            raise BaseExceedsException('exceed_columns_limit', 'Exceed the columns limit')
         if error_type == 'base_exceeds_limit' or error_msg == 'The base size exceeds the limit of 200MB, the operation cannot be performed.':
-            raise BaseExceedsLimitException('base_exceeds_limit', 'The base size exceeds the limit of 200MB, the operation cannot be performed.')
+            raise BaseExceedsException('base_exceeds_limit', 'The base size exceeds the limit of 200MB, the operation cannot be performed.')
 
         raise ConnectionError(response.status_code, response.text)
     else:
