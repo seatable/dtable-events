@@ -17,7 +17,22 @@ class WrongFilterException(Exception):
     pass
 
 
-class BaseExceedsLimitException(Exception):
+class BaseExceedsException(Exception):
+
+    def __init__(self, error_type, error_msg):
+        self.error_type = error_type
+        self.error_msg = error_msg
+
+
+class BaseExceedsLimitException(BaseExceedsException):
+    pass
+
+
+class BaseExceedsRowsLimitException(BaseExceedsException):
+    pass
+
+
+class BaseExceedsColumnsLimitException(BaseExceedsException):
     pass
 
 
@@ -29,15 +44,24 @@ def parse_response(response):
     if response.status_code >= 400:
         if response.status_code == 404:
             raise NotFoundException()
+        error_type, error_msg = '', ''
         try:
             response_json = response.json()
         except:
-            pass
+            error_msg = response.text
         else:
-            if response_json.get('error_type') == 'wrong_filter_in_filters':
-                raise WrongFilterException()
-            if response_json.get('error_msg') == 'base_exceeds_limit':
-                raise BaseExceedsLimitException()
+            error_type = response_json.get('error_type')
+            error_msg = response_json.get('error_msg')
+
+        if error_type == 'wrong_filter_in_filters':
+            raise WrongFilterException()
+        if error_type == 'exceed_rows_limit' or error_msg == 'Exceed the rows limit':
+            raise BaseExceedsRowsLimitException('exceed_rows_limit', 'Exceed the rows limit')
+        if error_type == 'exceed_columns_limit' or error_msg == 'Exceed the columns limit':
+            raise BaseExceedsColumnsLimitException('exceed_columns_limit', 'Exceed the columns limit')
+        if error_type == 'base_exceeds_limit' or error_msg == 'The base size exceeds the limit of 200MB, the operation cannot be performed.':
+            raise BaseExceedsLimitException('base_exceeds_limit', 'The base size exceeds the limit of 200MB, the operation cannot be performed.')
+
         raise ConnectionError(response.status_code, response.text)
     else:
         try:

@@ -178,7 +178,12 @@ def check_common_dataset(session_class):
             continue
         else:
             if result.get('error_msg'):
-                if result.get('error_type') in ('generate_synced_columns_error', 'base_exceeds_limit'):
+                if result.get('error_type') in (
+                    'generate_synced_columns_error',
+                    'base_exceeds_limit',
+                    'exceed_columns_limit',
+                    'exceed_rows_limit'
+                ):
                     logging.warning('src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s client error: %s',
                                     src_dtable_uuid, src_table_id, src_view_id, dst_dtable_uuid, dst_table_id, result)
                     with session_class() as db_session:
