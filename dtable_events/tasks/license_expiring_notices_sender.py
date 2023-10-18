@@ -63,7 +63,7 @@ class LicenseExpiringNoticesSenderTimer(Thread):
     def run(self):
         sched = BlockingScheduler()
 
-        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='44')
+        @sched.scheduled_job('cron', day_of_week='*', hour='7')
         def check():
             logging.info('start to check license...')
             if not os.path.isfile(self.license_path):
