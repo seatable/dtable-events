@@ -90,7 +90,6 @@ class LicenseExpiringNoticesSenderTimer(Thread):
                 logging.warning('No expire date found: %s error: %s', expire_str, e)
                 return
             days = (expire_date - date.today()).days
-            days = 30
             if days in self.days:
                 try:
                     python_exec = get_python_executable()
