@@ -9,9 +9,10 @@ from dateutil import parser
 
 from seaserv import ccnet_api
 
-from dtable_events.app.config import dtable_web_dir
+from dtable_events.app.config import LICENSE_PATH, DTABLE_WEB_SERVICE_URL
 from dtable_events.db import init_db_session_class
-from dtable_events.utils import get_opt_from_conf_or_env, get_python_executable, run
+from dtable_events.utils import get_opt_from_conf_or_env
+from dtable_events.utils.dtable_web_api import DTableWebAPI
 
 
 class LicenseExpiringNoticesSender:
@@ -19,7 +20,7 @@ class LicenseExpiringNoticesSender:
     def __init__(self, config):
         self._db_session_class = init_db_session_class(config)
         self.days = [35, 15, 7, 6, 5, 4, 3, 2, 1]
-        self.license_path = '/shared/seatable-license.txt'
+        self.license_path = LICENSE_PATH
         self._parse_config(config)
         logdir = os.path.join(os.environ.get('LOG_DIR', ''))
         self._logfile = os.path.join(logdir, 'license_expiring_notices_sender.log')
@@ -27,7 +28,6 @@ class LicenseExpiringNoticesSender:
     def _parse_config(self, config):
         section_name = 'LICENSE-EXPIRING-NOTICES-SENDER'
         key_days = 'days'
-        key_license_path = 'license_path'
         if not config.has_section(section_name):
             return
         
@@ -42,7 +42,6 @@ class LicenseExpiringNoticesSender:
                 pass
         if days:
             self.days = days
-        self.license_path = get_opt_from_conf_or_env(config, section_name, key_license_path, default='/shared/seatable-license.txt')
 
     def start(self):
         timer = LicenseExpiringNoticesSenderTimer(self._db_session_class, self.days, self.license_path, self._logfile)
@@ -90,19 +89,14 @@ class LicenseExpiringNoticesSenderTimer(Thread):
                 logging.warning('No expire date found: %s error: %s', expire_str, e)
                 return
             days = (expire_date - date.today()).days
-            if days in self.days:
-                try:
-                    python_exec = get_python_executable()
-                    manage_py = os.path.join(dtable_web_dir, 'manage.py')
-                    cmd = [
-                        python_exec,
-                        manage_py,
-                        'send_license_expiring_notices',
-                        str(days),
-                    ]
-                    with open(self._logfile, 'a') as fp:
-                        run(cmd, cwd=dtable_web_dir, output=fp)
-                except Exception as e:
-                    logging.exception('error when cleaning trash dtables: %s', e)
+            if days not in self.days:
+                return
+            admin_users = ccnet_api.get_superusers()
+            dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+            to_users = [user.email for user in admin_users]
+            try:
+                dtable_web_api.internal_add_notification(to_users, 'license_expiring', {'days': days})
+            except Exception as e:
+                logging.exception('send license expiring days: %s to users: %s error: %s', days, to_users, e)
 
         sched.start()
