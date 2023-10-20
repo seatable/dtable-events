@@ -1659,7 +1659,7 @@ class BaseSQLGenerator(object):
             group_conjunction_split.join(group_string_list)
         )
 
-    def _filter2sql(self):
+    def _filter2sql(self, include_where_string=True):
         filter_conditions = self.filter_conditions
         filters = filter_conditions.get('filters', [])
         filter_conjunction = filter_conditions.get('filter_conjunction', 'And')
@@ -1696,6 +1696,9 @@ class BaseSQLGenerator(object):
             )
         else:
             return ''
+
+        if not include_where_string:
+            return "%s" % filter_content
         return "%s%s" % (
             filter_header,
             filter_content
@@ -1736,6 +1739,9 @@ class BaseSQLGenerator(object):
         if limit_clause:
             sql = "%s %s" % (sql, limit_clause)
         return sql
+
+    def get_where_clause(self, include_where_string=False):
+        return self._filter2sql(include_where_string=include_where_string)
 
 
 class LinkRecordsSQLGenerator(object):

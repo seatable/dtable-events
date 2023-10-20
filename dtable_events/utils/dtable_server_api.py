@@ -422,3 +422,12 @@ class DTableServerAPI(object):
         }
         response = requests.post(url, json=body, headers=self.headers)
         return parse_response(response)
+    
+    def archive_view(self, table_name, where_clause=""):
+        url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/archive-view/?from=dtable_events'
+        json_data = {
+            'table_name': table_name,
+            'where': where_clause,
+        }
+        response = requests.post(url, json=json_data, headers=self.headers, timeout=self.timeout)
+        return parse_response(response)

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from dtable_events.activities.handlers import MessageHandler
+from dtable_events.big_data.big_data_auto_archive_scanner import DTableAutoArchiveTaskScanner
 from dtable_events.statistics.counter import UserActivityCounter
 from dtable_events.dtable_io.dtable_io_server import DTableIOServer
 from dtable_events.tasks.instant_notices_sender import InstantNoticeSender
@@ -51,6 +52,7 @@ class App(object):
             self._data_syncr = DataSyncer(config)
             self._workflow_schedule_scanner = WorkflowSchedulesScanner(config)
             self._dtable_asset_trash_cleaner = DTableAssetTrashCleaner(config)
+            self._dtable_auto_archive_scanner = DTableAutoArchiveTaskScanner(config)
 
     def serve_forever(self):
         if self._enable_foreground_tasks:
@@ -78,3 +80,4 @@ class App(object):
             self._data_syncr.start()                         # default True
             self._workflow_schedule_scanner.start()          # default True
             self._dtable_asset_trash_cleaner.start()         # always True
+            self._dtable_auto_archive_scanner.start()        # default True
