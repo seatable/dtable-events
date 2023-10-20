@@ -10,54 +10,28 @@ from dateutil import parser
 from seaserv import ccnet_api
 
 from dtable_events.app.config import LICENSE_PATH, DTABLE_WEB_SERVICE_URL
-from dtable_events.db import init_db_session_class
-from dtable_events.utils import get_opt_from_conf_or_env
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 
 
 class LicenseExpiringNoticesSender:
 
-    def __init__(self, config):
-        self._db_session_class = init_db_session_class(config)
-        self.days = [35, 15, 7, 6, 5, 4, 3, 2, 1]
+    def __init__(self):
+        self.days = [30, 15, 7, 6, 5, 4, 3, 2, 1]
         self.license_path = LICENSE_PATH
-        self._parse_config(config)
-        logdir = os.path.join(os.environ.get('LOG_DIR', ''))
-        self._logfile = os.path.join(logdir, 'license_expiring_notices_sender.log')
-
-    def _parse_config(self, config):
-        section_name = 'LICENSE-EXPIRING-NOTICES-SENDER'
-        key_days = 'days'
-        if not config.has_section(section_name):
-            return
-        
-        days_str = get_opt_from_conf_or_env(config, section_name, key_days, default='30,15,7,6,5,4,3,2,1')
-        days = []
-        for day_str in days_str.split(','):
-            try:
-                day = int(day_str.strip())
-                if day > 0 and day not in days:
-                    days.append(day)
-            except:
-                pass
-        if days:
-            self.days = days
 
     def start(self):
-        timer = LicenseExpiringNoticesSenderTimer(self._db_session_class, self.days, self.license_path, self._logfile)
+        timer = LicenseExpiringNoticesSenderTimer(self.days, self.license_path)
         logging.info('Start license notices sender...')
         timer.start()
 
 
 class LicenseExpiringNoticesSenderTimer(Thread):
 
-    def __init__(self, db_session_class, days, license_path, _log_file):
+    def __init__(self, days, license_path):
         super(LicenseExpiringNoticesSenderTimer, self).__init__()
         self.daemon = True
-        self.db_session_class = db_session_class
         self.days = days
         self.license_path = license_path
-        self._logfile = _log_file
 
     def run(self):
         sched = BlockingScheduler()
@@ -72,7 +46,7 @@ class LicenseExpiringNoticesSenderTimer(Thread):
             with open(self.license_path, 'r') as f:
                 for line in f.readlines():
                     line = line.strip()
-                    logging.info('line: %s', line)
+                    logging.debug('line: %s', line)
                     if line.startswith('Expiration'):
                         expire_str = line
                         break
@@ -89,12 +63,13 @@ class LicenseExpiringNoticesSenderTimer(Thread):
                 logging.warning('No expire date found: %s error: %s', expire_str, e)
                 return
             days = (expire_date - date.today()).days
+            logging.info('license will expire in %s days', days)
             if days not in self.days:
                 return
-            admin_users = ccnet_api.get_superusers()
-            dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
-            to_users = [user.email for user in admin_users]
             try:
+                admin_users = ccnet_api.get_superusers()
+                dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+                to_users = [user.email for user in admin_users]
                 dtable_web_api.internal_add_notification(to_users, 'license_expiring', {'days': days})
             except Exception as e:
                 logging.exception('send license expiring days: %s to users: %s error: %s', days, to_users, e)

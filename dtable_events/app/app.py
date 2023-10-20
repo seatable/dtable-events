@@ -52,7 +52,7 @@ class App(object):
             self._data_syncr = DataSyncer(config)
             self._workflow_schedule_scanner = WorkflowSchedulesScanner(config)
             self._dtable_asset_trash_cleaner = DTableAssetTrashCleaner(config)
-            self._license_expiring_notices_sender = LicenseExpiringNoticesSender(config)
+            self._license_expiring_notices_sender = LicenseExpiringNoticesSender()
 
     def serve_forever(self):
         if self._enable_foreground_tasks:
