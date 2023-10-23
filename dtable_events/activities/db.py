@@ -49,7 +49,7 @@ class TableActivityDetail(object):
 
 
 def save_or_update_or_delete(session, event):
-    # ignore a few cloumn data: creator, ctime, last-modifier, mtime
+    # ignore a few column data: creator, ctime, last-modifier, mtime
 
     if event['op_type'] in ROWS_OPERATION_TYPES:
         for cell_data in event['row_data']:
@@ -67,43 +67,45 @@ def save_or_update_or_delete(session, event):
             ).order_by(desc(Activities.id))
             row = q.first()
             if row:
-                if row.op_type == 'insert_row':
-                    detail = json.loads(row.detail)
-                    cells_data = event['row_data']
-                    # Update cells values.
-                    for cell_data in cells_data:
-                        for i in detail['row_data']:
-                            if i['column_key'] == cell_data['column_key']:
-                                i['value'] = cell_data['value']
-                                if i['column_type'] != cell_data['column_type']:
-                                    i['column_type'] = cell_data['column_type']
-                                    i['column_data'] = cell_data['column_data']
-                                break
-                        else:
-                            del cell_data['old_value']
-                            detail['row_data'].append(cell_data)
-                    detail['row_name'] = event['row_name']
-                    detail['row_name_option'] = event.get('row_name_option', '')
-                else:
-                    detail = json.loads(row.detail)
-                    cells_data = event['row_data']
-                    # Update cells values and keep old_values unchanged.
-                    for cell_data in cells_data:
-                        for i in detail['row_data']:
-                            if i['column_key'] == cell_data['column_key']:
-                                i['value'] = cell_data['value']
-                                if i['column_type'] != cell_data['column_type']:
-                                    i['column_type'] = cell_data['column_type']
-                                    i['column_data'] = cell_data['column_data']
-                                    i['old_value'] = cell_data['old_value']
-                                break
-                        else:
-                            detail['row_data'].append(cell_data)
-                    detail['row_name'] = event['row_name']
-                    detail['row_name_option'] = event.get('row_name_option', '')
+                detail = json.loads(row.detail)
+                if detail['table_id'] == event['table_id']:
+                    if row.op_type == 'insert_row':
+                        cells_data = event['row_data']
+                        # Update cells values.
+                        for cell_data in cells_data:
+                            for i in detail['row_data']:
+                                if i['column_key'] == cell_data['column_key']:
+                                    i['value'] = cell_data['value']
+                                    if i['column_type'] != cell_data['column_type']:
+                                        i['column_type'] = cell_data['column_type']
+                                        i['column_data'] = cell_data['column_data']
+                                    break
+                            else:
+                                del cell_data['old_value']
+                                detail['row_data'].append(cell_data)
+                        detail['row_name'] = event['row_name']
+                        detail['row_name_option'] = event.get('row_name_option', '')
+                    else:
+                        cells_data = event['row_data']
+                        # Update cells values and keep old_values unchanged.
+                        for cell_data in cells_data:
+                            for i in detail['row_data']:
+                                if i['column_key'] == cell_data['column_key']:
+                                    i['value'] = cell_data['value']
+                                    if i['column_type'] != cell_data['column_type']:
+                                        i['column_type'] = cell_data['column_type']
+                                        i['column_data'] = cell_data['column_data']
+                                        i['old_value'] = cell_data['old_value']
+                                    break
+                            else:
+                                detail['row_data'].append(cell_data)
+                        detail['row_name'] = event['row_name']
+                        detail['row_name_option'] = event.get('row_name_option', '')
 
-                detail = json.dumps(detail)
-                update_activity_timestamp(session, row.id, op_time, detail)
+                    detail = json.dumps(detail)
+                    update_activity_timestamp(session, row.id, op_time, detail)
+                else:
+                    save_user_activities(session, event)
             else:
                 save_user_activities(session, event)
         elif event['op_type'] == 'delete_row':
