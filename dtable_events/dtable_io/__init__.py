@@ -351,7 +351,7 @@ def append_excel_csv_append_parsed_file(username, repo_id, dtable_uuid, file_nam
     try:
         append_parsed_file_by_dtable_server(username, repo_id, dtable_uuid, file_name, table_name)
     except Exception as e:
-        dtable_io_logger.error('append excel or csv failed. ERROR: {}'.format(e))
+        dtable_io_logger.exception('append excel or csv failed. dtable_uuid: %s, table_name: %s ERROR:  %s' % (dtable_uuid, table_name, e))
     else:
         dtable_io_logger.info('append excel or csv %s success!' % file_name)
 
@@ -455,7 +455,7 @@ def append_excel_csv_to_table(username, repo_id, file_name, dtable_uuid, table_n
     try:
         parse_and_append_excel_csv_to_table(username, repo_id, file_name, dtable_uuid, table_name, file_type)
     except Exception as e:
-        dtable_io_logger.exception('append excel or csv to table failed. ERROR: {}'.format(e))
+        dtable_io_logger.exception('append excel or csv to table failed. dtable_uuid: %s, table_name: %s ERROR: %s' % (dtable_uuid, table_name, e))
         if str(e.args[0]) == 'Excel format error':
             raise Exception('Excel format error')
     else:
