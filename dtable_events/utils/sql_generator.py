@@ -250,6 +250,76 @@ class NumberOperator(Operator):
         total_time = 3600 * hours + 60 * minutes + seconds
         return -total_time if is_negtive else total_time
 
+class DepartmentSingleSelectOperator(Operator):
+    SUPPORT_FILTER_PREDICATE = [
+        FilterPredicateTypes.IS_ANY_OF,
+        FilterPredicateTypes.IS_NONE_OF,
+        FilterPredicateTypes.IS,
+        FilterPredicateTypes.IS_NOT,
+        FilterPredicateTypes.EMPTY,
+        FilterPredicateTypes.NOT_EMPTY,
+    ]
+
+    def __init__(self, column, filter_item):
+        super(DepartmentSingleSelectOperator, self).__init__(column, filter_item)
+    
+    def op_is(self):
+        if not self.filter_term:
+            return ''
+        filter_term = self.filter_term
+        if not filter_term:
+            return ''
+        if isinstance(filter_term, list):
+            filter_term_str = ", ".join(map(str, filter_term))
+            return "`%s` %s (%s)" % (
+                self.column_name,
+                'IN',
+                filter_term_str
+            )
+        return "`%s` %s %s" % (
+            self.column_name,
+            '=',
+            filter_term
+        )
+    
+    def op_is_not(self):
+        if not self.filter_term:
+            return ''
+        filter_term = self.filter_term
+        if isinstance(filter_term, list):
+            filter_term_str = ", ".join(map(str, filter_term))
+            return "`%s` %s (%s)" % (
+                self.column_name,
+                'NOT IN',
+                filter_term_str
+            )
+        return "`%s` %s %s" % (
+            self.column_name,
+            '<>',
+            filter_term
+        )
+
+    def op_is_any_of(self):
+        if not self.filter_term or not isinstance(self.filter_term, list):
+            return ''
+        filter_term = self.filter_term
+        filter_term_str = ", ".join(map(str, filter_term))
+        return "`%s` %s (%s)" % (
+            self.column_name,
+            'IN',
+            filter_term_str
+        )
+
+    def op_is_none_of(self):
+        if not self.filter_term or not isinstance(self.filter_term, list):
+            return ''
+        filter_term = self.filter_term
+        filter_term_str = ", ".join(map(str, filter_term))
+        return "`%s` %s (%s)" % (
+            self.column_name,
+            'NOT IN',
+            filter_term_str
+        )
 
 
 class SingleSelectOperator(Operator):
@@ -986,6 +1056,9 @@ def _get_operator_by_type(column_type):
 
     if column_type == ColumnTypes.SINGLE_SELECT:
         return SingleSelectOperator
+
+    if column_type == ColumnTypes.DEPARTMENT_SINGLE_SELECT:
+        return DepartmentSingleSelectOperator
 
     if column_type == ColumnTypes.MULTIPLE_SELECT:
         return MultipleSelectOperator

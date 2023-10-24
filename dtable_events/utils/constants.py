@@ -6,6 +6,7 @@ class ColumnTypes:
     CHECKBOX = 'checkbox'
     SINGLE_SELECT = 'single-select'
     MULTIPLE_SELECT = 'multiple-select'
+    DEPARTMENT_SINGLE_SELECT = 'department-single-select'
     URL = 'url'
     DURATION = 'duration'
     NUMBER = 'number'
