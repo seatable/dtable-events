@@ -1186,7 +1186,9 @@ def extract_select_options(rows, column_name_to_column):
                 if not col_options:
                     select_column_options[col_name] = col_options
                 if col_type == 'multiple-select':
-                    col_options.update(set(cell_value))
+                    for op in cell_value:
+                        if op:
+                            col_options.add(op)
                 else:
                     col_options.add(cell_value)
 

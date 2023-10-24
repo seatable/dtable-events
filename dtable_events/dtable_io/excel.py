@@ -80,7 +80,13 @@ def parse_checkbox(cell_value):
 def parse_multiple_select(cell_value):
     cell_value = str(cell_value)
     values = cell_value.split('，') if '，' in cell_value else cell_value.split(',')
-    return [value.strip(' ') for value in values]
+    options = []
+    for value in values:
+        option = value.strip(' ')
+        if not option:
+            continue
+        options.append(option)
+    return options
 
 
 def parse_image(cell_value):
@@ -603,7 +609,10 @@ def append_parsed_file_by_dtable_server(username, repo_id, dtable_uuid, file_nam
     # add single-select or multiple-select column options
     for col_name, excel_options in excel_select_column_options.items():
         column = dtable_col_name_to_column.get(col_name)
-        dtable_options = column.get('data').get('options')
+        # data is None if table is new
+        dtable_options = []
+        if column.get('data') and column.get('data').get('options'):
+            dtable_options = column.get('data').get('options')
         to_be_added_options = excel_options - set([op.get('name') for op in dtable_options])
 
         if to_be_added_options:
