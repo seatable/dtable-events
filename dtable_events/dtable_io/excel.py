@@ -1628,7 +1628,7 @@ def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, rep
         try:
             add_nickname_to_cell(unknown_user_set, unknown_cell_list)
         except Exception as e:
-            dtable_io_logger.error('add nickname to cell error: {}'.format(e))
+            dtable_io_logger.exception('add nickname to cell error: {}'.format(e))
     for row in row_list:
         ws.append(row)
 

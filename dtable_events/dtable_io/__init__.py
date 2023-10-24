@@ -882,7 +882,7 @@ def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token, session_id):
                 f.write(base64.b64decode(v))
             dtable_io_logger.info('convert page to pdf success!')
         except Exception as e:
-            dtable_io_logger.error('execute printToPDF error: {}'.format(e))
+            dtable_io_logger.exception('execute printToPDF error: {}'.format(e))
 
         driver.quit()
 
