@@ -9,7 +9,7 @@ from dateutil import parser
 
 from seaserv import ccnet_api
 
-from dtable_events.app.config import LICENSE_PATH, DTABLE_WEB_SERVICE_URL
+from dtable_events.app.config import LICENSE_PATH, DTABLE_WEB_SERVICE_URL, IS_PRO_VERSION
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 
 
@@ -18,8 +18,11 @@ class LicenseExpiringNoticesSender:
     def __init__(self):
         self.days = [30, 15, 7, 6, 5, 4, 3, 2, 1]
         self.license_path = LICENSE_PATH
+        self._enabled = IS_PRO_VERSION  # only pro check license
 
     def start(self):
+        if not self._enabled:
+            return
         timer = LicenseExpiringNoticesSenderTimer(self.days, self.license_path)
         logging.info('Start license notices sender...')
         timer.start()
