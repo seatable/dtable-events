@@ -1672,9 +1672,9 @@ class LinkRecordsAction(BaseAction):
 
         try:
             sql = filter2sql(table_name, columns, filter_conditions, by_group=True)
-        except ValueError:
-            logger.warning('wrong filter in rule: %s linked-table filter_conditions: %s error: %s', self.rule_id, filter_conditions, e)
-            raise RuleInvalidException('wrong filter in rule: %s linked-table error: %s' % (self.rule_id, e))
+        except ValueError as e:
+            logger.warning('wrong filter in rule: %s linked-table filter_conditions: %s error: %s', self.auto_rule.rule_id, filter_conditions, e)
+            raise RuleInvalidException('wrong filter in rule: %s linked-table error: %s' % (self.auto_rule.rule_id, e))
         query_clause = "*"
         if column_names:
             if "_id" not in column_names:
