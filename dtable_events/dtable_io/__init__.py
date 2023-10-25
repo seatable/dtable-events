@@ -338,7 +338,7 @@ def import_excel_csv_add_table(username, repo_id, workspace_id, dtable_uuid, dta
     try:
         import_excel_csv_add_table_by_dtable_server(username, repo_id, dtable_uuid, dtable_name, lang)
     except Exception as e:
-        dtable_io_logger.error('import excel or csv add table failed. ERROR: {}'.format(e))
+        dtable_io_logger.error('import excel or csv add table failed. dtable_uuid: %s, dtable_name: %s ERROR: %s' % (dtable_uuid, dtable_name, e))
         raise Exception('Import excel or csv error')
     else:
         dtable_io_logger.info('import excel or csv %s add table success!' % dtable_name)
@@ -377,7 +377,7 @@ def update_excel_csv_update_parsed_file(username, repo_id, dtable_uuid, file_nam
     try:
         update_parsed_file_by_dtable_server(username, repo_id, dtable_uuid, file_name, table_name, selected_columns)
     except Exception as e:
-        dtable_io_logger.exception('update excel,csv failed. ERROR: {}'.format(e))
+        dtable_io_logger.exception('update excel,csv failed. dtable_uuid: %s, table_name: %s ERROR: %s' % (dtable_uuid, table_name, e))
         raise Exception('Update excel or csv error')
     else:
         dtable_io_logger.info('update excel,csv %s success!' % file_name)
@@ -390,7 +390,7 @@ def update_excel_upload_excel(username, repo_id, file_name, dtable_uuid, table_n
     try:
         parse_update_excel_upload_excel_to_json(repo_id, file_name, username, dtable_uuid, table_name)
     except Exception as e:
-        dtable_io_logger.exception('parse update excel failed. ERROR: {}'.format(e))
+        dtable_io_logger.exception('parse update excel failed. dtable_uuid: %s, table_name: %s ERROR: %s' % (dtable_uuid, table_name, e))
         raise Exception('Update excel or csv error')
     else:
         dtable_io_logger.info('parse update excel %s.xlsx success!' % file_name)
@@ -403,7 +403,7 @@ def update_csv_upload_csv(username, repo_id, file_name, dtable_uuid, table_name)
     try:
         parse_update_csv_upload_csv_to_json(repo_id, file_name, username, dtable_uuid, table_name)
     except Exception as e:
-        dtable_io_logger.exception('parse update csv failed. ERROR: {}'.format(e))
+        dtable_io_logger.exception('parse update csv failed. dtable_uuid: %s, table_name: %s ERROR: %s' % (dtable_uuid, table_name, e))
         raise Exception('Update excel or csv error')
     else:
         dtable_io_logger.info('parse update csv %s.csv success!' % file_name)
@@ -433,7 +433,7 @@ def import_excel_csv_to_table(username, repo_id, workspace_id, file_name, dtable
     try:
         parse_and_import_excel_csv_to_table(repo_id, file_name, dtable_uuid, username, file_type, lang)
     except Exception as e:
-        dtable_io_logger.exception('import excel or csv to table failed. ERROR: {}'.format(e))
+        dtable_io_logger.exception('import excel or csv to table failed.  dtable_uuid: %s, file_name: %s ERROR: %s' % (dtable_uuid, file_name, e))
         if str(e.args[0]) == 'Excel format error':
             raise Exception('Excel format error')
         raise Exception('Import excel or csv error')
@@ -449,7 +449,7 @@ def update_table_via_excel_csv(username, repo_id, file_name, dtable_uuid, table_
     try:
         parse_and_update_file_to_table(repo_id, file_name, username, dtable_uuid, table_name, selected_columns, file_type)
     except Exception as e:
-        dtable_io_logger.exception('update file update to table failed. ERROR: {}'.format(e))
+        dtable_io_logger.exception('update file update to table failed. dtable_uuid: %s, table_name: %s ERROR: %s' % (dtable_uuid, table_name, e))
         raise Exception('Update excel or csv error')
     else:
         dtable_io_logger.info('update file %s.%s update to table success!' % (file_name, file_type))
