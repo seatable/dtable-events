@@ -273,7 +273,7 @@ class DepartmentSingleSelectOperator(Operator):
             filter_term_str = ", ".join(map(str, filter_term))
             return "`%s` %s (%s)" % (
                 self.column_name,
-                'IN',
+                'in',
                 filter_term_str
             )
         return "`%s` %s %s" % (
@@ -290,7 +290,7 @@ class DepartmentSingleSelectOperator(Operator):
             filter_term_str = ", ".join(map(str, filter_term))
             return "`%s` %s (%s)" % (
                 self.column_name,
-                'NOT IN',
+                'not in',
                 filter_term_str
             )
         return "`%s` %s %s" % (
@@ -306,7 +306,7 @@ class DepartmentSingleSelectOperator(Operator):
         filter_term_str = ", ".join(map(str, filter_term))
         return "`%s` %s (%s)" % (
             self.column_name,
-            'IN',
+            'in',
             filter_term_str
         )
 
@@ -317,7 +317,7 @@ class DepartmentSingleSelectOperator(Operator):
         filter_term_str = ", ".join(map(str, filter_term))
         return "`%s` %s (%s)" % (
             self.column_name,
-            'NOT IN',
+            'not in',
             filter_term_str
         )
 
