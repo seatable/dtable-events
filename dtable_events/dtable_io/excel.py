@@ -541,6 +541,7 @@ def parse_and_append_excel_csv_to_table(username, repo_id, file_name, dtable_uui
 
     dtable_col_name_to_column = {col['name']: col for col in columns}
     excel_select_column_options = extract_select_options(rows, dtable_col_name_to_column)
+
     # add single-select or multiple-select column options
     for col_name, excel_options in excel_select_column_options.items():
         column = dtable_col_name_to_column.get(col_name)
