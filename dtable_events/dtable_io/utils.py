@@ -68,13 +68,15 @@ def gen_inner_file_upload_url(token, op, replace=False):
     return url
 
 
-def get_dtable_server_token(username, dtable_uuid, timeout=300):
+def get_dtable_server_token(username, dtable_uuid, timeout=300, is_internal=False):
     payload = {
         'exp': int(time.time()) + timeout,
         'dtable_uuid': dtable_uuid,
         'username': username,
         'permission': 'rw',
     }
+    if is_internal:
+        payload['is_internal'] = '1'
     access_token = jwt.encode(
         payload, DTABLE_PRIVATE_KEY, algorithm='HS256'
     )
@@ -892,7 +894,7 @@ def get_rows_from_dtable_server(username, dtable_uuid, table_name):
     api_url = get_inner_dtable_server_url()
     url = api_url.rstrip('/') + '/api/v1/internal/dtables/' + dtable_uuid + '/table-rows/?table_name=' + urlquote(table_name) + \
           '&convert_link_id=true&from=dtable_events'
-    dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
+    dtable_server_access_token = get_dtable_server_token(username, dtable_uuid, is_internal=True)
     headers = {'Authorization': 'Token ' + dtable_server_access_token}
 
     res = requests.get(url, headers=headers, timeout=180)
@@ -962,6 +964,7 @@ def get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, i
         'id_in_org': id_in_org,
         'user_department_ids_map': user_department_ids_map,
         'permission': permission,
+        'is_internal': '1'
     }
     access_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
 

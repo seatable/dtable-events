@@ -81,6 +81,7 @@ class DTableServerAPI(object):
         self.username = username
         self.dtable_uuid = dtable_uuid
         self.headers = None
+        self.internal_headers = None
         self.dtable_server_url = dtable_server_url.rstrip('/')
         self.server_url = server_url.rstrip('/') if server_url else None
         self.repo_id = repo_id
@@ -88,11 +89,14 @@ class DTableServerAPI(object):
         self.timeout = timeout
         self.access_token_timeout = access_token_timeout
         self.access_token = ''
+        self.internal_access_token = ''
         self._init()
 
     def _init(self):
         self.access_token = get_dtable_server_token(self.username, self.dtable_uuid, timeout=self.access_token_timeout)
+        self.internal_access_token = get_dtable_server_token(self.username, self.dtable_uuid, timeout=self.access_token_timeout, is_internal=True)
         self.headers = {'Authorization': 'Token ' + self.access_token}
+        self.internal_headers = {'Authorization': 'Token ' + self.internal_access_token}
 
     def get_metadata(self):
         url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/metadata/?from=dtable_events'
@@ -164,7 +168,7 @@ class DTableServerAPI(object):
             'convert_link_id': True,
             'has_hidden_columns': has_hidden_columns,
         }
-        response = requests.get(url, params=params, headers=self.headers, timeout=self.timeout)
+        response = requests.get(url, params=params, headers=self.internal_headers, timeout=self.timeout)
         data = parse_response(response)
         return data.get('rows')
 
