@@ -327,7 +327,6 @@ def import_excel_csv(username, repo_id, workspace_id, dtable_uuid, dtable_name, 
         import_excel_csv_by_dtable_server(username, repo_id, dtable_uuid, dtable_name, lang)
     except Exception as e:
         dtable_io_logger.error('import excel or csv failed. ERROR: {}'.format(e))
-        raise Exception('Import excel or csv error')
     else:
         dtable_io_logger.info('import excel or csv %s success!' % dtable_name)
 
