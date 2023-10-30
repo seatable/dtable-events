@@ -1493,8 +1493,12 @@ def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_
             except Exception as e:
                 c = WriteOnlyCell(ws, value=None)
             else:
-                formula_value, number_format = parse_formula_number(cell_value, column.get('data'))
-                c.number_format = number_format
+                column_data = column.get('data')
+                if column_data:
+                    formula_value, number_format = parse_formula_number(cell_value, column.get('data'))
+                    c.number_format = number_format
+                else:
+                    c.number_format = gen_decimal_format(cell_value)
 
         elif col_type == ColumnTypes.DATE:
             c = WriteOnlyCell(ws, value=format_time(cell_value))
