@@ -972,6 +972,7 @@ def get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, i
         'table_name': table_name,
         'view_name': view_name,
         'convert_link_id': True,
+        'view_id': view_id,
     }
 
     if start is not None:
