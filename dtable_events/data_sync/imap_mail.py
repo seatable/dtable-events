@@ -32,12 +32,18 @@ class ImapMail(object):
 
     @staticmethod
     def decode_str(s):
-        value, charset = decode_header(s)[0]
-        if not charset:
-            return value
-        if charset.lower() in ['gb2312', 'gbk', 'gb18030']:
-            charset = 'gb18030'
-        return value.decode(charset)
+        result_str = ''
+        for value, charset in decode_header(s):
+            if not charset:
+                if isinstance(value, bytes):
+                    result_str += value.decode()
+                    continue
+                result_str += value
+                continue
+            if charset.lower() in ['gb2312', 'gbk', 'gb18030']:
+                charset = 'gb18030'
+            result_str += value.decode(charset)
+        return result_str
 
     @staticmethod
     def parse_content(part):
