@@ -374,6 +374,9 @@ class TaskManager(object):
                     # Errors in import/sync common dataset, those have been record in real task code, so no duplicated error logs here
                     # Including source/destination table not found...
                     dtable_io_logger.warning('Failed to handle task %s error: %s \n' % (task_info, e))
+                elif str(e.args[0]).startswith('import_table_from_base:'):
+                    # Errors in import-table-from-base, those have been record in real task code, so no duplicated error logs here
+                    dtable_io_logger.warning('Failed to handle task %s error: %s \n' % (task_info, e))
                 else:
                     dtable_io_logger.exception(e)
                     dtable_io_logger.error('Failed to handle task %s, error: %s \n' % (task_info, e))

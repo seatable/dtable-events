@@ -13,6 +13,9 @@ from seaserv import seafile_api
 from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL
 from dtable_events.dtable_io import dtable_io_logger
 from dtable_events.utils import get_inner_dtable_server_url
+from dtable_events.utils.constants import ColumnTypes, DATE_FORMATS, DURATION_FORMATS, NUMBER_FORMATS, NUMBER_DECIMALS,\
+    NUMBER_THOUSANDS, GEO_FORMATS
+from dtable_events.utils.dtable_column_utils import AutoNumberUtils
 
 service_url = DTABLE_WEB_SERVICE_URL.strip()
 dtable_server_url = get_inner_dtable_server_url().rstrip('/')
@@ -120,6 +123,75 @@ def trans_and_copy_asset(table, src_repo_id, src_dtable_uuid, dst_workspace_id, 
     return True, table
 
 
+def generate_column(src_column):
+    column_name = src_column.get('name')
+    column_key = src_column.get('key')
+    column_type = src_column.get('type')
+    column_data = src_column.get('data') or {}
+    if not column_name or not column_key or not column_type:
+        return None
+    column = {
+        'column_key': column_key,
+        'column_name': column_name,
+        'column_type': column_type
+    }
+    if column_type == ColumnTypes.DATE:
+        format = column_data.get('format')
+        if not format or format not in DATE_FORMATS:
+            column_data['format'] = DATE_FORMATS[0]
+        column['column_data'] = column_data
+    elif column_type == ColumnTypes.DURATION:
+        duration_format = column_data.get('duration_format')
+        format = column_data.get('format') or 'duration'
+        if not duration_format or duration_format not in DURATION_FORMATS:
+            column_data['duration_format'] = DURATION_FORMATS[0]
+        column_data['format'] = format
+        column['column_data'] = column_data
+    elif column_type == ColumnTypes.NUMBER:
+        format = column_data.get('format')
+        decimal = column_data.get('decimal')
+        thousands = column_data.get('thousands')
+        if not format or format not in NUMBER_FORMATS:
+            column_data['format'] = NUMBER_FORMATS[0]
+        if not decimal or decimal not in NUMBER_DECIMALS:
+            column_data['decimal'] = NUMBER_DECIMALS[0]
+        if not thousands or thousands not in NUMBER_THOUSANDS:
+            column_data['thousands'] = NUMBER_THOUSANDS[0]
+        column['column_data'] = column_data
+    elif column_type in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
+        old_options = column_data.get('options') or []
+        options = []
+        for option in old_options:
+            if not isinstance(option, dict):
+                continue
+            if not option.get('id'):
+                continue
+            if not option.get('name'):
+                continue
+            if not option.get('color'):
+                continue
+            options.append(option)
+        column_data['options'] = options
+        column['column_data'] = column_data
+    elif column_type == ColumnTypes.GEOLOCATION:
+        geo_format = column_data.get('geo_format')
+        if not geo_format or geo_format not in GEO_FORMATS:
+            column_data['geo_format'] = GEO_FORMATS[0]
+        column['column_data'] = column_data
+    elif column_type == ColumnTypes.AUTO_NUMBER:
+        format = column_data.get('format')
+        if not format:
+            column_data['format'] = '0000'
+        else:
+            try:
+                AutoNumberUtils.get_parsed_format(format)
+            except:
+                column_data['format'] = '0000'
+    else:
+        column['column_data'] = column_data
+    return column
+
+
 def import_table_from_base(context):
     """import table from base
     """
@@ -204,12 +276,9 @@ def import_table_from_base(context):
                 else:
                     continue
             else:
-                column_dict = {
-                    'column_key': col_key,
-                    'column_name': col_name,
-                    'column_type': col_type,
-                    'column_data': col_data
-                }
+                column_dict = generate_column(col)
+                if not column_dict:
+                    continue
             dst_columns.append(column_dict)
 
         data = {
@@ -222,11 +291,9 @@ def import_table_from_base(context):
             if resp.status_code != 200:
                 error_msg = 'create dst table error, status code: %s, resp text: %s' \
                             % (resp.status_code, resp.text)
-                dtable_io_logger.error(error_msg)
                 raise Exception(error_msg)
         except Exception as e:
             error_msg = 'create dst table error: %s' % e
-            dtable_io_logger.error(error_msg)
             raise Exception(error_msg)
 
         # import src_rows step by step
@@ -253,5 +320,13 @@ def import_table_from_base(context):
                 raise Exception(error_msg)
     except Exception as e:
         error_msg = 'import_table_from_base: %s' % e
-        dtable_io_logger.error(error_msg)
+        try:
+            error_info = json.loads(error_msg[error_msg.find('resp text: ')+11:])
+        except:
+            dtable_io_logger.exception(error_msg, exc_info=e)
+        else:
+            if error_info.get('error_type') == 'table_exist':
+                dtable_io_logger.warning('table: %s exists in dtable: %s', dst_table_name, dst_dtable_uuid)
+            else:
+                dtable_io_logger.exception(error_msg)
         raise Exception(error_msg)

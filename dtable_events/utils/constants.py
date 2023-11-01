@@ -160,6 +160,14 @@ class StatisticType:
     DASHBOARD = 'dashboard'
 
 
+DATE_FORMATS = ['YYYY-MM-DD', 'M/D/YYYY', 'DD/MM/YYYY', 'YYYY-MM-DD HH:mm', 'DD.MM.YYYY', 'DD.MM.YYYY HH:mm', 'M/D/YYYY HH:mm']
+DURATION_FORMATS = ['h:mm', 'h:mm:ss']
+NUMBER_FORMATS = ['number', 'percent', 'yuan', 'dollar', 'euro', 'custom_currency']
+NUMBER_DECIMALS = ['comma', 'dot']
+NUMBER_THOUSANDS = ['no', 'comma', 'dot', 'space']
+GEO_FORMATS = ['geolocation', 'lng_lat', 'country_region', 'province_city_district', 'province', 'province_city']
+
+
 # single/multiple select options
 VALID_OPTION_TAGS = [
     {'color': '#FFFCB5', 'border_color': '#E8E79D', 'text_color': '#212529'},
