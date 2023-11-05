@@ -6,6 +6,7 @@ from threading import Thread
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from dtable_events.app.config import TIME_ZONE
+from dtable_events.app.metadata_cache_managers import RuleIntervalMetadataCacheManager
 from dtable_events.db import init_db_session_class
 from dtable_events.notification_rules.notification_rules_utils import trigger_near_deadline_notification_rule
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool
@@ -76,11 +77,12 @@ def scan_dtable_notification_rules(db_session):
         'per_day_check_time': per_day_check_time,
         'per_week_check_time': per_week_check_time
     })
+    rule_interval_metadata_cache_manager = RuleIntervalMetadataCacheManager()
     for rule in rules:
         if not rule[4]:  # filter and ignore non-dtable-uuid records(some old records)
             continue
         try:
-            trigger_near_deadline_notification_rule(rule, db_session)
+            trigger_near_deadline_notification_rule(rule, db_session, rule_interval_metadata_cache_manager)
         except Exception as e:
             logging.exception(e)
             logging.error(f'check rule failed. {rule}, error: {e}')
@@ -97,7 +99,7 @@ class DTableNofiticationRulesScannerTimer(Thread):
     def run(self):
         sched = BlockingScheduler()
         # fire at every hour in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='*')
+        @sched.scheduled_job('cron', day_of_week='*', hour='2', minute='42')
         def timed_job():
             logging.info('Starts to scan notification rules...')
 

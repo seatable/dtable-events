@@ -10,6 +10,7 @@ import requests
 
 from dtable_events import filter2sql
 from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL
+from dtable_events.app.metadata_cache_managers import RuleIntentMetadataCacheManger, RuleIntervalMetadataCacheManager
 from dtable_events.notification_rules.utils import get_nickname_by_usernames
 from dtable_events.utils import is_valid_email, uuid_str_to_36_chars, get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes, FormulaResultType
@@ -74,8 +75,9 @@ def scan_triggered_notification_rules(event_data, db_session):
     rules = db_session.execute(sql, {'dtable_uuid': message_dtable_uuid, 'rule_id': rule_id})
 
     for rule in rules:
+        rule_intent_metadata_cache_manager = RuleIntentMetadataCacheManger()
         try:
-            trigger_notification_rule(rule, table_id, row, converted_row, db_session, op_type)
+            trigger_notification_rule(rule, table_id, row, converted_row, db_session, op_type, rule_intent_metadata_cache_manager)
         except Exception as e:
             logger.exception(e)
             logger.error(f'check rule failed. {rule}, error: {e}')
@@ -211,7 +213,7 @@ def convert_zero_in_value(value):
 
     return value
 
-def fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, converted_row, db_session, dtable_metadata):
+def fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, converted_row, db_session):
     for blank in column_blanks:
         if col_name_dict[blank]['type'] in [
             ColumnTypes.TEXT,
@@ -343,13 +345,13 @@ def get_column_blanks(blanks, columns):
     return column_blanks, col_name_dict
 
 
-def gen_noti_msg_with_converted_row(msg, row, column_blanks, col_name_dict, db_session, dtable_metadata=None):
+def gen_noti_msg_with_converted_row(msg, row, column_blanks, col_name_dict, db_session):
     if not msg:
         return msg
     if not column_blanks:
         return msg
 
-    return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, row, db_session, dtable_metadata=dtable_metadata)
+    return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, row, db_session)
 
 
 def gen_noti_msg_with_sql_row(msg, row, column_blanks, col_name_dict, db_session):
@@ -376,7 +378,7 @@ def get_column_by_key(dtable_metadata, table_id, column_key):
     return None
 
 
-def trigger_notification_rule(rule, message_table_id, row, converted_row, db_session, op_type):
+def trigger_notification_rule(rule, message_table_id, row, converted_row, db_session, op_type, rule_intent_metadata_cache_manager: RuleIntentMetadataCacheManger):
     rule_id = rule[0]
     trigger = rule[1]
     action = rule[2]
@@ -397,7 +399,7 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, db_ses
 
     dtable_server_api = DTableServerAPI('notification-rule', dtable_uuid, get_inner_dtable_server_url(), access_token_timeout=3600)
     dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
-    dtable_metadata = dtable_server_api.get_metadata()
+    dtable_metadata = rule_intent_metadata_cache_manager.get_metadata(dtable_uuid)
     target_table, target_view = None, None
     for table in dtable_metadata['tables']:
         if table['_id'] == table_id:
@@ -441,7 +443,7 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, db_ses
             'condition': CONDITION_ROWS_MODIFIED,
             'rule_id': rule.id,
             'rule_name': rule_name,
-            'msg': gen_noti_msg_with_converted_row(msg, converted_row, column_blanks, col_name_dict, db_session, dtable_metadata=dtable_metadata),
+            'msg': gen_noti_msg_with_converted_row(msg, converted_row, column_blanks, col_name_dict, db_session),
             'row_id_list': [row['_id']],
         }
 
@@ -476,7 +478,7 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, db_ses
             'condition': CONDITION_FILTERS_SATISFY,
             'rule_id': rule.id,
             'rule_name': rule_name,
-            'msg': gen_noti_msg_with_converted_row(msg, converted_row, column_blanks, col_name_dict, db_session, dtable_metadata=dtable_metadata),
+            'msg': gen_noti_msg_with_converted_row(msg, converted_row, column_blanks, col_name_dict, db_session),
             'row_id_list': [row['_id']],
         }
         if users_column_key:
@@ -508,7 +510,7 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, db_ses
     update_rule_last_trigger_time(rule_id, db_session)
 
 
-def trigger_near_deadline_notification_rule(rule, db_session):
+def trigger_near_deadline_notification_rule(rule, db_session, rule_interval_metadata_cache_manager: RuleIntervalMetadataCacheManager):
     rule_id = rule[0]
     trigger = rule[1]
     action = rule[2]
@@ -529,7 +531,7 @@ def trigger_near_deadline_notification_rule(rule, db_session):
     dtable_server_api = DTableServerAPI('notification-rule', dtable_uuid, get_inner_dtable_server_url(), access_token_timeout=3600)
     dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
     dtable_db_api = DTableDBAPI('dtable-events', dtable_uuid, INNER_DTABLE_DB_URL)
-    dtable_metadata = dtable_server_api.get_metadata()
+    dtable_metadata = rule_interval_metadata_cache_manager.get_metadata(dtable_uuid)
     target_table, target_view = None, None
     for table in dtable_metadata['tables']:
         if table['_id'] == table_id:

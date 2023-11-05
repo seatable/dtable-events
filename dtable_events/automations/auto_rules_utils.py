@@ -1,6 +1,7 @@
 import logging
 
 from dtable_events import init_db_session_class
+from dtable_events.app.metadata_cache_managers import RuleIntentMetadataCacheManger, RuleIntervalMetadataCacheManager
 from dtable_events.automations.actions import AutomationRule
 
 logger = logging.getLogger(__name__)
@@ -33,14 +34,15 @@ def scan_triggered_automation_rules(event_data, db_session, per_minute_trigger_l
             'creator': creator,
             'last_trigger_time': last_trigger_time,
         }
+        rule_intent_metadata_cache_manager = RuleIntentMetadataCacheManger()
         try:
-            auto_rule = AutomationRule(event_data, db_session, trigger, actions, options, per_minute_trigger_limit=per_minute_trigger_limit)
+            auto_rule = AutomationRule(event_data, db_session, trigger, actions, options, rule_intent_metadata_cache_manager, per_minute_trigger_limit=per_minute_trigger_limit)
             auto_rule.do_actions()
         except Exception as e:
             logger.error('auto rule: %s do actions error: %s', rule_id, e)
 
 
-def run_regular_execution_rule(rule, db_session):
+def run_regular_execution_rule(rule, db_session, metadata_cache_manager):
     trigger = rule[2]
     actions = rule[3]
 
@@ -53,7 +55,7 @@ def run_regular_execution_rule(rule, db_session):
     options['org_id'] = rule[7]
     options['creator'] = rule[8]
     try:
-        auto_rule = AutomationRule(None, db_session, trigger, actions, options)
+        auto_rule = AutomationRule(None, db_session, trigger, actions, options, metadata_cache_manager)
         auto_rule.do_actions()
     except Exception as e:
         logger.error('auto rule: %s do actions error: %s', options['rule_id'], e)
@@ -61,8 +63,9 @@ def run_regular_execution_rule(rule, db_session):
 def run_auto_rule_task(trigger, actions, options, config):
     from dtable_events.automations.actions import AutomationRule
     db_session = init_db_session_class(config)()
+    metadata_cache_manager = RuleIntervalMetadataCacheManager()
     try:
-        auto_rule = AutomationRule(None, db_session, trigger, actions, options)
+        auto_rule = AutomationRule(None, db_session, trigger, actions, options, metadata_cache_manager)
         auto_rule.do_actions(with_test=True)
     except Exception as e:
         logger.error('automation rule run test error: {}'.format(e))

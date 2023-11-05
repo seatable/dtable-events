@@ -14,6 +14,7 @@ import requests
 
 from seaserv import seafile_api
 from dtable_events.automations.models import get_third_party_account
+from dtable_events.app.metadata_cache_managers import BaseMetadataCacheManager
 from dtable_events.app.event_redis import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, \
     SEATABLE_FAAS_AUTH_TOKEN, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL
@@ -322,7 +323,7 @@ class UpdateAction(BaseAction):
     def fill_msg_blanks(self, row, text, blanks):
         col_name_dict = self.col_name_dict
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks_with_converted_row(text, blanks, col_name_dict, row, db_session, dtable_metadata)
+        return fill_msg_blanks_with_converted_row(text, blanks, col_name_dict, row, db_session)
 
     
     def fill_msg_blanks_with_sql(self, row, text, blanks):
@@ -716,7 +717,7 @@ class NotifyAction(BaseAction):
     def fill_msg_blanks(self, row):
         msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, row, db_session, dtable_metadata)
+        return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, row, db_session)
 
     def fill_msg_blanks_with_sql(self, row):
         msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
@@ -907,7 +908,7 @@ class AppNotifyAction(BaseAction):
     def fill_msg_blanks(self, row):
         msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, row, db_session, dtable_metadata)
+        return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, row, db_session)
 
     def fill_msg_blanks_with_sql(self, row):
         msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
@@ -1075,7 +1076,7 @@ class SendWechatAction(BaseAction):
     def fill_msg_blanks(self, row):
         msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, row, db_session, dtable_metadata)
+        return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, row, db_session)
 
     def fill_msg_blanks_with_sql(self, row):
         msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
@@ -1152,7 +1153,7 @@ class SendDingtalkAction(BaseAction):
     def fill_msg_blanks(self, row):
         msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, row, db_session, dtable_metadata)
+        return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, row, db_session)
 
     def fill_msg_blanks_with_sql(self, row):
         msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
@@ -1273,7 +1274,7 @@ class SendEmailAction(BaseAction):
     def fill_msg_blanks(self, row, text, blanks):
         col_name_dict = self.col_name_dict
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks_with_converted_row(text, blanks, col_name_dict, row, db_session, dtable_metadata)
+        return fill_msg_blanks_with_converted_row(text, blanks, col_name_dict, row, db_session)
 
 
     def fill_msg_blanks_with_sql(self, row, text, blanks):
@@ -1954,7 +1955,7 @@ class AddRecordToOtherTableAction(BaseAction):
     def fill_msg_blanks(self, row, text, blanks):
         col_name_dict = self.col_name_dict
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks_with_converted_row(text, blanks, col_name_dict, row, db_session, dtable_metadata)
+        return fill_msg_blanks_with_converted_row(text, blanks, col_name_dict, row, db_session)
 
     def format_time_by_offset(self, offset, format_length):
         cur_datetime = datetime.now()
@@ -2796,7 +2797,7 @@ class RuleInvalidException(Exception):
 
 class AutomationRule:
 
-    def __init__(self, data, db_session, raw_trigger, raw_actions, options, per_minute_trigger_limit=None):
+    def __init__(self, data, db_session, raw_trigger, raw_actions, options, metadata_cache_manager: BaseMetadataCacheManager, per_minute_trigger_limit=None):
         self.rule_id = options.get('rule_id', None)
         self.rule_name = ''
         self.run_condition = options.get('run_condition', None)
@@ -2827,6 +2828,8 @@ class AutomationRule:
         self._related_users = None
         self._related_users_dict = None
         self._trigger_conditions_rows = None
+
+        self.metadata_cache_manager = metadata_cache_manager
 
         self.cache_key = 'AUTOMATION_RULE:%s' % self.rule_id
         self.task_run_success = True
@@ -2882,7 +2885,7 @@ class AutomationRule:
     @property
     def dtable_metadata(self):
         if not self._dtable_metadata:
-            self._dtable_metadata = self.dtable_server_api.get_metadata()
+            self._dtable_metadata = self.metadata_cache_manager.get_metadata(self.dtable_uuid)
         return self._dtable_metadata
 
     @property
