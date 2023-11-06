@@ -1366,3 +1366,8 @@ def post_big_data_screen_zip_file(username, repo_id, dtable_uuid, page_id, tmp_e
                 seafile_api.post_file(repo_id, tmp_image_path, current_image_path, image_name, username)
 
 
+def escape_sheet_name(text):
+    # invalid_title_regex is from openpyxl
+    invalid_title_regex = re.compile(r'[\\*?:/\[\]]')
+    replacement = "-"
+    return re.sub(invalid_title_regex, replacement, text)

@@ -4,7 +4,8 @@ import shutil
 import uuid
 
 from dtable_events.dtable_io.excel import parse_row, write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR
-from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, get_metadata_from_dtable_server
+from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, get_metadata_from_dtable_server, \
+    escape_sheet_name
 from dtable_events.utils import get_inner_dtable_server_url, get_location_tree_json
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.app.config import INNER_DTABLE_DB_URL, BIG_DATA_ROW_IMPORT_LIMIT, BIG_DATA_ROW_UPDATE_LIMIT, \
@@ -407,6 +408,7 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
             summary_col_info.update({col.get('name'): summary_configs.get(col.get('key'))})
 
     sheet_name = table_name + ('_' + view_name if view_name else '')
+    sheet_name = escape_sheet_name(sheet_name)
     excel_name = name + '_' + table_name + ('_' + view_name if view_name else '') + '.xlsx'
     target_path = os.path.join(target_dir, excel_name)
 

@@ -899,7 +899,7 @@ def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token, session_id):
 def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image=False):
     from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_view_rows_from_dtable_server
     from dtable_events.dtable_io.excel import write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR
-    from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
+    from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, escape_sheet_name
     import openpyxl
 
     target_dir = TEMP_EXPORT_VIEW_DIR + dtable_uuid
@@ -961,6 +961,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, u
     image_param = {'num': 0, 'is_support': is_support_image, 'images_target_dir': images_target_dir}
 
     sheet_name = table_name + ('_' + view_name if view_name else '')
+    sheet_name = escape_sheet_name(sheet_name)
     excel_name = name + '_' + table_name + ('_' + view_name if view_name else '') + '.xlsx'
 
     wb = openpyxl.Workbook(write_only=True)
@@ -992,7 +993,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, u
 def convert_table_to_execl(dtable_uuid, table_id, username, permission, name, repo_id, is_support_image=False):
     from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_rows_from_dtable_server
     from dtable_events.dtable_io.excel import write_xls_with_type, IMAGE_TMP_DIR
-    from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable
+    from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, escape_sheet_name
     import openpyxl
 
     target_dir = '/tmp/dtable-io/export-table-to-excel/' + dtable_uuid
@@ -1035,7 +1036,7 @@ def convert_table_to_execl(dtable_uuid, table_id, username, permission, name, re
     images_target_dir = os.path.join(IMAGE_TMP_DIR, dtable_uuid, str(uuid.uuid4()))
     image_param = {'num': 0, 'is_support': is_support_image, 'images_target_dir': images_target_dir}
 
-    sheet_name = table_name
+    sheet_name = escape_sheet_name(table_name)
     excel_name = name + '_' + table_name + '.xlsx'
     target_path = os.path.join(target_dir, excel_name)
     wb = openpyxl.Workbook(write_only=True)
