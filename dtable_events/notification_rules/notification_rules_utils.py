@@ -74,8 +74,8 @@ def scan_triggered_notification_rules(event_data, db_session):
           "AND dtable_uuid=:dtable_uuid AND is_valid=1 AND id=:rule_id"
     rules = db_session.execute(sql, {'dtable_uuid': message_dtable_uuid, 'rule_id': rule_id})
 
+    rule_intent_metadata_cache_manager = RuleIntentMetadataCacheManger()
     for rule in rules:
-        rule_intent_metadata_cache_manager = RuleIntentMetadataCacheManger()
         try:
             trigger_notification_rule(rule, table_id, row, converted_row, db_session, op_type, rule_intent_metadata_cache_manager)
         except Exception as e:

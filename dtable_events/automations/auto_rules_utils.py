@@ -24,6 +24,7 @@ def scan_triggered_automation_rules(event_data, db_session, per_minute_trigger_l
         logger.error('checkout auto rules error: %s', e)
         return
 
+    rule_intent_metadata_cache_manager = RuleIntentMetadataCacheManger()
     for rule_id, run_condition, trigger, actions, last_trigger_time, dtable_uuid, trigger_count, org_id, creator in rules:
         options = {
             'rule_id': rule_id,
@@ -34,7 +35,6 @@ def scan_triggered_automation_rules(event_data, db_session, per_minute_trigger_l
             'creator': creator,
             'last_trigger_time': last_trigger_time,
         }
-        rule_intent_metadata_cache_manager = RuleIntentMetadataCacheManger()
         try:
             auto_rule = AutomationRule(event_data, db_session, trigger, actions, options, rule_intent_metadata_cache_manager, per_minute_trigger_limit=per_minute_trigger_limit)
             auto_rule.do_actions()

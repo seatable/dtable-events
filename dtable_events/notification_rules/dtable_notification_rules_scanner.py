@@ -77,6 +77,8 @@ def scan_dtable_notification_rules(db_session):
         'per_day_check_time': per_day_check_time,
         'per_week_check_time': per_week_check_time
     })
+    # each base's metadata only requested once and recorded in memory
+    # The reason why it doesn't cache metadata in redis is metadatas in interval rules need to be up-to-date
     rule_interval_metadata_cache_manager = RuleIntervalMetadataCacheManager()
     for rule in rules:
         if not rule[4]:  # filter and ignore non-dtable-uuid records(some old records)

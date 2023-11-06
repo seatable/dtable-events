@@ -69,6 +69,8 @@ def scan_dtable_automation_rules(db_session):
         'per_month_check_time': per_month_check_time
     })
 
+    # each base's metadata only requested once and recorded in memory
+    # The reason why it doesn't cache metadata in redis is metadatas in interval rules need to be up-to-date
     rule_interval_metadata_cache_manager = RuleIntervalMetadataCacheManager()
     for rule in rules:
         try:
