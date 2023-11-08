@@ -117,6 +117,13 @@ class DTableServerAPI(object):
         response = requests.post(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
+    def delete_table_by_id(self, table_id):
+        logger.debug('delete table table_id: %s', table_id)
+        url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/tables/?from=dtable_events'
+        json_data = {'table_id': table_id}
+        response = requests.delete(url, json=json_data, headers=self.headers, timeout=self.timeout)
+        return parse_response(response)
+
     def list_rows(self, table_name, start=None, limit=None):
         logger.debug('list rows table_name: %s', table_name)
         url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/rows/?from=dtable_events'
