@@ -20,6 +20,7 @@ from dtable_events.tasks.big_data_storage_stats_worker import BigDataStorageStat
 from dtable_events.data_sync.data_syncer import DataSyncer
 from dtable_events.workflow.workflow_actions import WorkflowActionsHandler
 from dtable_events.workflow.workflow_schedules_scanner import WorkflowSchedulesScanner
+from dtable_events.system_bases.system_bases import system_bases_manager
 
 
 class App(object):
@@ -81,3 +82,5 @@ class App(object):
             self._workflow_schedule_scanner.start()          # default True
             self._dtable_asset_trash_cleaner.start()         # always True
             self._license_expiring_notices_sender.start()    # always True
+            # upgrade system bases
+            system_bases_manager.upgrade()

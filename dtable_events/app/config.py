@@ -9,12 +9,16 @@ logger = logging.getLogger(__name__)
 
 # DTABLE_WEB_DIR
 dtable_web_dir = os.environ.get('DTABLE_WEB_DIR', '')
+central_conf_dir = os.environ.get('SEAFILE_CENTRAL_CONF_DIR', '')
 if not dtable_web_dir:
     logging.critical('dtable_web_dir is not set')
     raise RuntimeError('dtable_web_dir is not set')
 if not os.path.exists(dtable_web_dir):
     logging.critical('dtable_web_dir %s does not exist' % dtable_web_dir)
     raise RuntimeError('dtable_web_dir does not exist.')
+if not central_conf_dir or not os.path.exists(central_conf_dir):
+    logging.critical('central_conf_dir is not set or not found')
+    raise RuntimeError('central_conf_dir is not set or not found')
 
 sys.path.insert(0, dtable_web_dir)
 

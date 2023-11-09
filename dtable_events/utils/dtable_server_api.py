@@ -94,6 +94,14 @@ class DTableServerAPI(object):
         self.access_token = get_dtable_server_token(self.username, self.dtable_uuid, timeout=self.access_token_timeout)
         self.headers = {'Authorization': 'Token ' + self.access_token}
 
+    @staticmethod
+    def ping(dtable_server_url, timeout=30):
+        url = dtable_server_url.strip('/') + '/ping/'
+        response = requests.get(url, timeout=timeout)
+        if response.status_code != 200:
+            return None
+        return 'ping'
+
     def get_metadata(self):
         url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/metadata/?from=dtable_events'
         response = requests.get(url, headers=self.headers, timeout=self.timeout)
