@@ -314,7 +314,7 @@ class BaseAction:
         if not column_blanks:
             return msg
         try:
-            return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, converted_row, self.context.db_session, self.context.dtable_metadata)
+            return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, converted_row, self.context.db_session)
         except Exception as e:
             logger.exception(e)
             logger.error('msg: %s col_name_dict: %s column_blanks: %s fill error: %s', msg, col_name_dict, column_blanks, e)
