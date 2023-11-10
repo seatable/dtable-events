@@ -140,7 +140,7 @@ def main():
             pass
         logging.info('wait for dtable-db for 5s...')
         time.sleep(5)
-        update_version(version_dtable_server_api, '4.3.0')
+        update_version(version_dtable_server_api, '0.0.1')
 
 
 if __name__ == '__main__':
@@ -150,5 +150,5 @@ if __name__ == '__main__':
     try:
         main()
     except Exception as e:
-        logging.exception('upgrade system bases 4.3.0 error: %s', e)
+        logging.exception('upgrade system bases 0.0.1 error: %s', e)
         exit(1)

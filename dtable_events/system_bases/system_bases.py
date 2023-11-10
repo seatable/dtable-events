@@ -18,7 +18,7 @@ class SystemBasesManager:
     def __init__(self):
         self.is_upgrade_done = False
         self.versions = [
-            '4.3.0'
+            '0.0.1'
         ]
 
         self.current_version = ''
