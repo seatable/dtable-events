@@ -2,6 +2,7 @@
 import logging
 import re
 from copy import deepcopy
+from datetime import datetime
 
 from dateutil import parser
 
@@ -703,6 +704,9 @@ def import_sync_CDS(context):
     operator = context.get('operator')
     lang = context.get('lang', 'en')
 
+    stats_worker = context.get('stats_worker')
+    stats_worker.set_stats_data('started_at', datetime.now())
+
     src_dtable_server_api = DTableServerAPI(operator, src_dtable_uuid, dtable_server_url)
     src_dtable_db_api = DTableDBAPI(operator, src_dtable_uuid, INNER_DTABLE_DB_URL)
     dst_dtable_server_api = DTableServerAPI(operator, dst_dtable_uuid, dtable_server_url)
@@ -736,6 +740,9 @@ def import_sync_CDS(context):
             'task_status_code': 400
         }
     final_columns = (to_be_updated_columns or []) + (to_be_appended_columns or [])
+    stats_worker.set_stats_data('columns_count', len(final_columns))
+    stats_worker.set_stats_data('link_formula_columns_count', len([col for col in src_columns if col.get('type') == ColumnTypes.LINK_FORMULA]))
+
     ### create or update dst columns
     dst_table_id, error_resp = create_dst_table_or_update_columns(dst_dtable_uuid, dst_table_id, dst_table_name, to_be_appended_columns, to_be_updated_columns, dst_dtable_server_api, lang)
     if error_resp:
@@ -816,9 +823,14 @@ def import_sync_CDS(context):
     to_be_deleted_rows_id_set = dst_rows_id_set - src_rows_id_set
     logger.debug('to_be_appended_rows_id_set: %s, to_be_updated_rows_id_set: %s, to_be_deleted_rows_id_set: %s', len(to_be_appended_rows_id_set), len(to_be_updated_rows_id_set), len(to_be_deleted_rows_id_set))
 
+    stats_worker.set_stats_data('to_be_appended_rows_count', len(to_be_appended_rows_id_set))
+    stats_worker.set_stats_data('to_be_updated_rows_count', len(to_be_updated_rows_id_set))
+    stats_worker.set_stats_data('to_be_deleted_rows_count', len(to_be_deleted_rows_id_set))
+
     # delete dst to-be-deleted-rows
     logger.debug('will delete %s rows', len(to_be_deleted_rows_id_set))
     delete_dst_rows(dst_dtable_uuid, dst_table_name, list(to_be_deleted_rows_id_set), dst_dtable_server_api)
+    stats_worker.set_stats_data('deleted_rows_count', len(to_be_deleted_rows_id_set))
 
     src_query_columns = ', '.join(['_id'] + ["`%s`" % src_columns_key_dict[col['key']]['name'] for col in final_columns])
     dst_query_columns = ', '.join(['_id'] + ["`%s`" % col['name'] for col in final_columns])
@@ -859,6 +871,7 @@ def import_sync_CDS(context):
         error_resp = update_dst_rows(dst_dtable_uuid, dst_table_name, to_be_updated_rows, dst_dtable_server_api)
         if error_resp:
             return error_resp
+        stats_worker.set_stats_data('updated_rows_count', len(to_be_updated_rows))
 
     # fetch src to-be-append-rows, append to dst table, step by step
     ## this list is to record the order of src rows
@@ -893,6 +906,7 @@ def import_sync_CDS(context):
         error_resp = append_dst_rows(dst_dtable_uuid, dst_table_name, to_be_appended_rows, dst_dtable_server_api)
         if error_resp:
             return error_resp
+        stats_worker.set_stats_data('appended_rows_count', len(to_be_appended_rows))
 
     return {
         'dst_table_id': dst_table_id,

@@ -49,7 +49,8 @@ try:
     LICENSE_PATH = getattr(seahub_settings, 'LICENSE_PATH', '/shared/seatable-license.txt')
     IS_PRO_VERSION = getattr(seahub_settings, 'IS_PRO_VERSION', False)
     NEW_DTABLE_IN_STORAGE_SERVER = getattr(seahub_settings, 'NEW_DTABLE_IN_STORAGE_SERVER', False)
-    SYSTEM_BASES_VERSION = getattr(seahub_settings, 'SYSTEM_BASES_VERSION', '0.0.1')
+    ENABLE_SYSTEM_BASES = getattr(seahub_settings, 'ENABLE_SYSTEM_BASES', True)
+    SYSTEM_BASES_OWNER = getattr(seahub_settings, 'SYSTEM_BASES_OWNER', 'system bases')
 except Exception as e:
     logger.critical("Can not import dtable_web settings: %s." % e)
     raise RuntimeError("Can not import dtable_web settings: %s" % e)

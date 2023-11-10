@@ -2,15 +2,13 @@ import logging
 import os
 import time
 import subprocess
+import threading
 
-import requests
-
-from dtable_events.app.config import central_conf_dir, INNER_DTABLE_DB_URL
+from dtable_events.app.config import central_conf_dir, INNER_DTABLE_DB_URL, SYSTEM_BASES_OWNER, ENABLE_SYSTEM_BASES
 from dtable_events.db import init_db_session_class
-from dtable_events.utils import get_inner_dtable_server_url, uuid_str_to_32_chars, get_python_executable
+from dtable_events.utils import get_inner_dtable_server_url, get_python_executable, uuid_str_to_36_chars
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_db_api import DTableDBAPI
-from dtable_events.utils.storage_backend import storage_backend
 
 logger = logging.getLogger(__name__)
 dtable_server_url = get_inner_dtable_server_url()
@@ -28,28 +26,35 @@ class SystemBasesManager:
         self.version_base_name = 'version'
         self.version_table_name = 'version'
 
-        self.owner = 'system bases'
+        self.owner = SYSTEM_BASES_OWNER
 
-        self.version_dtable_uuid = None
+        self.base_uuids_dict = {}
 
     def init_config(self, config):
         self.session_class = init_db_session_class(config)
 
-    def get_base_by_type(self, base_type) -> DTableServerAPI:
-        if base_type == 'version':
+    def get_dtable_server_api_by_name(self, name, with_check_upgrade=True) -> DTableServerAPI:
+        if with_check_upgrade and not ENABLE_SYSTEM_BASES:
+            return None
+
+        dtable_uuid = self.base_uuids_dict.get(name)
+        if not dtable_uuid:
             with self.session_class() as session:
                 sql = '''
                 SELECT uuid FROM dtables d
                 JOIN workspaces w ON d.workspace_id=w.id
-                WHERE w.owner=:owner AND d.name=:base_name
+                WHERE w.owner=:owner AND d.name=:name LIMIT 1
                 '''
-                results = session.execute(sql)
+                results = session.execute(sql, {
+                    'owner': self.owner,
+                    'name': name
+                })
                 for item in results:
-                    self.version_dtable_uuid = item.uuid
-                    break
-                if not self.version_dtable_uuid:
+                    dtable_uuid = uuid_str_to_36_chars(item.uuid)
+                if not dtable_uuid:
                     return None
-                return DTableServerAPI('dtable-events', self.version_dtable_uuid, dtable_server_url)
+                self.base_uuids_dict[name] = dtable_uuid
+        return DTableServerAPI('dtable-events', dtable_uuid, dtable_server_url)
 
     def _upgrade_version(self, version):
         file = f'{version}.py'
@@ -76,8 +81,11 @@ class SystemBasesManager:
             logger.info('upgrade system bases version: %s success', version)
 
     def request_current_version(self):
+        version_dtable_server_api = self.get_dtable_server_api_by_name('version', with_check_upgrade=False)
+        if not version_dtable_server_api:
+            return '0.0.0'
         sql = f"SELECT version FROM `{self.version_table_name}` LIMIT 1"
-        version_dtable_db_api = DTableDBAPI('dtable-events', self.version_dtable_uuid)
+        version_dtable_db_api = DTableDBAPI('dtable-events', version_dtable_server_api.dtable_uuid, INNER_DTABLE_DB_URL)
         try:
             results, _ = version_dtable_db_api.query(sql, convert=True, server_only=True)
         except Exception as e:
@@ -94,6 +102,7 @@ class SystemBasesManager:
         """
         v1s = v1.split('.')
         v2s = v2.split('.')
+        logger.debug('v1s: %s v2s: %s', v1s, v2s)
         for i in range(len(v1s)):
             if int(v1s[i]) > int(v2s[i]):
                 return True
@@ -101,7 +110,7 @@ class SystemBasesManager:
                 return False
         return False
 
-    def upgrade(self):
+    def _upgrade(self):
         sleep = 5
         while True:
             try:
@@ -117,17 +126,24 @@ class SystemBasesManager:
                     continue
                 break
         logger.info('dtable-server and dtable-db ready')
-        if len(self.versions) == 1:
-            self.upgrade_version(self.versions[0])
-        else:
-            self.current_version = self.request_current_version()
-            logger.info('current_version: ', self.current_version)
-            for version in self.versions:
-               if not self.comp(version, self.current_version):
-                   logger.info('version %s has been upgraded!', version)
-               self.upgrade_version(version)
-        logger.info('all upgrade done!')
+
+        self.current_version = self.request_current_version()
+        logger.info('current_version: %s', self.current_version)
+        for version in self.versions:
+            logger.debug('comp version: %s current_version: %s', version, self.current_version)
+            need_upgrade = self.comp(version, self.current_version)
+            logger.debug('version: %s not need upgrade', version)
+            if not need_upgrade:
+                logger.info('version %s has been upgraded!', version)
+                continue
+            self.upgrade_version(version)
+
+        logger.info('all upgrades done!')
         self.is_upgrade_done = True
+
+    def upgrade(self):
+        if ENABLE_SYSTEM_BASES:
+            threading.Thread(target=self._upgrade, daemon=True).start()
 
 
 system_bases_manager = SystemBasesManager()

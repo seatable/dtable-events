@@ -8,6 +8,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 
 from dtable_events import init_db_session_class
 from dtable_events.app.config import DTABLE_PRIVATE_KEY
+from dtable_events.common_dataset.common_dataset_statistics_worker import CommonDatasetStatisticWorker
 from dtable_events.common_dataset.common_dataset_sync_utils import import_sync_CDS, set_common_dataset_sync_invalid
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars, get_inner_dtable_server_url
 from dtable_events.utils.dtable_server_api import DTableServerAPI
@@ -118,11 +119,12 @@ def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_
 def list_pending_common_dataset_syncs(db_session):
     sql = '''
             SELECT dcds.dst_dtable_uuid, dcds.dst_table_id, dcd.table_id AS src_table_id, dcd.view_id AS src_view_id,
-                dcd.dtable_uuid AS src_dtable_uuid, dcds.id AS sync_id, dcds.src_version, dcd.id
+                dcd.dtable_uuid AS src_dtable_uuid, dcds.id AS sync_id, dcds.src_version, dcd.id, w.org_id
             FROM dtable_common_dataset dcd
             INNER JOIN dtable_common_dataset_sync dcds ON dcds.dataset_id=dcd.id
             INNER JOIN dtables d_src ON dcd.dtable_uuid=d_src.uuid AND d_src.deleted=0
             INNER JOIN dtables d_dst ON dcds.dst_dtable_uuid=d_dst.uuid AND d_dst.deleted=0
+            INNER JOIN workspaces w ON d_src.workspace_id=w.id
             WHERE dcds.is_sync_periodically=1 AND dcd.is_valid=1 AND dcds.is_valid=1 AND 
             ((dcds.sync_interval='per_day' AND dcds.last_sync_time<:per_day_check_time) OR 
             (dcds.sync_interval='per_hour'))
@@ -147,6 +149,7 @@ def check_common_dataset(session_class):
         dataset_sync_id = dataset_sync[5]
         last_src_version = dataset_sync[6]
         dataset_id = dataset_sync[7]
+        org_id = dataset_sync[8]
 
         assets = gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_id, dst_table_id, dataset_sync_id, dataset_id, db_session)
 
@@ -159,6 +162,13 @@ def check_common_dataset(session_class):
         src_table_name = assets.get('src_table_name')
         src_view_name = assets.get('src_view_name')
         dst_table_name = assets.get('dst_table_name')
+
+        CDS_stats_worker = CommonDatasetStatisticWorker()
+        CDS_stats_worker.set_stats_data('org_id', org_id)
+        CDS_stats_worker.set_stats_data('sync_id', dataset_sync_id)
+        CDS_stats_worker.set_stats_data('import_or_sync', 'Sync')
+        CDS_stats_worker.set_stats_data('sync_type', 'Scheduled')
+
         try:
             result = import_sync_CDS({
                 'src_dtable_uuid': src_dtable_uuid,
@@ -170,14 +180,21 @@ def check_common_dataset(session_class):
                 'dst_table_name': dst_table_name,
                 'dst_columns': assets.get('dst_columns'),
                 'operator': 'dtable-events',
-                'lang': 'en',  # TODO: lang
+                'lang': 'en',  # TODO: lang,
+                'stats_worker': CDS_stats_worker
             })
         except Exception as e:
             logging.error('sync common dataset src-uuid: %s src-table: %s src-view: %s dst-uuid: %s dst-table: %s error: %s', 
                           src_dtable_uuid, src_table_name, src_view_name, dst_dtable_uuid, dst_table_name, e)
+            CDS_stats_worker.set_stats_data('is_success', False)
+            CDS_stats_worker.set_stats_data('finished_at', datetime.now())
+            CDS_stats_worker.record_stats_data()
             continue
         else:
             if result.get('error_msg'):
+                CDS_stats_worker.set_stats_data('is_success', False)
+                CDS_stats_worker.set_stats_data('finished_at', datetime.now())
+                CDS_stats_worker.record_stats_data()
                 if result.get('error_type') in (
                     'generate_synced_columns_error',
                     'base_exceeds_limit',
@@ -203,6 +220,10 @@ def check_common_dataset(session_class):
                 'id': dataset_sync_id
             })
             db_session.commit()
+
+        CDS_stats_worker.set_stats_data('is_success', True)
+        CDS_stats_worker.set_stats_data('finished_at', datetime.now())
+        CDS_stats_worker.record_stats_data()
 
 
 class CommonDatasetSyncerTimer(Thread):

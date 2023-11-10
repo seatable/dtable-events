@@ -3,6 +3,7 @@ from copy import deepcopy
 from datetime import datetime
 
 import requests
+from dtable_events.common_dataset.common_dataset_statistics_worker import CommonDatasetStatisticWorker
 from dtable_events.common_dataset.common_dataset_sync_utils import import_sync_CDS
 from dtable_events.db import init_db_session_class
 from dtable_events.dtable_io import dtable_io_logger
@@ -27,6 +28,8 @@ def sync_common_dataset(context, config):
     src_dtable_uuid = context.get('src_dtable_uuid')
     dst_dtable_uuid = context.get('dst_dtable_uuid')
 
+    sync_id = context.get('sync_id')
+
     src_table_name = context.get('src_table_name')
     src_view_name = context.get('src_view_name')
     src_columns = context.get('src_columns')
@@ -38,6 +41,8 @@ def sync_common_dataset(context, config):
 
     operator = context.get('operator')
     lang = context.get('lang', 'en')
+
+    org_id = context.get('org_id')
 
     dataset_id = context.get('dataset_id')
 
@@ -83,6 +88,12 @@ def sync_common_dataset(context, config):
             dtable_io_logger.error('update sync reset is_valid error: %s', e)
         return
 
+    CDS_stats_worker = CommonDatasetStatisticWorker()
+    CDS_stats_worker.set_stats_data('org_id', org_id)
+    CDS_stats_worker.set_stats_data('sync_id', sync_id)
+    CDS_stats_worker.set_stats_data('import_or_sync', 'Sync')
+    CDS_stats_worker.set_stats_data('sync_type', 'Manual')
+
     try:
         result = import_sync_CDS({
             'src_dtable_uuid': src_dtable_uuid,
@@ -94,18 +105,25 @@ def sync_common_dataset(context, config):
             'dst_table_name': dst_table_name,
             'dst_columns': dst_columns,
             'operator': operator,
-            'lang': lang
+            'lang': lang,
+            'stats_worker': CDS_stats_worker
         })
     except Exception as e:
         dtable_io_logger.exception(e)
         dtable_io_logger.error('sync common dataset error: %s', e)
         db_session.close()
+        CDS_stats_worker.set_stats_data('is_success', False)
+        CDS_stats_worker.set_stats_data('finished_at', datetime.now())
+        CDS_stats_worker.record_stats_data()
         raise Exception(str(e))
     else:
         if result and 'task_status_code' in result and result['task_status_code'] != 200:
             if result['task_status_code'] == 500:
                 dtable_io_logger.error(result)
             error_msg = 'import_sync_common_dataset:%s' % json.dumps(result)
+            CDS_stats_worker.set_stats_data('is_success', False)
+            CDS_stats_worker.set_stats_data('finished_at', datetime.now())
+            CDS_stats_worker.record_stats_data()
             raise Exception(error_msg)
 
     # get base's metadata
@@ -137,6 +155,10 @@ def sync_common_dataset(context, config):
     finally:
         db_session.close()
 
+    CDS_stats_worker.set_stats_data('is_success', True)
+    CDS_stats_worker.set_stats_data('finished_at', datetime.now())
+    CDS_stats_worker.record_stats_data()
+
 
 def import_common_dataset(context, config):
     """
@@ -156,6 +178,13 @@ def import_common_dataset(context, config):
 
     dataset_id = context.get('dataset_id')
 
+    org_id = context.get('org_id')
+
+    CDS_stats_worker = CommonDatasetStatisticWorker()
+    CDS_stats_worker.set_stats_data('org_id', org_id)
+    CDS_stats_worker.set_stats_data('import_or_sync', 'Import')
+    CDS_stats_worker.set_stats_data('sync_type', 'Manual')
+
     try:
         result = import_sync_CDS({
             'src_dtable_uuid': src_dtable_uuid,
@@ -165,16 +194,23 @@ def import_common_dataset(context, config):
             'src_columns': src_columns,
             'dst_table_name': dst_table_name,
             'operator': operator,
-            'lang': lang
+            'lang': lang,
+            'stats_worker': CDS_stats_worker
         })
     except Exception as e:
         dtable_io_logger.exception(e)
         dtable_io_logger.error('import common dataset error: %s', e)
+        CDS_stats_worker.set_stats_data('is_success', False)
+        CDS_stats_worker.set_stats_data('finished_at', datetime.now())
+        CDS_stats_worker.record_stats_data()
         raise Exception(e)
     else:
         if result and 'task_status_code' in result and result['task_status_code'] != 200:
             dtable_io_logger.error(result['error_msg'])
             error_msg = 'import_sync_common_dataset:%s' % json.dumps(result)
+            CDS_stats_worker.set_stats_data('is_success', False)
+            CDS_stats_worker.set_stats_data('finished_at', datetime.now())
+            CDS_stats_worker.record_stats_data()
             raise Exception(error_msg)
         dst_table_id = result.get('dst_table_id')
 
@@ -201,7 +237,7 @@ def import_common_dataset(context, config):
     '''
 
     try:
-        db_session.execute(sql, {
+        result = db_session.execute(sql, {
             'dst_dtable_uuid': uuid_str_to_32_chars(dst_dtable_uuid),
             'dst_table_id': dst_table_id,
             'created_at': datetime.now(),
@@ -211,7 +247,13 @@ def import_common_dataset(context, config):
             'src_version': last_src_version
         })
         db_session.commit()
+        sync_id = result.lastrowid
     except Exception as e:
         dtable_io_logger.error('insert dtable common dataset sync error: %s', e)
     finally:
         db_session.close()
+
+    CDS_stats_worker.set_stats_data('is_success', True)
+    CDS_stats_worker.set_stats_data('finished_at', datetime.now())
+    CDS_stats_worker.set_stats_data('sync_id', sync_id)
+    CDS_stats_worker.record_stats_data()

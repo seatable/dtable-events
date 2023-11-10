@@ -6,9 +6,9 @@ from uuid import uuid4
 
 from seaserv import seafile_api
 
-from dtable_events.app.config import get_config, NEW_DTABLE_IN_STORAGE_SERVER, INNER_DTABLE_DB_URL
+from dtable_events.app.config import get_config, NEW_DTABLE_IN_STORAGE_SERVER, INNER_DTABLE_DB_URL, SYSTEM_BASES_OWNER
 from dtable_events.db import init_db_session_class
-from dtable_events.utils import get_inner_dtable_server_url, uuid_str_to_32_chars
+from dtable_events.utils import get_inner_dtable_server_url, uuid_str_to_32_chars, gen_random_option
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.utils.storage_backend import storage_backend
@@ -45,7 +45,7 @@ def main():
     now = datetime.now()
 
     session_class = init_db_session_class(config)
-    owner = 'system bases'
+    owner = SYSTEM_BASES_OWNER
 
     with session_class() as session:
         # workspace
@@ -110,11 +110,14 @@ def main():
         CDS_statistic_columns = [
             {'column_name': 'org_id', 'column_type': 'number'},
             {'column_name': 'sync_id', 'column_type': 'number'},
+            {'column_name': 'import_or_sync', 'column_type': 'single-select'},
+            {'column_name': 'sync_type', 'column_type': 'single-select'},
             {'column_name': 'started_at', 'column_type': 'date', 'column_data': {"format": "YYYY-MM-DD HH:mm", "enable_fill_default_value": False, "default_value": "", "default_date_type": "specific_date"}},
             {'column_name': 'finished_at', 'column_type': 'date', 'column_data': {"format": "YYYY-MM-DD HH:mm", "enable_fill_default_value": False, "default_value": "", "default_date_type": "specific_date"}},
-            {'column_name': 'to_be_append_rows_count', 'column_type': 'number'},
-            {'column_name': 'to_be_update_rows_count', 'column_type': 'number'},
-            {'column_name': 'to_be_delete_rows_count', 'column_type': 'number'},
+            {'column_name': 'is_success', 'column_type': 'checkbox'},
+            {'column_name': 'to_be_appended_rows_count', 'column_type': 'number'},
+            {'column_name': 'to_be_updated_rows_count', 'column_type': 'number'},
+            {'column_name': 'to_be_deleted_rows_count', 'column_type': 'number'},
             {'column_name': 'appended_rows_count', 'column_type': 'number'},
             {'column_name': 'updated_rows_count', 'column_type': 'number'},
             {'column_name': 'deleted_rows_count', 'column_type': 'number'},
@@ -125,6 +128,14 @@ def main():
         CDS_statistics_dtable_server_api.add_table(CDS_statistics_table_name, columns=CDS_statistic_columns)
         try:
             CDS_statistics_dtable_server_api.delete_table_by_id('0000')
+            CDS_statistics_dtable_server_api.add_column_options(CDS_statistics_table_name, 'import_or_sync', [
+                gen_random_option('Import'),
+                gen_random_option('Sync')
+            ])
+            CDS_statistics_dtable_server_api.add_column_options(CDS_statistics_table_name, 'sync_type', [
+                gen_random_option('Scheduled'),
+                gen_random_option('Manual')
+            ])
         except:
             pass
         logging.info('wait for dtable-db for 5s...')
