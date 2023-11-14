@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import re
 import time
 from copy import deepcopy
@@ -9,13 +10,15 @@ from datetime import datetime, timedelta
 import jwt
 import requests
 
+from seaserv import seafile_api
+
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, SEATABLE_FAAS_AUTH_TOKEN, \
     SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL
 from dtable_events.automations.models import BoundThirdPartyAccounts
 from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg
 from dtable_events.notification_rules.notification_rules_utils import fill_msg_blanks_with_converted_row, \
     send_notification
-from dtable_events.utils import is_valid_email, get_inner_dtable_server_url
+from dtable_events.utils import is_valid_email, get_inner_dtable_server_url, uuid_str_to_36_chars
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI, NotFoundException
 from dtable_events.utils.dtable_web_api import DTableWebAPI
@@ -784,6 +787,16 @@ class RunPythonScriptAction(BaseAction):
     def can_run_python(self):
         if not SEATABLE_FAAS_URL:
             return False
+
+        script_file_path = os.path.join('/asset', uuid_str_to_36_chars(self.auto_rule.dtable_uuid), 'scripts', self.script_name)
+        try:
+            script_file_id = seafile_api.get_file_id_by_path(self.repo_id, script_file_path)
+            if not script_file_id:
+                return False
+        except Exception as e:
+            logger.exception('access repo: %s path: %s error: %s', self.repo_id, script_file_path, e)
+            return False
+
         if self.context.can_run_python is not None:
             return self.context.can_run_python
 

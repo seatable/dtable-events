@@ -20,6 +20,9 @@ class BaseMetadataCacheManager:
     def get_metadata(self, dtable_uuid):
         return self.request_metadata(dtable_uuid)
 
+    def clean_metadata(self, dtable_uuid):
+        pass
+
 
 class RuleIntentMetadataCacheManger(BaseMetadataCacheManager):
 
@@ -41,6 +44,10 @@ class RuleIntentMetadataCacheManger(BaseMetadataCacheManager):
         redis_cache.set(key, json.dumps(metadata), timeout=60)
         return metadata
 
+    def clean_metadata(self, dtable_uuid):
+        key = self.get_key(uuid_str_to_36_chars(dtable_uuid))
+        redis_cache.delete(key)
+
 
 
 class RuleIntervalMetadataCacheManager(BaseMetadataCacheManager):
@@ -56,3 +63,6 @@ class RuleIntervalMetadataCacheManager(BaseMetadataCacheManager):
         metadata = self.request_metadata(dtable_uuid)
         self.metadatas_dict[uuid_str_to_36_chars(dtable_uuid)] = metadata
         return metadata
+
+    def clean_metadata(self, dtable_uuid):
+        self.metadatas_dict.pop(uuid_str_to_36_chars(dtable_uuid), None)

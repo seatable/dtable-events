@@ -1439,6 +1439,16 @@ class RunPythonScriptAction(BaseAction):
     def can_do_action(self):
         if not SEATABLE_FAAS_URL:
             return False
+
+        script_file_path = os.path.join('/asset', uuid_str_to_36_chars(self.auto_rule.dtable_uuid), 'scripts', self.script_name)
+        try:
+            script_file_id = seafile_api.get_file_id_by_path(self.repo_id, script_file_path)
+            if not script_file_id:
+                return False
+        except Exception as e:
+            logger.exception('access repo: %s path: %s error: %s', self.repo_id, script_file_path, e)
+            return False
+
         if self.auto_rule.can_run_python is not None:
             return self.auto_rule.can_run_python
 
@@ -2881,6 +2891,7 @@ class AutomationRule:
         self._view_info = None
         self._dtable_metadata = None
         self._view_columns = None
+        self.metadata_cache_manager.clean_metadata(self.dtable_uuid)
 
     @property
     def dtable_metadata(self):
