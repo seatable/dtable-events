@@ -33,8 +33,8 @@ class SystemBasesManager:
     def init_config(self, config):
         self.session_class = init_db_session_class(config)
 
-    def get_dtable_server_api_by_name(self, name, with_check_upgrade=True) -> DTableServerAPI:
-        if with_check_upgrade and not ENABLE_SYSTEM_BASES:
+    def get_dtable_server_api_by_name(self, name, need_enable_setting=True) -> DTableServerAPI:
+        if need_enable_setting and not ENABLE_SYSTEM_BASES:
             return None
 
         dtable_uuid = self.base_uuids_dict.get(name)
@@ -55,6 +55,29 @@ class SystemBasesManager:
                     return None
                 self.base_uuids_dict[name] = dtable_uuid
         return DTableServerAPI('dtable-events', dtable_uuid, dtable_server_url)
+    
+    def get_dtable_db_api_by_name(self, name, need_enable_setting=True) -> DTableDBAPI:
+        if need_enable_setting and not ENABLE_SYSTEM_BASES:
+            return None
+
+        dtable_uuid = self.base_uuids_dict.get(name)
+        if not dtable_uuid:
+            with self.session_class() as session:
+                sql = '''
+                SELECT uuid FROM dtables d
+                JOIN workspaces w ON d.workspace_id=w.id
+                WHERE w.owner=:owner AND d.name=:name LIMIT 1
+                '''
+                results = session.execute(sql, {
+                    'owner': self.owner,
+                    'name': name
+                })
+                for item in results:
+                    dtable_uuid = uuid_str_to_36_chars(item.uuid)
+                if not dtable_uuid:
+                    return None
+                self.base_uuids_dict[name] = dtable_uuid
+        return DTableDBAPI('dtable-events', dtable_uuid, INNER_DTABLE_DB_URL)
 
     def _upgrade_version(self, version):
         file = f'{version}.py'
@@ -81,7 +104,7 @@ class SystemBasesManager:
             logger.info('upgrade system bases version: %s success', version)
 
     def request_current_version(self):
-        version_dtable_server_api = self.get_dtable_server_api_by_name('version', with_check_upgrade=False)
+        version_dtable_server_api = self.get_dtable_server_api_by_name('version', need_enable_setting=False)
         if not version_dtable_server_api:
             return '0.0.0'
         sql = f"SELECT version FROM `{self.version_table_name}` LIMIT 1"
@@ -100,15 +123,9 @@ class SystemBasesManager:
         """
         :return: v1 > v2
         """
-        v1s = v1.split('.')
-        v2s = v2.split('.')
-        logger.debug('v1s: %s v2s: %s', v1s, v2s)
-        for i in range(len(v1s)):
-            if int(v1s[i]) > int(v2s[i]):
-                return True
-            elif int(v1s[i]) < int(v2s[i]):
-                return False
-        return False
+        v1 = tuple(int(v) for v in v1.split('.'))
+        v2 = tuple(int(v) for v in v2.split('.'))
+        return v1 > v2
 
     def _upgrade(self):
         sleep = 5

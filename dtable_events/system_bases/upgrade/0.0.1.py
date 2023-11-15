@@ -17,8 +17,8 @@ dtable_server_url = get_inner_dtable_server_url()
 version_base_name = 'version'
 version_table_name = 'version'
 
-CDS_statistics_base_name = 'CDS-statistics'
-CDS_statistics_table_name = 'CDS-statistics'
+CDS_statistics_base_name = 'CDS statistics'
+CDS_statistics_table_name = 'CDS statistics'
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -128,16 +128,20 @@ def main():
         CDS_statistics_dtable_server_api.add_table(CDS_statistics_table_name, columns=CDS_statistic_columns)
         try:
             CDS_statistics_dtable_server_api.delete_table_by_id('0000')
-            CDS_statistics_dtable_server_api.add_column_options(CDS_statistics_table_name, 'import_or_sync', [
-                gen_random_option('Import'),
-                gen_random_option('Sync')
-            ])
-            CDS_statistics_dtable_server_api.add_column_options(CDS_statistics_table_name, 'sync_type', [
-                gen_random_option('Scheduled'),
-                gen_random_option('Manual')
-            ])
         except:
             pass
+
+        CDS_statistics_dtable_server_api.add_column_options(CDS_statistics_table_name, 'import_or_sync', [
+            gen_random_option('Import'),
+            gen_random_option('Sync')
+        ])
+        CDS_statistics_dtable_server_api.add_column_options(CDS_statistics_table_name, 'sync_type', [
+            gen_random_option('Scheduled'),
+            gen_random_option('Manual')
+        ])
+
+        CDS_statistics_dtable_server_api.update_enable_archive(True)
+
         logging.info('wait for dtable-db for 5s...')
         time.sleep(5)
         update_version(version_dtable_server_api, '0.0.1')

@@ -437,3 +437,8 @@ class DTableServerAPI(object):
         }
         response = requests.post(url, json=body, headers=self.headers)
         return parse_response(response)
+
+    def update_enable_archive(self, enable_archive):
+        url = self.dtable_server_url + f'/api/v1/dtables/{self.dtable_uuid}/archive/'
+        response = requests.put(url, json={'enable_archive': enable_archive})
+        return parse_response(response)

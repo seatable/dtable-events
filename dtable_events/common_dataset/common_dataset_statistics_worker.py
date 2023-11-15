@@ -55,13 +55,13 @@ class CommonDatasetStatisticWorker:
             'error': error
         }
 
-        dtable_server_api = system_bases_manager.get_dtable_server_api_by_name(self.base_name)
-        if not dtable_server_api:
+        dtable_db_api = system_bases_manager.get_dtable_db_api_by_name(self.base_name)
+        if  not dtable_db_api:
             return
         try:
-            dtable_server_api.append_row(self.table_name, row_data)
+            dtable_db_api.insert_rows(self.table_name, [row_data])
         except Exception as e:
-            logger.error('append CDS stats error: %s', e)
+            logger.error('append CDS stats base: %s table: %s error: %s', self.base_name, self.table_name, e)
 
     def record_stats_data(self):
         try:
