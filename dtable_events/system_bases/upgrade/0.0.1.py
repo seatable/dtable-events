@@ -8,30 +8,26 @@ from seaserv import seafile_api
 
 from dtable_events.app.config import get_config, NEW_DTABLE_IN_STORAGE_SERVER, INNER_DTABLE_DB_URL, SYSTEM_BASES_OWNER
 from dtable_events.db import init_db_session_class
+from dtable_events.system_bases.constants import VERSION_BASE_NAME, VERSION_TABLE_NAME, CDS_STATISTICS_BASE_NAME, CDS_STATISTICS_TABLE_NAME
 from dtable_events.utils import get_inner_dtable_server_url, uuid_str_to_32_chars, gen_random_option
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.utils.storage_backend import storage_backend
 
 dtable_server_url = get_inner_dtable_server_url()
-version_base_name = 'version'
-version_table_name = 'version'
-
-CDS_statistics_base_name = 'CDS statistics'
-CDS_statistics_table_name = 'CDS statistics'
 
 logging.basicConfig(level=logging.DEBUG)
 
 
 def update_version(dtable_server_api: DTableServerAPI, version):
-    sql = f"SELECT version FROM `{version_table_name}` LIMIT 1"
+    sql = f"SELECT version FROM `{VERSION_TABLE_NAME}` LIMIT 1"
     dtable_db_api = DTableDBAPI('dtable-events', dtable_server_api.dtable_uuid, INNER_DTABLE_DB_URL)
     results, _ = dtable_db_api.query(sql, server_only=True)
     if not results:
-        dtable_server_api.append_row(version_table_name, {'version': version})
+        dtable_server_api.append_row(VERSION_TABLE_NAME, {'version': version})
     else:
         row_id = results[0]['_id']
-        dtable_server_api.update_row(version_table_name, row_id, {'version': version})
+        dtable_server_api.update_row(VERSION_TABLE_NAME, row_id, {'version': version})
 
 
 def main():
@@ -68,7 +64,7 @@ def main():
         '''
         result = session.execute(sql, {
             'uuid': uuid_str_to_32_chars(version_dtable_uuid),
-            'name': version_base_name,
+            'name': VERSION_BASE_NAME,
             'creator': owner,
             'modifier': owner,
             'created_at': now,
@@ -77,12 +73,12 @@ def main():
             'in_storage': 1 if NEW_DTABLE_IN_STORAGE_SERVER else 0
         })
         session.commit()
-        storage_backend.create_empty_dtable(version_dtable_uuid, owner, NEW_DTABLE_IN_STORAGE_SERVER, repo_id, f'{version_base_name}.dtable')
+        storage_backend.create_empty_dtable(version_dtable_uuid, owner, NEW_DTABLE_IN_STORAGE_SERVER, repo_id, f'{VERSION_BASE_NAME}.dtable')
         version_dtable_server_api = DTableServerAPI('dtable-events', version_dtable_uuid, dtable_server_url)
         version_columns = [
             {'column_name': 'version', 'column_type': 'text'}
         ]
-        version_dtable_server_api.add_table(version_table_name, columns=version_columns)
+        version_dtable_server_api.add_table(VERSION_TABLE_NAME, columns=version_columns)
         try:
             version_dtable_server_api.delete_table_by_id('0000')
         except:
@@ -96,7 +92,7 @@ def main():
         '''
         result = session.execute(sql, {
             'uuid': uuid_str_to_32_chars(CDS_statistics_dtable_uuid),
-            'name': CDS_statistics_base_name,
+            'name': CDS_STATISTICS_BASE_NAME,
             'creator': owner,
             'modifier': owner,
             'created_at': now,
@@ -105,7 +101,7 @@ def main():
             'in_storage': 1 if NEW_DTABLE_IN_STORAGE_SERVER else 0
         })
         session.commit()
-        storage_backend.create_empty_dtable(CDS_statistics_dtable_uuid, owner, NEW_DTABLE_IN_STORAGE_SERVER, repo_id, f'{CDS_statistics_base_name}.dtable')
+        storage_backend.create_empty_dtable(CDS_statistics_dtable_uuid, owner, NEW_DTABLE_IN_STORAGE_SERVER, repo_id, f'{CDS_STATISTICS_BASE_NAME}.dtable')
         CDS_statistics_dtable_server_api = DTableServerAPI('dtable-events', CDS_statistics_dtable_uuid, dtable_server_url)
         CDS_statistic_columns = [
             {'column_name': 'org_id', 'column_type': 'number'},
@@ -125,17 +121,17 @@ def main():
             {'column_name': 'link_formula_columns_count', 'column_type': 'number'},
             {'column_name': 'error', 'column_type': 'long-text'}
         ]
-        CDS_statistics_dtable_server_api.add_table(CDS_statistics_table_name, columns=CDS_statistic_columns)
+        CDS_statistics_dtable_server_api.add_table(CDS_STATISTICS_TABLE_NAME, columns=CDS_statistic_columns)
         try:
             CDS_statistics_dtable_server_api.delete_table_by_id('0000')
         except:
             pass
 
-        CDS_statistics_dtable_server_api.add_column_options(CDS_statistics_table_name, 'import_or_sync', [
+        CDS_statistics_dtable_server_api.add_column_options(CDS_STATISTICS_TABLE_NAME, 'import_or_sync', [
             gen_random_option('Import'),
             gen_random_option('Sync')
         ])
-        CDS_statistics_dtable_server_api.add_column_options(CDS_statistics_table_name, 'sync_type', [
+        CDS_statistics_dtable_server_api.add_column_options(CDS_STATISTICS_TABLE_NAME, 'sync_type', [
             gen_random_option('Scheduled'),
             gen_random_option('Manual')
         ])

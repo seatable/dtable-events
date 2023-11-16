@@ -3,9 +3,14 @@ import os
 import time
 import subprocess
 import threading
+from datetime import datetime
 
-from dtable_events.app.config import central_conf_dir, INNER_DTABLE_DB_URL, SYSTEM_BASES_OWNER, ENABLE_SYSTEM_BASES
+from seaserv import seafile_api
+
+from dtable_events.app.config import INNER_DTABLE_DB_URL, SYSTEM_BASES_OWNER, ENABLE_SYSTEM_BASES
 from dtable_events.db import init_db_session_class
+from dtable_events.system_bases.constants import VERSION_BASE_NAME, VERSION_TABLE_NAME, CDS_STATISTICS_BASE_NAME
+from dtable_events.system_bases.bases import VerionBaseManager, CDSStatisticsBaseManager
 from dtable_events.utils import get_inner_dtable_server_url, get_python_executable, uuid_str_to_36_chars
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_db_api import DTableDBAPI
@@ -16,99 +21,59 @@ dtable_server_url = get_inner_dtable_server_url()
 class SystemBasesManager:
 
     def __init__(self):
-        self.is_upgrade_done = False
         self.versions = [
-            '0.0.1'
+            
         ]
 
+        self.bases_manager_map = {
+            VERSION_BASE_NAME: VerionBaseManager,
+            CDS_STATISTICS_BASE_NAME: CDSStatisticsBaseManager
+        }
+
         self.current_version = ''
-
-        self.version_base_name = 'version'
-        self.version_table_name = 'version'
-
-        self.owner = SYSTEM_BASES_OWNER
 
         self.base_uuids_dict = {}
 
     def init_config(self, config):
         self.session_class = init_db_session_class(config)
 
-    def get_dtable_server_api_by_name(self, name, need_enable_setting=True) -> DTableServerAPI:
-        if need_enable_setting and not ENABLE_SYSTEM_BASES:
-            return None
+    def create_workspace(self):
+        repo_id = seafile_api.create_repo(
+            "My Workspace",
+            "My Workspace",
+            "dtable@seafile"
+        )
+        now = datetime.now()
 
-        dtable_uuid = self.base_uuids_dict.get(name)
-        if not dtable_uuid:
-            with self.session_class() as session:
-                sql = '''
-                SELECT uuid FROM dtables d
-                JOIN workspaces w ON d.workspace_id=w.id
-                WHERE w.owner=:owner AND d.name=:name LIMIT 1
-                '''
-                results = session.execute(sql, {
-                    'owner': self.owner,
-                    'name': name
-                })
-                for item in results:
-                    dtable_uuid = uuid_str_to_36_chars(item.uuid)
-                if not dtable_uuid:
-                    return None
-                self.base_uuids_dict[name] = dtable_uuid
-        return DTableServerAPI('dtable-events', dtable_uuid, dtable_server_url)
-    
-    def get_dtable_db_api_by_name(self, name, need_enable_setting=True) -> DTableDBAPI:
-        if need_enable_setting and not ENABLE_SYSTEM_BASES:
-            return None
+        with self.session_class() as session:
+            # workspace
+            sql = '''
+            INSERT INTO workspaces(owner, repo_id, created_at, org_id) VALUES
+            (:owner, :repo_id, :created_at, -1)
+            '''
+            result = session.execute(sql, {
+                'owner': SYSTEM_BASES_OWNER,
+                'repo_id': repo_id,
+                'created_at': now
+            })
+            workspace_id = result.lastrowid
+        return workspace_id
 
-        dtable_uuid = self.base_uuids_dict.get(name)
-        if not dtable_uuid:
-            with self.session_class() as session:
-                sql = '''
-                SELECT uuid FROM dtables d
-                JOIN workspaces w ON d.workspace_id=w.id
-                WHERE w.owner=:owner AND d.name=:name LIMIT 1
-                '''
-                results = session.execute(sql, {
-                    'owner': self.owner,
-                    'name': name
-                })
-                for item in results:
-                    dtable_uuid = uuid_str_to_36_chars(item.uuid)
-                if not dtable_uuid:
-                    return None
-                self.base_uuids_dict[name] = dtable_uuid
-        return DTableDBAPI('dtable-events', dtable_uuid, INNER_DTABLE_DB_URL)
-
-    def _upgrade_version(self, version):
-        file = f'{version}.py'
-        file_path = os.path.join(os.path.dirname(__file__), 'upgrade', file)
-        if not os.path.isfile(file_path):
-            logger.error('file %s not found', file_path)
-            return Exception(f'version {version} file not found')
-        python_exec = get_python_executable()
-        conf_path = os.path.join(central_conf_dir, 'dtable-events.conf')
-        cmd = [python_exec, file_path, '--config-file', conf_path]
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        return result
-
-    def upgrade_version(self, version):
-        logger.info('start to upgrade system bases version: %s', version)
-        try:
-            result = self._upgrade_version(version)
-        except Exception as e:
-            logger.exception('upgrade version: %s error: %s', version, e)
-        if result.returncode != 0:
-            logger.error('upgrade version: %s error code: %s content: %s', version, result.returncode, result.stdout.decode())
-        else:
-            self.is_upgrade_done = True
-            logger.info('upgrade system bases version: %s success', version)
+    def get_workspace_id(self):
+        with self.session_class() as session:
+            sql = "SELECT id FROM workspaces WHERE owner=:owner"
+            result = session.execute(sql, {'owner': SYSTEM_BASES_OWNER}).fetch_one()
+            if not result:
+                return None
+            return result.id
 
     def request_current_version(self):
-        version_dtable_server_api = self.get_dtable_server_api_by_name('version', need_enable_setting=False)
-        if not version_dtable_server_api:
+        workspace_id = self.get_workspace_id()
+        if not workspace_id:
+            self.create_workspace()
             return '0.0.0'
-        sql = f"SELECT version FROM `{self.version_table_name}` LIMIT 1"
-        version_dtable_db_api = DTableDBAPI('dtable-events', version_dtable_server_api.dtable_uuid, INNER_DTABLE_DB_URL)
+        sql = f"SELECT version FROM `{VERSION_TABLE_NAME}` LIMIT 1"
+        version_dtable_db_api = DTableDBAPI('dtable-events', 'version_dtable_server_api.dtable_uuid', INNER_DTABLE_DB_URL)
         try:
             results, _ = version_dtable_db_api.query(sql, convert=True, server_only=True)
         except Exception as e:
@@ -117,6 +82,9 @@ class SystemBasesManager:
         if not results:
             return None
         return results[0]['version']
+
+    def get_base_manager(self, name):
+        return self.bases_manager_map.get(name)
 
     @staticmethod
     def comp(v1, v2) -> bool:
@@ -145,22 +113,18 @@ class SystemBasesManager:
         logger.info('dtable-server and dtable-db ready')
 
         self.current_version = self.request_current_version()
+        if self.current_version is None:
+            logger.error('workspace created but no version found')
+            return
         logger.info('current_version: %s', self.current_version)
         for version in self.versions:
-            logger.debug('comp version: %s current_version: %s', version, self.current_version)
-            need_upgrade = self.comp(version, self.current_version)
-            logger.debug('version: %s not need upgrade', version)
-            if not need_upgrade:
-                logger.info('version %s has been upgraded!', version)
-                continue
-            self.upgrade_version(version)
-
-        logger.info('all upgrades done!')
-        self.is_upgrade_done = True
+            pass
 
     def upgrade(self):
-        if ENABLE_SYSTEM_BASES:
-            threading.Thread(target=self._upgrade, daemon=True).start()
+        try:
+            self._upgrade()
+        except Exception as e:
+            logger.exception('upgrade error: %s', e)
 
 
 system_bases_manager = SystemBasesManager()

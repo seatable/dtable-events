@@ -8,8 +8,8 @@ logger = logging.getLogger(__name__)
 class CommonDatasetStatisticWorker:
 
     def __init__(self):
-        self.base_name = 'CDS-statistics'
-        self.table_name = 'CDS-statistics'
+        self.base_name = 'CDS statistics'
+        self.table_name = 'CDS statistics'
         self.stats_data = {}
 
     def set_stats_data(self, attr, value):
