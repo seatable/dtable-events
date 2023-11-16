@@ -21,18 +21,15 @@ dtable_server_url = get_inner_dtable_server_url()
 class SystemBasesManager:
 
     def __init__(self):
-        self.versions = [
-            
-        ]
+        self.versions = []
+        self.current_version = ''
 
         self.bases_manager_map = {
             VERSION_BASE_NAME: VerionBaseManager,
             CDS_STATISTICS_BASE_NAME: CDSStatisticsBaseManager
         }
 
-        self.current_version = ''
-
-        self.base_uuids_dict = {}
+        self.base = ''
 
     def init_config(self, config):
         self.session_class = init_db_session_class(config)
