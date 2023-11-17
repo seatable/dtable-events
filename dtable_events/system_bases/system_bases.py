@@ -78,7 +78,13 @@ class SystemBasesManager:
         self.load_bases()
 
     def get_base_by_name(self, name) -> BasicBase:
-        return self.base_map.get(name) if self.is_ready and ENABLE_SYSTEM_BASES else None
+        if self.is_ready and ENABLE_SYSTEM_BASES:
+            return None
+        base = self.base_map.get(name)
+        if not base:
+            return None
+        if not base.is_ready:
+            return None
 
     def request_current_version(self):
         """
@@ -171,6 +177,8 @@ class SystemBasesManager:
             if base.base_name == VERSION_BASE_NAME:
                 continue
             if base.check_db_base():
+                if base.check_table():
+                    base.is_ready = True
                 continue
             logger.info('base: %s not found start to create...', base.base_name)
             base.create()
