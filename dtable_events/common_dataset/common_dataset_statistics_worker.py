@@ -1,5 +1,6 @@
 import logging
 
+from dtable_events.system_bases.constants import CDS_STATISTICS_BASE_NAME, CDS_STATISTICS_TABLE_NAME
 from dtable_events.system_bases.system_bases import system_bases_manager
 
 logger = logging.getLogger(__name__)
@@ -8,15 +9,15 @@ logger = logging.getLogger(__name__)
 class CommonDatasetStatisticWorker:
 
     def __init__(self):
-        self.base_name = 'CDS statistics'
-        self.table_name = 'CDS statistics'
+        self.base_name = CDS_STATISTICS_BASE_NAME
+        self.table_name = CDS_STATISTICS_TABLE_NAME
         self.stats_data = {}
 
     def set_stats_data(self, attr, value):
         self.stats_data[attr] = value
 
     def _record_stats_data(self):
-        if not system_bases_manager.is_upgrade_done:
+        if not system_bases_manager.is_ready:
             return
 
         org_id = self.stats_data.get('org_id', -1)
@@ -55,7 +56,7 @@ class CommonDatasetStatisticWorker:
             'error': error
         }
 
-        dtable_db_api = system_bases_manager.get_dtable_db_api_by_name(self.base_name)
+        dtable_db_api = system_bases_manager.get_base_by_name(CDS_STATISTICS_BASE_NAME).get_dtable_db_api()
         if  not dtable_db_api:
             return
         try:

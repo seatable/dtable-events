@@ -10,7 +10,7 @@ def get_base_by_name(session, name):
     JOIN workspaces w ON d.workspace_id=w.id
     WHERE w.owner=:owner AND d.name=:name
     '''
-    result = session.execute(sql, {'owner': SYSTEM_BASES_OWNER, 'name': name}).fetch_one()
+    result = session.execute(sql, {'owner': SYSTEM_BASES_OWNER, 'name': name}).fetchone()
     if not result:
         return None
     else:
@@ -21,7 +21,7 @@ def create_base_by_name(session, name):
     sql = '''
     SELECT workspace_id FROM workspaces WHERE owner=:owner
     '''
-    result = session.execute(session, {'owner': SYSTEM_BASES_OWNER}).fetch_one()
+    result = session.execute(session, {'owner': SYSTEM_BASES_OWNER}).fetchone()
     if not result:
         logging.error('system workspace not found!')
 

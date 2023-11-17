@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 
 from dtable_events.app.config import SYSTEM_BASES_OWNER, INNER_DTABLE_DB_URL, NEW_DTABLE_IN_STORAGE_SERVER
 from dtable_events.system_bases.constants import VERSION_BASE_NAME, VERSION_TABLE_NAME, CDS_STATISTICS_BASE_NAME, CDS_STATISTICS_TABLE_NAME
-from dtable_events.utils import uuid_str_to_36_chars, get_inner_dtable_server_url, gen_random_option
+from dtable_events.utils import uuid_str_to_36_chars, uuid_str_to_32_chars, get_inner_dtable_server_url, gen_random_option
 from dtable_events.utils.storage_backend import storage_backend
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.utils.dtable_server_api import DTableServerAPI
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 dtable_server_url = get_inner_dtable_server_url()
 
 
-class BasicBaseManager:
+class BasicBase:
 
     base_name = ''
     table_name = ''
@@ -32,13 +32,15 @@ class BasicBaseManager:
         """
         :return: dtable_uuid
         """
+        if self.dtable_uuid:
+            return self.dtable_uuid
         with self.session_class() as session:
             sql = '''
             SELECT uuid FROM dtables d
             JOIN workspaces w ON d.workspace_id=w.id
             WHERE w.owner=:owner AND d.name=:name
             '''
-            result = session.execute(sql, {'owner': SYSTEM_BASES_OWNER, 'name': self.base_name}).fetch_one()
+            result = session.execute(sql, {'owner': SYSTEM_BASES_OWNER, 'name': self.base_name}).fetchone()
             if not result:
                 return None
             self.dtable_uuid = uuid_str_to_36_chars(result.uuid)
@@ -58,10 +60,10 @@ class BasicBaseManager:
         if not table:
             return False
         for column in self.columns:
-            table_column = next(filter(lambda x: x['name'] == column['name']), None)
+            table_column = next(filter(lambda x: x['name'] == column['column_name'], table['columns']), None)
             if not table_column:
                 return False
-            if column['type'] != table_column['type']:
+            if column['column_type'] != table_column['type']:
                 return False
         return True
 
@@ -81,10 +83,10 @@ class BasicBaseManager:
         with self.session_class() as session:
             sql = '''
             INSERT INTO dtables(uuid, name, creator, modifier, created_at, updated_at, workspace_id, in_storage) VALUES
-            (SELECT :dtable_uuid, :name, :owner, :owner, :created_at, :updated_at, :workspace_id, :in_storage)
+            (:dtable_uuid, :name, :owner, :owner, :created_at, :updated_at, :workspace_id, :in_storage)
             '''
             session.execute(sql, {
-                'dtable_uuid': self.dtable_uuid,
+                'dtable_uuid': uuid_str_to_32_chars(self.dtable_uuid),
                 'name': self.base_name,
                 'owner': SYSTEM_BASES_OWNER,
                 'created_at': now,
@@ -97,7 +99,7 @@ class BasicBaseManager:
     def create_table(self):
         storage_backend.create_empty_dtable(self.dtable_uuid, SYSTEM_BASES_OWNER, NEW_DTABLE_IN_STORAGE_SERVER, self.repo_id, f'{self.base_name}.dtable')
         dtable_server_api = DTableServerAPI('dtable-events', self.dtable_uuid, dtable_server_url)
-        dtable_server_api.add_table(self.base_name, columns=self.columns)
+        dtable_server_api.add_table(self.table_name, columns=self.columns)
         try:
             dtable_server_api.delete_table_by_id('0000')
         except:
@@ -120,7 +122,7 @@ class BasicBaseManager:
         return DTableDBAPI('dtable-events', self.dtable_uuid, INNER_DTABLE_DB_URL)
 
 
-class VerionBaseManager(BasicBaseManager):
+class VersionBase(BasicBase):
 
     base_name = VERSION_BASE_NAME
     table_name = VERSION_TABLE_NAME
@@ -130,7 +132,7 @@ class VerionBaseManager(BasicBaseManager):
     ]
 
 
-class CDSStatisticsBaseManager(BasicBaseManager):
+class CDSStatisticsBase(BasicBase):
 
     base_name = CDS_STATISTICS_BASE_NAME
     table_name = CDS_STATISTICS_TABLE_NAME
@@ -155,7 +157,7 @@ class CDSStatisticsBaseManager(BasicBaseManager):
     ]
 
     def create_table(self):
-        super(CDSStatisticsBaseManager, self).create_table()
+        super(CDSStatisticsBase, self).create_table()
         dtable_server_api = self.get_dtable_server_api()
         dtable_server_api.add_column_options(self.table_name, 'import_or_sync', [
             gen_random_option('Import'),
