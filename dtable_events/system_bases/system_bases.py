@@ -28,6 +28,8 @@ class SystemBasesManager:
 
         self.base_map = {}
 
+        self.version_row_id = ''
+
         self.is_ready = False
 
     def init_config(self, config):
@@ -78,41 +80,44 @@ class SystemBasesManager:
         self.load_bases()
 
     def get_base_by_name(self, name) -> BasicBase:
-        if self.is_ready and ENABLE_SYSTEM_BASES:
+        if not self.is_ready or not ENABLE_SYSTEM_BASES:
             return None
         base = self.base_map.get(name)
         if not base:
             return None
         if not base.is_ready:
             return None
+        return base
 
     def request_current_version(self):
         """
-        :return: current_version -> str or None: None means version base invalid
+        :return: row_id -> str or None, current_version -> str or None: None means version base invalid
         """
-        version_base = self.base_map[VERSION_BASE_NAME]
-        sql = f"SELECT version FROM `{VERSION_TABLE_NAME}` LIMIT 1"
+        version_base = self.base_map.get(VERSION_BASE_NAME)
+        if not version_base:
+            raise Exception('version base not found')
+        sql = f"SELECT _id, version FROM `{VERSION_TABLE_NAME}` LIMIT 1"
         try:
             if not version_base.check():
                 if not version_base.dtable_uuid:
                     logger.info('version base not exists, create one')
                     version_base.create()
-                    return '0.0.0'
+                    return '', '0.0.0'
                 else:
                     logger.error('version base exists in database but base invalid')
-                    return None
+                    return None, None
         except Exception as e:
             logger.exception('check or create version base error: %s', e)
-            return None
+            return None, None
         version_dtable_db_api = version_base.get_dtable_db_api()
         try:
             results, _ = version_dtable_db_api.query(sql, convert=True, server_only=True)
         except Exception as e:
             logger.error('query version error: %s', e)
-            return None
+            return None, None
         if not results:
-            return '0.0.0'
-        return results[0]['version']
+            return '', '0.0.0'
+        return results[0]['_id'], results[0]['version']
 
     @staticmethod
     def comp(v1, v2) -> bool:
@@ -121,11 +126,16 @@ class SystemBasesManager:
         """
         v1 = tuple(int(v) for v in v1.split('.'))
         v2 = tuple(int(v) for v in v2.split('.'))
+        return v1 > v2
 
     def update_version(self, version):
-        self.base_map[VERSION_BASE_NAME].get_dtable_server_api().append_row(VERSION_TABLE_NAME, {'version': version})
+        dtable_server_api = self.base_map[VERSION_BASE_NAME].get_dtable_server_api()
+        if self.row_id:
+            dtable_server_api.update_row(VERSION_TABLE_NAME, self.row_id, {'version': version})
+        else:
+            dtable_server_api.append_row(VERSION_TABLE_NAME, {'version': version})
 
-    def _upgrade(self):
+    def _init_and_upgrade(self):
         if not self.workspace_id:
             logger.error('workspace invalid')
             return
@@ -146,7 +156,7 @@ class SystemBasesManager:
                 break
         logger.info('dtable-server and dtable-db ready')
 
-        self.current_version = self.request_current_version()
+        self.row_id, self.current_version = self.request_current_version()
         logger.info('system bases current version: %s', self.current_version)
 
         logger.info('start to upgrade versions: %s', self.versions)
@@ -176,8 +186,9 @@ class SystemBasesManager:
         for base in self.base_map.values():
             if base.base_name == VERSION_BASE_NAME:
                 continue
-            if base.check_db_base():
-                if base.check_table():
+            if base.check_db_base():    # if base exists in database
+                if base.check_table():  # need to check table is valid
+                    logger.info('base: %s is ready', base.base_name)
                     base.is_ready = True
                 continue
             logger.info('base: %s not found start to create...', base.base_name)
@@ -187,9 +198,9 @@ class SystemBasesManager:
 
         self.is_ready = True
 
-    def upgrade(self):
+    def init_and_upgrade(self):
         try:
-            self._upgrade()
+            self._init_and_upgrade()
         except Exception as e:
             logger.exception('system bases upgrade error: %s', e)
 

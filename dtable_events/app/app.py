@@ -83,4 +83,4 @@ class App(object):
             self._dtable_asset_trash_cleaner.start()         # always True
             self._license_expiring_notices_sender.start()    # always True
             # upgrade system bases
-            system_bases_manager.upgrade()
+            system_bases_manager.init_and_upgrade()
