@@ -1,6 +1,7 @@
 import logging
 import time
 from datetime import datetime
+from threading import Thread
 
 from seaserv import seafile_api
 
@@ -203,6 +204,9 @@ class SystemBasesManager:
             self._init_and_upgrade()
         except Exception as e:
             logger.exception('system bases upgrade error: %s', e)
+
+    def start(self):
+        Thread(target=self.init_and_upgrade, daemon=True).start()
 
 
 system_bases_manager = SystemBasesManager()

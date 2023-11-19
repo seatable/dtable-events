@@ -21,6 +21,7 @@ from dtable_events.data_sync.data_syncer import DataSyncer
 from dtable_events.workflow.workflow_actions import WorkflowActionsHandler
 from dtable_events.workflow.workflow_schedules_scanner import WorkflowSchedulesScanner
 from dtable_events.system_bases.system_bases import system_bases_manager
+from dtable_events.tasks.system_bases_recorder import SystemBasesRecorder
 
 
 class App(object):
@@ -40,6 +41,8 @@ class App(object):
             self._dtable_real_time_rows_counter = DTableRealTimeRowsCounter(config)
             self._workflow_actions_handler = WorkflowActionsHandler(config)
             self._webhooker = Webhooker(config)
+            # init system bases manager
+            system_bases_manager.init_config(config)
             # cron jobs
             self._instant_notices_sender = InstantNoticeSender(config)
             self._email_notices_sender = EmailNoticesSender(config)
@@ -54,6 +57,7 @@ class App(object):
             self._workflow_schedule_scanner = WorkflowSchedulesScanner(config)
             self._dtable_asset_trash_cleaner = DTableAssetTrashCleaner(config)
             self._license_expiring_notices_sender = LicenseExpiringNoticesSender()
+            self._system_bases_recorder = SystemBasesRecorder(config)
 
     def serve_forever(self):
         if self._enable_foreground_tasks:
@@ -68,6 +72,8 @@ class App(object):
             self._dtable_real_time_rows_counter.start()      # default True
             self._workflow_actions_handler.start()           # always True
             self._webhooker.start()                          # always True
+            # upgrade system bases
+            system_bases_manager.start()
             # cron jobs
             self._instant_notices_sender.start()             # default True
             self._email_notices_sender.start()               # default True
@@ -82,5 +88,4 @@ class App(object):
             self._workflow_schedule_scanner.start()          # default True
             self._dtable_asset_trash_cleaner.start()         # always True
             self._license_expiring_notices_sender.start()    # always True
-            # upgrade system bases
-            system_bases_manager.init_and_upgrade()
+            self._system_bases_recorder.start()              # default ENABLE_SYSTEM_BASE
