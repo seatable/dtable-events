@@ -156,6 +156,14 @@ class DTableDBAPI(object):
             token = token.decode()
         return token
 
+    @staticmethod
+    def ping(dtable_db_url, timeout=30):
+        url = dtable_db_url.strip('/') + '/ping/'
+        response = requests.get(url, timeout=timeout)
+        if response.status_code != 200:
+            return None
+        return 'pong'
+
     def query(self, sql, convert=True, server_only=True):
         """
         :param sql: str

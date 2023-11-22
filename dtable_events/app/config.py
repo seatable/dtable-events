@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 # DTABLE_WEB_DIR
 dtable_web_dir = os.environ.get('DTABLE_WEB_DIR', '')
+central_conf_dir = os.environ.get('SEAFILE_CENTRAL_CONF_DIR', '')
 if not dtable_web_dir:
     logging.critical('dtable_web_dir is not set')
     raise RuntimeError('dtable_web_dir is not set')
@@ -44,6 +45,8 @@ try:
     TRASH_CLEAN_AFTER_DAYS = getattr(seahub_settings, 'TRASH_CLEAN_AFTER_DAYS', 30)
     LICENSE_PATH = getattr(seahub_settings, 'LICENSE_PATH', '/shared/seatable-license.txt')
     IS_PRO_VERSION = getattr(seahub_settings, 'IS_PRO_VERSION', False)
+    NEW_DTABLE_IN_STORAGE_SERVER = getattr(seahub_settings, 'NEW_DTABLE_IN_STORAGE_SERVER', False)
+    ENABLE_SYSTEM_BASES = getattr(seahub_settings, 'ENABLE_SYSTEM_BASES', False)
 except Exception as e:
     logger.critical("Can not import dtable_web settings: %s." % e)
     raise RuntimeError("Can not import dtable_web settings: %s" % e)

@@ -94,6 +94,14 @@ class DTableServerAPI(object):
         self.access_token = get_dtable_server_token(self.username, self.dtable_uuid, timeout=self.access_token_timeout)
         self.headers = {'Authorization': 'Token ' + self.access_token}
 
+    @staticmethod
+    def ping(dtable_server_url, timeout=30):
+        url = dtable_server_url.strip('/') + '/ping/'
+        response = requests.get(url, timeout=timeout)
+        if response.status_code != 200:
+            return None
+        return 'ping'
+
     def get_metadata(self):
         url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/metadata/?from=dtable_events'
         response = requests.get(url, headers=self.headers, timeout=self.timeout)
@@ -115,6 +123,13 @@ class DTableServerAPI(object):
         if columns:
             json_data['columns'] = columns
         response = requests.post(url, json=json_data, headers=self.headers, timeout=self.timeout)
+        return parse_response(response)
+
+    def delete_table_by_id(self, table_id):
+        logger.debug('delete table table_id: %s', table_id)
+        url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/tables/?from=dtable_events'
+        json_data = {'table_id': table_id}
+        response = requests.delete(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
     def list_rows(self, table_name, start=None, limit=None):
@@ -421,4 +436,9 @@ class DTableServerAPI(object):
             'user_messages': user_msg_list,
         }
         response = requests.post(url, json=body, headers=self.headers)
+        return parse_response(response)
+
+    def update_enable_archive(self, enable_archive):
+        url = self.dtable_server_url + f'/api/v1/internal/dtables/{self.dtable_uuid}/archive/'
+        response = requests.put(url, json={'enable_archive': enable_archive}, headers=self.headers)
         return parse_response(response)
