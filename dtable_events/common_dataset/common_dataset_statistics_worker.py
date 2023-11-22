@@ -1,8 +1,10 @@
 import json
 import logging
 
+from dtable_events.app.config import ENABLE_SYSTEM_BASES
 from dtable_events.app.event_redis import redis_cache
-from dtable_events.system_bases.constants import CDS_STATISTICS_MSG_KEY
+from dtable_events.system_bases.constants import CDS_STATISTICS_MSG_KEY, CDS_STATISTICS_BASE_NAME
+from dtable_events.system_bases.system_bases import system_bases_manager
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +18,13 @@ class CommonDatasetStatisticWorker:
         self.stats_data[attr] = value
 
     def _record_stats_data(self):
+        # must enable system bases
+        if not ENABLE_SYSTEM_BASES:
+            return
+        # must CDS-stats base be ready
+        base = system_bases_manager.get_base_by_name(CDS_STATISTICS_BASE_NAME)
+        if not base.is_ready:
+            return
         row_data = {
             'org_id': self.stats_data.get('org_id', -1),
             'sync_id': self.stats_data.get('sync_id'),
