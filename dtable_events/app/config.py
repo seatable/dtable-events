@@ -47,7 +47,6 @@ try:
     IS_PRO_VERSION = getattr(seahub_settings, 'IS_PRO_VERSION', False)
     NEW_DTABLE_IN_STORAGE_SERVER = getattr(seahub_settings, 'NEW_DTABLE_IN_STORAGE_SERVER', False)
     ENABLE_SYSTEM_BASES = getattr(seahub_settings, 'ENABLE_SYSTEM_BASES', False)
-    SYSTEM_BASES_OWNER = getattr(seahub_settings, 'SYSTEM_BASES_OWNER', 'system bases')
 except Exception as e:
     logger.critical("Can not import dtable_web settings: %s." % e)
     raise RuntimeError("Can not import dtable_web settings: %s" % e)

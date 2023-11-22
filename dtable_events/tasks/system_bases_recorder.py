@@ -1,7 +1,5 @@
-import os
 import json
 import logging
-import time
 from threading import Thread
 
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -10,7 +8,6 @@ from dtable_events.app.config import ENABLE_SYSTEM_BASES
 from dtable_events.app.event_redis import redis_cache
 from dtable_events.system_bases.system_bases import system_bases_manager
 from dtable_events.system_bases.constants import CDS_STATISTICS_MSG_KEY, CDS_STATISTICS_BASE_NAME, CDS_STATISTICS_TABLE_NAME
-from dtable_events.utils import get_opt_from_conf_or_env, parse_bool
 
 logger = logging.getLogger(__name__)
 
@@ -22,32 +19,11 @@ __all__ = [
 
 class SystemBasesRecorder(object):
 
-    def __init__(self, config):
+    def __init__(self):
         self._enabled = ENABLE_SYSTEM_BASES
-        self._parse_config(config)
         self.keys = [CDS_STATISTICS_MSG_KEY]
         self.interval = 5 * 60  # interval in seconds
         self.batch_count = 100
-
-    def _parse_config(self, config):
-        section_name = 'SYSTEM-BASES-RECORDER'
-        key_enabled = 'enabled'
-
-        if not config.has_section(section_name):
-            return
-
-        # enabled
-        enabled = get_opt_from_conf_or_env(config, section_name, key_enabled, default=ENABLE_SYSTEM_BASES)
-        enabled = parse_bool(enabled) and ENABLE_SYSTEM_BASES
-        self._enabled = enabled
-
-        key_interval = 'interval'
-        interval = get_opt_from_conf_or_env(config, section_name, key_interval, default=5)
-        try:
-            interval = int(interval) * 60
-        except:
-            interval = 5 * 60
-        self.interval = interval
 
     def start(self):
         if not self.is_enabled():
@@ -108,7 +84,6 @@ class SystemBasesRecorderTimer(Thread):
                     except:
                         continue
                     msg_list.append(msg)
-                    logger.debug('key: %s msg_list: %s', key, len(msg_list))
                     if len(msg_list) >= self.batch_count:
                         self.record(key, msg_list)
                         msg_list = []

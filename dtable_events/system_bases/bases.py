@@ -4,12 +4,13 @@ from uuid import uuid4
 
 from sqlalchemy.orm import sessionmaker
 
-from dtable_events.app.config import SYSTEM_BASES_OWNER, INNER_DTABLE_DB_URL, NEW_DTABLE_IN_STORAGE_SERVER
-from dtable_events.system_bases.constants import VERSION_BASE_NAME, VERSION_TABLE_NAME, CDS_STATISTICS_BASE_NAME, CDS_STATISTICS_TABLE_NAME
+from dtable_events.app.config import INNER_DTABLE_DB_URL, NEW_DTABLE_IN_STORAGE_SERVER
+from dtable_events.system_bases.constants import VERSION_BASE_NAME, VERSION_TABLE_NAME, CDS_STATISTICS_BASE_NAME, \
+    CDS_STATISTICS_TABLE_NAME, SYSTEM_BASES_OWNER
 from dtable_events.utils import uuid_str_to_36_chars, uuid_str_to_32_chars, get_inner_dtable_server_url, gen_random_option
-from dtable_events.utils.storage_backend import storage_backend
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.utils.dtable_server_api import DTableServerAPI
+from dtable_events.utils.storage_backend import storage_backend
 
 logger = logging.getLogger(__name__)
 dtable_server_url = get_inner_dtable_server_url()

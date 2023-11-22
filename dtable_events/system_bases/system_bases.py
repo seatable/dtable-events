@@ -5,9 +5,9 @@ from threading import Thread
 
 from seaserv import seafile_api
 
-from dtable_events.app.config import INNER_DTABLE_DB_URL, SYSTEM_BASES_OWNER, ENABLE_SYSTEM_BASES
+from dtable_events.app.config import INNER_DTABLE_DB_URL, ENABLE_SYSTEM_BASES
 from dtable_events.db import init_db_session_class
-from dtable_events.system_bases.constants import VERSION_BASE_NAME, VERSION_TABLE_NAME
+from dtable_events.system_bases.constants import VERSION_BASE_NAME, VERSION_TABLE_NAME, SYSTEM_BASES_OWNER
 from dtable_events.system_bases.bases import BasicBase, VersionBase, CDSStatisticsBase
 from dtable_events.utils import get_inner_dtable_server_url
 from dtable_events.utils.dtable_server_api import DTableServerAPI
