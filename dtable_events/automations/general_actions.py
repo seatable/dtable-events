@@ -788,7 +788,7 @@ class RunPythonScriptAction(BaseAction):
         if not SEATABLE_FAAS_URL:
             return False
 
-        script_file_path = os.path.join('/asset', uuid_str_to_36_chars(self.auto_rule.dtable_uuid), 'scripts', self.script_name)
+        script_file_path = os.path.join('/asset', uuid_str_to_36_chars(self.context.dtable_uuid), 'scripts', self.script_name)
         try:
             script_file_id = seafile_api.get_file_id_by_path(self.repo_id, script_file_path)
             if not script_file_id:
