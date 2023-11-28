@@ -76,7 +76,7 @@ def get_dtable_server_token(username, dtable_uuid, timeout=300, is_internal=Fals
         'permission': 'rw',
     }
     if is_internal:
-        payload['is_internal'] = '1'
+        payload['is_internal'] = True
     access_token = jwt.encode(
         payload, DTABLE_PRIVATE_KEY, algorithm='HS256'
     )
@@ -964,7 +964,7 @@ def get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, i
         'id_in_org': id_in_org,
         'user_department_ids_map': user_department_ids_map,
         'permission': permission,
-        'is_internal': '1'
+        'is_internal': True
     }
     access_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
 
