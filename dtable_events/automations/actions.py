@@ -1500,9 +1500,16 @@ class RunPythonScriptAction(BaseAction):
 
         script_file_path = os.path.join('/asset', uuid_str_to_36_chars(self.auto_rule.dtable_uuid), 'scripts', self.script_name)
         try:
+            repo = seafile_api.get_repo(self.repo_id)
+            if not repo:
+                logger.warning('rule: %s script: %s repo: %s not found', self.auto_rule.rule_id, self.script_name, self.repo_id)
+                raise RuleInvalidException('rule: %s script: %s repo: %s not found' % (self.auto_rule.rule_id, self.script_name, self.repo_id))
             script_file_id = seafile_api.get_file_id_by_path(self.repo_id, script_file_path)
             if not script_file_id:
-                return False
+                logger.warning('rule: %s script: %s repo: %s file: %s not found', self.auto_rule.rule_id, self.script_name, self.repo_id, script_file_path)
+                raise RuleInvalidException('rule: %s script: %s repo: %s file: %s not found' % (self.auto_rule.rule_id, self.script_name, self.repo_id, script_file_path))
+        except RuleInvalidException as e:
+            raise e
         except Exception as e:
             logger.exception('access repo: %s path: %s error: %s', self.repo_id, script_file_path, e)
             return False
