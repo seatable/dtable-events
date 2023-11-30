@@ -27,6 +27,11 @@ class SQLGeneratorOptionInvalidError(Exception):
     pass
 
 
+class DateTimeQueryInvalidError(Exception):
+    def __init__(self, column_name):
+        self.column_name = column_name
+
+
 class Operator(object):
 
     def __init__(self, column, filter_item):
@@ -531,7 +536,10 @@ class DateOperator(Operator):
             except:
                 logger.debug("filter_term is invalid, please assign an integer value of days to filter_term")
                 return None, None
-            days_ago = today - timedelta(days=filter_term)
+            try:
+                days_ago = today - timedelta(days=filter_term)
+            except OverflowError:
+                raise DateTimeQueryInvalidError(self.column_name)
             return days_ago, None
 
         if filter_term_modifier == FilterTermModifier.NUMBER_OF_DAYS_FROM_NOW:
@@ -540,12 +548,17 @@ class DateOperator(Operator):
             except:
                 logger.debug("filter_term is invalid, please assign an integer value of days to filter_term")
                 return None, None
-            days_after = today + timedelta(days=filter_term)
+            try:
+                days_after = today + timedelta(days=filter_term)
+            except OverflowError:
+                raise DateTimeQueryInvalidError(self.column_name)
             return days_after, None
 
         if filter_term_modifier == FilterTermModifier.EXACT_DATE:
             try:
                 return datetime.strptime(filter_term, "%Y-%m-%d").date(), None
+            except ValueError:
+                raise DateTimeQueryInvalidError(self.column_name)
             except:
                 logger.debug("filter_term is invalid, please assign an date value to filter_term, such as YYYY-MM-DD")
                 return None, None
@@ -617,7 +630,10 @@ class DateOperator(Operator):
             except:
                 logger.debug("filter_term is invalid, please assign an integer value of days to filter_term")
                 return None, None
-            end_date = today + timedelta(days=filter_term)
+            try:
+                end_date = today + timedelta(days=filter_term)
+            except OverflowError:
+                raise DateTimeQueryInvalidError(self.column_name)
             return today, end_date
 
         if filter_term_modifier == FilterTermModifier.THE_PAST_NUMBERS_OF_DAYS:
@@ -626,7 +642,10 @@ class DateOperator(Operator):
             except:
                 logger.debug("filter_term is invalid, please assign an integer value of days to filter_term")
                 return None, None
-            start_date = today - timedelta(days=filter_term)
+            try:
+                start_date = today - timedelta(days=filter_term)
+            except OverflowError:
+                raise DateTimeQueryInvalidError(self.column_name)
             return start_date, today
 
         return None, None
