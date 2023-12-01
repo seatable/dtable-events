@@ -2906,7 +2906,7 @@ class AutomationRule:
 
         self.metadata_cache_manager = metadata_cache_manager
 
-        self.cache_key = 'AUTOMATION_RULE:%s' % self.rule_id
+        self.cache_key = 'AUTOMATION_RULE:dtable:%s' % uuid_str_to_36_chars(self.dtable_uuid)
         self.task_run_success = True
 
         self.done_actions = False
@@ -3126,7 +3126,7 @@ class AutomationRule:
                 return True
             trigger_times = trigger_times.split(',')
             if len(trigger_times) >= self.per_minute_trigger_limit and time.time() - int(trigger_times[0]) < 60:
-                logger.warning('automation rule: %s exceed the trigger limit (%s times) within 1 minute', self.rule_id, self.per_minute_trigger_limit)
+                logger.warning('automation rule: %s dtable: %s exceed the trigger limit (%s times) within 1 minute', self.rule_id, self.per_minute_trigger_limit)
                 return False
             return True
 
