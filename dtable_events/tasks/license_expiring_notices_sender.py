@@ -46,13 +46,15 @@ class LicenseExpiringNoticesSenderTimer(Thread):
                 logging.warning('No license file found')
                 return
             expire_str = ''
+            mode_str = ''
             with open(self.license_path, 'r') as f:
                 for line in f.readlines():
                     line = line.strip()
                     logging.debug('line: %s', line)
                     if line.startswith('Expiration'):
                         expire_str = line
-                        break
+                    if line.startswith('Mode'):
+                        mode_str = line
             if not expire_str:
                 logging.warning('No license expiration found')
                 return
@@ -62,6 +64,7 @@ class LicenseExpiringNoticesSenderTimer(Thread):
                 return
             try:
                 expire_date = parser.parse(date_strs[0]).date()
+                mode = mode_str.split('=')[1].strip().strip('"')
             except Exception as e:
                 logging.warning('No expire date found: %s error: %s', expire_str, e)
                 return
@@ -73,7 +76,7 @@ class LicenseExpiringNoticesSenderTimer(Thread):
                 admin_users = ccnet_api.get_superusers()
                 dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
                 to_users = [user.email for user in admin_users]
-                dtable_web_api.internal_add_notification(to_users, 'license_expiring', {'days': days})
+                dtable_web_api.internal_add_notification(to_users, 'license_expiring', {'days': days, 'mode': mode})
             except Exception as e:
                 logging.exception('send license expiring days: %s to users: %s error: %s', days, to_users, e)
 
