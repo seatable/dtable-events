@@ -19,6 +19,7 @@ if not os.path.exists(dtable_web_dir):
 sys.path.insert(0, dtable_web_dir)
 
 try:
+    # settings in dtable-web
     import seahub.settings as seahub_settings
     DTABLE_WEB_SERVICE_URL = getattr(seahub_settings, 'DTABLE_WEB_SERVICE_URL', 'http://127.0.0.1')
     DTABLE_PRIVATE_KEY = getattr(seahub_settings, 'DTABLE_PRIVATE_KEY', '')
@@ -54,6 +55,10 @@ try:
     SEATABLE_AI_SERVER_URL = getattr(seahub_settings, 'SEATABLE_AI_SERVER_URL', 'http://127.0.0.1:8888')
     ENABLE_SEATABLE_AI = getattr(seahub_settings, 'ENABLE_SEATABLE_AI', False)
     AUTO_RULES_AI_CONTENT_MAX_LENGTH = getattr(seahub_settings, 'AUTO_RULES_AI_CONTENT_MAX_LENGTH', 10000)
+
+    # env
+    ENV_SEAFILE_CENTRAL_CONF_DIR = os.environ.get('SEAFILE_CENTRAL_CONF_DIR', '')
+    ENV_CCNET_CONF_PATH = os.path.join(ENV_SEAFILE_CENTRAL_CONF_DIR, 'ccnet.conf')
 except Exception as e:
     logger.critical("Can not import dtable_web settings: %s." % e)
     raise RuntimeError("Can not import dtable_web settings: %s" % e)
