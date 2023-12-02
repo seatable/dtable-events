@@ -3378,13 +3378,26 @@ class AutomationRule:
                 trigger_count=trigger_count+1,
                 update_at=:trigger_time
             '''
-
             set_statistic_sql_org = '''
                 INSERT INTO org_auto_rules_statistics (org_id, trigger_date, trigger_count, update_at) VALUES
                 (:org_id, :trigger_date, 1, :trigger_time)
                 ON DUPLICATE KEY UPDATE
                 trigger_count=trigger_count+1,
                 update_at=:trigger_time
+            '''
+            set_statistic_sql_user_per_month = '''
+                INSERT INTO user_auto_rules_statistics_per_month(username, trigger_count, month, updated_at) VALUES
+                (:username, 1, :month, :trigger_time)
+                ON DUPLICATED KEY UPDATE
+                trigger_count=trigger_count+1,
+                updated_at=:trigger_time
+            '''
+            set_statistic_sql_org_per_month = '''
+                INSERT INTO org_auto_rules_statistics_per_month(org_id, trigger_count, month, updated_at) VALUES
+                (:org_id, 1, :month, :trigger_time)
+                ON DUPLICATED KEY UPDATE
+                trigger_count=trigger_count+1,
+                updated_at=:trigger_time
             '''
             set_last_trigger_time_sql = '''
                 UPDATE dtable_automation_rules SET last_trigger_time=:trigger_time, trigger_count=:trigger_count WHERE id=:rule_id;
@@ -3394,8 +3407,10 @@ class AutomationRule:
             if self.org_id:
                 if self.org_id == -1:
                     sqls.append(set_statistic_sql_user)
+                    sqls.append(set_statistic_sql_user_per_month)
                 else:
                     sqls.append(set_statistic_sql_org)
+                    sqls.append(set_statistic_sql_org_per_month)
 
             cur_date = datetime.now().date()
             cur_year, cur_month = cur_date.year, cur_date.month
@@ -3407,7 +3422,8 @@ class AutomationRule:
                     'trigger_date': trigger_date,
                     'trigger_count': self.trigger_count + 1,
                     'username': self.creator,
-                    'org_id': self.org_id
+                    'org_id': self.org_id,
+                    'month': str(datetime.date())[:7]
                 })
             self.db_session.commit()
         except Exception as e:
