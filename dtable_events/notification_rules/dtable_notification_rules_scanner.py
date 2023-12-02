@@ -3,6 +3,7 @@ import logging
 from datetime import datetime, timedelta
 from threading import Thread
 
+from sqlalchemy import text
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from dtable_events.app.config import TIME_ZONE
@@ -73,7 +74,7 @@ def scan_dtable_notification_rules(db_session):
         '''
     per_day_check_time = datetime.utcnow() - timedelta(hours=23)
     per_week_check_time = datetime.utcnow() - timedelta(days=6)
-    rules = db_session.execute(sql, {
+    rules = db_session.execute(text(sql), {
         'per_day_check_time': per_day_check_time,
         'per_week_check_time': per_week_check_time
     })
@@ -141,7 +142,7 @@ class DTableNotificationRulesCleaner(Thread):
             '''
 
             try:
-                db_session.execute(sql, {'inactive_time_limit': inactive_time_limit})
+                db_session.execute(text(sql), {'inactive_time_limit': inactive_time_limit})
                 db_session.commit()
             except Exception as e:
                 logging.exception('error when cleaning inactive notification rules: %s', e)

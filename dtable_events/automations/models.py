@@ -1,12 +1,15 @@
 import logging
 from copy import deepcopy
-from sqlalchemy import Column, Integer, String, DateTime, Text
+
+from sqlalchemy.orm import mapped_column
+from sqlalchemy import Integer, String, DateTime, Text
 
 from dtable_events.automations.hasher import AESPasswordHasher
 from dtable_events.db import Base
 import json
 
 logger = logging.getLogger(__name__)
+
 
 def _decrypt_detail(detail):
     detail_clone = deepcopy(detail)
@@ -37,12 +40,12 @@ def _decrypt_detail(detail):
 class BoundThirdPartyAccounts(Base):
     __tablename__ = 'bound_third_party_accounts'
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    dtable_uuid = Column(String(length=255), nullable=False)
-    account_name = Column(String(length=255), nullable=False)
-    account_type = Column(String(length=255), nullable=False)
-    created_at = Column(DateTime, nullable=False)
-    detail = Column(Text)
+    id = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dtable_uuid = mapped_column(String(length=255), nullable=False)
+    account_name = mapped_column(String(length=255), nullable=False)
+    account_type = mapped_column(String(length=255), nullable=False)
+    created_at = mapped_column(DateTime, nullable=False)
+    detail = mapped_column(Text)
 
     def to_dict(self):
         detail_dict = json.loads(self.detail)

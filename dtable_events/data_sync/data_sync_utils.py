@@ -8,6 +8,8 @@ from datetime import datetime
 from uuid import uuid4
 from imapclient.exceptions import LoginError
 
+from sqlalchemy import text
+
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL
 from dtable_events.automations.models import get_third_party_account
 from dtable_events.data_sync.imap_mail import ImapMail
@@ -352,14 +354,14 @@ def sync_email_to_table(seatable, dtable_db_api, email_table_name, link_table_na
 def set_data_sync_invalid(data_sync_id, db_session):
     sql = "UPDATE dtable_data_syncs SET is_valid=0 WHERE id =:data_sync_id"
 
-    db_session.execute(sql, {'data_sync_id': data_sync_id})
+    db_session.execute(text(sql), {'data_sync_id': data_sync_id})
     db_session.commit()
 
 
 def update_sync_time(data_sync_id, db_session):
     sql = "UPDATE dtable_data_syncs SET last_sync_time=:last_sync_time WHERE id =:data_sync_id"
 
-    db_session.execute(sql, {'data_sync_id': data_sync_id, 'last_sync_time': datetime.now()})
+    db_session.execute(text(sql), {'data_sync_id': data_sync_id, 'last_sync_time': datetime.now()})
     db_session.commit()
 
 

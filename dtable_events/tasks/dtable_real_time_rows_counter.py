@@ -5,6 +5,8 @@ import json
 from datetime import datetime
 from threading import Thread, Event
 
+from sqlalchemy import text
+
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.db import init_db_session_class
 
@@ -18,7 +20,7 @@ def count_rows_by_uuids(session, dtable_uuids):
     SELECT owner, org_id FROM dtable_rows_count
     WHERE dtable_uuid IN :dtable_uuids
     '''
-    results = session.execute(sql, {'dtable_uuids': dtable_uuids}).fetchall()
+    results = session.execute(text(sql), {'dtable_uuids': dtable_uuids}).fetchall()
     usernames, org_ids = set(), set()
     for owner, org_id in results:
         if org_id != -1:
@@ -42,7 +44,7 @@ def count_rows_by_uuids(session, dtable_uuids):
             '''
             now = datetime.now()
             try:
-                results = session.execute(query_sql, {
+                results = session.execute(text(query_sql), {
                     'usernames': list(sub_usernames)
                 }).fetchall()
             except Exception as e:
@@ -64,7 +66,7 @@ def count_rows_by_uuids(session, dtable_uuids):
                     ON DUPLICATE KEY UPDATE rows_count=VALUES(rows_count), rows_count_update_at=:update_at;
                     ''' % ', '.join(["('%s', %s, %s)" % user_count for user_count in user_counts])
                     try:
-                        session.execute(update_sql, {'update_at': now})
+                        session.execute(text(update_sql), {'update_at': now})
                         session.commit()
                     except Exception as e:
                         logger.error('update users rows error: %s', e)
@@ -83,7 +85,7 @@ def count_rows_by_uuids(session, dtable_uuids):
             '''
             now = datetime.now()
             try:
-                results = session.execute(query_sql, {
+                results = session.execute(text(query_sql), {
                     'org_ids': list(sub_org_ids)
                 })
             except Exception as e:
@@ -105,7 +107,7 @@ def count_rows_by_uuids(session, dtable_uuids):
                     ON DUPLICATE KEY UPDATE rows_count=VALUES(rows_count), rows_count_update_at=:update_at;
                     ''' % ', '.join(["(%s, %s, %s)" % org_count for org_count in org_counts])
                     try:
-                        session.execute(update_sql, {'update_at': now})
+                        session.execute(text(update_sql), {'update_at': now})
                         session.commit()
                     except Exception as e:
                         logger.error('update users rows error: %s', e)

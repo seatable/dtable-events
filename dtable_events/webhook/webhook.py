@@ -6,6 +6,7 @@ from queue import Queue
 
 import requests
 from requests.exceptions import ReadTimeout
+from sqlalchemy import select, text
 
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.db import init_db_session_class
@@ -53,7 +54,8 @@ class Webhooker(object):
                     try:
                         event = {'data': data, 'event': 'update'}
                         dtable_uuid = data.get('dtable_uuid')
-                        hooks = session.query(Webhooks).filter(Webhooks.dtable_uuid == dtable_uuid, Webhooks.is_valid == 1).all()
+                        stmt = select(Webhooks).where(Webhooks.dtable_uuid == dtable_uuid, Webhooks.is_valid == 1)
+                        hooks = session.scalars(stmt).all()
                         for hook in hooks:
                             request_body = hook.gen_request_body(event)
                             request_headers = hook.gen_request_headers(request_body)
@@ -71,7 +73,7 @@ class Webhooker(object):
     def invalidate_webhook(self, webhook_id, db_session):
         sql = "UPDATE webhooks SET is_valid=0 WHERE id=:webhook_id"
         try:
-            db_session.execute(sql, {'webhook_id': webhook_id})
+            db_session.execute(text(sql), {'webhook_id': webhook_id})
             db_session.commit()
         except Exception as e:
             logger.error('invalidate webhook: %s error: %s', webhook_id, e)

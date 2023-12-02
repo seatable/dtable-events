@@ -5,6 +5,7 @@ from threading import Thread
 from concurrent.futures import ThreadPoolExecutor, ALL_COMPLETED, wait
 
 from apscheduler.schedulers.blocking import BlockingScheduler
+from sqlalchemy import text
 
 from dtable_events import init_db_session_class
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars
@@ -57,7 +58,7 @@ def list_pending_data_syncs(db_session):
             WHERE das.is_valid=1
         '''
 
-    dataset_list = db_session.execute(sql)
+    dataset_list = db_session.execute(text(sql))
     return dataset_list
 
 

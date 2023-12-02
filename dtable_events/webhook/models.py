@@ -2,7 +2,8 @@ import json
 import hmac
 import logging
 
-from sqlalchemy import Column, Integer, String, DateTime, Text, text
+from sqlalchemy.orm import mapped_column
+from sqlalchemy import Integer, String, DateTime, Text, text
 from sqlalchemy.dialects.mysql import INTEGER, TINYINT
 
 from dtable_events.db import Base
@@ -19,13 +20,13 @@ class Webhooks(Base):
     """
     __tablename__ = 'webhooks'
 
-    id = Column(INTEGER(unsigned=True), primary_key=True, autoincrement=True)
-    dtable_uuid = Column(String(32), nullable=False, index=True)
-    url = Column(String(2000), nullable=False)
-    settings = Column(Text)
-    creator = Column(String(255), nullable=False)
-    created_at = Column(DateTime, server_default=text('current_timestamp(6)'))
-    is_valid = Column(TINYINT, default=1)
+    id = mapped_column(INTEGER(unsigned=True), primary_key=True, autoincrement=True)
+    dtable_uuid = mapped_column(String(32), nullable=False, index=True)
+    url = mapped_column(String(2000), nullable=False)
+    settings = mapped_column(Text)
+    creator = mapped_column(String(255), nullable=False)
+    created_at = mapped_column(DateTime, server_default=text('current_timestamp(6)'))
+    is_valid = mapped_column(TINYINT, default=1)
 
     @property
     def hook_settings(self):
@@ -74,19 +75,20 @@ class WebhookJobs(Base):
     """
     __tablename__ = 'webhook_jobs'
 
-    id = Column(INTEGER(unsigned=True), primary_key=True, autoincrement=True)
-    webhook_id = Column(INTEGER(unsigned=True), index=True, nullable=False)
-    created_at = Column(DateTime, server_default=text('current_timestamp(6)'))
-    trigger_at = Column(DateTime)
-    status = Column(TINYINT, default=0, index=True)
-    url = Column(String(2000), nullable=False)
-    request_headers = Column(Text)
-    request_body = Column(Text)
-    response_status = Column(Integer)
-    response_body = Column(Text)
+    id = mapped_column(INTEGER(unsigned=True), primary_key=True, autoincrement=True)
+    webhook_id = mapped_column(INTEGER(unsigned=True), index=True, nullable=False)
+    created_at = mapped_column(DateTime, server_default=text('current_timestamp(6)'))
+    trigger_at = mapped_column(DateTime)
+    status = mapped_column(TINYINT, default=0, index=True)
+    url = mapped_column(String(2000), nullable=False)
+    request_headers = mapped_column(Text)
+    request_body = mapped_column(Text)
+    response_status = mapped_column(Integer)
+    response_body = mapped_column(Text)
 
     def __init__(self, webhook_id, created_at, trigger_at, status, url, request_headers,
                  request_body, response_status, response_body):
+        super().__init__()
         self.webhook_id = webhook_id
         self.created_at = created_at
         self.trigger_at = trigger_at

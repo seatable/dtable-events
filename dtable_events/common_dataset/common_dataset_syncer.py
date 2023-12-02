@@ -6,6 +6,7 @@ from threading import Thread
 
 import jwt
 from apscheduler.schedulers.blocking import BlockingScheduler
+from sqlalchemy import text
 
 from dtable_events import init_db_session_class
 from dtable_events.app.config import DTABLE_PRIVATE_KEY
@@ -135,7 +136,7 @@ def list_pending_common_dataset_syncs(db_session):
         '''
 
     per_day_check_time = datetime.now() - timedelta(hours=23)
-    dataset_list = db_session.execute(sql, {
+    dataset_list = db_session.execute(text(sql), {
         'per_day_check_time': per_day_check_time
     })
     return dataset_list
@@ -219,7 +220,7 @@ def check_common_dataset(session_class):
                 WHERE id=:id
             '''
             with session_class() as db_session:
-                db_session.execute(sql, {
+                db_session.execute(text(sql), {
                     'last_sync_time': datetime.now(),
                     'src_version': src_assets.get('src_version'),
                     'id': dataset_sync_id

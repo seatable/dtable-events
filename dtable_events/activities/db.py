@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 import json
-import time
 import logging
 from datetime import datetime, timedelta
 
-from sqlalchemy import desc, func, case
+from sqlalchemy import select, update, delete, desc, func, case
 
 from dtable_events.activities.models import Activities
 
@@ -27,7 +26,12 @@ LINK_OPERATION_TYPES = [
     'update_rows_links'
 ]
 
-DETAIL_LIMIT = 65535 # 2^16 - 1
+DETAIL_LIMIT = 65535  # 2^16 - 1
+
+
+class TableActivity(object):
+    pass
+
 
 class TableActivityDetail(object):
     def __init__(self, activity):
@@ -60,12 +64,12 @@ def save_or_update_or_delete(session, event):
             op_time = datetime.utcfromtimestamp(event['op_time'])
             _timestamp = op_time - timedelta(minutes=5)
             # If a row was edited many times by same user in 5 minutes, just update record.
-            q = session.query(Activities).filter(
+            stmt = select(Activities).where(
                 Activities.row_id == event['row_id'],
                 Activities.op_user == event['op_user'],
                 Activities.op_time > _timestamp
-            ).order_by(desc(Activities.id))
-            row = q.first()
+            ).order_by(desc(Activities.id)).limit(1)
+            row = session.scalars(stmt).first()
             if row:
                 detail = json.loads(row.detail)
                 if detail['table_id'] == event['table_id']:
@@ -112,14 +116,14 @@ def save_or_update_or_delete(session, event):
             op_time = datetime.utcfromtimestamp(event['op_time'])
             _timestamp = op_time - timedelta(minutes=5)
             # If a row was inserted by same user in 5 minutes, just delete this record.
-            q = session.query(Activities).filter(
+            stmt = select(Activities).where(
                 Activities.row_id == event['row_id'],
                 Activities.op_user == event['op_user'],
                 Activities.op_time > _timestamp
-            ).order_by(desc(Activities.id))
-            row = q.first()
+            ).order_by(desc(Activities.id)).limit(1)
+            row = session.scalars(stmt).first()
             if row and row.op_type == 'insert_row':
-                session.query(Activities).filter(Activities.id == row.id).delete()
+                session.execute(delete(Activities).where(Activities.id == row.id))
                 session.commit()
             else:
                 save_user_activities(session, event)
@@ -130,18 +134,18 @@ def save_or_update_or_delete(session, event):
             op_time = datetime.utcfromtimestamp(event['op_time'])
             _timestamp = op_time - timedelta(minutes=5)
             # If a row was edited many times by same user in 5 minutes, just update record.
-            q1 = session.query(Activities).filter(
+            stmt1 = select(Activities).where(
                 Activities.row_id == event['table1_row_id'],
                 Activities.op_user == event['op_user'],
                 Activities.op_time > _timestamp
-            ).order_by(desc(Activities.id))
-            q2 = session.query(Activities).filter(
+            ).order_by(desc(Activities.id)).limit(1)
+            stmt2 = select(Activities).where(
                 Activities.row_id == event['table2_row_id'],
                 Activities.op_user == event['op_user'],
                 Activities.op_time > _timestamp
-            ).order_by(desc(Activities.id))
-            row1 = q1.first()
-            row2 = q2.first()
+            ).order_by(desc(Activities.id)).limit(1)
+            row1 = session.scalars(stmt1).first()
+            row2 = session.scalars(stmt2).first()
             if row1:
                 detail1 = json.loads(row1.detail)
                 cells_data1 = event['row_data1']
@@ -174,25 +178,25 @@ def save_or_update_or_delete(session, event):
                 detail2 = json.dumps(detail2)
                 update_link_activity_timestamp(session, row2.id, op_time, detail2, op_type='modify_row')
 
-        
             save_user_activities_by_link(session, event, row1, row2)
 
 
 def update_activity_timestamp(session, activity_id, op_time, detail):
     if len(detail) > DETAIL_LIMIT:
         return
-    activity = session.query(Activities).filter(Activities.id == activity_id)
-    activity.update({"op_time": op_time, "detail": detail})
+    stmt = update(Activities).where(Activities.id == activity_id).values({"op_time": op_time, "detail": detail})
+    session.execute(stmt)
     session.commit()
 
 
 def update_link_activity_timestamp(session, activity_id, op_time, detail, op_type=None):
     if len(detail) > DETAIL_LIMIT:
         return
-    activity = session.query(Activities).filter(Activities.id == activity_id)
-    activity.update({"op_time": op_time, "detail": detail})
+    stmt = update(Activities).where(Activities.id == activity_id).values({"op_time": op_time, "detail": detail})
     if op_type:
-        activity.update({'op_type': op_type})
+        stmt = update(Activities).where(Activities.id == activity_id).values(
+            {"op_time": op_time, "detail": detail, 'op_type': op_type})
+    session.execute(stmt)
     session.commit()
 
 
@@ -205,20 +209,31 @@ def get_table_activities(session, uuid_list, start, limit, to_tz):
         logger.error('limit must be positive')
         raise RuntimeError('limit must be positive')
 
-    table_activities = list()
+    activities = list()
     try:
-        q = session.query(
+        stmt = select(
             Activities.dtable_uuid, Activities.op_time.label('op_date'),
             func.date_format(func.convert_tz(Activities.op_time, '+00:00', to_tz), '%Y-%m-%d 00:00:00').label('date'),
-            func.sum(case([(Activities.op_type == 'insert_row', Activities.row_count)])).label('insert_row'),
-            func.sum(case([(Activities.op_type == 'modify_row', Activities.row_count)])).label('modify_row'),
-            func.sum(case([(Activities.op_type == 'delete_row', Activities.row_count)])).label('delete_row'))
-        q = q.filter(
-            Activities.op_time > (datetime.utcnow() - timedelta(days=7)),
-            Activities.dtable_uuid.in_(uuid_list)).group_by(Activities.dtable_uuid, 'date')
-        table_activities = q.order_by(desc(Activities.op_time)).slice(start, start + limit).all()
+            func.sum(case((Activities.op_type == 'insert_row', Activities.row_count))).label('insert_row'),
+            func.sum(case((Activities.op_type == 'modify_row', Activities.row_count))).label('modify_row'),
+            func.sum(case((Activities.op_type == 'delete_row', Activities.row_count))).label('delete_row')
+        ).where(
+            Activities.op_time > (datetime.utcnow() - timedelta(days=7)), Activities.dtable_uuid.in_(uuid_list)
+        ).group_by(Activities.dtable_uuid, 'date').order_by(desc(Activities.op_time)).slice(start, start + limit)
+        activities = session.execute(stmt).all()
     except Exception as e:
         logger.error('Get table activities failed: %s' % e)
+
+    table_activities = list()
+    for dtable_uuid, op_date, date, insert_row, modify_row, delete_row in activities:
+        table_activity = TableActivity()
+        table_activity.dtable_uuid = dtable_uuid
+        table_activity.op_date = op_date
+        table_activity.date = date
+        table_activity.insert_row = insert_row
+        table_activity.modify_row = modify_row
+        table_activity.delete_row = delete_row
+        table_activities.append(table_activity)
 
     return table_activities
 
@@ -234,9 +249,11 @@ def get_activities_detail(session, dtable_uuid, start_time, end_time, start, lim
 
     activities = list()
     try:
-        q = session.query(Activities).filter(Activities.dtable_uuid == dtable_uuid).\
-            filter(func.convert_tz(Activities.op_time, '+00:00', to_tz).between(start_time, end_time))
-        activities = q.order_by(desc(Activities.id)).slice(start, start + limit).all()
+        stmt = select(Activities).where(
+            Activities.dtable_uuid == dtable_uuid,
+            func.convert_tz(Activities.op_time, '+00:00', to_tz).between(start_time, end_time)
+        ).order_by(desc(Activities.id)).slice(start, start + limit)
+        activities = session.scalars(stmt).all()
     except Exception as e:
         logger.error('Get table activities detail failed: %s' % e)
 
@@ -282,6 +299,7 @@ def save_user_activities(session, event):
     session.add(activity)
     session.commit()
 
+
 def save_user_activities_by_link(session, event, row1, row2):
     if row1 and row2:
         return
@@ -301,12 +319,10 @@ def save_user_activities_by_link(session, event, row1, row2):
     row_data1 = event['row_data1']
     row_count1 = event.get('row_count', 1)
 
-
     row_id2 = event['table2_row_id']
     table_id2 = event['table2_id']
     table_name2 = event['table2_name']
     row_name2 = event['table2_row_name']
-    row_name_option = event.get('row_name_option', '')
     row_data2 = event['row_data2']
     row_count2 = event.get('row_count', 1)
 

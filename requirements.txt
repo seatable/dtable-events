@@ -1,5 +1,5 @@
 redis==4.4.*
-SQLAlchemy==1.4.*
+SQLAlchemy==2.0.18
 apscheduler==3.9.*
 openpyxl==3.0.1
 selenium==3.141.0

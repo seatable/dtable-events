@@ -2,6 +2,9 @@ from datetime import datetime
 from dateutil.parser import parse
 from dtable_events.utils.constants import ColumnTypes
 
+from sqlalchemy import text
+
+
 APP_USERS_COUMNS_TYPE_MAP = {
     "Name" : ColumnTypes.TEXT,
     "User": ColumnTypes.COLLABORATOR,
@@ -43,7 +46,7 @@ def update_app_sync(db_session, app_id, table_id):
     dst_table_id=:dst_table_id
     """
 
-    db_session.execute(sql, {
+    db_session.execute(text(sql), {
         'app_id': app_id,
         'dst_table_id': table_id,
         'created_at': datetime.utcnow(),
@@ -55,7 +58,7 @@ def update_app_sync(db_session, app_id, table_id):
 def get_app_users(db_session, app_id):
     start, offset, user_list = 0, 1000, []
     count_sql = "SELECT COUNT(1) AS count FROM dtable_app_users where app_id=:app_id"
-    count_result = db_session.execute(count_sql, {'app_id': app_id})
+    count_result = db_session.execute(text(count_sql), {'app_id': app_id})
     total_count = count_result.cursor.fetchone()[0]
     while start <= total_count:
         sql = """
@@ -67,7 +70,7 @@ def get_app_users(db_session, app_id):
         WHERE u.app_id=:app_id
         LIMIT :start, :offset
         """
-        results = db_session.execute(sql, {'app_id': app_id, 'start': start, 'offset': offset})
+        results = db_session.execute(text(sql), {'app_id': app_id, 'start': start, 'offset': offset})
         users = []
         for username, nickname, role_name, is_active, created_at in results:
             users.append({

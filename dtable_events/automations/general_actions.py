@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 
 import jwt
 import requests
+from sqlalchemy import select
 
 from seaserv import seafile_api
 
@@ -48,10 +49,8 @@ AUTO_RULE_TRIGGER_TIMES_PER_MINUTE_TIMEOUT = 60
 
 
 def get_third_party_account(session, account_id):
-    account_query = session.query(BoundThirdPartyAccounts).filter(
-        BoundThirdPartyAccounts.id == account_id
-    )
-    account = account_query.first()
+    stmt = select(BoundThirdPartyAccounts).where(BoundThirdPartyAccounts.id == account_id).limit(1)
+    account = session.scalars(stmt).first()
     if account:
         return account.to_dict()
     else:

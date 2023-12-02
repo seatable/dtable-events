@@ -5,6 +5,7 @@ import re
 import time
 from datetime import datetime
 
+from sqlalchemy import text
 import jwt
 import requests
 
@@ -39,7 +40,7 @@ def is_trigger_time_satisfy(last_trigger_time):
 def update_rule_last_trigger_time(rule_id, db_session):
 
     cmd = "UPDATE dtable_notification_rules SET last_trigger_time=:new_time WHERE id=:rule_id"
-    db_session.execute(cmd, {'new_time': datetime.utcnow(), 'rule_id': rule_id})
+    db_session.execute(text(cmd), {'new_time': datetime.utcnow(), 'rule_id': rule_id})
 
 
 def get_dtable_server_token(dtable_uuid):
@@ -72,7 +73,7 @@ def scan_triggered_notification_rules(event_data, db_session):
 
     sql = "SELECT `id`, `trigger`, `action`, `creator`, `last_trigger_time`, `dtable_uuid` FROM dtable_notification_rules WHERE run_condition='per_update'" \
           "AND dtable_uuid=:dtable_uuid AND is_valid=1 AND id=:rule_id"
-    rules = db_session.execute(sql, {'dtable_uuid': message_dtable_uuid, 'rule_id': rule_id})
+    rules = db_session.execute(text(sql), {'dtable_uuid': message_dtable_uuid, 'rule_id': rule_id})
 
     rule_intent_metadata_cache_manager = RuleIntentMetadataCacheManger()
     for rule in rules:
@@ -100,7 +101,7 @@ def send_notification(dtable_uuid, user_msg_list, dtable_server_access_token):
 def deal_invalid_rule(rule_id, db_session):
     sql = "UPDATE dtable_notification_rules SET is_valid=:is_valid WHERE id=:rule_id"
     try:
-        db_session.execute(sql, {'is_valid': 0, 'rule_id': rule_id})
+        db_session.execute(text(sql), {'is_valid': 0, 'rule_id': rule_id})
     except Exception as e:
         logger.error(e)
 

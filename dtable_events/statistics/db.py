@@ -3,7 +3,7 @@ import logging
 from hashlib import md5
 from datetime import datetime
 
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, text, select, insert
 
 from dtable_events.statistics.models import UserActivityStatistics, EmailSendingLog
 
@@ -20,7 +20,7 @@ def save_user_activity_stat(session, msg):
     cmd = "REPLACE INTO user_activity_statistics (user_time_md5, username, timestamp, org_id)" \
           "values(:user_time_md5, :username, :timestamp, :org_id)"
 
-    session.execute(cmd, msg)
+    session.execute(text(cmd), msg)
     session.commit()
 
 
@@ -31,22 +31,21 @@ def get_user_activity_stats_by_day(session, start, end, offset='+00:00'):
     end_at_23 = datetime.strptime(end_str, '%Y-%m-%d %H:%M:%S')
 
     try:
-        q = session.query(
+        stmt = select(
             func.date(func.convert_tz(UserActivityStatistics.timestamp, '+00:00', offset)).label("timestamp"),
             func.count(UserActivityStatistics.user_time_md5).label("number")
-        )
-        q = q.filter(UserActivityStatistics.timestamp.between(
+        ).where(UserActivityStatistics.timestamp.between(
             func.convert_tz(start_at_0, offset, '+00:00'), func.convert_tz(end_at_23, offset, '+00:00')
-        ))
-        rows = q.group_by(func.date(func.convert_tz(UserActivityStatistics.timestamp, '+00:00', offset))).\
-            order_by("timestamp").all()
+        )).group_by(func.date(func.convert_tz(UserActivityStatistics.timestamp, '+00:00', offset))).\
+            order_by("timestamp")
+        rows = session.execute(stmt).all()
     except Exception as e:
         logger.error('Get user activity statistics failed: %s' % e)
         rows = list()
 
     res = list()
     for row in rows:
-        res.append((datetime.strptime(str(row.timestamp), '%Y-%m-%d'), row.number))
+        res.append((datetime.strptime(str(row[0]), '%Y-%m-%d'), row[1]))
     return res
 
 
@@ -55,17 +54,18 @@ def get_daily_active_users(session, date_day, start, count):
     date = datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S')
 
     try:
-        total_count = session.query(UserActivityStatistics).filter(UserActivityStatistics.timestamp == date).count()
-        q = session.query(
-            UserActivityStatistics.username, UserActivityStatistics.org_id
-        ).filter(UserActivityStatistics.timestamp == date)
-        active_users = q.group_by(UserActivityStatistics.username).slice(start, start + count)
+        count_stmt = select(func.count(UserActivityStatistics.id)).where(UserActivityStatistics.timestamp == date)
+        stmt = select(UserActivityStatistics).where(UserActivityStatistics.timestamp == date).group_by(
+            UserActivityStatistics.username).slice(start, start + count)
+        total_count = session.scalar(count_stmt)
+        active_users = session.scalars(stmt).all()
     except Exception as e:
         logger.error('Get daily active users failed: %s' % e)
         total_count = 0
         active_users = list()
 
     return active_users, total_count
+
 
 def save_email_sending_records(session, username, host, success):
     timestamp = datetime.utcnow()
@@ -74,26 +74,31 @@ def save_email_sending_records(session, username, host, success):
     session.add(new_log)
     session.commit()
 
+
 def batch_save_email_sending_records(session, username, host, send_state_list):
     timestamp = datetime.utcnow()
-    email_log_list = [EmailSendingLog(username, timestamp, host, send_state) for send_state in send_state_list]
-    session.bulk_save_objects(email_log_list)
+    session.execute(
+        insert(EmailSendingLog),
+        [{"username": username, "timestamp": timestamp, "host": host, "success": send_state}
+         for send_state in send_state_list]
+    )
     session.commit()
+
 
 def get_email_sending_logs(session, start, end):
     if start < 0:
         logger.error('start must be non-negative')
         raise RuntimeError('start must be non-negative')
 
-    if  end < start:
+    if end < start:
         logger.error('end must be more than start')
         raise RuntimeError('end must be more than start')
 
     try:
-        total_count = session.query(EmailSendingLog).count()
-        logs = session.query(
-            EmailSendingLog
-        ).order_by(desc(EmailSendingLog.timestamp)).slice(start, end)
+        count_stmt = select(func.count(EmailSendingLog.id))
+        stmt = select(EmailSendingLog).order_by(desc(EmailSendingLog.timestamp)).slice(start, end)
+        total_count = session.scalar(count_stmt)
+        logs = session.scalars(stmt).all()
     except Exception as e:
         logger.error('Get email sending logs failed: %s' % e)
         total_count = 0

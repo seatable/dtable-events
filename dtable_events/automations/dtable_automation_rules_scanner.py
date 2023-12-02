@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timedelta
 from threading import Thread
 
+from sqlalchemy import text
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from dtable_events.app.metadata_cache_managers import RuleIntervalMetadataCacheManager
@@ -63,7 +64,7 @@ def scan_dtable_automation_rules(db_session):
     per_day_check_time = datetime.utcnow() - timedelta(hours=23)
     per_week_check_time = datetime.utcnow() - timedelta(days=6)
     per_month_check_time = datetime.utcnow() - timedelta(days=27)  # consider the least month-days 28 in February (the 2nd month) in common years
-    rules = db_session.execute(sql, {
+    rules = db_session.execute(text(sql), {
         'per_day_check_time': per_day_check_time,
         'per_week_check_time': per_week_check_time,
         'per_month_check_time': per_month_check_time

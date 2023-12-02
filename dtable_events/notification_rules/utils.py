@@ -1,5 +1,7 @@
 import logging
 
+from sqlalchemy import text
+
 from dtable_events.app.event_redis import redis_cache as cache
 
 logger = logging.getLogger(__name__)
@@ -30,7 +32,7 @@ def get_nickname_by_usernames(usernames, db_session):
     # miss_users is not empty
     sql = "SELECT user, nickname FROM profile_profile WHERE user in :users"
     try:
-        for username, nickname in db_session.execute(sql, {'users': usernames}).fetchall():
+        for username, nickname in db_session.execute(text(sql), {'users': usernames}).fetchall():
             users_dict[username] = nickname
             cache.set(key_format % username, nickname, timeout=cache_timeout)
     except Exception as e:

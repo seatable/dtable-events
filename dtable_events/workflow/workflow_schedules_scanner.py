@@ -3,6 +3,7 @@ import logging
 from datetime import datetime
 from threading import Thread
 
+from sqlalchemy import text
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL
@@ -65,7 +66,7 @@ def scan_workflow_schedules(db_session):
     SELECT id, task_id, schedule_time, action, is_executed, created_at FROM dtable_workflow_task_schedules
     WHERE schedule_time <= :utc_now AND is_executed = 0
     '''
-    schedules = db_session.execute(sql, {'utc_now': datetime.utcnow()})
+    schedules = db_session.execute(text(sql), {'utc_now': datetime.utcnow()})
     for item in schedules:
         schedule_id = item.id
         task_id = item.task_id
@@ -79,7 +80,7 @@ def scan_workflow_schedules(db_session):
         if action.get('type') == 'notify':
             do_notify_schedule(schedule_id, task_id, action)
         try:
-            db_session.execute('UPDATE dtable_workflow_task_schedules SET is_executed=1 WHERE id=:schedule_id', {
+            db_session.execute(text('UPDATE dtable_workflow_task_schedules SET is_executed=1 WHERE id=:schedule_id'), {
                 'schedule_id': schedule_id
             })
             db_session.commit()

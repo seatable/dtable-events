@@ -3,6 +3,8 @@ import logging
 import time
 from threading import Thread, Event
 
+from sqlalchemy import text
+
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.automations.general_actions import ActionInvalid, AddRecordToOtherTableAction, BaseContext, NotifyAction, SendEmailAction, \
     SendWechatAction, SendDingtalkAction, UpdateAction, AddRowAction, LockRecordAction, LinkRecordsAction, \
@@ -18,7 +20,7 @@ def do_workflow_actions(task_id, node_id, db_session):
     JOIN dtable_workflow_tasks dwt ON dw.id = dwt.dtable_workflow_id
     WHERE dwt.id=:task_id
     '''
-    task_item = db_session.execute(sql, {'task_id': task_id}).fetchone()
+    task_item = db_session.execute(text(sql), {'task_id': task_id}).fetchone()
     if not task_item:
         return
     dtable_uuid = task_item.dtable_uuid

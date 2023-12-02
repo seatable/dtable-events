@@ -1,8 +1,8 @@
 import json
-from copy import deepcopy
 from datetime import datetime
 
-import requests
+from sqlalchemy import text
+
 from dtable_events.common_dataset.common_dataset_sync_utils import import_sync_CDS, get_dataset_data
 from dtable_events.db import init_db_session_class
 from dtable_events.dtable_io import dtable_io_logger
@@ -53,7 +53,7 @@ def sync_common_dataset(context, config):
                 AND src_version=:src_version
             '''
     try:
-        sync_dataset = db_session.execute(sql, {
+        sync_dataset = db_session.execute(text(sql), {
             'dst_dtable_uuid': uuid_str_to_32_chars(dst_dtable_uuid),
             'dataset_id': dataset_id,
             'dst_table_id': dst_table_id,
@@ -72,7 +72,7 @@ def sync_common_dataset(context, config):
             WHERE dataset_id=:dataset_id AND dst_dtable_uuid=:dst_dtable_uuid AND dst_table_id=:dst_table_id
         '''
         try:
-            db_session.execute(sql, {
+            db_session.execute(text(sql), {
                 'dst_dtable_uuid': uuid_str_to_32_chars(dst_dtable_uuid),
                 'dst_table_id': dst_table_id,
                 'dataset_id': dataset_id,
@@ -128,7 +128,7 @@ def sync_common_dataset(context, config):
         WHERE dataset_id=:dataset_id AND dst_dtable_uuid=:dst_dtable_uuid AND dst_table_id=:dst_table_id
     '''
     try:
-        db_session.execute(sql, {
+        db_session.execute(text(sql), {
             'dst_dtable_uuid': uuid_str_to_32_chars(dst_dtable_uuid),
             'dst_table_id': dst_table_id,
             'last_sync_time': datetime.now(),
@@ -209,7 +209,7 @@ def import_common_dataset(context, config):
     '''
 
     try:
-        db_session.execute(sql, {
+        db_session.execute(text(sql), {
             'dst_dtable_uuid': uuid_str_to_32_chars(dst_dtable_uuid),
             'dst_table_id': dst_table_id,
             'created_at': datetime.now(),

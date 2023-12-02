@@ -17,10 +17,10 @@ import hashlib
 import shutil
 from io import BytesIO
 from zipfile import ZipFile, is_zipfile
-from dateutil import parser
 from uuid import UUID, uuid4
 from urllib.parse import quote as urlquote
 
+from sqlalchemy import text
 from seaserv import seafile_api
 
 from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL
@@ -229,7 +229,7 @@ def copy_src_forms_to_json(dtable_uuid, tmp_file_path, db_session):
     if not db_session:
         return
     sql = "SELECT `username`, `form_config`, `share_type` FROM dtable_forms WHERE dtable_uuid=:dtable_uuid"
-    src_forms = db_session.execute(sql, {'dtable_uuid': ''.join(dtable_uuid.split('-'))})
+    src_forms = db_session.execute(text(sql), {'dtable_uuid': ''.join(dtable_uuid.split('-'))})
     src_forms_json = []
     for src_form in src_forms:
         form = {
@@ -248,7 +248,7 @@ def copy_src_auto_rules_to_json(dtable_uuid, tmp_file_path, db_session):
     if not db_session:
         return
     sql = """SELECT `run_condition`, `trigger`, `actions` FROM dtable_automation_rules WHERE dtable_uuid=:dtable_uuid"""
-    src_auto_rules = db_session.execute(sql, {'dtable_uuid': ''.join(dtable_uuid.split('-'))})
+    src_auto_rules = db_session.execute(text(sql), {'dtable_uuid': ''.join(dtable_uuid.split('-'))})
     src_auto_rules_json = []
     for src_auto_rule in src_auto_rules:
         auto_rule = {
@@ -266,7 +266,7 @@ def copy_src_workflows_to_json(dtable_uuid, tmp_file_path, db_session):
     if not db_session:
         return
     sql = """SELECT `token`, `workflow_config` FROM dtable_workflows WHERE dtable_uuid=:dtable_uuid"""
-    src_workflows = db_session.execute(sql, {'dtable_uuid': ''.join(dtable_uuid.split('-'))})
+    src_workflows = db_session.execute(text(sql), {'dtable_uuid': ''.join(dtable_uuid.split('-'))})
     src_workflows_json = []
     for src_workflow in src_workflows:
         workflow = {
@@ -283,7 +283,7 @@ def copy_src_external_app_to_json(dtable_uuid, tmp_file_path, db_session):
     if not db_session:
         return
     sql = """SELECT `app_config` FROM dtable_external_apps WHERE dtable_uuid=:dtable_uuid"""
-    src_external_apps = db_session.execute(sql, {'dtable_uuid': ''.join(dtable_uuid.split('-'))})
+    src_external_apps = db_session.execute(text(sql), {'dtable_uuid': ''.join(dtable_uuid.split('-'))})
     src_external_apps_json = []
     for src_external_app in src_external_apps:
         external_app = {
@@ -693,13 +693,13 @@ def add_a_form_to_db(form, workspace_id, dtable_uuid, db_session):
     # check form id
     form_id = gen_form_id()
     sql_check_form_id = 'SELECT `id` FROM dtable_forms WHERE form_id=:form_id'
-    while db_session.execute(sql_check_form_id, {'form_id': form_id}).rowcount > 0:
+    while db_session.execute(text(sql_check_form_id), {'form_id': form_id}).rowcount > 0:
         form_id = gen_form_id()
 
     sql = "INSERT INTO dtable_forms (`username`, `workspace_id`, `dtable_uuid`, `form_id`, `form_config`, `token`, `share_type`, `created_at`)" \
         "VALUES (:username, :workspace_id, :dtable_uuid, :form_id, :form_config, :token, :share_type, :created_at)"
 
-    db_session.execute(sql, {
+    db_session.execute(text(sql), {
         'username': form['username'],
         'workspace_id': workspace_id,
         'dtable_uuid': ''.join(dtable_uuid.split('-')),
@@ -715,7 +715,7 @@ def add_a_form_to_db(form, workspace_id, dtable_uuid, db_session):
 def add_a_auto_rule_to_db(username, auto_rule, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, db_session):
     # get org_id
     sql_get_org_id = """SELECT `org_id` FROM workspaces WHERE id=:id"""
-    org_id = [x[0] for x in db_session.execute(sql_get_org_id, {'id': workspace_id})][0]
+    org_id = [x[0] for x in db_session.execute(text(sql_get_org_id), {'id': workspace_id})][0]
     try:
         actions = json.loads(auto_rule.get('actions'))
     except:
@@ -737,7 +737,7 @@ def add_a_auto_rule_to_db(username, auto_rule, workspace_id, repo_id, owner, org
     sql = """INSERT INTO dtable_automation_rules (`dtable_uuid`, `run_condition`, `trigger`, `actions`,
              `creator`, `ctime`, `org_id`, `last_trigger_time`) VALUES (:dtable_uuid, :run_condition,
              :trigger, :actions, :creator, :ctime, :org_id, :last_trigger_time)"""
-    db_session.execute(sql, {
+    db_session.execute(text(sql), {
         'dtable_uuid': ''.join(dtable_uuid.split('-')),
         'run_condition': auto_rule['run_condition'],
         'trigger': auto_rule['trigger'],
@@ -770,7 +770,7 @@ def add_a_workflow_to_db(username, workflow, workspace_id, repo_id, dtable_uuid,
              `owner`) VALUES (:token, :dtable_uuid, :workflow_config,
              :creator, :created_at, :owner)"""
     new_token = str(uuid.uuid4())
-    db_session.execute(sql, {
+    db_session.execute(text(sql), {
         'token': new_token,
         'dtable_uuid': ''.join(dtable_uuid.split('-')),
         'workflow_config': json.dumps(workflow_config),
@@ -786,7 +786,7 @@ def add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, o
                 VALUES (:app_uuid, :dtable_uuid, :app_type, :app_config, :creator, :created_at, :org_id)"""
     app_uuid = str(uuid.uuid4())
     app_type = external_app['app_config'].get('app_type')
-    db_session.execute(sql, {
+    db_session.execute(text(sql), {
         'app_uuid': app_uuid,
         'dtable_uuid': ''.join(dtable_uuid.split('-')),
         'app_type': app_type,
@@ -800,10 +800,10 @@ def add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, o
     # add app role as defualt
     if app_type == 'universal-app':
         sql_app_id = """SELECT `id` FROM dtable_external_apps WHERE app_uuid=:app_uuid"""
-        app_id = [x[0] for x in db_session.execute(sql_app_id, {'app_uuid': app_uuid})][0]
+        app_id = [x[0] for x in db_session.execute(text(sql_app_id), {'app_uuid': app_uuid})][0]
         sql_app_default_role = """INSERT INTO dtable_app_roles (`app_id`,`role_name`,`role_permission`, `created_at`) 
                         VALUES (:app_id, :role_name, :role_permission, :created_at)"""
-        db_session.execute(sql_app_default_role, {
+        db_session.execute(text(sql_app_default_role), {
             'app_id': app_id,
             'role_name': 'default',
             'role_permission': 'rw',

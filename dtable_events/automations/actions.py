@@ -12,6 +12,7 @@ from uuid import UUID
 import jwt
 import requests
 from dateutil import parser
+from sqlalchemy import text
 
 from seaserv import seafile_api
 from dtable_events.automations.models import get_third_party_account
@@ -2232,7 +2233,7 @@ class TriggerWorkflowAction(BaseAction):
     def is_workflow_valid(self):
         sql = 'SELECT workflow_config FROM dtable_workflows WHERE token=:token AND dtable_uuid=:dtable_uuid'
         try:
-            result = self.auto_rule.db_session.execute(sql, {'token': self.token, 'dtable_uuid': self.auto_rule.dtable_uuid.replace('-', '')}).fetchone()
+            result = self.auto_rule.db_session.execute(text(sql), {'token': self.token, 'dtable_uuid': self.auto_rule.dtable_uuid.replace('-', '')}).fetchone()
             if not result:
                 return False
             workflow_config = json.loads(result[0])
@@ -3418,7 +3419,7 @@ class AutomationRule:
                 (:trigger_time, :success, :rule_id, :run_condition, :dtable_uuid, :org_id, :owner, :warnings)
             """
             if self.run_condition in ALL_CONDITIONS:
-                self.db_session.execute(set_task_log_sql, {
+                self.db_session.execute(text(set_task_log_sql), {
                     'trigger_time': datetime.utcnow(),
                     'success': self.task_run_success,
                     'rule_id': self.rule_id,
@@ -3464,7 +3465,7 @@ class AutomationRule:
             cur_year, cur_month = cur_date.year, cur_date.month
             trigger_date = date(year=cur_year, month=cur_month, day=1)
             for sql in sqls:
-                self.db_session.execute(sql, {
+                self.db_session.execute(text(sql), {
                     'rule_id': self.rule_id,
                     'trigger_time': datetime.utcnow(),
                     'trigger_date': trigger_date,
@@ -3492,7 +3493,7 @@ class AutomationRule:
             set_invalid_sql = '''
                 UPDATE dtable_automation_rules SET is_valid=0 WHERE id=:rule_id
             '''
-            self.db_session.execute(set_invalid_sql, {'rule_id': self.rule_id})
+            self.db_session.execute(text(set_invalid_sql), {'rule_id': self.rule_id})
             self.db_session.commit()
         except Exception as e:
             logger.error('set rule: %s invalid error: %s', self.rule_id, e)

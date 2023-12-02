@@ -1,5 +1,7 @@
 import logging
 
+from sqlalchemy import text
+
 from dtable_events import init_db_session_class
 from dtable_events.app.metadata_cache_managers import RuleIntentMetadataCacheManger, RuleIntervalMetadataCacheManager
 from dtable_events.automations.actions import AutomationRule
@@ -19,7 +21,7 @@ def scan_triggered_automation_rules(event_data, db_session, per_minute_trigger_l
     """
 
     try:
-        rules = db_session.execute(sql, {'dtable_uuid': dtable_uuid, 'rule_id': automation_rule_id}).fetchall()
+        rules = db_session.execute(text(sql), {'dtable_uuid': dtable_uuid, 'rule_id': automation_rule_id}).fetchall()
     except Exception as e:
         logger.error('checkout auto rules error: %s', e)
         return

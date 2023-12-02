@@ -3,6 +3,7 @@ import logging
 import re
 from copy import deepcopy
 
+from sqlalchemy import text
 from dateutil import parser
 
 from dtable_events.utils.sql_generator import BaseSQLGenerator
@@ -986,7 +987,7 @@ def import_sync_CDS(context):
 def set_common_dataset_invalid(dataset_id, db_session):
     sql = "UPDATE dtable_common_dataset SET is_valid=0 WHERE id=:dataset_id"
     try:
-        db_session.execute(sql, {'dataset_id': dataset_id})
+        db_session.execute(text(sql), {'dataset_id': dataset_id})
         db_session.commit()
     except Exception as e:
         logger.error('set state of common dataset: %s error: %s', dataset_id, e)
@@ -995,7 +996,7 @@ def set_common_dataset_invalid(dataset_id, db_session):
 def set_common_dataset_syncs_invalid(dataset_sync_ids, db_session):
     sql = "UPDATE dtable_common_dataset_sync SET is_valid=0 WHERE id IN :dataset_sync_ids"
     try:
-        db_session.execute(sql, {'dataset_sync_ids': dataset_sync_ids})
+        db_session.execute(text(sql), {'dataset_sync_ids': dataset_sync_ids})
         db_session.commit()
     except Exception as e:
         logger.error('set state of common dataset sync: %s error: %s', dataset_sync_ids, e)

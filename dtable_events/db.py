@@ -4,11 +4,14 @@ import logging
 from urllib.parse import quote_plus
 
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import sessionmaker
 
 logger = logging.getLogger(__name__)
-Base = declarative_base()  # base class of model classes in events.models
+
+
+class Base(DeclarativeBase):
+    pass
 
 
 def create_engine_from_conf(config):
@@ -39,8 +42,8 @@ def create_engine_from_conf(config):
     # Add pool recycle, or mysql connection will be closed
     # by mysql daemon if idle for too long.
     """MySQL has gone away
-    https://docs.sqlalchemy.org/en/14/faq/connections.html#mysql-server-has-gone-away
-    https://docs.sqlalchemy.org/en/14/core/pooling.html#pool-disconnects
+    https://docs.sqlalchemy.org/en/20/faq/connections.html#mysql-server-has-gone-away
+    https://docs.sqlalchemy.org/en/20/core/pooling.html#pool-disconnects
     """
     kwargs = dict(pool_recycle=300, pool_pre_ping=True, echo=False, echo_pool=False)
 
