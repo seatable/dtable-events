@@ -651,12 +651,12 @@ def add_a_workflow_to_db(username, workflow, workspace_id, repo_id, dtable_uuid,
     old_new_workflow_token_dict[old_token] = new_token
 
 def add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, org_id):
-    sql = """INSERT INTO dtable_external_apps (`token`,`dtable_uuid`,`app_type`, `app_config`, `creator`, `created_at`, `org_id`) 
-                VALUES (:token, :dtable_uuid, :app_type, :app_config, :creator, :created_at, :org_id)"""
-    token = str(uuid.uuid4())
+    sql = """INSERT INTO dtable_external_apps (`app_uuid`,`dtable_uuid`,`app_type`, `app_config`, `creator`, `created_at`, `org_id`) 
+                VALUES (:app_uuid, :dtable_uuid, :app_type, :app_config, :creator, :created_at, :org_id)"""
+    app_uuid = str(uuid.uuid4())
     app_type = external_app['app_config'].get('app_type')
     db_session.execute(sql, {
-        'token': token,
+        'app_uuid': app_uuid,
         'dtable_uuid': ''.join(dtable_uuid.split('-')),
         'app_type': app_type,
         'app_config': json.dumps(external_app['app_config']),
@@ -668,8 +668,8 @@ def add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, o
 
     # add app role as defualt
     if app_type == 'universal-app':
-        sql_app_id = """SELECT `id` FROM dtable_external_apps WHERE token=:token"""
-        app_id = [x[0] for x in db_session.execute(sql_app_id, {'token': token})][0]
+        sql_app_id = """SELECT `id` FROM dtable_external_apps WHERE app_uuid=:app_uuid"""
+        app_id = [x[0] for x in db_session.execute(sql_app_id, {'app_uuid': app_uuid})][0]
         sql_app_default_role = """INSERT INTO dtable_app_roles (`app_id`,`role_name`,`role_permission`, `created_at`) 
                         VALUES (:app_id, :role_name, :role_permission, :created_at)"""
         db_session.execute(sql_app_default_role, {
