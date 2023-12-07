@@ -22,7 +22,8 @@ class DTableUploadLinkHandler(Thread):
         Thread.__init__(self)
         self._finished = Event()
         self._redis_client = RedisClient(config)
-        self.interval_hours = 1
+        self.interval_hours = 6
+        self.cache_timeout = 12 * 60 * 60
 
     def get_cache_key(self, hour):
         return f'public_form_upload_link:{hour}'
@@ -45,7 +46,7 @@ class DTableUploadLinkHandler(Thread):
                 dtable_uuids.append((dtable_uuid, repo_id))
         else:
             dtable_uuids = [(dtable_uuid, repo_id)]
-        redis_cache.set(cache_key, json.dumps(dtable_uuids), 12*60*60)
+        redis_cache.set(cache_key, json.dumps(dtable_uuids), self.cache_timeout)
 
     def listen_redis(self):
         logger.info('Starting handle dtable upload link...')
