@@ -101,7 +101,7 @@ class DTableUploadLinkHandler(Thread):
                         if stat.S_ISDIR(dirent.mode):
                             continue
                         if dirent.mtime and now_timestamp - dirent.mtime > self.interval_hours * 60 * 60:
-                            seafile_api.del_file(repo_id, public_forms_path, dirent.obj_name, '')
+                            seafile_api.del_file(repo_id, public_forms_path, json.dumps([dirent.obj_name]), '')
                 except Exception as e:
                     logger.exception('scan repo: %s dtable: %s path: %s error: %s', repo_id, dtable_uuid, public_forms_path, e)
             redis_cache.delete(cache_key)
