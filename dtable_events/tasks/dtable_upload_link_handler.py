@@ -66,6 +66,8 @@ class DTableUploadLinkHandler(Thread):
                             seafile_api.del_file(repo_id, public_forms_path, file, '')
                 except Exception as e:
                     logger.exception('repo: %s handle upload flags error: %s', repo_id, e)
+            if len(results) < limit:
+                break
             offset += limit
         sql = "DELETE FROM dtable_form_upload_link_flags WHERE flag_time <= :flag_time"
         try:
