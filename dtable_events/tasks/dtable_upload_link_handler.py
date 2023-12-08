@@ -12,7 +12,7 @@ from seaserv import seafile_api
 
 from dtable_events.app.event_redis import RedisClient, redis_cache
 from dtable_events.db import init_db_session_class
-from dtable_events.utils import uuid_str_to_36_chars
+from dtable_events.utils import uuid_str_to_36_chars, uuid_str_to_32_chars
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class DTableUploadLinkHandler(Thread):
         return f'public_form_upload_link:{hour}'
 
     def handle_upload_link(self, event_data):
-        dtable_uuid = event_data.get('dtable_uuid')
+        dtable_uuid = uuid_str_to_32_chars(event_data.get('dtable_uuid'))
         repo_id = event_data.get('repo_id')
         parent_dir = event_data.get('parent_dir') or ''
         if 'public/forms' not in parent_dir:
@@ -43,7 +43,13 @@ class DTableUploadLinkHandler(Thread):
                 logger.warning('key: %s cache invalid', cache_key)
                 dtable_uuids = [(dtable_uuid, repo_id)]
             else:
-                dtable_uuids.append((dtable_uuid, repo_id))
+                flag = True
+                for tmp_dtable_uuid, _ in dtable_uuids:
+                    if dtable_uuid == tmp_dtable_uuid:
+                        flag = False
+                        break
+                if flag:
+                    dtable_uuids.append((dtable_uuid, repo_id))
         else:
             dtable_uuids = [(dtable_uuid, repo_id)]
         redis_cache.set(cache_key, json.dumps(dtable_uuids), self.cache_timeout)
