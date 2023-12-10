@@ -23,6 +23,28 @@ INSERT_UPDATE_ROWS_LIMIT = 1000
 DELETE_ROWS_LIMIT = 10000
 
 
+class DatasetCacheManager:
+
+    def __init__(self):
+        self.init()
+
+    def init(self):
+        self.dataset_id = None
+        self.dataset_rows = []
+        self.rows_id_list = []
+        self.rows_id_set = set()
+
+    def update_cache(self, dataset_id, rows):
+        self.init()
+        self.dataset_id = dataset_id
+        for row in rows:
+            if row['_id'] in self.rows_id_set:
+                continue
+            self.rows_id_list.append(row['_id'])
+            self.rows_id_set.add(row['_id'])
+            self.dataset_rows.append(row)
+
+
 DATA_NEED_KEY_VALUES = {
     ColumnTypes.DATE: [{
         'name': 'format',
@@ -689,12 +711,16 @@ def import_sync_CDS(context):
     """
     fetch src/dst rows id, find need append/update/delete rows
     """
+    dataset_id = context.get('dataset_id')
+
     src_dtable_uuid = context.get('src_dtable_uuid')
     dst_dtable_uuid = context.get('dst_dtable_uuid')
 
-    src_table_name = context.get('src_table_name')
-    src_view_name = context.get('src_view_name')
-    src_columns = context.get('src_columns')
+    # src_table_name = context.get('src_table_name')
+    # src_view_name = context.get('src_view_name')
+    # src_columns = context.get('src_columns')
+    src_table = context.get('src_table')
+    src_view_id = context.get('src_view_id')
 
     dst_table_id = context.get('dst_table_id')
     dst_table_name = context.get('dst_table_name')
@@ -702,6 +728,8 @@ def import_sync_CDS(context):
 
     operator = context.get('operator')
     lang = context.get('lang', 'en')
+
+    dataset_cache_manager = context.get('dataset_cache_manager', DatasetCacheManager())
 
     src_dtable_server_api = DTableServerAPI(operator, src_dtable_uuid, dtable_server_url)
     src_dtable_db_api = DTableDBAPI(operator, src_dtable_uuid, INNER_DTABLE_DB_URL)
@@ -724,6 +752,9 @@ def import_sync_CDS(context):
     # fetch create dst table or update dst table columns
     # use src_columns from context temporary !
 
+    src_view = [view for view in src_table['views'] if view['_id'] == src_view_id][0]
+    hidden_column_keys = src_view.get('hidden_columns', [])
+    src_columns = [col for col in src_table['columns'] if col['key'] not in hidden_column_keys]
     src_columns_key_dict = {col['key']: col for col in src_columns}
     dst_columns_key_dict = {col['key']: col for col in (dst_columns or [])}
 
@@ -741,54 +772,47 @@ def import_sync_CDS(context):
     if error_resp:
         return error_resp
 
-    # fetch all src view rows id
-    src_rows_id_set = set()
-    src_rows_id_list = list()
-    src_metadata = src_dtable_server_api.get_metadata()
-    src_table = [table for table in src_metadata['tables'] if table['name'] == src_table_name][0]
-    src_view = [view for view in src_table['views'] if view['name'] == src_view_name][0]
-    filter_conditions = {
-        'filters': src_view.get('filters', []),
-        'filter_conjunction': src_view.get('filter_conjunction', 'And'),
-        'sorts': src_view.get('sorts', [])
-    }
-    logger.debug('filter_conditions: %s', filter_conditions)
-    try:
-        sql_generator = BaseSQLGenerator(src_table_name, src_table['columns'], filter_conditions=filter_conditions)
-        filter_clause = sql_generator._filter2sql()
-        sort_clause = sql_generator._sort2sql()
-    except Exception as e:
-        logger.error('generate src view sql error: %s', e)
-        return {
-            'dst_table_id': None,
-            'error_msg': 'generate src view sql error: %s' % e,
-            'task_status_code': 500
+    if dataset_cache_manager.dataset_id != dataset_id:
+        # fetch all src view rows id
+        filter_conditions = {
+            'filters': src_view.get('filters', []),
+            'filter_conjunction': src_view.get('filter_conjunction', 'And'),
+            'sorts': src_view.get('sorts', [])
         }
-    sql_template = f"SELECT `_id` FROM `{src_table_name}` {filter_clause or ''} {sort_clause or ''}"
-    start, step = 0, 10000
-    while True:
-        if server_only and (start + step) > SRC_ROWS_LIMIT:
-            step = SRC_ROWS_LIMIT - start
-        sql = sql_template + (" LIMIT {offset}, {limit}".format(offset=start, limit=step))
-        logger.debug('fetch src rows-id sql: %s', sql[:200])
+        logger.debug('filter_conditions: %s', filter_conditions)
         try:
-            rows, _ = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
+            sql_generator = BaseSQLGenerator(src_table['name'], src_table['columns'], filter_conditions=filter_conditions)
+            filter_clause = sql_generator._filter2sql()
+            sort_clause = sql_generator._sort2sql()
         except Exception as e:
-            logger.error('fetch src rows id filter_conditions: %s sql: %s src columns: %s error: %s', filter_conditions, sql[:200], src_table['columns'], e)
+            logger.exception('src dtable: %s src table: %s src view: %s filter_conditions: %s to sql error: %s', src_dtable_uuid, src_table['name'], src_view_id, filter_conditions, e)
             return {
                 'dst_table_id': None,
-                'error_msg': 'fetch src rows id error: %s' % e,
+                'error_msg': 'generate src view sql error: %s' % e,
                 'task_status_code': 500
             }
-        for row in rows:
-            if row['_id'] in src_rows_id_set:
-                continue
-            src_rows_id_list.append(row['_id'])
-            src_rows_id_set.add(row['_id'])
-        ## judge whether break
-        if len(rows) < step or (server_only and (start + step) >= SRC_ROWS_LIMIT):
-            break
-        start += step
+        src_columns_str = ', '.join(map(lambda col: f"`{col['name']}`", src_columns))
+        sql_template = f"SELECT `_id`, {src_columns_str} FROM `{src_table['name']}` {filter_clause or ''} {sort_clause or ''}"
+        start, step = 0, 10000
+        reques_src_rows = []
+        while True:
+            if (start + step) > SRC_ROWS_LIMIT:
+                step = SRC_ROWS_LIMIT - start
+            sql = f"{sql_template} LIMIT {start}, {step}"
+            logger.debug('fetch src dtable: %s table: %s view: %s sql: %s', src_dtable_uuid, src_table['name'], src_view_id, sql[:200])
+            try:
+                rows, _ = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
+            except Exception as e:
+                logger.error('fetch src dtable: %s table: %s view: %s sql: %s error: %s', src_dtable_uuid, src_table['name'], src_view_id, sql[:200], e)
+                return {
+                    'dst_table_id': None,
+                    'error_msg': 'fetch src rows id error: %s' % e,
+                    'task_status_code': 500
+                }
+            reques_src_rows.extend(rows)
+            if len(rows) < step:
+                break
+        dataset_cache_manager.update_cache(dataset_id, reques_src_rows)
 
     # fetch all dst table rows id
     dst_rows_id_set = set()
@@ -811,9 +835,9 @@ def import_sync_CDS(context):
         start += step
 
     # calc to-be-appended-rows-id, to-be-updated-rows-id, to-be-deleted-rows-id
-    to_be_appended_rows_id_set = src_rows_id_set - dst_rows_id_set
-    to_be_updated_rows_id_set = src_rows_id_set & dst_rows_id_set
-    to_be_deleted_rows_id_set = dst_rows_id_set - src_rows_id_set
+    to_be_appended_rows_id_set = dataset_cache_manager.rows_id_set - dst_rows_id_set
+    to_be_updated_rows_id_set = dataset_cache_manager.rows_id_set & dst_rows_id_set
+    to_be_deleted_rows_id_set = dst_rows_id_set - dataset_cache_manager.rows_id_set
     logger.debug('to_be_appended_rows_id_set: %s, to_be_updated_rows_id_set: %s, to_be_deleted_rows_id_set: %s', len(to_be_appended_rows_id_set), len(to_be_updated_rows_id_set), len(to_be_deleted_rows_id_set))
 
     # delete dst to-be-deleted-rows
@@ -829,19 +853,20 @@ def import_sync_CDS(context):
     for i in range(0, len(to_be_updated_rows_id_list), step):
         logger.debug('to_be_updated_rows_id_list i: %s step: %s', i, step)
         ## fetch src to-be-updated-rows
-        rows_id_str = ', '.join(["'%s'" % row_id for row_id in to_be_updated_rows_id_list[i: i+step]])
-        sql = f"SELECT {src_query_columns} FROM `{src_table_name}` WHERE _id IN ({rows_id_str}) LIMIT {step}"
-        try:
-            src_rows, _ = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
-        except Exception as e:
-            logger.error('fetch src to-be-updated-rows sql: %s error: %s', sql[:200], e)
-            return {
-                'dst_table_id': None,
-                'error_msg': 'fetch src to-be-updated-rows error: %s' % e,
-                'task_status_code': 500
-            }
+        # sql = f"SELECT {src_query_columns} FROM `{src_table['name']}` WHERE _id IN ({rows_id_str}) LIMIT {step}"
+        # try:
+        #     src_rows, _ = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
+        # except Exception as e:
+        #     logger.error('fetch src to-be-updated-rows sql: %s error: %s', sql[:200], e)
+        #     return {
+        #         'dst_table_id': None,
+        #         'error_msg': 'fetch src to-be-updated-rows error: %s' % e,
+        #         'task_status_code': 500
+        #     }
+        src_rows = [row for row in dataset_cache_manager.dataset_rows if row['_id'] in to_be_updated_rows_id_list[i: i+step]]
 
         ## fetch dst to-be-updated-rows
+        rows_id_str = ', '.join(["'%s'" % row_id for row_id in to_be_updated_rows_id_list[i: i+step]])
         sql = f"SELECT {dst_query_columns} FROM `{dst_table_name}` WHERE _id IN ({rows_id_str}) LIMIT {step}"
         try:
             dst_rows, _ = dst_dtable_db_api.query(sql, convert=False, server_only=True)
@@ -862,7 +887,7 @@ def import_sync_CDS(context):
 
     # fetch src to-be-append-rows, append to dst table, step by step
     ## this list is to record the order of src rows
-    to_be_appended_rows_id_list = [row_id for row_id in src_rows_id_list if row_id in to_be_appended_rows_id_set]
+    to_be_appended_rows_id_list = [row_id for row_id in dataset_cache_manager.rows_id_list if row_id in to_be_appended_rows_id_set]
 
     step = 10000
     for i in range(0, len(to_be_appended_rows_id_list), step):
@@ -874,20 +899,21 @@ def import_sync_CDS(context):
                 break
             step_to_be_appended_rows_id_list.append(to_be_appended_rows_id_list[i+j])
             step_row_sort_dict[to_be_appended_rows_id_list[i+j]] = j
-        rows_id_str = ', '.join(["'%s'" % row_id for row_id in step_to_be_appended_rows_id_list])
-        if filter_clause:
-            sql = f"SELECT {src_query_columns} FROM `{src_table_name}` WHERE (({filter_clause[len('WHERE'):]}) AND `_id` IN ({rows_id_str})) LIMIT {step}"
-        else:
-            sql = f"SELECT {src_query_columns} FROM `{src_table_name}` WHERE `_id` IN ({rows_id_str}) LIMIT {step}"
-        try:
-            src_rows, _ = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
-        except Exception as e:
-            logger.error('fetch to-be-appended-rows sql: %s error: %s', sql[:200], e)
-            return {
-                'dst_table_id': None,
-                'error_msg': 'fetch to-be-appended-rows error: %s' % e,
-                'task_status_code': 500
-            }
+        # rows_id_str = ', '.join(["'%s'" % row_id for row_id in step_to_be_appended_rows_id_list])
+        # if filter_clause:
+        #     sql = f"SELECT {src_query_columns} FROM `{src_table['name']}` WHERE (({filter_clause[len('WHERE'):]}) AND `_id` IN ({rows_id_str})) LIMIT {step}"
+        # else:
+        #     sql = f"SELECT {src_query_columns} FROM `{src_table['name']}` WHERE `_id` IN ({rows_id_str}) LIMIT {step}"
+        # try:
+        #     src_rows, _ = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
+        # except Exception as e:
+        #     logger.error('fetch to-be-appended-rows sql: %s error: %s', sql[:200], e)
+        #     return {
+        #         'dst_table_id': None,
+        #         'error_msg': 'fetch to-be-appended-rows error: %s' % e,
+        #         'task_status_code': 500
+        #     }
+        src_rows = [row for row in dataset_cache_manager.dataset_rows if row['_id'] in step_to_be_appended_rows_id_list]
         src_rows = sorted(src_rows, key=lambda row: step_row_sort_dict[row['_id']])
         _, to_be_appended_rows, _ = generate_synced_rows(src_rows, src_columns, final_columns, [])
         error_resp = append_dst_rows(dst_dtable_uuid, dst_table_name, to_be_appended_rows, dst_dtable_server_api)

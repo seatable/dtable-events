@@ -1,5 +1,6 @@
 import logging
 import time
+from collections import defaultdict
 from datetime import datetime, timedelta
 from threading import Thread
 
@@ -8,7 +9,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 
 from dtable_events import init_db_session_class
 from dtable_events.app.config import DTABLE_PRIVATE_KEY
-from dtable_events.common_dataset.common_dataset_sync_utils import import_sync_CDS, set_common_dataset_sync_invalid
+from dtable_events.common_dataset.common_dataset_sync_utils import import_sync_CDS, set_common_dataset_sync_invalid, DatasetCacheManager
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars, get_inner_dtable_server_url
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 
@@ -89,9 +90,9 @@ def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_
         logging.error('Source view not found.')
         return None
 
-    src_columns = [col for col in src_table.get('columns', []) if col['key'] not in src_view.get('hidden_columns', [])]
+    # src_columns = [col for col in src_table.get('columns', []) if col['key'] not in src_view.get('hidden_columns', [])]
 
-    src_enable_archive = (src_dtable_metadata.get('settings') or {}).get('enable_archive', False)
+    # src_enable_archive = (src_dtable_metadata.get('settings') or {}).get('enable_archive', False)
     src_version = src_dtable_metadata.get('version')
 
     dst_table = None
@@ -106,9 +107,10 @@ def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_
             return None
 
     return {
-        'src_table_name': src_table['name'],
-        'src_view_name': src_view['name'],
-        'src_columns': src_columns,
+        # 'src_table_name': src_table['name'],
+        # 'src_view_name': src_view['name'],
+        # 'src_columns': src_columns,
+        'src_table': src_table,
         'src_version': src_version,
         'dst_table_name': dst_table['name'] if dst_table else None,
         'dst_columns': dst_table['columns'] if dst_table else None
@@ -138,71 +140,81 @@ def list_pending_common_dataset_syncs(db_session):
 def check_common_dataset(session_class):
     with session_class() as db_session:
         dataset_sync_list = list(list_pending_common_dataset_syncs(db_session))
+    CDS_dst_dict = defaultdict(list)
+    dataset_cache_manager = DatasetCacheManager()
     for dataset_sync in dataset_sync_list:
-        dst_dtable_uuid = uuid_str_to_36_chars(dataset_sync[0])
-        dst_table_id = dataset_sync[1]
-        src_table_id = dataset_sync[2]
-        src_view_id = dataset_sync[3]
-        src_dtable_uuid = uuid_str_to_36_chars(dataset_sync[4])
-        dataset_sync_id = dataset_sync[5]
-        last_src_version = dataset_sync[6]
-        dataset_id = dataset_sync[7]
+        CDS_dst_dict[dataset_sync.id].append(dataset_sync)
+    for dataset_id, dataset_syncs in CDS_dst_dict.items():
+        for dataset_sync in dataset_syncs:
+            dst_dtable_uuid = uuid_str_to_36_chars(dataset_sync[0])
+            dst_table_id = dataset_sync[1]
+            src_table_id = dataset_sync[2]
+            src_view_id = dataset_sync[3]
+            src_dtable_uuid = uuid_str_to_36_chars(dataset_sync[4])
+            dataset_sync_id = dataset_sync[5]
+            last_src_version = dataset_sync[6]
+            # dataset_id = dataset_sync[7]
 
-        assets = gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_id, dst_table_id, dataset_sync_id, dataset_id, db_session)
+            assets = gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_id, dst_table_id, dataset_sync_id, dataset_id, db_session)
 
-        if not assets:
-            continue
-
-        if assets.get('src_version') == last_src_version:
-            continue
-
-        src_table_name = assets.get('src_table_name')
-        src_view_name = assets.get('src_view_name')
-        dst_table_name = assets.get('dst_table_name')
-        try:
-            result = import_sync_CDS({
-                'src_dtable_uuid': src_dtable_uuid,
-                'dst_dtable_uuid': dst_dtable_uuid,
-                'src_table_name': src_table_name,
-                'src_view_name': src_view_name,
-                'src_columns': assets.get('src_columns'),
-                'dst_table_id': dst_table_id,
-                'dst_table_name': dst_table_name,
-                'dst_columns': assets.get('dst_columns'),
-                'operator': 'dtable-events',
-                'lang': 'en',  # TODO: lang
-            })
-        except Exception as e:
-            logging.error('sync common dataset src-uuid: %s src-table: %s src-view: %s dst-uuid: %s dst-table: %s error: %s', 
-                          src_dtable_uuid, src_table_name, src_view_name, dst_dtable_uuid, dst_table_name, e)
-            continue
-        else:
-            if result.get('error_msg'):
-                if result.get('error_type') in (
-                    'generate_synced_columns_error',
-                    'base_exceeds_limit',
-                    'exceed_columns_limit',
-                    'exceed_rows_limit'
-                ):
-                    logging.warning('src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s client error: %s',
-                                    src_dtable_uuid, src_table_id, src_view_id, dst_dtable_uuid, dst_table_id, result)
-                    with session_class() as db_session:
-                        set_common_dataset_sync_invalid(dataset_sync_id, db_session)
-                else:
-                    logging.error('src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s error: %s',
-                                  src_dtable_uuid, src_table_id, src_view_id, dst_dtable_uuid, dst_table_id, result)
+            if not assets:
                 continue
-        sql = '''
-            UPDATE dtable_common_dataset_sync SET last_sync_time=:last_sync_time, src_version=:src_version
-            WHERE id=:id
-        '''
-        with session_class() as db_session:
-            db_session.execute(sql, {
-                'last_sync_time': datetime.now(),
-                'src_version': assets.get('src_version'),
-                'id': dataset_sync_id
-            })
-            db_session.commit()
+
+            if assets.get('src_version') == last_src_version:
+                continue
+
+            # src_table_name = assets.get('src_table_name')
+            # src_view_name = assets.get('src_view_name')
+            src_table = assets.get('src_table')
+            dst_table_name = assets.get('dst_table_name')
+            try:
+                result = import_sync_CDS({
+                    'dataset_id': dataset_id,
+                    'src_dtable_uuid': src_dtable_uuid,
+                    'dst_dtable_uuid': dst_dtable_uuid,
+                    # 'src_table_name': src_table_name,
+                    # 'src_view_name': src_view_name,
+                    # 'src_columns': assets.get('src_columns'),
+                    'src_table': src_table,
+                    'src_view_id': src_view_id,
+                    'dst_table_id': dst_table_id,
+                    'dst_table_name': dst_table_name,
+                    'dst_columns': assets.get('dst_columns'),
+                    'operator': 'dtable-events',
+                    'lang': 'en',  # TODO: lang,
+                    'dataset_cache_manager': dataset_cache_manager
+                })
+            except Exception as e:
+                logging.error('sync common dataset src-uuid: %s src-table: %s src-view: %s dst-uuid: %s dst-table: %s error: %s', 
+                            src_dtable_uuid, src_table['name'], src_view_id, dst_dtable_uuid, dst_table_name, e)
+                continue
+            else:
+                if result.get('error_msg'):
+                    if result.get('error_type') in (
+                        'generate_synced_columns_error',
+                        'base_exceeds_limit',
+                        'exceed_columns_limit',
+                        'exceed_rows_limit'
+                    ):
+                        logging.warning('src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s client error: %s',
+                                        src_dtable_uuid, src_table_id, src_view_id, dst_dtable_uuid, dst_table_id, result)
+                        with session_class() as db_session:
+                            set_common_dataset_sync_invalid(dataset_sync_id, db_session)
+                    else:
+                        logging.error('src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s error: %s',
+                                    src_dtable_uuid, src_table_id, src_view_id, dst_dtable_uuid, dst_table_id, result)
+                    continue
+            sql = '''
+                UPDATE dtable_common_dataset_sync SET last_sync_time=:last_sync_time, src_version=:src_version
+                WHERE id=:id
+            '''
+            with session_class() as db_session:
+                db_session.execute(sql, {
+                    'last_sync_time': datetime.now(),
+                    'src_version': assets.get('src_version'),
+                    'id': dataset_sync_id
+                })
+                db_session.commit()
 
 
 class CommonDatasetSyncerTimer(Thread):
@@ -213,7 +225,7 @@ class CommonDatasetSyncerTimer(Thread):
     def run(self):
         sched = BlockingScheduler()
         # fire at every hour in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='*')
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='56')
         def timed_job():
             logging.info('Starts to scan common dataset syncs...')
             try:

@@ -27,9 +27,11 @@ def sync_common_dataset(context, config):
     src_dtable_uuid = context.get('src_dtable_uuid')
     dst_dtable_uuid = context.get('dst_dtable_uuid')
 
-    src_table_name = context.get('src_table_name')
-    src_view_name = context.get('src_view_name')
-    src_columns = context.get('src_columns')
+    # src_table_name = context.get('src_table_name')
+    # src_view_name = context.get('src_view_name')
+    # src_columns = context.get('src_columns')
+    src_table = context.get('src_table')
+    src_view_id = context.get('src_view_id')
     src_version = context.get('src_version')
 
     dst_table_id = context.get('dst_table_id')
@@ -85,11 +87,14 @@ def sync_common_dataset(context, config):
 
     try:
         result = import_sync_CDS({
+            'dataset_id': dataset_id,
             'src_dtable_uuid': src_dtable_uuid,
             'dst_dtable_uuid': dst_dtable_uuid,
-            'src_table_name': src_table_name,
-            'src_view_name': src_view_name,
-            'src_columns': src_columns,
+            # 'src_table_name': src_table_name,
+            # 'src_view_name': src_view_name,
+            # 'src_columns': src_columns,
+            'src_table': src_table,
+            'src_view_id': src_view_id,
             'dst_table_id': dst_table_id,
             'dst_table_name': dst_table_name,
             'dst_columns': dst_columns,
@@ -145,9 +150,11 @@ def import_common_dataset(context, config):
     src_dtable_uuid = context.get('src_dtable_uuid')
     dst_dtable_uuid = context.get('dst_dtable_uuid')
 
-    src_table_name = context.get('src_table_name')
-    src_view_name = context.get('src_view_name')
-    src_columns = context.get('src_columns')
+    # src_table_name = context.get('src_table_name')
+    # src_view_name = context.get('src_view_name')
+    # src_columns = context.get('src_columns')
+    src_table = context.get('src_table')
+    src_view_id = context.get('src_view_id')
 
     dst_table_name = context.get('dst_table_name')
 
@@ -158,11 +165,14 @@ def import_common_dataset(context, config):
 
     try:
         result = import_sync_CDS({
+            'dataset_id': dataset_id,
             'src_dtable_uuid': src_dtable_uuid,
             'dst_dtable_uuid': dst_dtable_uuid,
-            'src_table_name': src_table_name,
-            'src_view_name': src_view_name,
-            'src_columns': src_columns,
+            # 'src_table_name': src_table_name,
+            # 'src_view_name': src_view_name,
+            # 'src_columns': src_columns,
+            'src_table': src_table,
+            'src_view_id': src_view_id,
             'dst_table_name': dst_table_name,
             'operator': operator,
             'lang': lang
