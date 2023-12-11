@@ -9,7 +9,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 
 from dtable_events import init_db_session_class
 from dtable_events.app.config import DTABLE_PRIVATE_KEY
-from dtable_events.common_dataset.common_dataset_sync_utils import import_sync_CDS, set_common_dataset_sync_invalid, DatasetCacheManager
+from dtable_events.common_dataset.common_dataset_sync_utils import import_sync_CDS, set_common_dataset_syncs_invalid, DatasetCacheManager
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars, get_inner_dtable_server_url
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 
@@ -58,27 +58,24 @@ def get_dtable_server_header(dtable_uuid):
     return {'Authorization': 'Token ' + access_token}
 
 
-def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_id, dst_table_id, dataset_sync_id, dataset_id, db_session):
+def gen_src_assets(src_dtable_uuid, src_table_id, src_view_id, dataset_sync_ids, db_session):
     """
-    return assets -> dict
+    :return: assets -> dict
     """
     dtable_server_url = get_inner_dtable_server_url()
     src_dtable_server_api = DTableServerAPI('dtable-events', src_dtable_uuid, dtable_server_url)
-    dst_dtable_server_api = DTableServerAPI('dtable-events', dst_dtable_uuid, dtable_server_url)
     try:
         src_dtable_metadata = src_dtable_server_api.get_metadata()
-        dst_dtable_metadata = dst_dtable_server_api.get_metadata()
     except Exception as e:
-        logging.error('request src dst dtable: %s, %s metadata error: %s', src_dtable_uuid, dst_dtable_uuid, e)
+        logging.error('request src dst dtable: %s metadata error: %s', src_dtable_uuid, e)
         return None
-
     src_table, src_view = None, None
     for table in src_dtable_metadata.get('tables', []):
         if table['_id'] == src_table_id:
             src_table = table
             break
     if not src_table:
-        set_common_dataset_sync_invalid(dataset_sync_id, db_session)
+        set_common_dataset_syncs_invalid(dataset_sync_ids, db_session)
         logging.error('Source table not found.')
         return None
     for view in src_table.get('views', []):
@@ -86,41 +83,48 @@ def gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_
             src_view = view
             break
     if not src_view:
-        set_common_dataset_sync_invalid(dataset_sync_id, db_session)
+        set_common_dataset_syncs_invalid(dataset_sync_ids, db_session)
         logging.error('Source view not found.')
         return None
 
-    # src_columns = [col for col in src_table.get('columns', []) if col['key'] not in src_view.get('hidden_columns', [])]
-
-    # src_enable_archive = (src_dtable_metadata.get('settings') or {}).get('enable_archive', False)
     src_version = src_dtable_metadata.get('version')
 
-    dst_table = None
-    if dst_table_id:
-        for table in dst_dtable_metadata.get('tables', []):
-            if table['_id'] == dst_table_id:
-                dst_table = table
-                break
-        if not dst_table:
-            set_common_dataset_sync_invalid(dataset_sync_id, db_session)
-            logging.error('Destination table not found.')
-            return None
-
     return {
-        # 'src_table_name': src_table['name'],
-        # 'src_view_name': src_view['name'],
-        # 'src_columns': src_columns,
         'src_table': src_table,
-        'src_version': src_version,
-        'dst_table_name': dst_table['name'] if dst_table else None,
-        'dst_columns': dst_table['columns'] if dst_table else None
+        'src_version': src_version
+    }
+
+
+def gen_dst_assets(dst_dtable_uuid, dst_table_id, dataset_sync_id, db_session):
+    """
+    :return: assets -> dict
+    """
+    dtable_server_url = get_inner_dtable_server_url()
+    dst_dtable_server_api = DTableServerAPI('dtable-events', dst_dtable_uuid, dtable_server_url)
+    try:
+        dst_dtable_metadata = dst_dtable_server_api.get_metadata()
+    except Exception as e:
+        logging.error('request src dst dtable: %s metadata error: %s', dst_dtable_uuid, e)
+        return None
+    dst_table = None
+    for table in dst_dtable_metadata.get('tables', []):
+        if table['_id'] == dst_table_id:
+            dst_table = table
+            break
+    if not dst_table:
+        set_common_dataset_syncs_invalid([dataset_sync_id], db_session)
+        logging.error('Destination table not found.')
+        return None
+    return {
+        'dst_table_name': dst_table['name'],
+        'dst_columns': dst_table['columns']
     }
 
 
 def list_pending_common_dataset_syncs(db_session):
     sql = '''
             SELECT dcds.dst_dtable_uuid, dcds.dst_table_id, dcd.table_id AS src_table_id, dcd.view_id AS src_view_id,
-                dcd.dtable_uuid AS src_dtable_uuid, dcds.id AS sync_id, dcds.src_version, dcd.id
+                dcd.dtable_uuid AS src_dtable_uuid, dcds.id AS sync_id, dcds.src_version, dcd.id AS dataset_id
             FROM dtable_common_dataset dcd
             INNER JOIN dtable_common_dataset_sync dcds ON dcds.dataset_id=dcd.id
             INNER JOIN dtables d_src ON dcd.dtable_uuid=d_src.uuid AND d_src.deleted=0
@@ -143,43 +147,42 @@ def check_common_dataset(session_class):
     CDS_dst_dict = defaultdict(list)
     dataset_cache_manager = DatasetCacheManager()
     for dataset_sync in dataset_sync_list:
-        CDS_dst_dict[dataset_sync.id].append(dataset_sync)
+        CDS_dst_dict[dataset_sync.dataset_id].append(dataset_sync)
     for dataset_id, dataset_syncs in CDS_dst_dict.items():
+        # fetch src assets
+        src_dtable_uuid = uuid_str_to_36_chars(dataset_syncs[0].src_dtable_uuid)
+        src_table_id = dataset_syncs[0].src_table_id
+        src_view_id = dataset_syncs[0].src_view_id
+        sync_ids = [dataset_sync.sync_id for dataset_sync in dataset_syncs]
+        src_assets = gen_src_assets(src_dtable_uuid, src_table_id, src_view_id, sync_ids, db_session)
+        if not src_assets:
+            continue
         for dataset_sync in dataset_syncs:
-            dst_dtable_uuid = uuid_str_to_36_chars(dataset_sync[0])
-            dst_table_id = dataset_sync[1]
-            src_table_id = dataset_sync[2]
-            src_view_id = dataset_sync[3]
-            src_dtable_uuid = uuid_str_to_36_chars(dataset_sync[4])
-            dataset_sync_id = dataset_sync[5]
-            last_src_version = dataset_sync[6]
-            # dataset_id = dataset_sync[7]
+            dst_dtable_uuid = uuid_str_to_36_chars(dataset_sync.dst_dtable_uuid)
+            dst_table_id = dataset_sync.dst_table_id
+            dataset_sync_id = dataset_sync.sync_id
+            last_src_version = dataset_sync.src_version
 
-            assets = gen_src_dst_assets(dst_dtable_uuid, src_dtable_uuid, src_table_id, src_view_id, dst_table_id, dataset_sync_id, dataset_id, db_session)
+            dst_assets = gen_dst_assets(dst_dtable_uuid, dst_table_id, dataset_sync_id, db_session)
 
-            if not assets:
+            if not dst_assets:
                 continue
 
-            if assets.get('src_version') == last_src_version:
+            if src_assets.get('src_version') == last_src_version:
                 continue
 
-            # src_table_name = assets.get('src_table_name')
-            # src_view_name = assets.get('src_view_name')
-            src_table = assets.get('src_table')
-            dst_table_name = assets.get('dst_table_name')
+            src_table = src_assets.get('src_table')
+            dst_table_name = dst_assets.get('dst_table_name')
             try:
                 result = import_sync_CDS({
                     'dataset_id': dataset_id,
                     'src_dtable_uuid': src_dtable_uuid,
                     'dst_dtable_uuid': dst_dtable_uuid,
-                    # 'src_table_name': src_table_name,
-                    # 'src_view_name': src_view_name,
-                    # 'src_columns': assets.get('src_columns'),
                     'src_table': src_table,
                     'src_view_id': src_view_id,
                     'dst_table_id': dst_table_id,
                     'dst_table_name': dst_table_name,
-                    'dst_columns': assets.get('dst_columns'),
+                    'dst_columns': dst_assets.get('dst_columns'),
                     'operator': 'dtable-events',
                     'lang': 'en',  # TODO: lang,
                     'dataset_cache_manager': dataset_cache_manager
@@ -199,7 +202,7 @@ def check_common_dataset(session_class):
                         logging.warning('src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s client error: %s',
                                         src_dtable_uuid, src_table_id, src_view_id, dst_dtable_uuid, dst_table_id, result)
                         with session_class() as db_session:
-                            set_common_dataset_sync_invalid(dataset_sync_id, db_session)
+                            set_common_dataset_syncs_invalid([dataset_sync_id], db_session)
                     else:
                         logging.error('src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s error: %s',
                                     src_dtable_uuid, src_table_id, src_view_id, dst_dtable_uuid, dst_table_id, result)
@@ -211,7 +214,7 @@ def check_common_dataset(session_class):
             with session_class() as db_session:
                 db_session.execute(sql, {
                     'last_sync_time': datetime.now(),
-                    'src_version': assets.get('src_version'),
+                    'src_version': src_assets.get('src_version'),
                     'id': dataset_sync_id
                 })
                 db_session.commit()
@@ -225,7 +228,7 @@ class CommonDatasetSyncerTimer(Thread):
     def run(self):
         sched = BlockingScheduler()
         # fire at every hour in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='56')
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='07')
         def timed_job():
             logging.info('Starts to scan common dataset syncs...')
             try:
