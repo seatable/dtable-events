@@ -76,7 +76,7 @@ def gen_src_assets(src_dtable_uuid, src_table_id, src_view_id, dataset_sync_ids,
             break
     if not src_table:
         set_common_dataset_syncs_invalid(dataset_sync_ids, db_session)
-        logging.error('Source table not found.')
+        logging.error('src: %s, %s, %s Source table not found.', src_dtable_uuid, src_table_id, src_view_id)
         return None
     for view in src_table.get('views', []):
         if view['_id'] == src_view_id:
@@ -84,7 +84,7 @@ def gen_src_assets(src_dtable_uuid, src_table_id, src_view_id, dataset_sync_ids,
             break
     if not src_view:
         set_common_dataset_syncs_invalid(dataset_sync_ids, db_session)
-        logging.error('Source view not found.')
+        logging.error('src: %s, %s, %s Source view not found.', src_dtable_uuid, src_table_id, src_view_id)
         return None
 
     src_version = src_dtable_metadata.get('version')
