@@ -89,8 +89,9 @@ class DatasetCacheManager:
                     'task_status_code': 500
                 }
             request_src_rows.extend(rows)
-            if len(rows) < step:
+            if len(rows) < step or start + step >= SRC_ROWS_LIMIT:
                 break
+            start += step
         self.update_cache(dataset_id, request_src_rows)
         return None
 
