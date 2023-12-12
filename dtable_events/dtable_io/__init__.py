@@ -802,36 +802,9 @@ def batch_send_email_msg(auth_info, send_info_list, username, config=None, db_se
         session.close()
 
 
-def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token, session_id):
-    if not row_id:
-        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/' % (dtable_uuid, page_id)
-    if row_id:
-        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/row/%s/' % (dtable_uuid, page_id, row_id)
-    url += '?access-token=%s&need_convert=%s' % (access_token, 0)
-    target_dir = '/tmp/dtable-io/convert-page-to-pdf'
-    if not os.path.isdir(target_dir):
-        os.makedirs(target_dir)
-    target_path = os.path.join(target_dir, '%s_%s_%s.pdf' % (dtable_uuid, page_id, row_id))
-
-    webdriver_options = Options()
-    driver = None
-
-    webdriver_options.add_argument('--no-sandbox')
-    webdriver_options.add_argument('--headless')
-    webdriver_options.add_argument('--disable-gpu')
-    webdriver_options.add_argument('--disable-dev-shm-usage')
-
-    driver = webdriver.Chrome('/usr/local/bin/chromedriver', options=webdriver_options)
-
-    driver.get(DTABLE_WEB_SERVICE_URL)
-    cookies = [{
-        'name': SESSION_COOKIE_NAME,
-        'value': session_id
-    }]
-    for cookie in cookies:
-        driver.add_cookie(cookie)
+def generate_pdf(driver: webdriver.Chrome, url, row_id, target_path):
+    print('url: ', url)
     driver.get(url)
-
     def check_images_and_networks(driver, frequency=0.5):
         """
         make sure all images complete
@@ -888,11 +861,11 @@ def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token, session_id):
         }
 
         resource = "/session/%s/chromium/send_command_and_get_result" % driver.session_id
-        url = driver.command_executor._url + resource
+        commnad_url = driver.command_executor._url + resource
         body = json.dumps({'cmd': 'Page.printToPDF', 'params': calculated_print_options})
 
         try:
-            response = driver.command_executor._request('POST', url, body)
+            response = driver.command_executor._request('POST', commnad_url, body)
             if not response:
                 dtable_io_logger.error('execute printToPDF error no response')
             v = response.get('value')['data']
@@ -903,6 +876,38 @@ def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token, session_id):
             dtable_io_logger.exception('execute printToPDF error: {}'.format(e))
 
         driver.quit()
+
+
+def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token):
+    if not row_id:
+        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/' % (dtable_uuid, page_id)
+    if row_id:
+        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/row/%s/' % (dtable_uuid, page_id, row_id)
+    url += '?access-token=%s&need_convert=%s' % (access_token, 0)
+    target_dir = '/tmp/dtable-io/convert-page-to-pdf'
+    if not os.path.isdir(target_dir):
+        os.makedirs(target_dir)
+    target_path = os.path.join(target_dir, '%s_%s_%s.pdf' % (dtable_uuid, page_id, row_id))
+
+    webdriver_options = Options()
+    driver = None
+
+    webdriver_options.add_argument('--no-sandbox')
+    webdriver_options.add_argument('--headless')
+    webdriver_options.add_argument('--disable-gpu')
+    webdriver_options.add_argument('--disable-dev-shm-usage')
+
+    driver = webdriver.Chrome('/usr/local/bin/chromedriver', options=webdriver_options)
+
+    # driver.get(DTABLE_WEB_SERVICE_URL)
+    # cookies = [{
+    #     'name': SESSION_COOKIE_NAME,
+    #     'value': session_id
+    # }]
+    # for cookie in cookies:
+    #     driver.add_cookie(cookie)
+
+    generate_pdf(driver, url, row_id, target_path)
 
 
 def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image=False):

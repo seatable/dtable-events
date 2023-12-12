@@ -408,7 +408,7 @@ def convert_page_to_pdf():
 
     try:
         task_id = task_manager.convert_page_to_pdf(
-            dtable_uuid, page_id, row_id, access_token, session_id)
+            dtable_uuid, page_id, row_id, access_token)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
