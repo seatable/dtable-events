@@ -9,7 +9,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 
 from dtable_events import init_db_session_class
 from dtable_events.app.config import DTABLE_PRIVATE_KEY
-from dtable_events.common_dataset.common_dataset_sync_utils import import_sync_CDS, set_common_dataset_syncs_invalid, DatasetCacheManager
+from dtable_events.common_dataset.common_dataset_sync_utils import import_sync_CDS, set_common_dataset_syncs_invalid, get_dataset_data
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars, get_inner_dtable_server_url
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 
@@ -145,7 +145,6 @@ def check_common_dataset(session_class):
     with session_class() as db_session:
         dataset_sync_list = list(list_pending_common_dataset_syncs(db_session))
     CDS_dst_dict = defaultdict(list)
-    dataset_cache_manager = DatasetCacheManager()
     for dataset_sync in dataset_sync_list:
         CDS_dst_dict[dataset_sync.dataset_id].append(dataset_sync)
     for dataset_id, dataset_syncs in CDS_dst_dict.items():
@@ -156,6 +155,14 @@ def check_common_dataset(session_class):
         sync_ids = [dataset_sync.sync_id for dataset_sync in dataset_syncs]
         src_assets = gen_src_assets(src_dtable_uuid, src_table_id, src_view_id, sync_ids, db_session)
         if not src_assets:
+            continue
+        src_table = src_assets.get('src_table')
+        try:
+            datase_data, error = get_dataset_data(src_dtable_uuid, src_table, src_view_id)
+        except Exception as e:
+            logging.exception('request dtable: %s table: %s view: %s data error: %s', src_dtable_uuid, src_table_id, src_view_id, e)
+        if error:
+            logging.error('request dtable: %s table: %s view: %s data error: %s', src_dtable_uuid, src_table_id, src_view_id, error)
             continue
         for dataset_sync in dataset_syncs:
             dst_dtable_uuid = uuid_str_to_36_chars(dataset_sync.dst_dtable_uuid)
@@ -184,8 +191,8 @@ def check_common_dataset(session_class):
                     'dst_table_name': dst_table_name,
                     'dst_columns': dst_assets.get('dst_columns'),
                     'operator': 'dtable-events',
-                    'lang': 'en',  # TODO: lang,
-                    'dataset_cache_manager': dataset_cache_manager
+                    'lang': 'en',  # TODO: lang
+                    'dataset_data': datase_data
                 })
             except Exception as e:
                 logging.error('sync common dataset src-uuid: %s src-table: %s src-view: %s dst-uuid: %s dst-table: %s error: %s', 
@@ -228,7 +235,7 @@ class CommonDatasetSyncerTimer(Thread):
     def run(self):
         sched = BlockingScheduler()
         # fire at every hour in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='*')
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='39')
         def timed_job():
             logging.info('Starts to scan common dataset syncs...')
             try:
