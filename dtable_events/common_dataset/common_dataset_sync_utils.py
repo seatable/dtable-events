@@ -34,8 +34,7 @@ class DatasetCacheManager:
         if self.dataset_cache and self.dataset_cache['dataset_id'] == dataset_id:
             logger.debug('dataset cache: %s hit', dataset_id)
             return self.dataset_cache
-        if self.dataset_cache:
-            self.dataset_cache = None  # gc handle old cache
+        self.dataset_cache = None  # gc will handle old cache memory
         src_dtable_db_api = DTableDBAPI('dtable-events', src_dtable_uuid, INNER_DTABLE_DB_URL)
         # fetch all src view rows id
         filter_conditions = {
