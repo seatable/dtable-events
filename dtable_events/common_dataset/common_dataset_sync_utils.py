@@ -25,32 +25,17 @@ DELETE_ROWS_LIMIT = 10000
 class DatasetCacheManager:
 
     def __init__(self):
-        self.init()
+        self.dataset_cache = None  # a dict of {dataset_id, rows_id_list, rows_dict}
 
-    def init(self):
-        self.dataset_id = None
-        self.dataset_rows = []
-        self.dataset_rows_dict = {}
-        self.rows_id_list = []
-        self.rows_id_set = set()
-
-    def update_cache(self, dataset_id, rows):
-        self.init()
-        self.dataset_id = dataset_id
-        for row in rows:
-            if row['_id'] in self.rows_id_set:
-                continue
-            self.rows_id_list.append(row['_id'])
-            self.rows_id_set.add(row['_id'])
-            self.dataset_rows.append(row)
-            self.dataset_rows_dict[row['_id']] = row
-
-    def reload_cache(self, dataset_id, src_dtable_uuid, src_table, src_view, src_columns, server_only=True):
+    def get_dataset_cache(self, dataset_id, src_dtable_uuid, src_table, src_view, src_columns, server_only=True):
         """
-        :return: error_body -> dict or None
+        :return: item of self.caches_dict -> dict
         """
-        if self.dataset_id == dataset_id:
-            return None
+        if self.dataset_cache and self.dataset_cache['dataset_id'] == dataset_id:
+            logger.debug('dataset cache: %s hit', dataset_id)
+            return self.dataset_cache
+        if self.dataset_cache:
+            self.dataset_cache = None  # gc handle old cache
         src_dtable_db_api = DTableDBAPI('dtable-events', src_dtable_uuid, INNER_DTABLE_DB_URL)
         # fetch all src view rows id
         filter_conditions = {
@@ -70,10 +55,10 @@ class DatasetCacheManager:
                 'error_msg': 'generate src view sql error: %s' % e,
                 'task_status_code': 500
             }
+        rows_id_list, rows_dict = list(), dict()
         src_columns_str = ', '.join(map(lambda col: f"`{col['name']}`", src_columns))
         sql_template = f"SELECT `_id`, {src_columns_str} FROM `{src_table['name']}` {filter_clause or ''} {sort_clause or ''}"
         start, step = 0, 10000
-        request_src_rows = []
         while True:
             if (start + step) > SRC_ROWS_LIMIT:
                 step = SRC_ROWS_LIMIT - start
@@ -88,12 +73,17 @@ class DatasetCacheManager:
                     'error_msg': 'fetch src rows id error: %s' % e,
                     'task_status_code': 500
                 }
-            request_src_rows.extend(rows)
+            for row in rows:
+                if row['_id'] in rows_dict:
+                    continue
+                rows_dict[row['_id']] = row
+                rows_id_list.append(row['_id'])
             if len(rows) < step or start + step >= SRC_ROWS_LIMIT:
                 break
             start += step
-        self.update_cache(dataset_id, request_src_rows)
-        return None
+        dataset_cache = {'dataset_id': dataset_id, 'rows_id_list': rows_id_list, 'rows_dict': rows_dict}
+        self.dataset_cache = dataset_cache
+        return dataset_cache
 
 
 DATA_NEED_KEY_VALUES = {
@@ -814,11 +804,8 @@ def import_sync_CDS(context):
     if error_resp:
         return error_resp
 
-    logger.debug('dataset_cache_manager.dataset_id: %s dataset_id: %s', dataset_cache_manager.dataset_id, dataset_id)
-    if dataset_cache_manager.dataset_id != dataset_id:
-        error = dataset_cache_manager.reload_cache(dataset_id, src_dtable_uuid, src_table, src_view, src_columns, server_only)
-        if error:
-            return error
+    logger.debug('dataset_cache_manager dataset_id: %s dataset_id: %s', dataset_cache_manager.dataset_cache['dataset_id'] if dataset_cache_manager.dataset_cache else None, dataset_id)
+    dataset_cache = dataset_cache_manager.get_dataset_cache(dataset_id, src_dtable_uuid, src_table, src_view, src_columns, server_only)
 
     # fetch all dst table rows id
     dst_rows_id_set = set()
@@ -841,9 +828,9 @@ def import_sync_CDS(context):
         start += step
 
     # calc to-be-appended-rows-id, to-be-updated-rows-id, to-be-deleted-rows-id
-    to_be_appended_rows_id_set = dataset_cache_manager.rows_id_set - dst_rows_id_set
-    to_be_updated_rows_id_set = dataset_cache_manager.rows_id_set & dst_rows_id_set
-    to_be_deleted_rows_id_set = dst_rows_id_set - dataset_cache_manager.rows_id_set
+    to_be_appended_rows_id_set = dataset_cache['rows_dict'].keys() - dst_rows_id_set
+    to_be_updated_rows_id_set = dataset_cache['rows_dict'].keys() & dst_rows_id_set
+    to_be_deleted_rows_id_set = dst_rows_id_set - dataset_cache['rows_dict'].keys()
     logger.debug('to_be_appended_rows_id_set: %s, to_be_updated_rows_id_set: %s, to_be_deleted_rows_id_set: %s', len(to_be_appended_rows_id_set), len(to_be_updated_rows_id_set), len(to_be_deleted_rows_id_set))
 
     # delete dst to-be-deleted-rows
@@ -857,7 +844,7 @@ def import_sync_CDS(context):
     step = 10000
     for i in range(0, len(to_be_updated_rows_id_list), step):
         logger.debug('to_be_updated_rows_id_list i: %s step: %s', i, step)
-        src_rows = [dataset_cache_manager.dataset_rows_dict[row_id] for row_id in to_be_updated_rows_id_list[i: i+step]]
+        src_rows = [dataset_cache['rows_dict'][row_id] for row_id in to_be_updated_rows_id_list[i: i+step]]
 
         ## fetch dst to-be-updated-rows
         rows_id_str = ', '.join(["'%s'" % row_id for row_id in to_be_updated_rows_id_list[i: i+step]])
@@ -881,7 +868,7 @@ def import_sync_CDS(context):
 
     # fetch src to-be-append-rows, append to dst table, step by step
     ## this list is to record the order of src rows
-    to_be_appended_rows_id_list = [row_id for row_id in dataset_cache_manager.rows_id_list if row_id in to_be_appended_rows_id_set]
+    to_be_appended_rows_id_list = [row_id for row_id in dataset_cache['rows_id_list'] if row_id in to_be_appended_rows_id_set]
 
     step = 10000
     for i in range(0, len(to_be_appended_rows_id_list), step):
@@ -893,7 +880,7 @@ def import_sync_CDS(context):
                 break
             step_to_be_appended_rows_id_list.append(to_be_appended_rows_id_list[i+j])
             step_row_sort_dict[to_be_appended_rows_id_list[i+j]] = j
-        src_rows = [dataset_cache_manager.dataset_rows_dict[row_id] for row_id in step_to_be_appended_rows_id_list]
+        src_rows = [dataset_cache['rows_dict'][row_id] for row_id in step_to_be_appended_rows_id_list]
         src_rows = sorted(src_rows, key=lambda row: step_row_sort_dict[row['_id']])
         _, to_be_appended_rows, _ = generate_synced_rows(src_rows, src_columns, final_columns, [])
         error_resp = append_dst_rows(dst_dtable_uuid, dst_table_name, to_be_appended_rows, dst_dtable_server_api)
