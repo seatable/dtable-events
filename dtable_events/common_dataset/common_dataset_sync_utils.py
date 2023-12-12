@@ -29,7 +29,7 @@ class DatasetCacheManager:
 
     def get_dataset_cache(self, dataset_id, src_dtable_uuid, src_table, src_view, src_columns, server_only=True):
         """
-        :return: item of self.caches_dict -> dict
+        :return: dataset_cache -> dict
         """
         if self.dataset_cache and self.dataset_cache['dataset_id'] == dataset_id:
             logger.debug('dataset cache: %s hit', dataset_id)
