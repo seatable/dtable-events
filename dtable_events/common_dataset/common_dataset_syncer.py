@@ -235,7 +235,7 @@ class CommonDatasetSyncerTimer(Thread):
     def run(self):
         sched = BlockingScheduler()
         # fire at every hour in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='39')
+        @sched.scheduled_job('cron', day_of_week='*', hour='*')
         def timed_job():
             logging.info('Starts to scan common dataset syncs...')
             try:
