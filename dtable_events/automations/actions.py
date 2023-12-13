@@ -2863,6 +2863,40 @@ class ExtractUserNameAction(BaseAction):
         self.auto_rule.set_done_actions()
 
 
+class ConvertPageToPDFAction(BaseAction):
+
+    def __init__(self, auto_rule, data, page_id, file_name, target_column_key):
+        super().__init__(auto_rule, data)
+        self.action_type = 'convert_page_to_pdf'
+        self.page_id = page_id
+        self.file_name = file_name
+        self.target_column_key = target_column_key
+        self.target_column = None
+
+    def can_do_action(self):
+        if not self.auto_rule.current_valid:
+            return False
+        plugin = self.auto_rule.get_plugin('page-design')
+        if not plugin:
+            return False
+        page = next(filter(lambda page: page['page_id'] == self.page_id, plugin), None)
+        if not page:
+            return False
+        if page.get('table_id') != self.auto_rule.table_id or page.get('table_id').get('view_id') != self.auto_rule.view_id:
+            return False
+        self.target_column = next(filter(lambda col: col['key'] == self.target_column_key), None)
+        if not self.target_column or self.target_column['type'] != ColumnTypes.FILE:
+            return False
+        return True
+
+    def do_action(self):
+        if not self.can_do_action():
+            return
+        rows = self.auto_rule.get_trigger_conditions_rows(warning_rows=10)
+        # pass page rows to driver
+        pass
+
+
 class RuleInvalidException(Exception):
     """
     Exception which indicates rule need to be set is_valid=Fasle
@@ -2896,6 +2930,7 @@ class AutomationRule:
         self._table_info = None
         self._view_info = None
         self._dtable_metadata = None
+        self.plugins_dict = {}
         self._access_token = None
         self._view_columns = None
         self.can_run_python = None
@@ -2963,6 +2998,9 @@ class AutomationRule:
         if not self._dtable_metadata:
             self._dtable_metadata = self.metadata_cache_manager.get_metadata(self.dtable_uuid)
         return self._dtable_metadata
+
+    def get_plugin(self, plugin_type):
+        return self.dtable_server_api.get_metadata_plugin(plugin_type)
 
     @property
     def view_columns(self):
@@ -3210,6 +3248,10 @@ class AutomationRule:
             return False
         elif action_type in ['lookup_and_copy', 'extract_user_name']:
             if run_condition in CRON_CONDITIONS and trigger_condition == CONDITION_PERIODICALLY:
+                return True
+            return False
+        elif action_type == 'convert_page_to_pdf':
+            if run_condition in CRON_CONDITIONS and trigger_condition == CONDITION_PERIODICALLY_BY_CONDITION:
                 return True
             return False
         return False
