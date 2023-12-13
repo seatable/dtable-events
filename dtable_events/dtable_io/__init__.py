@@ -2,19 +2,19 @@ import base64
 import json
 import os
 import shutil
+import smtplib
 import time
 import uuid
+from datetime import datetime
+from urllib import parse
 
 import requests
-import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr, parseaddr
 from selenium import webdriver
-from urllib import parse
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
-from datetime import datetime
 
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, SESSION_COOKIE_NAME, INNER_DTABLE_DB_URL
 from dtable_events.dtable_io.big_data import import_excel_to_db, update_excel_to_db, export_big_data_to_excel
@@ -898,14 +898,6 @@ def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token):
     webdriver_options.add_argument('--disable-dev-shm-usage')
 
     driver = webdriver.Chrome('/usr/local/bin/chromedriver', options=webdriver_options)
-
-    # driver.get(DTABLE_WEB_SERVICE_URL)
-    # cookies = [{
-    #     'name': SESSION_COOKIE_NAME,
-    #     'value': session_id
-    # }]
-    # for cookie in cookies:
-    #     driver.add_cookie(cookie)
 
     generate_pdf(driver, url, row_id, target_path)
 
