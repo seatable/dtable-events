@@ -22,15 +22,16 @@ class ConvertPageTOPDFManager:
         self.config = config
         self.max_workers = 10
         self.queue = Queue(self.max_workers)  # element in queue is a dict about task
-        self.drivers = [get_driver(os.path.join(CHROME_DATA_DIR, f'convert-manager-{i}')) for i in range(self.max_workers)]
         try:  # kill all existing chrome processes
             os.system("ps aux | grep chrome | grep -v grep | awk ' { print $2 } ' | xargs kill -9")
         except:
             pass
+        self.drivers = [get_driver(os.path.join(CHROME_DATA_DIR, f'convert-manager-{i}')) for i in range(self.max_workers)]
 
     def do_convert(self, index):
         while True:
             task_info = self.queue.get()
+            logger.debug('do_convert task_info: %s', task_info)
             try:
                 dtable_uuid = task_info.get('dtable_uuid')
                 page_id = task_info.get('page_id')
@@ -83,6 +84,7 @@ class ConvertPageTOPDFManager:
 
     def add_task(self, task_info):
         try:
+            logger.debug('add task_info: %s', task_info)
             self.queue.put(task_info, block=False)
         except Full:
             logger.warning('convert queue full task: %s will be ignored', task_info)
