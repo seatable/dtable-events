@@ -48,12 +48,14 @@ class ConvertPageTOPDFManager:
                     try:
                         convert_page_to_pdf(self.drivers[index], dtable_uuid, page_id, row_id, dtable_server_api.access_token, output)
                         file_name = file_names_dict.get(row_id, f'{dtable_uuid}_{page_id}_{row_id}.pdf')
+                        if not file_name.endswith('.pdf'):
+                            file_name += '.pdf'
                         file_info = dtable_server_api.upload_bytes_file(file_name, output.getvalue())
                         rows_files_dict[row_id] = file_info
                     except Exception as e:
                         logger.exception('convert dtable: %s page: %s row: %s error: %s', dtable_uuid, page_id, row_id, e)
                         continue
-                row_ids_str = ', '.join(map(lambda row_id: f"`{row_id}`", row_ids))
+                row_ids_str = ', '.join(map(lambda row_id: f"'{row_id}'", row_ids))
                 sql = f"SELECT `_id`, `{target_column['name']}` FROM `{table_name}` WHERE _id IN ({row_ids_str})"
                 try:
                     rows, _ = dtable_db_api.query(sql)

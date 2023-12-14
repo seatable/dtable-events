@@ -2882,12 +2882,12 @@ class ConvertPageToPDFAction(BaseAction):
         plugin = self.auto_rule.get_plugin('page-design')
         if not plugin:
             return False
-        page = next(filter(lambda page: page['page_id'] == self.page_id, plugin), None)
+        page = next(filter(lambda page: page.get('page_id') == self.page_id, plugin), None)
         if not page:
             return False
-        if page.get('table_id') != self.auto_rule.table_id or page.get('table_id').get('view_id') != self.auto_rule.view_id:
+        if page.get('table_id') != self.auto_rule.table_id or page.get('view_id') != self.auto_rule.view_id:
             return False
-        self.target_column = next(filter(lambda col: col['key'] == self.target_column_key), None)
+        self.target_column = next(filter(lambda col: col['key'] == self.target_column_key, self.auto_rule.table_info['columns']), None)
         if not self.target_column or self.target_column['type'] != ColumnTypes.FILE:
             return False
         return True
@@ -2905,7 +2905,7 @@ class ConvertPageToPDFAction(BaseAction):
         col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
         column_blanks = [blank for blank in blanks if blank in col_name_dict]
         for row in rows:
-            file_name = self.fill_msg_blanks_with_sql(column_blanks)
+            file_name = self.fill_msg_blanks_with_sql(column_blanks, col_name_dict, row)
             file_names_dict[row['_id']] = file_name
         conver_page_to_pdf_manager.add_task({
             'dtable_uuid': self.auto_rule.dtable_uuid,

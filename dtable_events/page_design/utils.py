@@ -108,5 +108,5 @@ def convert_page_to_pdf(driver: webdriver.Chrome, dtable_uuid, page_id, row_id, 
             logger.info('convert page to pdf success!')
         except Exception as e:
             logger.exception('execute printToPDF error: {}'.format(e))
-        json.dump()
+
         # driver.quit()
