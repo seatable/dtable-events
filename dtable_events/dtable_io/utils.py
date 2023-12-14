@@ -600,8 +600,13 @@ def add_a_auto_rule_to_db(username, auto_rule, workspace_id, repo_id, owner, org
             action['owner'] = owner
             action['org_id'] = int(org_id)
             action['repo_id'] = repo_id
-        if action.get('type') == 'trigger_workflow':
+        elif action.get('type') == 'trigger_workflow':
             action['token'] = old_new_workflow_token_dict.get(action.get('token'))
+        elif action.get('type') == 'send_email':
+            action['repo_id'] = repo_id
+        elif action.get('type') == 'convert_page_to_pdf':
+            action['repo_id'] = repo_id
+            action['workspace_id'] = int(workspace_id)
 
     sql = """INSERT INTO dtable_automation_rules (`dtable_uuid`, `run_condition`, `trigger`, `actions`,
              `creator`, `ctime`, `org_id`, `last_trigger_time`) VALUES (:dtable_uuid, :run_condition,

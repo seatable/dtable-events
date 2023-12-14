@@ -19,6 +19,7 @@ from dtable_events.app.event_redis import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, \
     SEATABLE_FAAS_AUTH_TOKEN, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL
 from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg, batch_send_email_msg
+from dtable_events.page_design.manager import conver_page_to_pdf_manager
 from dtable_events.notification_rules.notification_rules_utils import fill_msg_blanks_with_converted_row, \
     send_notification, fill_msg_blanks_with_sql_row
 from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url, \
@@ -2865,13 +2866,15 @@ class ExtractUserNameAction(BaseAction):
 
 class ConvertPageToPDFAction(BaseAction):
 
-    def __init__(self, auto_rule, data, page_id, file_name, target_column_key):
+    def __init__(self, auto_rule, data, page_id, file_name, target_column_key, repo_id, workspace_id):
         super().__init__(auto_rule, data)
         self.action_type = 'convert_page_to_pdf'
         self.page_id = page_id
         self.file_name = file_name
         self.target_column_key = target_column_key
         self.target_column = None
+        self.repo_id = repo_id
+        self.workspace_id = workspace_id
 
     def can_do_action(self):
         if not self.auto_rule.current_valid:
@@ -2889,12 +2892,31 @@ class ConvertPageToPDFAction(BaseAction):
             return False
         return True
 
+    def fill_msg_blanks_with_sql(self, column_blanks, col_name_dict, row):
+        
+        return fill_msg_blanks_with_sql_row(self.file_name, column_blanks, col_name_dict, row, self.auto_rule.db_session)
+
     def do_action(self):
         if not self.can_do_action():
             return
         rows = self.auto_rule.get_trigger_conditions_rows(warning_rows=10)
-        # pass page rows to driver
-        pass
+        file_names_dict = {}
+        blanks = set(re.findall(r'\{([^{]*?)\}', self.file_name))
+        col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
+        column_blanks = [blank for blank in blanks if blank in col_name_dict]
+        for row in rows:
+            file_name = self.fill_msg_blanks_with_sql(column_blanks)
+            file_names_dict[row['_id']] = file_name
+        conver_page_to_pdf_manager.add_task({
+            'dtable_uuid': self.auto_rule.dtable_uuid,
+            'page_id': self.page_id,
+            'row_ids': [row['_id'] for row in rows],
+            'repo_id': self.repo_id,
+            'workspace_id': self.workspace_id,
+            'file_names_dict': file_names_dict,
+            'target_column': self.target_column,
+            'table_name': self.auto_rule.table_info['name']
+        })
 
 
 class RuleInvalidException(Exception):
@@ -3368,6 +3390,14 @@ class AutomationRule:
                     users_column_key = action_info.get('users_column_key', '')
                     app_uuid = action_info.get('app_token', None) or action_info.get('app_uuid', None)
                     AppNotifyAction(self, self.data, default_msg, users, users_column_key, app_uuid).do_action()
+
+                elif action_info.get('type') == 'convert_page_to_pdf':
+                    page_id = action_info.get('page_id')
+                    file_name = action_info.get('file_name')
+                    target_column_key = action_info.get('target_column_key')
+                    repo_id = action_info.get('repo_id')
+                    workspace_id = action_info.get('workspace_id')
+                    ConvertPageToPDFAction(self, self.data, page_id, file_name, target_column_key, repo_id, workspace_id).do_action()
 
             except RuleInvalidException as e:
                 logger.warning('auto rule: %s, invalid error: %s', self.rule_id, e)

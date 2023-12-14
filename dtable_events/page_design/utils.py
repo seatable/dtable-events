@@ -1,6 +1,7 @@
 import base64
-import logging
+import io
 import json
+import logging
 import os
 import time
 
@@ -12,9 +13,29 @@ from dtable_events.app.config import DTABLE_WEB_SERVICE_URL
 
 logger = logging.getLogger(__name__)
 
+CHROME_DATA_DIR = '/tmp/chrome-user-datas'
 
-def generate_pdf(driver: webdriver.Chrome, url, row_id, target_path):
-    driver.get(url)
+
+def get_driver(user_data_path):
+    webdriver_options = Options()
+
+    webdriver_options.add_argument('--no-sandbox')
+    webdriver_options.add_argument('--headless')
+    webdriver_options.add_argument('--disable-gpu')
+    webdriver_options.add_argument('--disable-dev-shm-usage')
+    webdriver_options.add_argument(f'--user-data-dir={user_data_path}')
+
+    driver = webdriver.Chrome('/usr/local/bin/chromedriver', options=webdriver_options)
+    return driver
+
+
+def convert_page_to_pdf(driver: webdriver.Chrome, dtable_uuid, page_id, row_id, access_token, output):
+    if not row_id:
+        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/' % (dtable_uuid, page_id)
+    if row_id:
+        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/row/%s/' % (dtable_uuid, page_id, row_id)
+    url += '?access-token=%s&need_convert=%s' % (access_token, 0)
+
     def check_images_and_networks(driver, frequency=0.5):
         """
         make sure all images complete
@@ -71,41 +92,21 @@ def generate_pdf(driver: webdriver.Chrome, url, row_id, target_path):
         }
 
         resource = "/session/%s/chromium/send_command_and_get_result" % driver.session_id
-        commnad_url = driver.command_executor._url + resource
+        url = driver.command_executor._url + resource
         body = json.dumps({'cmd': 'Page.printToPDF', 'params': calculated_print_options})
 
         try:
-            response = driver.command_executor._request('POST', commnad_url, body)
+            response = driver.command_executor._request('POST', url, body)
             if not response:
                 logger.error('execute printToPDF error no response')
             v = response.get('value')['data']
-            with open(target_path, 'wb') as f:
-                f.write(base64.b64decode(v))
+            if isinstance(output, str):
+                with open(output, 'wb') as f:
+                    f.write(base64.b64decode(v))
+            elif isinstance(output, io.BytesIO):
+                output.write(base64.b64decode(v))
             logger.info('convert page to pdf success!')
         except Exception as e:
             logger.exception('execute printToPDF error: {}'.format(e))
-
-
-def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token):
-    if not row_id:
-        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/' % (dtable_uuid, page_id)
-    if row_id:
-        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/row/%s/' % (dtable_uuid, page_id, row_id)
-    url += '?access-token=%s&need_convert=%s' % (access_token, 0)
-    target_dir = '/tmp/dtable-io/convert-page-to-pdf'
-    if not os.path.isdir(target_dir):
-        os.makedirs(target_dir)
-    target_path = os.path.join(target_dir, '%s_%s_%s.pdf' % (dtable_uuid, page_id, row_id))
-
-    webdriver_options = Options()
-    driver = None
-
-    webdriver_options.add_argument('--no-sandbox')
-    webdriver_options.add_argument('--headless')
-    webdriver_options.add_argument('--disable-gpu')
-    webdriver_options.add_argument('--disable-dev-shm-usage')
-
-    driver = webdriver.Chrome('/usr/local/bin/chromedriver', options=webdriver_options)
-
-    generate_pdf(driver, url, row_id, target_path)
-    driver.quit()
+        json.dump()
+        # driver.quit()
