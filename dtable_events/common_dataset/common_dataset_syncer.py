@@ -144,10 +144,10 @@ def list_pending_common_dataset_syncs(db_session):
 def check_common_dataset(session_class):
     with session_class() as db_session:
         dataset_sync_list = list(list_pending_common_dataset_syncs(db_session))
-    CDS_dst_dict = defaultdict(list)
+    cds_dst_dict = defaultdict(list)
     for dataset_sync in dataset_sync_list:
-        CDS_dst_dict[dataset_sync.dataset_id].append(dataset_sync)
-    for dataset_id, dataset_syncs in CDS_dst_dict.items():
+        cds_dst_dict[dataset_sync.dataset_id].append(dataset_sync)
+    for dataset_id, dataset_syncs in cds_dst_dict.items():
         # fetch src assets
         src_dtable_uuid = uuid_str_to_36_chars(dataset_syncs[0].src_dtable_uuid)
         src_table_id = dataset_syncs[0].src_table_id
