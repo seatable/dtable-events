@@ -723,10 +723,6 @@ def get_dataset_data(src_dtable_uuid, src_table, src_view_id, server_only=True):
     sql_template = f"SELECT `_id`, {src_columns_str} FROM `{src_table['name']}` {filter_clause or ''} {sort_clause or ''}"
     start, step = 0, 10000
     while True:
-        if len(rows_id_list) >= SRC_ROWS_LIMIT:
-            break
-        if (start + step) > SRC_ROWS_LIMIT:
-            step = SRC_ROWS_LIMIT - start
         sql = f"{sql_template} LIMIT {start}, {step}"
         logger.debug('fetch src dtable: %s table: %s view: %s sql: %s', src_dtable_uuid, src_table['name'], src_view['_id'], sql[:200])
         try:
@@ -743,7 +739,10 @@ def get_dataset_data(src_dtable_uuid, src_table, src_view_id, server_only=True):
                 continue
             rows_dict[row['_id']] = row
             rows_id_list.append(row['_id'])
-        
+            if len(rows_id_list) >= SRC_ROWS_LIMIT:
+                break
+        if len(rows) < step or len(rows_id_list) >= SRC_ROWS_LIMIT:
+            break
         start += step
     dataset_data = {'rows_id_list': rows_id_list, 'rows_dict': rows_dict}
     return dataset_data, None
