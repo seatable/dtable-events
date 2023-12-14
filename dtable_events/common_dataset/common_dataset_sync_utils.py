@@ -690,7 +690,15 @@ def get_dataset_data(src_dtable_uuid, src_table, src_view_id, server_only=True):
     """
     src_dtable_db_api = DTableDBAPI('dtable-events', src_dtable_uuid, INNER_DTABLE_DB_URL)
     # fetch all src view rows id
-    src_view = [view for view in src_table['views'] if view['_id'] == src_view_id][0]
+    try:
+        src_view = [view for view in src_table['views'] if view['_id'] == src_view_id][0]
+    except IndexError:
+        logger.warning("src view %s not found" % src_view_id)
+        return None, {
+            'dst_table_id': None,
+            'error_msg': 'view %s not found' % src_view_id,
+            'task_status_code': 404
+        }
     hidden_column_keys = src_view.get('hidden_columns') or []
     src_columns = [col for col in src_table['columns'] if col['key'] not in hidden_column_keys]
     filter_conditions = {
@@ -715,6 +723,8 @@ def get_dataset_data(src_dtable_uuid, src_table, src_view_id, server_only=True):
     sql_template = f"SELECT `_id`, {src_columns_str} FROM `{src_table['name']}` {filter_clause or ''} {sort_clause or ''}"
     start, step = 0, 10000
     while True:
+        if len(rows_id_list) >= SRC_ROWS_LIMIT:
+            break
         if (start + step) > SRC_ROWS_LIMIT:
             step = SRC_ROWS_LIMIT - start
         sql = f"{sql_template} LIMIT {start}, {step}"
@@ -733,8 +743,7 @@ def get_dataset_data(src_dtable_uuid, src_table, src_view_id, server_only=True):
                 continue
             rows_dict[row['_id']] = row
             rows_id_list.append(row['_id'])
-        if len(rows) < step or start + step >= SRC_ROWS_LIMIT:
-            break
+        
         start += step
     dataset_data = {'rows_id_list': rows_id_list, 'rows_dict': rows_dict}
     return dataset_data, None
@@ -744,9 +753,7 @@ def import_sync_CDS(context):
     """
     fetch src/dst rows id, find need append/update/delete rows
     """
-    dataset_id = context.get('dataset_id')
 
-    src_dtable_uuid = context.get('src_dtable_uuid')
     dst_dtable_uuid = context.get('dst_dtable_uuid')
 
     src_table = context.get('src_table')
@@ -764,7 +771,6 @@ def import_sync_CDS(context):
     dst_dtable_server_api = DTableServerAPI(operator, dst_dtable_uuid, dtable_server_url)
     dst_dtable_db_api = DTableDBAPI(operator, dst_dtable_uuid, INNER_DTABLE_DB_URL)
 
-    server_only = True
     is_sync = bool(dst_table_id)
 
     # create dst table or update dst table columns
