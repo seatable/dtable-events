@@ -2885,8 +2885,10 @@ class ConvertPageToPDFAction(BaseAction):
         page = next(filter(lambda page: page.get('page_id') == self.page_id, plugin), None)
         if not page:
             return False
-        if page.get('table_id') != self.auto_rule.table_id or page.get('view_id') != self.auto_rule.view_id:
+        if page.get('table_id') != self.auto_rule.table_id:
             return False
+        # if page.get('view_id') != self.auto_rule.view_id:
+        #     return False
         self.target_column = next(filter(lambda col: col['key'] == self.target_column_key, self.auto_rule.table_info['columns']), None)
         if not self.target_column or self.target_column['type'] != ColumnTypes.FILE:
             return False

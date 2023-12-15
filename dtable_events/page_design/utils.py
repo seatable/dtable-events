@@ -10,6 +10,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL
+from dtable_events.utils import uuid_str_to_36_chars
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +32,12 @@ def get_driver(user_data_path):
 
 def convert_page_to_pdf(driver: webdriver.Chrome, dtable_uuid, page_id, row_id, access_token, output):
     if not row_id:
-        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/' % (dtable_uuid, page_id)
+        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id)
     if row_id:
-        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/row/%s/' % (dtable_uuid, page_id, row_id)
+        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/row/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id, row_id)
     url += '?access-token=%s&need_convert=%s' % (access_token, 0)
+    logger.debug('url: %s', url)
+    driver.get(url)
 
     def check_images_and_networks(driver, frequency=0.5):
         """
@@ -109,4 +112,10 @@ def convert_page_to_pdf(driver: webdriver.Chrome, dtable_uuid, page_id, row_id, 
         except Exception as e:
             logger.exception('execute printToPDF error: {}'.format(e))
 
-        # driver.quit()
+        # debug page-design view in chrome, console log and network log, don't delete
+        # logger.debug('browser console: %s', list(driver.get_log('browser')))
+        # network_logs = driver.execute_script("var performance = window.performance || window.mozPerformance || window.msPerformance || window.webkitPerformance || {}; var network = performance.getEntries() || {}; return network;")
+        # logger.debug('network logs start')
+        # for item in network_logs:
+        #     logger.debug(str(item))
+        # logger.debug('network logs end')

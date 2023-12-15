@@ -9,6 +9,7 @@ from datetime import datetime
 from seaserv import seafile_api
 from dtable_events.dtable_io.utils import get_dtable_server_token
 from dtable_events.app.config import FILE_SERVER_ROOT
+from dtable_events.utils import uuid_str_to_36_chars
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +80,7 @@ class DTableServerAPI(object):
 
     def __init__(self, username, dtable_uuid, dtable_server_url, server_url=None, repo_id=None, workspace_id=None, timeout=180, access_token_timeout=300):
         self.username = username
-        self.dtable_uuid = dtable_uuid
+        self.dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
         self.headers = None
         self.internal_headers = None
         self.dtable_server_url = dtable_server_url.rstrip('/')
