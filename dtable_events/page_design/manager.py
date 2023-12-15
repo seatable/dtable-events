@@ -5,7 +5,7 @@ from queue import Queue, Full
 from threading import Thread
 
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL
-from dtable_events.page_design.utils import convert_page_to_pdf, get_driver, CHROME_DATA_DIR
+from dtable_events.page_design.utils import get_driver, CHROME_DATA_DIR, open_page_view, wait_page_view
 from dtable_events.utils import get_inner_dtable_server_url
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_db_api import DTableDBAPI
@@ -17,11 +17,12 @@ class ConvertPageTOPDFManager:
 
     def __init__(self):
         self.max_workers = 10
+        self.max_queue = 0
 
     def init(self, config):
         self.config = config
         self.max_workers = 10
-        self.queue = Queue(self.max_workers)  # element in queue is a dict about task
+        self.queue = Queue(self.max_queue)  # element in queue is a dict about task
         try:  # kill all existing chrome processes
             os.system("ps aux | grep chrome | grep -v grep | awk ' { print $2 } ' | xargs kill -9")
         except:
@@ -32,6 +33,7 @@ class ConvertPageTOPDFManager:
         while True:
             task_info = self.queue.get()
             logger.debug('do_convert task_info: %s', task_info)
+            driver = self.drivers[index]
             try:
                 dtable_uuid = task_info.get('dtable_uuid')
                 page_id = task_info.get('page_id')
@@ -41,21 +43,27 @@ class ConvertPageTOPDFManager:
                 workspace_id = task_info.get('workspace_id')
                 file_names_dict = task_info.get('file_names_dict')
                 table_name = task_info.get('table_name')
+
                 dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, dtable_server_url, DTABLE_WEB_SERVICE_URL, repo_id, workspace_id)
                 dtable_db_api = DTableDBAPI('dtable-events', dtable_uuid, INNER_DTABLE_DB_URL)
+
+                # open all tabs of rows at once
+                # wait render and export to pdf one by one
                 rows_files_dict = {}
                 for row_id in row_ids:
+                    tab_name = f'page-design-{row_id}'
+                    open_page_view(driver, dtable_uuid, page_id, row_id, dtable_server_api.access_token, tab_name)
+                for row_id in row_ids:
                     output = io.BytesIO()
-                    try:
-                        convert_page_to_pdf(self.drivers[index], dtable_uuid, page_id, row_id, dtable_server_api.access_token, output)
-                        file_name = file_names_dict.get(row_id, f'{dtable_uuid}_{page_id}_{row_id}.pdf')
-                        if not file_name.endswith('.pdf'):
-                            file_name += '.pdf'
-                        file_info = dtable_server_api.upload_bytes_file(file_name, output.getvalue())
-                        rows_files_dict[row_id] = file_info
-                    except Exception as e:
-                        logger.exception('convert dtable: %s page: %s row: %s error: %s', dtable_uuid, page_id, row_id, e)
-                        continue
+                    tab_name = f'page-design-{row_id}'
+                    wait_page_view(driver, tab_name, row_id, output)
+                    file_name = file_names_dict.get(row_id, f'{dtable_uuid}_{page_id}_{row_id}.pdf')
+                    if not file_name.endswith('.pdf'):
+                        file_name += '.pdf'
+                    file_info = dtable_server_api.upload_bytes_file(file_name, output.getvalue())
+                    rows_files_dict[row_id] = file_info
+                    driver.switch_to.window(tab_name)
+                    driver.close()
                 row_ids_str = ', '.join(map(lambda row_id: f"'{row_id}'", row_ids))
                 sql = f"SELECT `_id`, `{target_column['name']}` FROM `{table_name}` WHERE _id IN ({row_ids_str})"
                 try:

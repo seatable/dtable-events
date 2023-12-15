@@ -30,15 +30,17 @@ def get_driver(user_data_path):
     return driver
 
 
-def convert_page_to_pdf(driver: webdriver.Chrome, dtable_uuid, page_id, row_id, access_token, output):
+def open_page_view(driver: webdriver.Chrome, dtable_uuid, page_id, row_id, access_token, tab_name):
     if not row_id:
         url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id)
     if row_id:
         url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/row/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id, row_id)
     url += '?access-token=%s&need_convert=%s' % (access_token, 0)
     logger.debug('url: %s', url)
-    driver.get(url)
+    driver.execute_script(f"window.open('{url}', '{tab_name}')")
 
+
+def wait_page_view(driver: webdriver.Chrome, tab_name, row_id, output):
     def check_images_and_networks(driver, frequency=0.5):
         """
         make sure all images complete
@@ -77,6 +79,8 @@ def convert_page_to_pdf(driver: webdriver.Chrome, dtable_uuid, page_id, row_id, 
     if not row_id:
         awaitReactRender = 180
         sleepTime = 6
+
+    driver.switch_to.window(tab_name)
 
     try:
         # make sure react is rendered, timeout awaitReactRender, rendering is not completed within 3 minutes, and rendering performance needs to be improved
@@ -119,3 +123,9 @@ def convert_page_to_pdf(driver: webdriver.Chrome, dtable_uuid, page_id, row_id, 
         # for item in network_logs:
         #     logger.debug(str(item))
         # logger.debug('network logs end')
+
+
+def convert_page_to_pdf(driver: webdriver.Chrome, dtable_uuid, page_id, row_id, access_token, output):
+    tab_name = 'page-design' if not row_id else f'page-deisgn-{row_id}'
+    open_page_view(driver, dtable_uuid, page_id, row_id, access_token, tab_name)
+    wait_page_view(driver, tab_name, row_id, output)
