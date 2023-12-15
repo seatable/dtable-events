@@ -78,7 +78,7 @@ def gen_file_upload_url(token, op, replace=False):
 class DTableServerAPI(object):
     # simple version of python sdk without authorization for base or table manipulation
 
-    def __init__(self, username, dtable_uuid, dtable_server_url, server_url=None, repo_id=None, workspace_id=None, timeout=180, access_token_timeout=300):
+    def __init__(self, username, dtable_uuid, dtable_server_url, server_url=None, repo_id=None, workspace_id=None, timeout=180, access_token_timeout=3600):
         self.username = username
         self.dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
         self.headers = None

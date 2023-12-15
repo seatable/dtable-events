@@ -64,10 +64,10 @@ class ConvertPageTOPDFManager:
                 # wait render and export to pdf one by one
                 rows_files_dict = {}
                 for row_id in row_ids:
-                    tab_name = f'page-design-{row_id}'
+                    tab_name = f'page-design-{row_id}'  # a new tab window named {tab_name}
                     open_page_view(driver, dtable_uuid, page_id, row_id, dtable_server_api.internal_access_token, tab_name)
                 for row_id in row_ids:
-                    output = io.BytesIO()
+                    output = io.BytesIO()  # receive pdf content
                     tab_name = f'page-design-{row_id}'
                     wait_page_view(driver, tab_name, row_id, output)
                     file_name = file_names_dict.get(row_id, f'{dtable_uuid}_{page_id}_{row_id}.pdf')
@@ -95,7 +95,7 @@ class ConvertPageTOPDFManager:
             except Exception as e:
                 logger.exception('convert task: %s error: %s', task_info, e)
             finally:
-                try:
+                try:  # delete all tab window except first blank
                     for window in driver.window_handles[1:]:
                         driver.switch_to.window(window)
                         driver.close()
