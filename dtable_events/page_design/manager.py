@@ -18,6 +18,7 @@ class ConvertPageTOPDFManager:
     def __init__(self):
         self.max_workers = 10
         self.max_queue = 0
+        self.drivers = {}
 
     def init(self, config):
         section_name = 'CONERT-PAGE-TO-PDF'
@@ -35,7 +36,11 @@ class ConvertPageTOPDFManager:
             pass
 
     def get_driver(self, index):
-        return get_driver(os.path.join(CHROME_DATA_DIR, f'convert-manager-{index}'))
+        driver = self.drivers.get(index)
+        if not driver:
+            driver = get_driver(os.path.join(CHROME_DATA_DIR, f'convert-manager-{index}'))
+            self.drivers[index] = driver
+        return driver
 
     def do_convert(self, index):
         while True:
@@ -70,8 +75,6 @@ class ConvertPageTOPDFManager:
                         file_name += '.pdf'
                     file_info = dtable_server_api.upload_bytes_file(file_name, output.getvalue())
                     rows_files_dict[row_id] = file_info
-                    driver.switch_to.window(tab_name)
-                    driver.close()
                 row_ids_str = ', '.join(map(lambda row_id: f"'{row_id}'", row_ids))
                 sql = f"SELECT `_id`, `{target_column['name']}` FROM `{table_name}` WHERE _id IN ({row_ids_str})"
                 try:
@@ -91,6 +94,18 @@ class ConvertPageTOPDFManager:
                 dtable_server_api.batch_update_rows(table_name, updates)
             except Exception as e:
                 logger.exception('convert task: %s error: %s', task_info, e)
+            finally:
+                try:
+                    for window in driver.window_handles[1:]:
+                        driver.switch_to.window(window)
+                        driver.close()
+                except Exception as e:
+                    logger.exception('close driver: %s error: %s', index, e)
+                    try:
+                        driver.quit()
+                    except Exception as e:
+                        logger.exception('quit driver: %s error: %s', index, e)
+                    self.drivers.pop(index, None)
 
     def start(self):
         logger.debug('convert page to pdf max workers: %s', self.max_workers)
