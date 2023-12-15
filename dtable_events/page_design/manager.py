@@ -31,7 +31,7 @@ class ConvertPageTOPDFManager:
                 pass
         self.queue = Queue(self.max_queue)  # element in queue is a dict about task
         try:  # kill all existing chrome processes
-            os.system("ps aux | grep chrome | grep -v grep | awk ' { print $2 } ' | xargs kill -9")
+            os.system("ps aux | grep chrome | grep -v grep | awk ' { print $2 } ' | xargs kill -9 > /dev/null 2>&1")
         except:
             pass
 
