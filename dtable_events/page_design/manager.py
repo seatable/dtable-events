@@ -27,13 +27,15 @@ class ConvertPageTOPDFManager:
             os.system("ps aux | grep chrome | grep -v grep | awk ' { print $2 } ' | xargs kill -9")
         except:
             pass
-        self.drivers = [get_driver(os.path.join(CHROME_DATA_DIR, f'convert-manager-{i}')) for i in range(self.max_workers)]
+
+    def get_driver(self, index):
+        return get_driver(os.path.join(CHROME_DATA_DIR, f'convert-manager-{index}'))
 
     def do_convert(self, index):
         while True:
             task_info = self.queue.get()
             logger.debug('do_convert task_info: %s', task_info)
-            driver = self.drivers[index]
+            driver = self.get_driver(index)
             try:
                 dtable_uuid = task_info.get('dtable_uuid')
                 page_id = task_info.get('page_id')

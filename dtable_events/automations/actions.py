@@ -60,6 +60,7 @@ CONDITION_ROWS_LOCKED_LIMIT = 200
 CONDITION_ROWS_UPDATE_LIMIT = 50
 WECHAT_CONDITION_ROWS_LIMIT = 20
 DINGTALK_CONDITION_ROWS_LIMIT = 20
+CONVERT_PAGE_TO_PDF_ROWS_LIMIT = 10
 
 AUTO_RULE_CALCULATE_TYPES = ['calculate_accumulated_value', 'calculate_delta', 'calculate_rank', 'calculate_percentage']
 
@@ -2901,7 +2902,7 @@ class ConvertPageToPDFAction(BaseAction):
     def do_action(self):
         if not self.can_do_action():
             return
-        rows = self.auto_rule.get_trigger_conditions_rows(warning_rows=10)
+        rows = self.auto_rule.get_trigger_conditions_rows(warning_rows=CONVERT_PAGE_TO_PDF_ROWS_LIMIT)
         file_names_dict = {}
         blanks = set(re.findall(r'\{([^{]*?)\}', self.file_name))
         col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
