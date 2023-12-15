@@ -803,7 +803,9 @@ def batch_send_email_msg(auth_info, send_info_list, username, config=None, db_se
         session.close()
 
 
-def convert_page_to_pdf(dtable_uuid, page_id, row_id, access_token):
+def convert_page_to_pdf(dtable_uuid, page_id, row_id):
+    dtable_server_url = get_inner_dtable_server_url()
+    access_token = DTableServerAPI('dtable-events', dtable_uuid, dtable_server_url).internal_access_token
     if not row_id:
         url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/' % (dtable_uuid, page_id)
     if row_id:

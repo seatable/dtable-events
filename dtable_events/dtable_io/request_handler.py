@@ -403,11 +403,10 @@ def convert_page_to_pdf():
     dtable_uuid = request.args.get('dtable_uuid')
     page_id = request.args.get('page_id')
     row_id = request.args.get('row_id')
-    access_token = request.args.get('access_token')
 
     try:
         task_id = task_manager.convert_page_to_pdf(
-            dtable_uuid, page_id, row_id, access_token)
+            dtable_uuid, page_id, row_id)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))

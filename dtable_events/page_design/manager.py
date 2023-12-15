@@ -6,7 +6,7 @@ from threading import Thread
 
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL
 from dtable_events.page_design.utils import get_driver, CHROME_DATA_DIR, open_page_view, wait_page_view
-from dtable_events.utils import get_inner_dtable_server_url
+from dtable_events.utils import get_inner_dtable_server_url, get_opt_from_conf_or_env
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 
@@ -20,8 +20,14 @@ class ConvertPageTOPDFManager:
         self.max_queue = 0
 
     def init(self, config):
-        self.config = config
-        self.max_workers = 10
+        section_name = 'CONERT-PAGE-TO-PDF'
+        key_max_workers = 'max_workers'
+
+        if config.has_section('CONERT-PAGE-TO-PDF'):
+            try:
+                self.max_workers = int(get_opt_from_conf_or_env(config, section_name, key_max_workers, default=10))
+            except:
+                pass
         self.queue = Queue(self.max_queue)  # element in queue is a dict about task
         try:  # kill all existing chrome processes
             os.system("ps aux | grep chrome | grep -v grep | awk ' { print $2 } ' | xargs kill -9")
@@ -54,7 +60,7 @@ class ConvertPageTOPDFManager:
                 rows_files_dict = {}
                 for row_id in row_ids:
                     tab_name = f'page-design-{row_id}'
-                    open_page_view(driver, dtable_uuid, page_id, row_id, dtable_server_api.access_token, tab_name)
+                    open_page_view(driver, dtable_uuid, page_id, row_id, dtable_server_api.internal_access_token, tab_name)
                 for row_id in row_ids:
                     output = io.BytesIO()
                     tab_name = f'page-design-{row_id}'
@@ -87,6 +93,7 @@ class ConvertPageTOPDFManager:
                 logger.exception('convert task: %s error: %s', task_info, e)
 
     def start(self):
+        logger.debug('convert page to pdf max workers: %s', self.max_workers)
         for i in range(self.max_workers):
             t_name = f'driver-{i}'
             t = Thread(target=self.do_convert, args=(i,), name=t_name, daemon=True)
