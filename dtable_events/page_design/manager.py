@@ -99,6 +99,8 @@ class ConvertPageTOPDFManager:
                     for window in driver.window_handles[1:]:
                         driver.switch_to.window(window)
                         driver.close()
+                    # switch to the first tab window or error will occur when open new window
+                    driver.switch_to.window(driver.window_handles[0])
                 except Exception as e:
                     logger.exception('close driver: %s error: %s', index, e)
                     try:
