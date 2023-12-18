@@ -100,6 +100,18 @@ def parse_number(cell_value):
     except:
         return ''
 
+def parse_duration(cell_value):
+    parsed_value = parse_number(cell_value)
+    if not parsed_value:
+        try:
+            value_list = re.split('[:：]', str(cell_value))
+            hours, minutes, seconds = value_list
+            return 3600 * int(hours) + 60 * int(minutes) + int(seconds)
+        except Exception as e:
+            return ''
+    return parsed_value
+
+
 
 def parse_long_text(cell_value):
     cell_value = str(cell_value)
@@ -991,8 +1003,10 @@ def parse_row(column_type, cell_value, name_to_email, location_tree=None):
         cell_value = str(cell_value)
     if isinstance(cell_value, str):
         cell_value = cell_value.strip()
-    if column_type in ('number', 'duration', 'rate'):
+    if column_type in ('number', 'rate'):
         return parse_number(cell_value)
+    elif column_type == 'duration':
+        return parse_duration(cell_value)
     elif column_type == 'date':
         return str(cell_value)
     elif column_type == 'long-text':
