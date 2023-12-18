@@ -41,12 +41,20 @@ class WorkflowSchedulesScanner:
         WorkflowSchedulesScannerTimer(self._db_session_class).start()
 
 
-def do_notify_schedule(schedule_id, task_id, action):
+def do_notify_schedule(schedule_id, task_id, action, db_session):
     try:
         offset = action['offset']
         token = action['token']
         to_users = action['to_users']
         if not to_users or not isinstance(to_users, list):
+            return
+        sql = "SELECT user FROM profile_profile WHERE user IN :users"
+        try:
+            valid_users = [result.user for result in db_session.execute(sql, {'users': to_users})]
+        except Exception as e:
+            logging.error('query valid users from db users: %s ', to_users)
+            return
+        if not valid_users:
             return
         detail = {
             'task_id': task_id,
@@ -77,7 +85,7 @@ def scan_workflow_schedules(db_session):
             logging.error('schedule: %s action: %s invalid', schedule_id, action)
             continue
         if action.get('type') == 'notify':
-            do_notify_schedule(schedule_id, task_id, action)
+            do_notify_schedule(schedule_id, task_id, action, db_session)
         try:
             db_session.execute('UPDATE dtable_workflow_task_schedules SET is_executed=1 WHERE id=:schedule_id', {
                 'schedule_id': schedule_id
