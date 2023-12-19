@@ -806,11 +806,6 @@ def batch_send_email_msg(auth_info, send_info_list, username, config=None, db_se
 def convert_page_to_pdf(dtable_uuid, page_id, row_id):
     dtable_server_url = get_inner_dtable_server_url()
     access_token = DTableServerAPI('dtable-events', dtable_uuid, dtable_server_url).internal_access_token
-    if not row_id:
-        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/' % (dtable_uuid, page_id)
-    if row_id:
-        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/row/%s/' % (dtable_uuid, page_id, row_id)
-    url += '?access-token=%s&need_convert=%s' % (access_token, 0)
     target_dir = '/tmp/dtable-io/convert-page-to-pdf'
     if not os.path.isdir(target_dir):
         os.makedirs(target_dir)
