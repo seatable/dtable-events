@@ -30,10 +30,10 @@ def get_driver(user_data_path):
 
 
 def open_page_view(driver: webdriver.Chrome, dtable_uuid, page_id, row_id, access_token, tab_name):
-    if not row_id:
-        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id)
+    url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id)
     if row_id:
         url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/row/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id, row_id)
+
     url += '?access-token=%s&need_convert=%s' % (access_token, 0)
     logger.debug('url: %s', url)
     driver.execute_script(f"window.open('{url}', '{tab_name}')")
@@ -73,20 +73,20 @@ def wait_page_view(driver: webdriver.Chrome, tab_name, row_id, output):
                 break
         return False
 
-    awaitReactRender = 60
-    sleepTime = 2
+    await_react_render = 60
+    sleep_time = 2
     if not row_id:
-        awaitReactRender = 180
-        sleepTime = 6
+        await_react_render = 180
+        sleep_time = 6
 
     driver.switch_to.window(tab_name)
 
     try:
-        # make sure react is rendered, timeout awaitReactRender, rendering is not completed within 3 minutes, and rendering performance needs to be improved
-        WebDriverWait(driver, awaitReactRender).until(lambda driver: driver.find_element_by_id('page-design-render-complete') is not None, message='wait react timeout')
+        # make sure react is rendered, timeout await_react_render, rendering is not completed within 3 minutes, and rendering performance needs to be improved
+        WebDriverWait(driver, await_react_render).until(lambda driver: driver.find_element_by_id('page-design-render-complete') is not None, message='wait react timeout')
         # make sure images from asset are rendered, timeout 120s
         WebDriverWait(driver, 120, poll_frequency=1).until(lambda driver: check_images_and_networks(driver), message='wait images and networks timeout')
-        time.sleep(sleepTime) # wait for all rendering
+        time.sleep(sleep_time) # wait for all rendering
     except Exception as e:
         logger.warning('wait for page design error: %s', e)
     finally:
