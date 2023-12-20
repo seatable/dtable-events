@@ -62,7 +62,7 @@ def do_notify_schedule(schedule_id, task_id, action, db_session):
             'offset': offset
         }
         dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
-        dtable_web_api.internal_add_notification(to_users, 'workflow_processing_expired', detail)
+        dtable_web_api.internal_add_notification(valid_users, 'workflow_processing_expired', detail)
     except Exception as e:
         logging.exception(e)
         logging.error('schedule_id: %s task_id: %s action: %s send notifications error: %s', schedule_id, task_id, action, e)
