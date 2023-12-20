@@ -2296,20 +2296,8 @@ class TriggerWorkflowAction(BaseAction):
             logger.error('rule: %s submit workflow: %s append row dtable: %s, error: %s', self.auto_rule.rule_id, self.token, self.auto_rule.dtable_uuid, e)
             return
 
-        internal_submit_workflow_url = DTABLE_WEB_SERVICE_URL.strip('/') + '/api/v2.1/workflows/%s/internal-task-submit/' % self.token
-        data = {
-            'row_id': row_id,
-            'replace': 'true',
-            'submit_from': 'Automation Rule',
-            'automation_rule_id': self.auto_rule.rule_id
-        }
-        logger.debug('trigger workflow data: %s', data)
         try:
-            header_token = 'Token ' + jwt.encode({'token': self.token}, DTABLE_PRIVATE_KEY, 'HS256')
-            resp = requests.post(internal_submit_workflow_url, data=data, headers={'Authorization': header_token})
-            if resp.status_code != 200:
-                logger.error('rule: %s row_id: %s new workflow: %s task error status code: %s content: %s', self.auto_rule.rule_id, row_id, self.token, resp.status_code, resp.content)
-            self.auto_rule.set_done_actions()
+            self.auto_rule.dtable_web_api.internal_submit_row_workflow(self.token, row_id, 'Automation Rule', automation_rule_id=self.auto_rule.rule_id)
         except Exception as e:
             logger.error('submit workflow: %s row_id: %s error: %s', self.token, row_id, e)
 
