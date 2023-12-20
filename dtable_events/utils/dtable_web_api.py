@@ -122,11 +122,29 @@ class DTableWebAPI:
         url = '%(server_url)s/api/v2.1/internal-notifications/?from=dtable_events' % {
             'server_url': self.dtable_web_service_url
         }
-        token = jwt.encode({}, DTABLE_PRIVATE_KEY, algorithm='HS256')
+        token = jwt.encode({'is_internal': True}, DTABLE_PRIVATE_KEY, algorithm='HS256')
         headers = {'Authorization': 'Token ' + token}
         resp = requests.post(url, json={
             'detail': detail,
             'to_users': to_users,
             'type': msg_type
         }, headers=headers)
+        return parse_response(resp)
+
+    def internal_submit_row_workflow(self, workflow_token, row_id, submit_from, **kwargs):
+        url = '%(server_url)s/api/v2.1/workflows/%(workflow_token)s/internal-task-submit/?from=dtable_events' % {
+            'server_url': self.dtable_web_service_url,
+            'workflow_token': workflow_token
+        }
+        data = {
+            'row_id': row_id,
+            'replace': 'true',
+            'submit_from': submit_from
+        }
+        if kwargs.get('automation_rule_id'):
+            data['automation_rule_id'] = kwargs['automation_rule_id']
+        logger.debug('trigger workflow data: %s', data)
+        token = jwt.encode({'token': workflow_token}, DTABLE_PRIVATE_KEY, algorithm='HS256')
+        headers = {'Authorization': 'Token ' + token}
+        resp = requests.post(url, data=data, headers=headers)
         return parse_response(resp)
