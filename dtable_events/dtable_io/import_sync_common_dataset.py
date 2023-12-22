@@ -3,13 +3,41 @@ from datetime import datetime
 
 from sqlalchemy import text
 
-from dtable_events.common_dataset.common_dataset_sync_utils import import_sync_CDS, get_dataset_data
+from dtable_events.common_dataset.common_dataset_sync_utils import import_sync_CDS, get_dataset_data, batch_sync_common_dataset
 from dtable_events.db import init_db_session_class
 from dtable_events.dtable_io import dtable_io_logger
 from dtable_events.utils import uuid_str_to_32_chars, get_inner_dtable_server_url
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 
 dtable_server_url = get_inner_dtable_server_url()
+
+
+def force_sync_common_dataset(context: dict, config):
+    """
+    force apply common dataset to all syncs
+    """
+    dataset_id = context.get('dataset_id')
+    username = context.get('username')
+    # select valid syncs
+    session_class = init_db_session_class(config)
+    sql = '''
+        SELECT dcds.dst_dtable_uuid, dcds.dst_table_id, dcd.table_id AS src_table_id, dcd.view_id AS src_view_id,
+                dcd.dtable_uuid AS src_dtable_uuid, dcds.id AS sync_id, dcds.src_version, dcd.id AS dataset_id
+        FROM dtable_common_dataset dcd
+        INNER JOIN dtable_common_dataset_sync dcds ON dcds.dataset_id=dcd.id
+        INNER JOIN dtables d_src ON dcd.dtable_uuid=d_src.uuid AND d_src.deleted=0
+        INNER JOIN dtables d_dst ON dcds.dst_dtable_uuid=d_dst.uuid AND d_dst.deleted=0
+        WHERE dcd.id=:dataset_id AND dcd.is_valid=1 AND dcds.is_valid=1
+    '''
+    with session_class() as session:
+        results = list(session.execute(sql, {'dataset_id': dataset_id}))
+    # sync one by one
+    try:
+        batch_sync_common_dataset(dataset_id, results, session_class)
+    except Exception as e:
+        dtable_io_logger.exception('force sync dataset: %s error: %s', dataset_id, e)
+    else:
+        pass
 
 
 def sync_common_dataset(context, config):

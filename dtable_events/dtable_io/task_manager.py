@@ -299,6 +299,19 @@ class TaskManager(object):
 
         return task_id, None
 
+    def add_force_sync_common_dataset_task(self, context):
+        """
+        return: task_id -> str or None, error_type -> str or None
+        """
+        from dtable_events.dtable_io.import_sync_common_dataset import force_sync_common_dataset
+
+        task_id = str(uuid.uuid4())
+        task = (force_sync_common_dataset, (context, self.config))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+
+        return task_id, None
+
     def add_convert_view_to_execl_task(self, dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image):
         from dtable_events.dtable_io import convert_view_to_execl
 
@@ -401,7 +414,7 @@ class TaskManager(object):
                 self.current_task_info.pop(task_id, None)
             finally:
                 self.tasks_map.pop(task_id, None)
-                if hasattr(task[0], '__name__') and task[0].__name__ == 'sync_common_dataset':
+                if getattr(task[0], '__name__', None) == 'sync_common_dataset':
                     context = task[1][0]
                     self.finish_dataset_id_sync(context.get('dataset_sync_id'))
 
