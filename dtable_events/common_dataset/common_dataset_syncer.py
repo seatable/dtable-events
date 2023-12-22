@@ -153,7 +153,8 @@ def check_common_dataset(session_class):
         src_table_id = dataset_syncs[0].src_table_id
         src_view_id = dataset_syncs[0].src_view_id
         sync_ids = [dataset_sync.sync_id for dataset_sync in dataset_syncs]
-        src_assets = gen_src_assets(src_dtable_uuid, src_table_id, src_view_id, sync_ids, db_session)
+        with session_class() as db_session:
+            src_assets = gen_src_assets(src_dtable_uuid, src_table_id, src_view_id, sync_ids, db_session)
         if not src_assets:
             continue
         src_table = src_assets.get('src_table')
