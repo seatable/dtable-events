@@ -960,7 +960,7 @@ def sync_common_data():
 
 
 @app.route('/force-sync-common-dataset', methods=['POST'])
-def sync_common_data():
+def force_sync_common_data():
     is_valid, error = check_auth_token(request)
     if not is_valid:
         return make_response((error, 403))
@@ -978,7 +978,7 @@ def sync_common_data():
     try:
         task_id, error_type = task_manager.add_force_sync_common_dataset_task(context)
         if error_type == 'syncing':
-            return make_response({'error_msg': 'Dataset is syncing'}, 429)
+            return make_response({'error_msg': 'Dataset is force syncing'}, 429)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))

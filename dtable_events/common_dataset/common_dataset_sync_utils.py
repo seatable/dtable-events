@@ -1067,7 +1067,7 @@ def gen_dst_assets(dst_dtable_uuid, dst_table_id, dataset_sync_id, db_session):
     }
 
 
-def batch_sync_common_dataset(dataset_id, dataset_syncs, session_class: sessionmaker):
+def batch_sync_common_dataset(dataset_id, dataset_syncs, db_session, is_force_sync=False):
     """
     batch sync CDS content to all syncs
 
@@ -1100,7 +1100,7 @@ def batch_sync_common_dataset(dataset_id, dataset_syncs, session_class: sessionm
         if not dst_assets:
             continue
 
-        if src_assets.get('src_version') == last_src_version:
+        if not is_force_sync and src_assets.get('src_version') == last_src_version:
             continue
 
         src_table = src_assets.get('src_table')
@@ -1133,8 +1133,7 @@ def batch_sync_common_dataset(dataset_id, dataset_syncs, session_class: sessionm
                 ):
                     logging.warning('src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s client error: %s',
                                     src_dtable_uuid, src_table_id, src_view_id, dst_dtable_uuid, dst_table_id, result)
-                    with session_class() as db_session:
-                        set_common_dataset_syncs_invalid([dataset_sync_id], db_session)
+                    set_common_dataset_syncs_invalid([dataset_sync_id], db_session)
                 else:
                     logging.error('src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s error: %s',
                                 src_dtable_uuid, src_table_id, src_view_id, dst_dtable_uuid, dst_table_id, result)
@@ -1143,10 +1142,10 @@ def batch_sync_common_dataset(dataset_id, dataset_syncs, session_class: sessionm
             UPDATE dtable_common_dataset_sync SET last_sync_time=:last_sync_time, src_version=:src_version
             WHERE id=:id
         '''
-        with session_class() as db_session:
-            db_session.execute(sql, {
-                'last_sync_time': datetime.now(),
-                'src_version': src_assets.get('src_version'),
-                'id': dataset_sync_id
-            })
-            db_session.commit()
+
+        db_session.execute(sql, {
+            'last_sync_time': datetime.now(),
+            'src_version': src_assets.get('src_version'),
+            'id': dataset_sync_id
+        })
+        db_session.commit()

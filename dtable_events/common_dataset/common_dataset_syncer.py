@@ -81,11 +81,11 @@ def list_pending_common_dataset_syncs(db_session):
 def check_common_dataset(session_class):
     with session_class() as db_session:
         dataset_sync_list = list(list_pending_common_dataset_syncs(db_session))
-    cds_dst_dict = defaultdict(list)
-    for dataset_sync in dataset_sync_list:
-        cds_dst_dict[dataset_sync.dataset_id].append(dataset_sync)
-    for dataset_id, dataset_syncs in cds_dst_dict.items():
-        batch_sync_common_dataset(dataset_id, dataset_syncs, session_class)
+        cds_dst_dict = defaultdict(list)
+        for dataset_sync in dataset_sync_list:
+            cds_dst_dict[dataset_sync.dataset_id].append(dataset_sync)
+        for dataset_id, dataset_syncs in cds_dst_dict.items():
+            batch_sync_common_dataset(dataset_id, dataset_syncs, db_session)
 
 
 class CommonDatasetSyncerTimer(Thread):

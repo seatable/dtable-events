@@ -439,3 +439,13 @@ class DTableServerAPI(object):
         }
         response = requests.post(url, json=body, headers=self.headers)
         return parse_response(response)
+
+    def send_toast_notification(self, username, msg, toast_type='success'):
+        url = self.dtable_server_url + f'/api/v1/dtables/{self.dtable_uuid}/ui-toasts/'
+        requests.post(url, json={
+            'to_user': username,
+            'toast_type': toast_type,
+            'detail': {
+                'msg': str(msg)
+            }
+        }, headers=self.headers)
