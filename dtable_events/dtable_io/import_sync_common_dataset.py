@@ -45,10 +45,6 @@ def force_sync_common_dataset(context: dict, config):
         except Exception as e:
             dtable_io_logger.exception('force sync dataset: %s error: %s', dataset_id, e)
         else:
-            try:
-                dtable_server_api.send_toast_notification(username, 'Force synchronize completed')
-            except Exception as e:
-                dtable_io_logger.error('force sync dataset: %s send to %s data', dataset_id, username)
             for sync_item in results:
                 task_manager.finish_dataset_sync(sync_item.sync_id)
 

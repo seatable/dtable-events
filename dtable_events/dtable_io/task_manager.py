@@ -295,7 +295,7 @@ class TaskManager(object):
         with self.dataset_sync_ids_lock:
             if self.is_syncing(dataset_sync_id):
                 return None, 'syncing'
-            self.dataset_sync_ids.add(dataset_sync_id)
+            self.add_dataset_sync(dataset_sync_id)
 
         task_id = str(uuid.uuid4())
         task = (sync_common_dataset, (context, self.config))
