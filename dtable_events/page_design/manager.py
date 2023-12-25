@@ -16,7 +16,7 @@ dtable_server_url = get_inner_dtable_server_url()
 class ConvertPageTOPDFManager:
 
     def __init__(self):
-        self.max_workers = 10
+        self.max_workers = 2
         self.max_queue = 0
         self.drivers = {}
 
@@ -27,7 +27,7 @@ class ConvertPageTOPDFManager:
 
         if config.has_section('CONERT-PAGE-TO-PDF'):
             try:
-                self.max_workers = int(get_opt_from_conf_or_env(config, section_name, key_max_workers, default=10))
+                self.max_workers = int(get_opt_from_conf_or_env(config, section_name, key_max_workers, default=2))
             except:
                 pass
             try:
