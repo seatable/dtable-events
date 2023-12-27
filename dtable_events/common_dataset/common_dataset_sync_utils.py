@@ -470,6 +470,48 @@ def get_converted_cell_value(dtable_db_cell_value, transfered_column, col):
     return deepcopy(dtable_db_cell_value)
 
 
+EXPECT_VALUE_TYPES = {
+    ColumnTypes.TEXT: [str],
+    ColumnTypes.IMAGE: [list],
+    ColumnTypes.DATE: [str],
+    ColumnTypes.LONG_TEXT: [str],
+    ColumnTypes.CHECKBOX: [bool],
+    ColumnTypes.SINGLE_SELECT: [str],
+    ColumnTypes.MULTIPLE_SELECT: [list],
+    ColumnTypes.URL: [str],
+    ColumnTypes.DURATION: [int],
+    ColumnTypes.NUMBER: [int, float],
+    ColumnTypes.FILE: [list],
+    ColumnTypes.COLLABORATOR: [list],
+    ColumnTypes.EMAIL: [str],
+    ColumnTypes.CREATOR: [str],
+    ColumnTypes.LAST_MODIFIER: [str],
+    ColumnTypes.CTIME: [str],
+    ColumnTypes.MTIME: [str],
+    ColumnTypes.RATE: [int],
+    ColumnTypes.GEOLOCATION: [dict]
+}
+
+
+def get_converted_cell_value_with_check(dtable_db_cell_value, transfered_column, col):
+    value = get_converted_cell_value(dtable_db_cell_value, transfered_column, col)
+    column_type = transfered_column.get('type', ColumnTypes.TEXT)
+    if column_type not in EXPECT_VALUE_TYPES:
+        logger.warning('type: %s not supported', column_type)
+        return None
+    expect_types = EXPECT_VALUE_TYPES.get(column_type)
+    if value is not None:
+        flag = False
+        for expect_type in expect_types:
+            if isinstance(value, expect_type):
+                flag = True
+                break
+        if not flag:
+            logger.warning('src column: %s transfered column: %s src value: %s transfer value: %s is not any of %s', col, transfered_column, dtable_db_cell_value, value, expect_types)
+            return None
+    return value
+
+
 def is_equal(v1, v2, column_type):
     """
     judge two values equal or not
@@ -557,12 +599,11 @@ def generate_single_row(dtable_db_row, src_columns, transfered_columns_dict, dst
         if not transfered_column:
             continue
 
+        converted_cell_value = get_converted_cell_value_with_check(dtable_db_cell_value, transfered_column, col)
         if op_type == 'update':
-            converted_cell_value = get_converted_cell_value(dtable_db_cell_value, transfered_column, col)
             if not is_equal(dst_row.get(col_key), converted_cell_value, transfered_column['type']):
                 dataset_row[col_key] = converted_cell_value
         else:
-            converted_cell_value = get_converted_cell_value(dtable_db_cell_value, transfered_column, col)
             dataset_row[col_key] = converted_cell_value
 
     return dataset_row
