@@ -479,7 +479,7 @@ EXPECT_VALUE_TYPES = {
     ColumnTypes.SINGLE_SELECT: [str],
     ColumnTypes.MULTIPLE_SELECT: [list],
     ColumnTypes.URL: [str],
-    ColumnTypes.DURATION: [int],
+    ColumnTypes.DURATION: [int, float],
     ColumnTypes.NUMBER: [int, float],
     ColumnTypes.FILE: [list],
     ColumnTypes.COLLABORATOR: [list],
