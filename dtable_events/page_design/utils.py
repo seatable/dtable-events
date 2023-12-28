@@ -29,17 +29,18 @@ def get_driver(user_data_path):
     return driver
 
 
-def open_page_view(driver: webdriver.Chrome, dtable_uuid, page_id, row_id, access_token, tab_name):
+def open_page_view(driver: webdriver.Chrome, dtable_uuid, page_id, row_id, access_token):
     url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id)
     if row_id:
         url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/row/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id, row_id)
 
     url += '?access-token=%s&need_convert=%s' % (access_token, 0)
     logger.debug('url: %s', url)
-    driver.execute_script(f"window.open('{url}', '{tab_name}')")
+    driver.execute_script(f"window.open('{url}')")
+    return driver.window_handles[-1]
 
 
-def wait_page_view(driver: webdriver.Chrome, tab_name, row_id, output):
+def wait_page_view(driver: webdriver.Chrome, session_id, row_id, output):
     def check_images_and_networks(driver, frequency=0.5):
         """
         make sure all images complete
@@ -79,7 +80,7 @@ def wait_page_view(driver: webdriver.Chrome, tab_name, row_id, output):
         await_react_render = 180
         sleep_time = 6
 
-    driver.switch_to.window(tab_name)
+    driver.switch_to.window(session_id)
 
     try:
         # make sure react is rendered, timeout await_react_render, rendering is not completed within 3 minutes, and rendering performance needs to be improved
@@ -125,6 +126,5 @@ def wait_page_view(driver: webdriver.Chrome, tab_name, row_id, output):
 
 
 def convert_page_to_pdf(driver: webdriver.Chrome, dtable_uuid, page_id, row_id, access_token, output):
-    tab_name = 'page-design' if not row_id else f'page-deisgn-{row_id}'
-    open_page_view(driver, dtable_uuid, page_id, row_id, access_token, tab_name)
-    wait_page_view(driver, tab_name, row_id, output)
+    session_id = open_page_view(driver, dtable_uuid, page_id, row_id, access_token)
+    wait_page_view(driver, session_id, row_id, output)
