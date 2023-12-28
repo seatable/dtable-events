@@ -17,7 +17,7 @@ class ConvertPageTOPDFManager:
 
     def __init__(self):
         self.max_workers = 2
-        self.max_queue = 0
+        self.max_queue = 200
         self.drivers = {}
 
     def init(self, config):
@@ -27,11 +27,11 @@ class ConvertPageTOPDFManager:
 
         if config.has_section('CONERT-PAGE-TO-PDF'):
             try:
-                self.max_workers = int(get_opt_from_conf_or_env(config, section_name, key_max_workers, default=2))
+                self.max_workers = int(get_opt_from_conf_or_env(config, section_name, key_max_workers, default=self.max_workers))
             except:
                 pass
             try:
-                self.max_queue = int(get_opt_from_conf_or_env(config, section_name, key_max_queue, default=0))
+                self.max_queue = int(get_opt_from_conf_or_env(config, section_name, key_max_queue, default=self.max_queue))
             except:
                 pass
         self.queue = Queue(self.max_queue)  # element in queue is a dict about task
@@ -125,8 +125,9 @@ class ConvertPageTOPDFManager:
         try:
             logger.debug('add task_info: %s', task_info)
             self.queue.put(task_info, block=False)
-        except Full:
+        except Full as e:
             logger.warning('convert queue full task: %s will be ignored', task_info)
+            raise e
 
 
 conver_page_to_pdf_manager = ConvertPageTOPDFManager()
