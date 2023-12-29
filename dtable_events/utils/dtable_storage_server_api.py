@@ -1,6 +1,9 @@
 import uuid
+
+import jwt
 import requests
 
+from dtable_events.app.config import DTABLE_PRIVATE_KEY
 from dtable_events.utils import get_inner_dtable_server_url
 
 
@@ -46,7 +49,7 @@ class DTableStorageServerAPI(object):
             'dtable_uuid': uuid_str_to_36_chars(dtable_uuid),
             'is_internal': True
         }
-        access_token = jwt.encode(payload, settings.DTABLE_PRIVATE_KEY, algorithm='HS256')
+        access_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
         return {'Authorization': f'Token {access_token}'}
 
     def get_dtable(self, dtable_uuid):
@@ -70,7 +73,9 @@ class DTableStorageServerAPI(object):
     def save_dtable(self, dtable_uuid, json_string):
         dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
         url = self.server_url + f'/api/v1/internal/storage/dtables/{dtable_uuid}/'
-        response = requests.put(url, headers=self.get_headers(dtable_uuid), data=json_string, timeout=TIMEOUT)
+        headers = self.get_headers(dtable_uuid)
+        headers['Content-Type'] = 'application/json'
+        response = requests.put(url, headers=headers, data=json_string, timeout=TIMEOUT)
         data = parse_response(response)
         return data
 
