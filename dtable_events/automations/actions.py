@@ -2884,7 +2884,6 @@ class ConvertPageToPDFAction(BaseAction):
         return True
 
     def fill_msg_blanks_with_sql(self, column_blanks, col_name_dict, row):
-        
         return fill_msg_blanks_with_sql_row(self.file_name, column_blanks, col_name_dict, row, self.auto_rule.db_session)
 
     def do_action(self):
@@ -2906,8 +2905,8 @@ class ConvertPageToPDFAction(BaseAction):
                 'repo_id': self.repo_id,
                 'workspace_id': self.workspace_id,
                 'file_names_dict': file_names_dict,
-                'target_column': self.target_column,
-                'table_name': self.auto_rule.table_info['name']
+                'target_column_key': self.target_column_key,
+                'table_id': self.auto_rule.table_id
             })
         except Full:
             self.auto_rule.append_warning({

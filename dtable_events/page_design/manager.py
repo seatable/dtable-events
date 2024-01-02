@@ -4,10 +4,12 @@ import os
 from queue import Queue, Full
 from threading import Thread
 
+from seaserv import seafile_api
+
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL
 from dtable_events.page_design.utils import get_driver, CHROME_DATA_DIR, open_page_view, wait_page_view
 from dtable_events.utils import get_inner_dtable_server_url, get_opt_from_conf_or_env
-from dtable_events.utils.dtable_server_api import DTableServerAPI
+from dtable_events.utils.dtable_server_api import DTableServerAPI, NotFoundException
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 
 logger = logging.getLogger(__name__)
@@ -17,7 +19,7 @@ class ConvertPageTOPDFManager:
 
     def __init__(self):
         self.max_workers = 2
-        self.max_queue = 200
+        self.max_queue = 1000
         self.drivers = {}
 
     def init(self, config):
@@ -82,6 +84,21 @@ class ConvertPageTOPDFManager:
             })
         dtable_server_api.batch_update_rows(table_name, updates)
 
+    def check_resources(self, dtable_uuid, page_id, table_id, target_column_key):
+        try:
+            metadata = DTableServerAPI('dtable-events', dtable_uuid, dtable_server_url).get_metadata_plugin('page-design')
+        except NotFoundException:
+            return None, 'Base not found'
+        except Exception as e:
+            pass
+        table = next(filter(lambda t: t['_id'] == table_id, metadata.get('tables', [])), None)
+        if not table:
+            raise Exception(404, 'Table not found')
+        return {
+            'table': {},
+            'target_column': {}
+        }
+
     def do_convert(self, index):
         while True:
             task_info = self.queue.get()
@@ -95,6 +112,11 @@ class ConvertPageTOPDFManager:
             workspace_id = task_info.get('workspace_id')
             file_names_dict = task_info.get('file_names_dict')
             table_name = task_info.get('table_name')
+
+            # resource check
+            repo = seafile_api.get_repo(repo_id)
+            if not repo:
+                continue
 
             try:
                 # open all tabs of rows step by step
