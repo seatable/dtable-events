@@ -28,9 +28,6 @@ class App(object):
         self._enable_foreground_tasks = task_mode.enable_foreground_tasks
         self._enable_background_tasks = task_mode.enable_background_tasks
 
-        # convert pdf manager, auto-rule-test foreground task need this
-        conver_page_to_pdf_manager.init(config)
-
         if self._enable_foreground_tasks:
             self._dtable_io_server = DTableIOServer(config)
 
@@ -57,10 +54,10 @@ class App(object):
             self._workflow_schedule_scanner = WorkflowSchedulesScanner(config)
             self._dtable_asset_trash_cleaner = DTableAssetTrashCleaner(config)
             self._license_expiring_notices_sender = LicenseExpiringNoticesSender()
+            # convert pdf manager
+            conver_page_to_pdf_manager.init(config)
 
     def serve_forever(self):
-        # convert pdf manager
-        conver_page_to_pdf_manager.start()                   # always True
 
         if self._enable_foreground_tasks:
             self._dtable_io_server.start()
@@ -88,3 +85,5 @@ class App(object):
             self._workflow_schedule_scanner.start()          # default True
             self._dtable_asset_trash_cleaner.start()         # always True
             self._license_expiring_notices_sender.start()    # always True
+            # convert pdf manager
+            conver_page_to_pdf_manager.start()               # always True
