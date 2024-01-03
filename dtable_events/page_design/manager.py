@@ -100,7 +100,8 @@ class ConvertPageTOPDFManager:
         table = next(filter(lambda t: t['_id'] == table_id, metadata.get('tables', [])), None)
         if not table:
             return None, 'table not found'
-        plugin = metadata.get('plugin_settings', {}).get('page-design')
+        plugin_settings = metadata.get('plugin_settings') or {}
+        plugin = plugin_settings.get('page-design') or []
         if not plugin:
             return None, 'plugin not found'
         page = next(filter(lambda page: page.get('page_id') == page_id, plugin), None)
@@ -140,13 +141,17 @@ class ConvertPageTOPDFManager:
 
             # resource check
             # Rather than wait one minute to render a wrong page, a resources check is more effective
-            resources, error_msg = self.check_resources(dtable_uuid, page_id, table_id, target_column_key, row_ids)
-            if not resources:
-                logger.warning('page design dtable: %s page: %s table: %s column: %s error: %s', dtable_uuid, page_id, table_id, target_column_key, error_msg)
+            try:
+                resources, error_msg = self.check_resources(dtable_uuid, page_id, table_id, target_column_key, row_ids)
+                if not resources:
+                    logger.warning('page design dtable: %s page: %s table: %s column: %s error: %s', dtable_uuid, page_id, table_id, target_column_key, error_msg)
+                    continue
+                row_ids = resources['row_ids']
+                table = resources['table']
+                target_column = resources['target_column']
+            except Exception as e:
+                logger.exception('page design dtable: %s page: %s table: %s column: %s resource check error: %s', dtable_uuid, page_id, table_id, target_column_key, error_msg)
                 continue
-            row_ids = resources['row_ids']
-            table = resources['table']
-            target_column = resources['target_column']
 
             try:
                 # open all tabs of rows step by step
