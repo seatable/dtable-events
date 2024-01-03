@@ -109,9 +109,8 @@ class DTableServerAPI(object):
         url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/metadata/plugin/?from=dtable_events'
         params = {'plugin_type': plugin_type}
         response = requests.get(url, params=params, headers=self.headers, timeout=self.timeout)
-        metadata = parse_response(response).get('metadata')
-        plugin_settings = metadata.get('plugin_settings')
-        return plugin_settings.get(plugin_type)
+        data = parse_response(response)
+        return data.get('metadata')
 
     def get_base(self):
         url = self.dtable_server_url + '/dtables/' + self.dtable_uuid + '?from=dtable_events'

@@ -84,20 +84,45 @@ class ConvertPageTOPDFManager:
             })
         dtable_server_api.batch_update_rows(table_name, updates)
 
-    def check_resources(self, dtable_uuid, page_id, table_id, target_column_key):
+    def check_resources(self, dtable_uuid, page_id, table_id, target_column_key, row_ids):
+        """
+        :return: resources -> dict or None, error_msg -> str or None
+        """
+        dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, dtable_server_url)
+        dtable_db_api = DTableDBAPI('dtable-events', dtable_uuid, INNER_DTABLE_DB_URL)
         try:
-            metadata = DTableServerAPI('dtable-events', dtable_uuid, dtable_server_url).get_metadata_plugin('page-design')
+            metadata = dtable_server_api.get_metadata_plugin('page-design')
         except NotFoundException:
-            return None, 'Base not found'
+            return None, 'base not found'
         except Exception as e:
-            pass
+            logger.error('page design dtable: %s get metadata error: %s', dtable_uuid, e)
+            return None, 'get metadata error %s' % e
         table = next(filter(lambda t: t['_id'] == table_id, metadata.get('tables', [])), None)
         if not table:
-            raise Exception(404, 'Table not found')
+            return None, 'table not found'
+        plugin = metadata.get('plugin_settings', {}).get('page-design')
+        if not plugin:
+            return None, 'plugin not found'
+        page = next(filter(lambda page: page.get('page_id') == page_id, plugin), None)
+        if not page:
+            return None, 'page %s not found' % page_id
+        target_column = next(filter(lambda col: col['key'] == target_column_key, table.get('columns', [])), None)
+        if not target_column:
+            return None, 'column %s not found' % target_column_key
+        row_ids_str = ', '.join(map(lambda row_id: f"'{row_id}'", row_ids))
+        sql = f"SELECT _id FROM `{table['name']}` WHERE _id IN ({row_ids_str})"
+        try:
+            rows, _ = dtable_db_api.query(sql)
+        except Exception as e:
+            logger.error('page design dtable: %s query rows error: %s', dtable_uuid, e)
+            return None, 'query rows error'
+        row_ids = [row['_id'] for row in rows]
         return {
-            'table': {},
-            'target_column': {}
-        }
+            'table': table,
+            'target_column': target_column,
+            'page': page,
+            'row_ids': row_ids
+        }, None
 
     def do_convert(self, index):
         while True:
@@ -107,20 +132,24 @@ class ConvertPageTOPDFManager:
             dtable_uuid = task_info.get('dtable_uuid')
             page_id = task_info.get('page_id')
             row_ids = task_info.get('row_ids')
-            target_column = task_info.get('target_column')
+            target_column_key = task_info.get('target_column_key')
             repo_id = task_info.get('repo_id')
             workspace_id = task_info.get('workspace_id')
             file_names_dict = task_info.get('file_names_dict')
-            table_name = task_info.get('table_name')
+            table_id = task_info.get('table_id')
 
             # resource check
-            repo = seafile_api.get_repo(repo_id)
-            if not repo:
+            resources, error_msg = self.check_resources(dtable_uuid, page_id, table_id, target_column_key, row_ids)
+            if not resources:
+                logger.warning('page design dtable: %s page: %s table: %s column: %s error: %s', dtable_uuid, page_id, table_id, target_column_key, error_msg)
                 continue
+            row_ids = resources['row_ids']
+            table = resources['table']
+            target_column = resources['target_column']
 
             try:
                 # open all tabs of rows step by step
-                # wait render and export to pdf one by one
+                # wait render and convert to pdf one by one
                 step = 10
                 for i in range(0, len(row_ids), step):
                     step_row_ids = row_ids[i: i+step]
@@ -129,7 +158,7 @@ class ConvertPageTOPDFManager:
                     except Exception as e:
                         logger.exception('get driver: %s error: %s', index, e)
                     try:
-                        self.batch_convert_rows(driver, repo_id, workspace_id, dtable_uuid, page_id, table_name, target_column, step_row_ids, file_names_dict)
+                        self.batch_convert_rows(driver, repo_id, workspace_id, dtable_uuid, page_id, table['name'], target_column, step_row_ids, file_names_dict)
                     except Exception as e:
                         logger.exception('convert task: %s error: %s', task_info, e)
                     finally:
