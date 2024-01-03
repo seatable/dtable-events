@@ -456,7 +456,7 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
 
         row_num = start
         try:
-            write_xls_with_type(response_rows, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, row_height=row_height, header_height=header_height)
+            write_xls_with_type(response_rows, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, row_height=row_height, header_height=header_height, is_big_data_view=True)
         except Exception as e:
             dtable_io_logger.exception(e)
             dtable_io_logger.error('head_list = {}\n{}'.format(cols_without_hidden, e))

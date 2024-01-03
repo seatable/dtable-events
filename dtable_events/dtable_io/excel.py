@@ -1200,7 +1200,7 @@ def parse_summary_value(cell_data, column_data):
     return value
 
 
-def parse_formula_number(cell_data, column_data):
+def parse_formula_number(cell_data, column_data, is_big_data_view=False):
     """
     parse formula number to regular format
     :param cell_data: value of cell (e.g. 1.25, ￥12.0, $10.20, €10.2, 0:02 or 10%, etc)
@@ -1209,18 +1209,18 @@ def parse_formula_number(cell_data, column_data):
     src_format = column_data.get('format')
     value = str(cell_data)
     if src_format in ['euro', 'dollar', 'yuan']:
-        value = value[1:]
+        value = is_big_data_view and value or value[1:]
     elif src_format == 'percent':
-        value = value[:-1]
+        value = is_big_data_view and value or value[:-1]
     elif src_format == 'custom_currency':
         currency_symbol = column_data.get('currency_symbol')
         currency_symbol_position = column_data.get('currency_symbol_position', 'before')
-        if currency_symbol_position == 'before':
-            value = value[len(currency_symbol):]
-        else:
-            value = value[:-len(currency_symbol)]
+        if not is_big_data_view:
+            if currency_symbol_position == 'before':
+                value = value[len(currency_symbol):]
+            else:
+                value = value[:-len(currency_symbol)]
     value = convert_formula_number(value, column_data)
-
     number_format = '0'
     # src_format is None, if column format does not be changed
     if src_format == 'number' or not src_format:
@@ -1244,7 +1244,6 @@ def parse_formula_number(cell_data, column_data):
             number_format = '"%s"#,##' % currency_symbol + gen_decimal_format(value) + '_-'
         else:
             number_format = gen_decimal_format(value) + currency_symbol
-
     try:
         if is_int_str(value):
             value = int(value)
@@ -1483,7 +1482,7 @@ def handle_grouped_row(row, ws, cols_without_hidden, column_name_to_column, sub_
     return cell_list
 
 
-def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id, image_param, cols_without_hidden):
+def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id, image_param, cols_without_hidden, is_big_data_view=False):
     from openpyxl.cell import WriteOnlyCell
     cell_list = []
     col_num = 0
@@ -1548,7 +1547,7 @@ def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_
                 unknown_cell_list.append((c, cell_data2str(cell_value), col_type))
         elif col_type == ColumnTypes.FORMULA \
                 and isinstance(column.get('data'), dict) and column.get('data').get('result_type') == 'number':
-            formula_value, number_format = parse_formula_number(cell_value, column.get('data'))
+            formula_value, number_format = parse_formula_number(cell_value, column.get('data'), is_big_data_view)
             c = WriteOnlyCell(ws, value=formula_value)
             c.number_format = number_format
         elif col_type == ColumnTypes.IMAGE and cell_value and image_param['is_support']:
@@ -1578,7 +1577,7 @@ def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_
     return cell_list
 
 
-def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, is_group_view=False, summary_col_info=None, row_height='default', header_height='default'):
+def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, is_group_view=False, summary_col_info=None, row_height='default', header_height='default', is_big_data_view=False):
     """ write listed data into excel
     """
     from dtable_events.dtable_io import dtable_io_logger
@@ -1633,7 +1632,7 @@ def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, rep
             row_num += 1  # for big data view
             try:
                 params = (row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id,
-                          image_param, cols_without_hidden)
+                          image_param, cols_without_hidden, is_big_data_view)
                 row_cells = handle_row(*params)
                 ws.row_dimensions[row_num + 1].height = height_transfer(row_height)
             except Exception as e:
