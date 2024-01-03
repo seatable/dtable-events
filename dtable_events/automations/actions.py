@@ -2884,6 +2884,8 @@ class ConvertPageToPDFAction(BaseAction):
             file_name = self.fill_msg_blanks_with_sql(column_blanks, col_name_dict, row)
             file_names_dict[row['_id']] = file_name
         try:
+            # put resources check to the place before convert page,
+            # because there is a distance between put task to queue and convert page
             conver_page_to_pdf_manager.add_task({
                 'dtable_uuid': self.auto_rule.dtable_uuid,
                 'page_id': self.page_id,

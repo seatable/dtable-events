@@ -139,6 +139,7 @@ class ConvertPageTOPDFManager:
             table_id = task_info.get('table_id')
 
             # resource check
+            # Rather than wait one minute to render a wrong page, a resources check is more effective
             resources, error_msg = self.check_resources(dtable_uuid, page_id, table_id, target_column_key, row_ids)
             if not resources:
                 logger.warning('page design dtable: %s page: %s table: %s column: %s error: %s', dtable_uuid, page_id, table_id, target_column_key, error_msg)
