@@ -54,9 +54,13 @@ class ConvertPageTOPDFManager:
         dtable_db_api = DTableDBAPI('dtable-events', dtable_uuid, INNER_DTABLE_DB_URL)
         rows_files_dict = {}
         row_session_dict = {}
+
+        # open rows
         for row_id in step_row_ids:
             session_id = open_page_view(driver, dtable_uuid, page_id, row_id, dtable_server_api.internal_access_token)
             row_session_dict[row_id] = session_id
+
+        # wait for chrome windows rendering
         for row_id in step_row_ids:
             output = io.BytesIO()  # receive pdf content
             session_id = row_session_dict[row_id]
@@ -66,6 +70,8 @@ class ConvertPageTOPDFManager:
                 file_name += '.pdf'
             file_info = dtable_server_api.upload_bytes_file(file_name, output.getvalue())
             rows_files_dict[row_id] = file_info
+
+        # query rows
         row_ids_str = ', '.join(map(lambda row_id: f"'{row_id}'", step_row_ids))
         sql = f"SELECT `_id`, `{target_column['name']}` FROM `{table_name}` WHERE _id IN ({row_ids_str})"
         try:
@@ -73,6 +79,8 @@ class ConvertPageTOPDFManager:
         except Exception as e:
             logger.error('dtable: %s table: %s sql: %s error: %s', dtable_uuid, table_name, sql, e)
             return
+
+        # update rows
         updates = []
         for row in rows:
             row_id = row['_id']
@@ -90,6 +98,8 @@ class ConvertPageTOPDFManager:
         """
         dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, dtable_server_url)
         dtable_db_api = DTableDBAPI('dtable-events', dtable_uuid, INNER_DTABLE_DB_URL)
+
+        # metdata with plugin
         try:
             metadata = dtable_server_api.get_metadata_plugin('page-design')
         except NotFoundException:
@@ -97,9 +107,13 @@ class ConvertPageTOPDFManager:
         except Exception as e:
             logger.error('page design dtable: %s get metadata error: %s', dtable_uuid, e)
             return None, 'get metadata error %s' % e
+
+        # table
         table = next(filter(lambda t: t['_id'] == table_id, metadata.get('tables', [])), None)
         if not table:
             return None, 'table not found'
+
+        # plugin
         plugin_settings = metadata.get('plugin_settings') or {}
         plugin = plugin_settings.get('page-design') or []
         if not plugin:
@@ -107,9 +121,13 @@ class ConvertPageTOPDFManager:
         page = next(filter(lambda page: page.get('page_id') == page_id, plugin), None)
         if not page:
             return None, 'page %s not found' % page_id
+
+        # column
         target_column = next(filter(lambda col: col['key'] == target_column_key, table.get('columns', [])), None)
         if not target_column:
             return None, 'column %s not found' % target_column_key
+
+        # rows
         row_ids_str = ', '.join(map(lambda row_id: f"'{row_id}'", row_ids))
         sql = f"SELECT _id FROM `{table['name']}` WHERE _id IN ({row_ids_str})"
         try:
@@ -118,6 +136,7 @@ class ConvertPageTOPDFManager:
             logger.error('page design dtable: %s query rows error: %s', dtable_uuid, e)
             return None, 'query rows error'
         row_ids = [row['_id'] for row in rows]
+
         return {
             'table': table,
             'target_column': target_column,
