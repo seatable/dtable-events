@@ -150,7 +150,7 @@ class ConvertPageTOPDFManager:
                 table = resources['table']
                 target_column = resources['target_column']
             except Exception as e:
-                logger.exception('page design dtable: %s page: %s table: %s column: %s resource check error: %s', dtable_uuid, page_id, table_id, target_column_key, error_msg)
+                logger.exception('page design dtable: %s page: %s table: %s column: %s resource check error: %s', dtable_uuid, page_id, table_id, target_column_key, e)
                 continue
 
             try:
