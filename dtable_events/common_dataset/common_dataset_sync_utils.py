@@ -364,6 +364,13 @@ def get_converted_cell_value(dtable_db_cell_value, transfered_column, col):
     ]:
         return deepcopy(dtable_db_cell_value)
 
+    elif col_type == ColumnTypes.DEPARTMENT_SINGLE_SELECT:
+        try:
+            dtable_db_cell_value = int(str(dtable_db_cell_value))  # department-single-select need a int
+        except:
+            return
+        return dtable_db_cell_value
+
     elif col_type == ColumnTypes.SINGLE_SELECT:
         if not isinstance(dtable_db_cell_value, str):
             return
