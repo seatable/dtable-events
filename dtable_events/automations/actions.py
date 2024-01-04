@@ -1631,6 +1631,9 @@ class LinkRecordsAction(BaseAction):
         ColumnTypes.RATE,
         ColumnTypes.FORMULA,
         ColumnTypes.AUTO_NUMBER,
+        ColumnTypes.SINGLE_SELECT,
+        ColumnTypes.MULTIPLE_SELECT,
+        ColumnTypes.DEPARTMENT_SINGLE_SELECT
     ]
 
     def __init__(self, auto_rule, action_type, data, linked_table_id, link_id, match_conditions):
