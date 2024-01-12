@@ -501,12 +501,7 @@ def get_converted_cell_value_with_check(dtable_db_cell_value, transfered_column,
         return None
     expect_types = EXPECT_VALUE_TYPES.get(column_type)
     if value is not None:
-        flag = False
-        for expect_type in expect_types:
-            if isinstance(value, expect_type):
-                flag = True
-                break
-        if not flag:
+        if not isinstance(value, tuple(expect_types)):
             logger.warning('src column: %s transfered column: %s src value: %s transfer value: %s is not any of %s', col, transfered_column, dtable_db_cell_value, value, expect_types)
             return None
     return value
