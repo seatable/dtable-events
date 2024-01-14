@@ -13,10 +13,11 @@ import string
 import jwt
 import sys
 import re
+import hashlib
 from io import BytesIO
 from zipfile import ZipFile, is_zipfile
 from dateutil import parser
-from uuid import UUID
+from uuid import UUID, uuid4
 from urllib.parse import quote as urlquote
 
 from seaserv import seafile_api
@@ -355,7 +356,93 @@ def convert_dtable_import_file_url(dtable_content, workspace_id, dtable_uuid):
     return dtable_content
 
 
-def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage):
+def get_uuid_from_custom_path(path):
+    dot_index = path.find('.')
+    if dot_index == -1:
+        return path[len('custom-asset://'):]
+    else:
+        return path[len('custom-asset://'): dot_index]
+
+
+def get_dtable_uuid_parent_path_md5(dtable_uuid, parent_path):
+    parent_path = parent_path.strip('/')
+    return hashlib.md5((dtable_uuid + '-' + parent_path).encode('utf-8')).hexdigest()
+
+
+def update_custom_assets(content, dst_dtable_uuid, username, db_session):
+    old_new_dict = {}
+    uuid_old_path_dict = {}
+    # get old custom-assets in content
+    for table in content['tables']:
+        img_cols = [col['key'] for col in table['columns'] if col['type'] == 'image']
+        file_cols = [col['key'] for col in table['columns'] if col['type'] == 'file']
+        for row in table['rows']:
+            for img_col in img_cols:
+                if img_col in row and isinstance(row[img_col], list):
+                    for img in row[img_col]:
+                        if not img.startswith('custom-asset://'):
+                            continue
+                        uuid_old_path_dict[get_uuid_from_custom_path(img)] = img
+                        old_new_dict[img] = ''
+            for file_col in file_cols:
+                if file_col in row and isinstance(row[file_col], list):
+                    for file in row[file_col]:
+                        if not file['url'].startswith('custom-asset://'):
+                            continue
+                        uuid_old_path_dict[get_uuid_from_custom_path(file['url'])] = file['url']
+                        old_new_dict[file['url']] = ''
+
+
+    # create custom-assets objects
+    step = 1000
+    olds = list(old_new_dict.keys())
+    for i in range(0, len(olds), step):
+        old_uuids = [get_uuid_from_custom_path(old).replace('-', '') for old in olds[i: i+step]]
+        sql = "SELECT `uuid`, `parent_path`, `file_name` FROM `custom_asset_uuid` WHERE `uuid` IN :uuids"
+        old_custom_uuids = db_session.execute(sql, {'uuids': old_uuids})
+        custom_uuid_infos = []
+        for uuid_obj in old_custom_uuids:
+            file_uuid = uuid_obj.uuid
+            parent_path = uuid_obj.parent_path
+            file_name = uuid_obj.file_name
+            new_uuid = uuid4()
+            new_md5 = get_dtable_uuid_parent_path_md5(dst_dtable_uuid, parent_path)
+            ext = os.path.splitext(uuid_old_path_dict[str(UUID(file_uuid))])[1]
+            old_new_dict[uuid_old_path_dict[str(UUID(file_uuid))]] = f'custom-asset://{str(new_uuid)}{ext}'
+            custom_uuid_infos.append({
+                'dtable_uuid': dst_dtable_uuid,
+                'uuid': new_uuid.hex,
+                'parent_path': parent_path,
+                'dtable_uuid_parent_path_md5': new_md5,
+                'file_name': file_name
+            })
+        values_str = ', '.join(map(lambda info: "('%(dtable_uuid)s', '%(uuid)s', '%(parent_path)s', '%(dtable_uuid_parent_path_md5)s', '%(file_name)s')" % info, custom_uuid_infos))
+        sql = "INSERT INTO `custom_asset_uuid` (`dtable_uuid`, `uuid`, `parent_path`, `dtable_uuid_parent_path_md5`, `file_name`) VALUES %s" % values_str
+        db_session.execute(sql)
+        db_session.commit()
+
+    # update content
+    for table in content['tables']:
+        img_cols = [col['key'] for col in table['columns'] if col['type'] == 'image']
+        file_cols = [col['key'] for col in table['columns'] if col['type'] == 'file']
+        for row in table['rows']:
+            for img_col in img_cols:
+                if img_col in row and isinstance(row[img_col], list):
+                    for index in range(len(row[img_col])):
+                        if not row[img_col][index].startswith('custom-asset://'):
+                            continue
+                        row[img_col][index] = old_new_dict[row[img_col][index]]  # update
+            for file_col in file_cols:
+                if file_col in row and isinstance(row[file_col], list):
+                    for index in range(len(row[file_col])):
+                        if not row[file_col][index]['url'].startswith('custom-asset://'):
+                            continue
+                        row[file_col][index]['url'] = old_new_dict[row[file_col][index]['url']]  # update
+
+    return content
+
+
+def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage, db_session):
     """
     used to import dtable
     prepare dtable json file and post it at file server
@@ -385,6 +472,11 @@ def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_n
         return
 
     content_json = convert_dtable_import_file_url(content, workspace_id, dtable_uuid)
+
+    try:
+        content_json = update_custom_assets(content, dtable_uuid, username, db_session)
+    except Exception as e:
+        logging.exception('update dtable: %s update custom assets error: %s', dtable_uuid, e)
 
     try:
         storage_backend.save_dtable(dtable_uuid, json.dumps(content_json), username, in_storage, repo_id, dtable_file_name)
