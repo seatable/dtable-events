@@ -280,7 +280,7 @@ def generate_synced_rows(dtable_db_rows, src_columns, synced_columns, dst_rows=N
 
     if invalid_cols:
         column_infos = ["%s(%s)" % (col.get('name'), col.get('type')) for col in invalid_cols]
-        logger.error("Dst columns in CDS invalid, invalid columns includes: %s" % column_infos)
+        logger.warning("Dst columns in CDS invalid, invalid columns includes: %s" % column_infos)
     return to_be_updated_rows, to_be_appended_rows, to_be_deleted_row_ids
 
 
@@ -601,7 +601,7 @@ def generate_single_row(dtable_db_row, src_columns, transfered_columns_dict, dst
             continue
 
         converted_cell_value, invalid_col = get_converted_cell_value_with_check(dtable_db_cell_value, transfered_column, col)
-        if invalid_col not in invalid_cols:
+        if invalid_col and (invalid_col not in invalid_cols):
             invalid_cols.append(invalid_col)
         if op_type == 'update':
             if not is_equal(dst_row.get(col_key), converted_cell_value, transfered_column['type']):
