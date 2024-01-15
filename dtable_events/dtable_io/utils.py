@@ -29,7 +29,7 @@ from dtable_events.utils import get_inner_dtable_server_url
 
 # this two prefix used in exported zip file
 from dtable_events.utils.constants import ColumnTypes
-
+from dtable_events.utils.exception import BaseSizeExceedsLimitError
 
 FILE_URL_PREFIX = 'file://dtable-bundle/asset/files/'
 IMG_URL_PREFIX = 'file://dtable-bundle/asset/images/'
@@ -851,6 +851,12 @@ def upload_excel_json_to_dtable_server(username, dtable_uuid, json_file, lang='e
 
     res = requests.post(url, headers=headers, files=files, timeout=180)
     if res.status_code != 200:
+        try:
+            res_json = res.json()
+        except:
+            res_json = {}
+        if res_json.get('error_type') == 'base_exceeds_limit':
+            raise BaseSizeExceedsLimitError
         raise ConnectionError('failed to import excel json %s %s' % (dtable_uuid, res.text))
 
 def upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, json_file, lang='en'):
@@ -864,6 +870,12 @@ def upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, json_fil
     }
     res = requests.post(url, headers=headers, files=files, timeout=180)
     if res.status_code != 200:
+        try:
+            res_json = res.json()
+        except:
+            res_json = {}
+        if res_json.get('error_type') == 'base_exceeds_limit':
+            raise BaseSizeExceedsLimitError
         raise ConnectionError('failed to import excel json %s %s' % (dtable_uuid, res.text))
 
 

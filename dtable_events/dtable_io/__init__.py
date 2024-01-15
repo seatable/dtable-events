@@ -37,6 +37,7 @@ from dtable_events.statistics.db import save_email_sending_records, batch_save_e
 from dtable_events.data_sync.data_sync_utils import run_sync_emails
 from dtable_events.utils import get_inner_dtable_server_url, is_valid_email
 from dtable_events.utils.dtable_server_api import DTableServerAPI
+from dtable_events.utils.exception import BaseSizeExceedsLimitError
 
 dtable_io_logger = setup_logger('dtable_events_io.log')
 dtable_message_logger = setup_logger('dtable_events_message.log')
@@ -326,6 +327,8 @@ def import_excel_csv(username, repo_id, workspace_id, dtable_uuid, dtable_name, 
     dtable_io_logger.info('Start import excel or csv: {}.'.format(dtable_uuid))
     try:
         import_excel_csv_by_dtable_server(username, repo_id, dtable_uuid, dtable_name, lang)
+    except BaseSizeExceedsLimitError:
+        raise Exception('Base size exceeds limit')
     except Exception as e:
         dtable_io_logger.error('import excel or csv failed. ERROR: {}'.format(e))
     else:
@@ -338,6 +341,8 @@ def import_excel_csv_add_table(username, repo_id, workspace_id, dtable_uuid, dta
     dtable_io_logger.info('Start import excel or csv add table: {}.'.format(dtable_uuid))
     try:
         import_excel_csv_add_table_by_dtable_server(username, repo_id, dtable_uuid, dtable_name, lang)
+    except BaseSizeExceedsLimitError:
+        raise Exception('Base size exceeds limit')
     except Exception as e:
         dtable_io_logger.error('import excel or csv add table failed. dtable_uuid: %s, dtable_name: %s ERROR: %s' % (dtable_uuid, dtable_name, e))
         raise Exception('Import excel or csv error')
@@ -417,6 +422,8 @@ def import_excel_csv_to_dtable(username, repo_id, workspace_id, dtable_name, dta
     dtable_io_logger.info('Start import excel or csv: %s.%s to dtable.' % (dtable_name, file_type))
     try:
         parse_and_import_excel_csv_to_dtable(repo_id, dtable_name, dtable_uuid, username, file_type, lang)
+    except BaseSizeExceedsLimitError:
+        raise Exception('Base size exceeds limit')
     except Exception as e:
         dtable_io_logger.exception('import excel or csv to dtable failed. dtable_uuid: %s, dtable_name: %s ERROR: %s' % (dtable_uuid, dtable_name, e))
         if str(e.args[0]) == 'Excel format error':
@@ -433,6 +440,8 @@ def import_excel_csv_to_table(username, repo_id, workspace_id, file_name, dtable
     dtable_io_logger.info('Start import excel or csv: %s.%s to table.' % (file_name, file_type))
     try:
         parse_and_import_excel_csv_to_table(repo_id, file_name, dtable_uuid, username, file_type, lang)
+    except BaseSizeExceedsLimitError:
+        raise Exception('Base size exceeds limit')
     except Exception as e:
         dtable_io_logger.exception('import excel or csv to table failed.  dtable_uuid: %s, file_name: %s ERROR: %s' % (dtable_uuid, file_name, e))
         if str(e.args[0]) == 'Excel format error':
