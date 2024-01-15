@@ -501,7 +501,7 @@ def get_converted_cell_value_with_check(dtable_db_cell_value, transfered_column,
     column_type = transfered_column.get('type', ColumnTypes.TEXT)
     invalid_col = None
     if column_type not in EXPECT_VALUE_TYPES:
-        invalid_col= transfered_column
+        invalid_col = transfered_column
         value = None
     else:
         expect_types = EXPECT_VALUE_TYPES.get(column_type)
