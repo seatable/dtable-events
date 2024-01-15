@@ -250,11 +250,11 @@ def generate_synced_rows(dtable_db_rows, src_columns, synced_columns, dst_rows=N
 
     dtable_db_rows_dict = {row.get('_id'): row for row in dtable_db_rows}
     synced_columns_dict = {col.get('key'): col for col in synced_columns}
-
     to_be_updated_rows, to_be_appended_rows, transfered_row_ids = [], [], {}
     if not dst_rows:
         dst_rows = []
     to_be_deleted_row_ids = []
+    invalid_cols = []
     for row in dst_rows:
         row_id = row.get('_id')
         dtable_db_row = dtable_db_rows_dict.get(row_id)
@@ -262,7 +262,7 @@ def generate_synced_rows(dtable_db_rows, src_columns, synced_columns, dst_rows=N
             to_be_deleted_row_ids.append(row_id)
             continue
 
-        update_row = generate_single_row(dtable_db_row, src_columns, synced_columns_dict, dst_row=row)
+        update_row, invalid_cols = generate_single_row(dtable_db_row, src_columns, synced_columns_dict, dst_row=row)
         if update_row:
             update_row['_id'] = row_id
             to_be_updated_rows.append(update_row)
@@ -272,12 +272,15 @@ def generate_synced_rows(dtable_db_rows, src_columns, synced_columns, dst_rows=N
         row_id = dtable_db_row.get('_id')
         if transfered_row_ids.get(row_id):
             continue
-        append_row = generate_single_row(dtable_db_row, src_columns, synced_columns_dict, dst_row=None)
+        append_row, invalid_cols = generate_single_row(dtable_db_row, src_columns, synced_columns_dict, dst_row=None)
         if append_row:
             append_row['_id'] = row_id
             to_be_appended_rows.append(append_row)
         transfered_row_ids[row_id] = True
 
+    if invalid_cols:
+        column_infos = ["%s(%s)" % (col.get('name'), col.get('type')) for col in invalid_cols]
+        logger.error("Dst columns in CDS invalid, invalid columns includes: %s" % column_infos)
     return to_be_updated_rows, to_be_appended_rows, to_be_deleted_row_ids
 
 
@@ -496,15 +499,17 @@ EXPECT_VALUE_TYPES = {
 def get_converted_cell_value_with_check(dtable_db_cell_value, transfered_column, col):
     value = get_converted_cell_value(dtable_db_cell_value, transfered_column, col)
     column_type = transfered_column.get('type', ColumnTypes.TEXT)
+    invalid_col = None
     if column_type not in EXPECT_VALUE_TYPES:
-        logger.warning('type: %s not supported', column_type)
-        return None
-    expect_types = EXPECT_VALUE_TYPES.get(column_type)
-    if value is not None:
-        if not isinstance(value, tuple(expect_types)):
-            logger.warning('src column: %s transfered column: %s src value: %s transfer value: %s is not any of %s', col, transfered_column, dtable_db_cell_value, value, expect_types)
-            return None
-    return value
+        invalid_col= transfered_column
+        value = None
+    else:
+        expect_types = EXPECT_VALUE_TYPES.get(column_type)
+        if value is not None:
+            if not isinstance(value, tuple(expect_types)):
+                invalid_col = transfered_column
+                value = None
+    return value, invalid_col
 
 
 def is_equal(v1, v2, column_type):
@@ -586,6 +591,7 @@ def generate_single_row(dtable_db_row, src_columns, transfered_columns_dict, dst
     if not dst_row:
         op_type = 'append'
     dst_row = deepcopy(dst_row) if dst_row else {'_id': dtable_db_row.get('_id')}
+    invalid_cols = []
     for col in src_columns:
         col_key = col.get('key')
 
@@ -594,14 +600,17 @@ def generate_single_row(dtable_db_row, src_columns, transfered_columns_dict, dst
         if not transfered_column:
             continue
 
-        converted_cell_value = get_converted_cell_value_with_check(dtable_db_cell_value, transfered_column, col)
+        converted_cell_value, invalid_col = get_converted_cell_value_with_check(dtable_db_cell_value, transfered_column, col)
+        if invalid_col not in invalid_cols:
+            invalid_cols.append(invalid_col)
         if op_type == 'update':
             if not is_equal(dst_row.get(col_key), converted_cell_value, transfered_column['type']):
                 dataset_row[col_key] = converted_cell_value
         else:
             dataset_row[col_key] = converted_cell_value
 
-    return dataset_row
+
+    return dataset_row, invalid_cols
 
 
 def create_dst_table_or_update_columns(dst_dtable_uuid, dst_table_id, dst_table_name, to_be_appended_columns, to_be_updated_columns, dst_dtable_server_api, lang):
