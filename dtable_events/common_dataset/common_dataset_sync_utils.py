@@ -254,7 +254,7 @@ def generate_synced_rows(dtable_db_rows, src_columns, synced_columns, dst_rows=N
     if not dst_rows:
         dst_rows = []
     to_be_deleted_row_ids = []
-    invalid_cols = []
+    rows_invalid_infos = []
     for row in dst_rows:
         row_id = row.get('_id')
         dtable_db_row = dtable_db_rows_dict.get(row_id)
@@ -262,25 +262,31 @@ def generate_synced_rows(dtable_db_rows, src_columns, synced_columns, dst_rows=N
             to_be_deleted_row_ids.append(row_id)
             continue
 
-        update_row, invalid_cols = generate_single_row(dtable_db_row, src_columns, synced_columns_dict, dst_row=row)
+        update_row, row_invalid_infos = generate_single_row(dtable_db_row, src_columns, synced_columns_dict, dst_row=row)
         if update_row:
             update_row['_id'] = row_id
             to_be_updated_rows.append(update_row)
+        if row_invalid_infos.get('invalid_infos'):
+            rows_invalid_infos.append(row_invalid_infos)
         transfered_row_ids[row_id] = True
 
     for dtable_db_row in dtable_db_rows:
         row_id = dtable_db_row.get('_id')
         if transfered_row_ids.get(row_id):
             continue
-        append_row, invalid_cols = generate_single_row(dtable_db_row, src_columns, synced_columns_dict, dst_row=None)
+        append_row, row_invalid_infos = generate_single_row(dtable_db_row, src_columns, synced_columns_dict, dst_row=None)
         if append_row:
             append_row['_id'] = row_id
             to_be_appended_rows.append(append_row)
+        if row_invalid_infos.get('invalid_infos'):
+            rows_invalid_infos.append(row_invalid_infos)
         transfered_row_ids[row_id] = True
 
-    if invalid_cols:
-        column_infos = ["%s(%s)" % (col.get('name'), col.get('type')) for col in invalid_cols]
-        logger.warning("Dst columns in CDS invalid, invalid columns includes: %s" % column_infos)
+    for row_invalid_infos in rows_invalid_infos[:5]:
+        row_id = row_invalid_infos['row_id']
+        row_invalid_infos = row_invalid_infos['invalid_infos']
+        for invalid_info in row_invalid_infos[:5]:
+            logger.warning('row: %s invalid infos: %s', row_id, invalid_info)
     return to_be_updated_rows, to_be_appended_rows, to_be_deleted_row_ids
 
 
@@ -492,24 +498,40 @@ EXPECT_VALUE_TYPES = {
     ColumnTypes.CTIME: [str],
     ColumnTypes.MTIME: [str],
     ColumnTypes.RATE: [int],
-    ColumnTypes.GEOLOCATION: [dict]
+    ColumnTypes.GEOLOCATION: [dict],
+    ColumnTypes.DEPARTMENT_SINGLE_SELECT: [int]
 }
 
 
 def get_converted_cell_value_with_check(dtable_db_cell_value, transfered_column, col):
     value = get_converted_cell_value(dtable_db_cell_value, transfered_column, col)
     column_type = transfered_column.get('type', ColumnTypes.TEXT)
-    invalid_col = None
+    invalid_cell_info = None
     if column_type not in EXPECT_VALUE_TYPES:
-        invalid_col = transfered_column
+        invalid_cell_info = {
+            'column_key': col['key'],
+            'src_column_type': col['type'],
+            'dst_column_type': transfered_column['type'],
+            'src_column_name': col['name'],
+            'dst_column_name': col['name'],
+            'invalid_type': 'column_type_invalid'
+        }
         value = None
     else:
         expect_types = EXPECT_VALUE_TYPES.get(column_type)
         if value is not None:
             if not isinstance(value, tuple(expect_types)):
-                invalid_col = transfered_column
+                invalid_cell_info = {
+                    'column_key': col['key'],
+                    'src_column_type': col['type'],
+                    'dst_column_type': transfered_column['type'],
+                    'src_column_name': col['name'],
+                    'dst_column_name': col['name'],
+                    'invalid_type': 'cell_type_invalid',
+                    'value': value
+                }
                 value = None
-    return value, invalid_col
+    return value, invalid_cell_info
 
 
 def is_equal(v1, v2, column_type):
@@ -591,7 +613,7 @@ def generate_single_row(dtable_db_row, src_columns, transfered_columns_dict, dst
     if not dst_row:
         op_type = 'append'
     dst_row = deepcopy(dst_row) if dst_row else {'_id': dtable_db_row.get('_id')}
-    invalid_cols = []
+    row_invalid_infos = []
     for col in src_columns:
         col_key = col.get('key')
 
@@ -600,9 +622,9 @@ def generate_single_row(dtable_db_row, src_columns, transfered_columns_dict, dst
         if not transfered_column:
             continue
 
-        converted_cell_value, invalid_col = get_converted_cell_value_with_check(dtable_db_cell_value, transfered_column, col)
-        if invalid_col and (invalid_col not in invalid_cols):
-            invalid_cols.append(invalid_col)
+        converted_cell_value, invalid_cell_info = get_converted_cell_value_with_check(dtable_db_cell_value, transfered_column, col)
+        if invalid_cell_info:
+            row_invalid_infos.append(invalid_cell_info)
         if op_type == 'update':
             if not is_equal(dst_row.get(col_key), converted_cell_value, transfered_column['type']):
                 dataset_row[col_key] = converted_cell_value
@@ -610,7 +632,7 @@ def generate_single_row(dtable_db_row, src_columns, transfered_columns_dict, dst
             dataset_row[col_key] = converted_cell_value
 
 
-    return dataset_row, invalid_cols
+    return dataset_row, {'invalid_infos': row_invalid_infos, 'row_id': dst_row['_id']}
 
 
 def create_dst_table_or_update_columns(dst_dtable_uuid, dst_table_id, dst_table_name, to_be_appended_columns, to_be_updated_columns, dst_dtable_server_api, lang):
