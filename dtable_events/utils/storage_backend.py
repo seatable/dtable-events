@@ -31,7 +31,11 @@ class StorageBackend(object):
             dtable_path = os.path.join(self._get_local_file_path(), dtable_uuid)
             with open(dtable_path, 'w') as f:
                 f.write(json_string)
-            return seafile_api.post_file(repo_id, dtable_path, '/', dtable_file_name, username)
+            file_id = seafile_api.get_file_id_by_path(repo_id, f'/{dtable_file_name}')
+            if not file_id:
+                return seafile_api.post_file(repo_id, dtable_path, '/', dtable_file_name, username)
+            else:
+                return seafile_api.put_file(repo_id, dtable_path, '/', dtable_file_name, username, None)
 
 
 storage_backend = StorageBackend()

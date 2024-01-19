@@ -369,7 +369,10 @@ def get_dtable_uuid_parent_path_md5(dtable_uuid, parent_path):
     return hashlib.md5((dtable_uuid + '-' + parent_path).encode('utf-8')).hexdigest()
 
 
-def update_custom_assets(content, dst_dtable_uuid, username, db_session):
+def update_custom_assets(content, dst_dtable_uuid, db_session):
+    tmp_extracted_path = os.path.join('/tmp/dtable-io', dst_dtable_uuid, 'dtable_zip_extracted/')
+    if not os.path.isdir(os.path.join(tmp_extracted_path, 'asset', 'custom')):
+        return content
     old_new_dict = {}
     uuid_old_path_dict = {}
     # get old custom-assets in content
@@ -474,7 +477,7 @@ def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_n
     content_json = convert_dtable_import_file_url(content, workspace_id, dtable_uuid)
 
     try:
-        content_json = update_custom_assets(content, dtable_uuid, username, db_session)
+        content_json = update_custom_assets(content, dtable_uuid, db_session)
     except Exception as e:
         logging.exception('update dtable: %s update custom assets error: %s', dtable_uuid, e)
 
