@@ -33,10 +33,11 @@ def force_sync_common_dataset(context: dict, config):
     results = []
     with session_class() as db_session:
         for sync_item in db_session.execute(sql, {'dataset_id': dataset_id}):
-            if task_manager.is_syncing(sync_item.sync_id):
-                continue
-            results.append(sync_item)
-            task_manager.add_dataset_sync(sync_item.sync_id)
+            with task_manager.dataset_sync_ids_lock:
+                if task_manager.is_syncing(sync_item.sync_id):
+                    continue
+                results.append(sync_item)
+                task_manager.add_dataset_sync(sync_item.sync_id)
         # sync one by one
         try:
             batch_sync_common_dataset(dataset_id, results, db_session, is_force_sync=True)

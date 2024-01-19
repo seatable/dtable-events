@@ -452,8 +452,7 @@ class TaskManager(object):
             self.dataset_sync_ids -= {db_sync_id}
 
     def add_dataset_sync(self, db_sync_id):
-        with self.dataset_sync_ids_lock:
-            self.dataset_sync_ids.add(db_sync_id)
+        self.dataset_sync_ids.add(db_sync_id)
 
     def is_dataset_force_syncing(self, dataset_id):
         return dataset_id in self.force_sync_dataset_ids
