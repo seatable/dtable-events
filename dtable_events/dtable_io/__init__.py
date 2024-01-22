@@ -1134,3 +1134,19 @@ def convert_big_data_view_to_execl(dtable_uuid, table_id, view_id, username, nam
         dtable_io_logger.info('export big data table_id: %s, view_id: %s success!', table_id, view_id)
 
 
+def export_page_design(repo_id, dtable_uuid, page_id, username):
+    # prepare empty dir
+    tmp_file_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'page_plugin', page_id)
+    tmp_zip_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'zip_file') + '.zip'
+    clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path)
+    os.makedirs(tmp_file_path, exist_ok=True)
+
+    # download, handle content and save to file
+    try:
+        pass
+    except Exception as e:
+        dtable_io_logger.exception('handle dtable: %s page: %s error: %s', dtable_uuid, page_id, e)
+
+    # download and save static images to dir
+
+    # make archive
