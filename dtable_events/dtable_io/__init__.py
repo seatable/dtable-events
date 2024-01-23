@@ -24,7 +24,8 @@ from dtable_events.dtable_io.utils import setup_logger, \
     prepare_dtable_json_from_memory, update_page_design_static_image, \
     copy_src_auto_rules_to_json, create_auto_rules_from_src_dtable, sync_app_users_to_table, \
     copy_src_workflows_to_json, create_workflows_from_src_dtable, copy_src_external_app_to_json,\
-    create_external_apps_from_src_dtable, zip_big_data_screen, post_big_data_screen_zip_file
+    create_external_apps_from_src_dtable, zip_big_data_screen, post_big_data_screen_zip_file, \
+    export_page_design_dir_to_path, update_page_design_content_to_path, upload_page_design
 from dtable_events.db import init_db_session_class
 from dtable_events.dtable_io.excel import parse_excel_csv_to_json, import_excel_csv_by_dtable_server, \
     append_parsed_file_by_dtable_server, parse_append_excel_csv_upload_file_to_json, \
@@ -35,7 +36,7 @@ from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.page_design.utils import CHROME_DATA_DIR, convert_page_to_pdf as _convert_page_to_pdf, get_driver
 from dtable_events.statistics.db import save_email_sending_records, batch_save_email_sending_records
 from dtable_events.data_sync.data_sync_utils import run_sync_emails
-from dtable_events.utils import get_inner_dtable_server_url, is_valid_email
+from dtable_events.utils import get_inner_dtable_server_url, is_valid_email, uuid_str_to_36_chars
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.exception import BaseSizeExceedsLimitError
 
@@ -45,12 +46,20 @@ dtable_data_sync_logger = setup_logger('dtable_events_data_sync.log')
 dtable_plugin_email_logger = setup_logger('dtable_events_plugin_email.log')
 
 
+def clear_tmp_dir(tmp_dir_path):
+    if os.path.exists(tmp_dir_path):
+        shutil.rmtree(tmp_dir_path)
+
+
+def clear_tmp_file(tmp_file_path):
+    if os.path.exists(tmp_file_path):
+        os.remove(tmp_file_path)
+
+
 def clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path):
     # delete tmp files/dirs
-    if os.path.exists(tmp_file_path):
-        shutil.rmtree(tmp_file_path)
-    if os.path.exists(tmp_zip_path):
-        os.remove(tmp_zip_path)
+    clear_tmp_dir(tmp_file_path)
+    clear_tmp_file(tmp_zip_path)
 
 def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asset_dir_id, config):
     """
@@ -1136,17 +1145,35 @@ def convert_big_data_view_to_execl(dtable_uuid, table_id, view_id, username, nam
 
 def export_page_design(repo_id, dtable_uuid, page_id, username):
     # prepare empty dir
-    tmp_file_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'page_plugin', page_id)
-    tmp_zip_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'zip_file') + '.zip'
-    clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path)
-    os.makedirs(tmp_file_path, exist_ok=True)
+    tmp_zip_dir = os.path.join('/tmp/dtable-io', 'page-design')
+    os.makedirs(tmp_zip_dir, exist_ok=True)
+    tmp_zip_path = os.path.join(tmp_zip_dir, f'{uuid_str_to_36_chars(dtable_uuid)}-{page_id}.zip')
 
-    # download, handle content and save to file
+    # download and save to path
+    export_page_design_dir_to_path(repo_id, dtable_uuid, page_id, tmp_zip_path, username)
+
+
+def import_page_design(repo_id, workspace_id, dtable_uuid, page_id, username):
+    # check file exists
+    tmp_page_path = os.path.join('/tmp/dtable-io', 'page-design', f'{uuid_str_to_36_chars(dtable_uuid)}-{page_id}')
+    is_dir = True
+    if os.path.isdir(tmp_page_path):
+        tmp_content_file = os.path.join(tmp_page_path, f'{page_id}.json')
+    elif os.path.isfile(tmp_page_path):
+        tmp_content_file = tmp_page_path
+        is_dir = False
+    else:
+        return
     try:
-        pass
+        if is_dir:
+            # update content and save to file
+            update_page_design_content_to_path(workspace_id, dtable_uuid, page_id, tmp_content_file)
+        # upload
+        upload_page_design(repo_id, dtable_uuid, page_id, tmp_page_path, username)
     except Exception as e:
-        dtable_io_logger.exception('handle dtable: %s page: %s error: %s', dtable_uuid, page_id, e)
-
-    # download and save static images to dir
-
-    # make archive
+        raise e
+    finally:
+        if is_dir:
+            clear_tmp_dir(tmp_page_path)
+        else:
+            clear_tmp_file(tmp_page_path)

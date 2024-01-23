@@ -514,11 +514,44 @@ def post_asset_files(repo_id, dtable_uuid, username):
             seafile_api.post_file(repo_id, tmp_file_path, cur_file_parent_path, file_name, username)
 
 # execute after post asset
+def update_page_content(workspace_id, dtable_uuid, page_id, page_content):
+    valid_dtable_web_service_url = DTABLE_WEB_SERVICE_URL.rstrip('/')
+    if 'pages' not in page_content.keys():
+        page_elements = page_content.get('page_elements', {})
+        page_content = {
+            'page_id': page_id,
+            'default_font': page_content.get('default_font', ''),
+            'page_settings': page_content.get('page_settings', {}),
+            'pages': [
+                {
+                    '_id': '0000',
+                    'element_map': page_elements.get('element_map', {}),
+                    'element_ids': page_elements.get('element_ids', [])
+                }
+            ]
+        }
+    pages = page_content.get('pages', [])
+    for sub_page in pages:
+        element_map = sub_page.get('element_map', {})
+        for element_id in element_map:
+            element = element_map.get(element_id, {})
+            if element['type'] == 'static_image':
+                config_data = element.get('config_data', {})
+                static_image_url = config_data.get('staticImageUrl', '')
+                file_name = '/'.join(static_image_url.split('/')[-2:])
+                config_data['staticImageUrl'] = '/'.join([valid_dtable_web_service_url, 'workspace', str(workspace_id),
+                                                        'asset', uuid_str_to_36_chars(str(dtable_uuid)), 'page-design', page_id, file_name])
+                is_changed = True
+    return {
+        'page_content': page_content,
+        'is_changed': is_changed
+    }
+
+
 def update_page(repo_id, workspace_id, dtable_uuid, page, inner_file_server_root):
     page_id = page['page_id']
     page_content_file_name = '%s.json'%(page_id)
     page_content_url = page['content_url']
-    valid_dtable_web_service_url = DTABLE_WEB_SERVICE_URL.rstrip('/')
     page_json_file_id = seafile_api.get_file_id_by_path(repo_id, '/asset' + page_content_url.split('asset')[1])
     token = seafile_api.get_fileserver_access_token(
         repo_id, page_json_file_id, 'view', '', use_onetime=False
@@ -526,35 +559,13 @@ def update_page(repo_id, workspace_id, dtable_uuid, page, inner_file_server_root
     content_url = '%s/files/%s/%s'%(inner_file_server_root, token,
                             urlquote(page_content_file_name))
     page_content_response = requests.get(content_url)
+    page_content = None
     is_changed = False
     if page_content_response.status_code == 200:
         page_content = page_content_response.json()
-        if 'pages' not in page_content.keys():
-            page_elements = page_content.get('page_elements', {})
-            page_content = {
-                'page_id': page_id,
-                'default_font': page_content.get('default_font', ''),
-                'page_settings': page_content.get('page_settings', {}),
-                'pages': [
-                    {
-                        '_id': '0000',
-                        'element_map': page_elements.get('element_map', {}),
-                        'element_ids': page_elements.get('element_ids', [])
-                    }
-                ]
-            }
-        pages = page_content.get('pages', [])
-        for sub_page in pages:
-            element_map = sub_page.get('element_map', {})
-            for element_id in element_map:
-                element = element_map.get(element_id, {})
-                if element['type'] == 'static_image':
-                    config_data = element.get('config_data', {})
-                    static_image_url = config_data.get('staticImageUrl', '')
-                    file_name = '/'.join(static_image_url.split('/')[-2:])
-                    config_data['staticImageUrl'] = '/'.join([valid_dtable_web_service_url, 'workspace', str(workspace_id),
-                                                            'asset', str(dtable_uuid), 'page-design', page_id, file_name])
-                    is_changed = True
+        info = update_page_content(workspace_id, dtable_uuid, page_id, page_content)
+        page_content = info['page_content']
+        is_changed = info['is_changed']
     return {
         'page_content': page_content,
         'is_changed': is_changed
@@ -1550,9 +1561,55 @@ def escape_sheet_name(text):
     return re.sub(invalid_title_regex, replacement, text)
 
 
-def export_page_design_to_file(repo_id, dtable_uuid, page_id, tmp_file_path):
-    file_path = f'/asset/{uuid_str_to_36_chars(dtable_uuid)}/page-design/{page_id}/{page_id}.json'
-    file_id = seafile_api.get_file_id_by_path(repo_id, file_path)
-    if not file_id:
+def export_page_design_dir_to_path(repo_id, dtable_uuid, page_id, tmp_file_path, username=''):
+    dir_path = f'/asset/{uuid_str_to_36_chars(dtable_uuid)}/page-design/{page_id}'
+    dir_id = seafile_api.get_dir_id_by_path(repo_id, dir_path)
+    if not dir_id:
         return
-    
+    fake_obj_id = {
+        'obj_id': dir_id,
+        'dir_name': page_id,
+        'is_window': 0
+    }
+    token = seafile_api.get_fileserver_access_token(
+        repo_id, json.dumps(fake_obj_id), 'download-dir', username, use_onetime=False
+    )
+    progress = {'zipped': 0, 'total': 1}
+    while progress['zipped'] != progress['total']:
+        time.sleep(0.5)   # sleep 0.5 second
+        try:
+            progress = json.loads(seafile_api.query_zip_progress(token))
+        except Exception as e:
+            raise e
+
+    asset_url = gen_dir_zip_download_url(token)
+    resp = requests.get(asset_url)
+    with open(tmp_file_path, 'wb') as f:
+        f.write(resp.content)
+
+
+def update_page_design_content_to_path(workspace_id, dtable_uuid, page_id, tmp_file_path):
+    if not os.path.exists(tmp_file_path):
+        return
+    with open(tmp_file_path, 'r') as f:
+        content = json.load(f)
+    info = update_page_content(workspace_id, dtable_uuid, page_id, content)
+    if info['is_changed']:
+        with open(tmp_file_path, 'w') as f:
+            json.dump(info['page_content'], f)
+
+
+def upload_page_design(repo_id, dtable_uuid, page_id, tmp_page_path, username=''):
+    asset_dir = f'/asset/{uuid_str_to_36_chars(dtable_uuid)}/page-design/{page_id}'
+    asset_dir_id = seafile_api.get_dir_id_by_path(repo_id, asset_dir)
+    if not asset_dir_id:
+        seafile_api.mkdir_with_parents(repo_id, os.path.dirname(asset_dir), page_id)
+
+    if os.path.isdir(tmp_page_path):
+        for root, _, files in os.walk(tmp_page_path):
+            relative_path = root[len(tmp_page_path):].strip('/')
+            parent_dir = os.path.join(asset_dir, relative_path).strip('/')
+            for file in files:
+                seafile_api.post_file(repo_id, os.path.join(root, file), parent_dir, file, username)
+    else:
+        seafile_api.post_file(repo_id, os.path.join(root, file), asset_dir, f'{page_id}.json', username)

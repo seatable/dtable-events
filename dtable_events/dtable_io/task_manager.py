@@ -328,6 +328,24 @@ class TaskManager(object):
 
         return task_id
 
+    def add_export_page_design_task(self, repo_id, dtable_uuid, page_id, username):
+        from dtable_events.dtable_io import export_page_design
+        task_id = str(uuid.uuid4())
+        task = (export_page_design, (repo_id, dtable_uuid, page_id, username))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+
+        return task_id
+    
+    def add_import_page_design_task(self, repo_id, workspace_id, dtable_uuid, page_id, username):
+        from dtable_events.dtable_io import import_page_design
+        task_id = str(uuid.UUID4())
+        task = (import_page_design, (repo_id, workspace_id, dtable_uuid, page_id, username))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+
+        return task_id
+
     def threads_is_alive(self):
         info = {}
         for t in self.threads:
