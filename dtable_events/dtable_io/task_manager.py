@@ -337,10 +337,10 @@ class TaskManager(object):
 
         return task_id
     
-    def add_import_page_design_task(self, repo_id, workspace_id, dtable_uuid, page_id, username):
+    def add_import_page_design_task(self, repo_id, workspace_id, dtable_uuid, page_id, is_dir, username):
         from dtable_events.dtable_io import import_page_design
-        task_id = str(uuid.UUID4())
-        task = (import_page_design, (repo_id, workspace_id, dtable_uuid, page_id, username))
+        task_id = str(uuid.uuid4())
+        task = (import_page_design, (repo_id, workspace_id, dtable_uuid, page_id, is_dir, username))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
 

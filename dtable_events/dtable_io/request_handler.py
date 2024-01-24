@@ -1195,7 +1195,7 @@ def add_export_page_design_task():
 
 
 @app.route('/add-import-page-design-task', methods=['GET'])
-def add_export_page_design_task():
+def add_import_page_design_task():
     is_valid, error = check_auth_token(request)
     if not is_valid:
         return make_response((error, 403))
@@ -1212,10 +1212,11 @@ def add_export_page_design_task():
     dtable_uuid = request.args.get('dtable_uuid')
     page_id = request.args.get('page_id')
     workspace_id = request.args.get('workspace_id')
+    is_dir = to_python_boolean(request.args.get('is_dir'))
 
     try:
         task_id = task_manager.add_import_page_design_task(
-            repo_id, workspace_id, dtable_uuid, page_id, username)
+            repo_id, workspace_id, dtable_uuid, page_id, is_dir, username)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))

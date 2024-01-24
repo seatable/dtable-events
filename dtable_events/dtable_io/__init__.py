@@ -1153,23 +1153,21 @@ def export_page_design(repo_id, dtable_uuid, page_id, username):
     export_page_design_dir_to_path(repo_id, dtable_uuid, page_id, tmp_zip_path, username)
 
 
-def import_page_design(repo_id, workspace_id, dtable_uuid, page_id, username):
+def import_page_design(repo_id, workspace_id, dtable_uuid, page_id, is_dir, username):
     # check file exists
-    tmp_page_path = os.path.join('/tmp/dtable-io', 'page-design', f'{uuid_str_to_36_chars(dtable_uuid)}-{page_id}')
-    is_dir = True
-    if os.path.isdir(tmp_page_path):
-        tmp_content_file = os.path.join(tmp_page_path, f'{page_id}.json')
-    elif os.path.isfile(tmp_page_path):
-        tmp_content_file = tmp_page_path
-        is_dir = False
+    if is_dir:
+        tmp_page_path = os.path.join('/tmp/dtable-io', 'page-design', f'{uuid_str_to_36_chars(dtable_uuid)}-{page_id}')
     else:
+        tmp_page_path = os.path.join('/tmp/dtable-io', 'page-design', f'{uuid_str_to_36_chars(dtable_uuid)}-{page_id}.json')
+    if not os.path.exists(tmp_page_path):
         return
     try:
         if is_dir:
             # update content and save to file
+            tmp_content_file = os.path.join(tmp_page_path, f'{page_id}.json')
             update_page_design_content_to_path(workspace_id, dtable_uuid, page_id, tmp_content_file)
         # upload
-        upload_page_design(repo_id, dtable_uuid, page_id, tmp_page_path, username)
+        upload_page_design(repo_id, dtable_uuid, page_id, tmp_page_path, is_dir, username)
     except Exception as e:
         raise e
     finally:

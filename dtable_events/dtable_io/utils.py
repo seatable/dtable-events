@@ -1599,17 +1599,19 @@ def update_page_design_content_to_path(workspace_id, dtable_uuid, page_id, tmp_f
             json.dump(info['page_content'], f)
 
 
-def upload_page_design(repo_id, dtable_uuid, page_id, tmp_page_path, username=''):
-    asset_dir = f'/asset/{uuid_str_to_36_chars(dtable_uuid)}/page-design/{page_id}'
-    asset_dir_id = seafile_api.get_dir_id_by_path(repo_id, asset_dir)
-    if not asset_dir_id:
-        seafile_api.mkdir_with_parents(repo_id, os.path.dirname(asset_dir), page_id)
+def upload_page_design(repo_id, dtable_uuid, page_id, tmp_page_path, is_dir, username=''):
+    page_dir = f'/asset/{uuid_str_to_36_chars(dtable_uuid)}/page-design/{page_id}'
+    page_dir_id = seafile_api.get_dir_id_by_path(repo_id, page_dir)
+    if not page_dir_id:
+        seafile_api.mkdir_with_parents(repo_id, os.path.dirname(page_dir), page_id, username)
 
-    if os.path.isdir(tmp_page_path):
+    if is_dir:
         for root, _, files in os.walk(tmp_page_path):
             relative_path = root[len(tmp_page_path):].strip('/')
-            parent_dir = os.path.join(asset_dir, relative_path).strip('/')
+            parent_dir = os.path.join(page_dir, relative_path).strip('/')
+            if not seafile_api.get_dir_id_by_path(repo_id, parent_dir):
+                seafile_api.mkdir_with_parents(repo_id, os.path.dirname(parent_dir), os.path.basename(parent_dir), username)
             for file in files:
                 seafile_api.post_file(repo_id, os.path.join(root, file), parent_dir, file, username)
     else:
-        seafile_api.post_file(repo_id, os.path.join(root, file), asset_dir, f'{page_id}.json', username)
+        seafile_api.post_file(repo_id, tmp_page_path, page_dir, f'{page_id}.json', username)
