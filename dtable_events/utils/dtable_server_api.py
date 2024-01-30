@@ -8,7 +8,7 @@ from uuid import UUID
 from datetime import datetime
 from seaserv import seafile_api
 from dtable_events.dtable_io.utils import get_dtable_server_token
-from dtable_events.app.config import FILE_SERVER_ROOT
+from dtable_events.app.config import INNER_FILE_SERVER_ROOT
 from dtable_events.utils import uuid_str_to_36_chars
 
 logger = logging.getLogger(__name__)
@@ -59,17 +59,22 @@ def parse_response(response):
             pass
 
 
-def get_fileserver_root():
-    """ Construct seafile fileserver address and port.
+def get_inner_fileserver_root():
+    """Construct inner seafile fileserver address and port.
+
+    Inner fileserver root allows dtable-events access fileserver through local
+    address, thus avoiding the overhead of DNS queries, as well as other
+    related issues, for example, the server can not ping itself, etc.
 
     Returns:
-    	Constructed fileserver root.
+    	http://127.0.0.1:<port>
     """
-    return FILE_SERVER_ROOT.rstrip('/') if FILE_SERVER_ROOT else ''
+
+    return INNER_FILE_SERVER_ROOT.rstrip('/') if INNER_FILE_SERVER_ROOT else 'http://127.0.0.1:8082'
 
 
-def gen_file_upload_url(token, op, replace=False):
-    url = '%s/%s/%s' % (get_fileserver_root(), op, token)
+def gen_inner_file_upload_url(token, op, replace=False):
+    url = '%s/%s/%s' % (get_inner_fileserver_root(), op, token)
     if replace is True:
         url += '?replace=1'
     return url
@@ -349,7 +354,7 @@ class DTableServerAPI(object):
         obj_id = json.dumps({'parent_dir': asset_dir_path})
         token = seafile_api.get_fileserver_access_token(repo_id, obj_id, 'upload', '', use_onetime=False)
 
-        upload_link = gen_file_upload_url(token, 'upload-api')
+        upload_link = gen_inner_file_upload_url(token, 'upload-api')
 
         res = dict()
         res['upload_link'] = upload_link
