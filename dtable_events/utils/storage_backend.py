@@ -1,9 +1,9 @@
 import os
-from seaserv import seafile_api
 from dtable_events.utils.dtable_storage_server_api import storage_api
 
 FILE_TYPE = '.dtable'
 TMP_PATH = '/tmp/storage-backend/'
+NOT_IN_STORAGE_ERROR_MSG = 'This version only supports Bases storage in storage-server. Please use "/templates/migrate_bases.sh" to migrate Bases to storage-server.'
 
 
 class StorageBackend(object):
@@ -22,20 +22,13 @@ class StorageBackend(object):
         if in_storage:
             return storage_api.create_empty_dtable(dtable_uuid)
         else:
-            return seafile_api.post_empty_file(repo_id, '/', dtable_file_name, username)
+            raise RuntimeError(NOT_IN_STORAGE_ERROR_MSG)
 
     def save_dtable(self, dtable_uuid, json_string, username, in_storage, repo_id, dtable_file_name):
         if in_storage:
             return storage_api.save_dtable(dtable_uuid, json_string)
         else:
-            dtable_path = os.path.join(self._get_local_file_path(), dtable_uuid)
-            with open(dtable_path, 'w') as f:
-                f.write(json_string)
-            file_id = seafile_api.get_file_id_by_path(repo_id, f'/{dtable_file_name}')
-            if not file_id:
-                return seafile_api.post_file(repo_id, dtable_path, '/', dtable_file_name, username)
-            else:
-                return seafile_api.put_file(repo_id, dtable_path, '/', dtable_file_name, username, None)
+            raise RuntimeError(NOT_IN_STORAGE_ERROR_MSG)
 
 
 storage_backend = StorageBackend()
