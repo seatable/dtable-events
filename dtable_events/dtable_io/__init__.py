@@ -1155,8 +1155,12 @@ def export_page_design(repo_id, dtable_uuid, page_id, username):
 
 def import_page_design(repo_id, workspace_id, dtable_uuid, page_id, is_dir, username):
     # check file exists
+    need_check_static = False
     if is_dir:
         tmp_page_path = os.path.join('/tmp/dtable-io', 'page-design', f'{uuid_str_to_36_chars(dtable_uuid)}-{page_id}')
+        items = os.listdir(tmp_page_path)
+        if 'static_image' in items:
+            need_check_static = True
     else:
         tmp_page_path = os.path.join('/tmp/dtable-io', 'page-design', f'{uuid_str_to_36_chars(dtable_uuid)}-{page_id}.json')
     if not os.path.exists(tmp_page_path):
@@ -1165,7 +1169,9 @@ def import_page_design(repo_id, workspace_id, dtable_uuid, page_id, is_dir, user
         if is_dir:
             # update content and save to file
             tmp_content_file = os.path.join(tmp_page_path, f'{page_id}.json')
-            update_page_design_content_to_path(workspace_id, dtable_uuid, page_id, tmp_content_file)
+            update_page_design_content_to_path(workspace_id, dtable_uuid, page_id, tmp_content_file, need_check_static)
+        else:
+            update_page_design_content_to_path(workspace_id, dtable_uuid, page_id, tmp_page_path, need_check_static)
         # upload
         upload_page_design(repo_id, dtable_uuid, page_id, tmp_page_path, is_dir, username)
     except Exception as e:

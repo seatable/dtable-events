@@ -514,8 +514,9 @@ def post_asset_files(repo_id, dtable_uuid, username):
             seafile_api.post_file(repo_id, tmp_file_path, cur_file_parent_path, file_name, username)
 
 # execute after post asset
-def update_page_content(workspace_id, dtable_uuid, page_id, page_content):
+def update_page_content(workspace_id, dtable_uuid, page_id, page_content, need_check_static=True):
     valid_dtable_web_service_url = DTABLE_WEB_SERVICE_URL.rstrip('/')
+    is_changed = False
     if 'pages' not in page_content.keys():
         page_elements = page_content.get('page_elements', {})
         page_content = {
@@ -530,18 +531,22 @@ def update_page_content(workspace_id, dtable_uuid, page_id, page_content):
                 }
             ]
         }
+    if page_content.get('page_id') != page_id:
+        page_content['page_id'] = page_id
+        is_changed = True
     pages = page_content.get('pages', [])
-    for sub_page in pages:
-        element_map = sub_page.get('element_map', {})
-        for element_id in element_map:
-            element = element_map.get(element_id, {})
-            if element['type'] == 'static_image':
-                config_data = element.get('config_data', {})
-                static_image_url = config_data.get('staticImageUrl', '')
-                file_name = '/'.join(static_image_url.split('/')[-2:])
-                config_data['staticImageUrl'] = '/'.join([valid_dtable_web_service_url, 'workspace', str(workspace_id),
-                                                        'asset', uuid_str_to_36_chars(str(dtable_uuid)), 'page-design', page_id, file_name])
-                is_changed = True
+    if need_check_static:
+        for sub_page in pages:
+            element_map = sub_page.get('element_map', {})
+            for element_id in element_map:
+                element = element_map.get(element_id, {})
+                if element['type'] == 'static_image':
+                    config_data = element.get('config_data', {})
+                    static_image_url = config_data.get('staticImageUrl', '')
+                    file_name = '/'.join(static_image_url.split('/')[-2:])
+                    config_data['staticImageUrl'] = '/'.join([valid_dtable_web_service_url, 'workspace', str(workspace_id),
+                                                            'asset', uuid_str_to_36_chars(str(dtable_uuid)), 'page-design', page_id, file_name])
+                    is_changed = True
     return {
         'page_content': page_content,
         'is_changed': is_changed
@@ -1540,12 +1545,12 @@ def export_page_design_dir_to_path(repo_id, dtable_uuid, page_id, tmp_file_path,
         f.write(resp.content)
 
 
-def update_page_design_content_to_path(workspace_id, dtable_uuid, page_id, tmp_file_path):
+def update_page_design_content_to_path(workspace_id, dtable_uuid, page_id, tmp_file_path, need_check_static):
     if not os.path.exists(tmp_file_path):
         return
     with open(tmp_file_path, 'r') as f:
         content = json.load(f)
-    info = update_page_content(workspace_id, dtable_uuid, page_id, content)
+    info = update_page_content(workspace_id, dtable_uuid, page_id, content, need_check_static)
     if info['is_changed']:
         with open(tmp_file_path, 'w') as f:
             json.dump(info['page_content'], f)
