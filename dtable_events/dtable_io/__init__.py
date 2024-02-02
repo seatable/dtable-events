@@ -1170,21 +1170,29 @@ def import_page_design(repo_id, workspace_id, dtable_uuid, page_id, is_dir, user
             download_page_design_file(repo_id, dtable_uuid, page_id, is_dir, username)
             tmp_page_path = os.path.join('/tmp/dtable-io', 'page-design', f'{uuid_str_to_36_chars(dtable_uuid)}-{page_id}.json')
     except Exception as e:
-        raise e
-    finally:
         if is_dir:
             tmp_page_path = os.path.join('/tmp/dtable-io', 'page-design', f'{uuid_str_to_36_chars(dtable_uuid)}-{page_id}')
             clear_tmp_dir(tmp_page_path)
             clear_tmp_file(tmp_page_path + '.zip')
-            try:
-                seafile_tmp_file = f'/asset/{uuid_str_to_36_chars(dtable_uuid)}/page-design/{uuid_str_to_36_chars(dtable_uuid)}-{page_id}.zip'
-                if seafile_api.get_file_id_by_path(repo_id, seafile_tmp_file):
-                    seafile_api.del_file(repo_id, os.path.dirname(seafile_tmp_file), os.path.basename(seafile_tmp_file))
-            except Exception as e:
-                dtable_io_logger.exception('delete repo: %s temp zip file: %s error: %s', repo_id, tmp_page_path, e)
         else:
             tmp_page_path = os.path.join('/tmp/dtable-io', 'page-design', f'{uuid_str_to_36_chars(dtable_uuid)}-{page_id}.json')
             clear_tmp_file(tmp_page_path)
+        raise e
+    finally:
+        if is_dir:
+            try:
+                seafile_tmp_file = f'/asset/{uuid_str_to_36_chars(dtable_uuid)}/page-design/{uuid_str_to_36_chars(dtable_uuid)}-{page_id}.zip'
+                if seafile_api.get_file_id_by_path(repo_id, seafile_tmp_file):
+                    seafile_api.del_file(repo_id, os.path.dirname(seafile_tmp_file), os.path.basename(seafile_tmp_file), username)
+            except Exception as e:
+                dtable_io_logger.exception('delete repo: %s temp zip file: %s error: %s', repo_id, tmp_page_path, e)
+        else:
+            try:
+                seafile_tmp_file = f'/asset/{uuid_str_to_36_chars(dtable_uuid)}/page-design/{uuid_str_to_36_chars(dtable_uuid)}-{page_id}.json'
+                if seafile_api.get_file_id_by_path(repo_id, seafile_tmp_file):
+                    seafile_api.del_file(repo_id, os.path.dirname(seafile_tmp_file), os.path.basename(seafile_tmp_file), username)
+            except Exception as e:
+                dtable_io_logger.exception('delete repo: %s temp zip file: %s error: %s', repo_id, tmp_page_path, e)
 
     if not os.path.exists(tmp_page_path):
         return
@@ -1203,5 +1211,6 @@ def import_page_design(repo_id, workspace_id, dtable_uuid, page_id, is_dir, user
     finally:
         if is_dir:
             clear_tmp_dir(tmp_page_path)
+            clear_tmp_file(tmp_page_path + '.zip')
         else:
             clear_tmp_file(tmp_page_path)
