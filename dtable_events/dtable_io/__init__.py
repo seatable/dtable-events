@@ -16,6 +16,8 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from datetime import datetime
 
+from seaserv import seafile_api
+
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, SESSION_COOKIE_NAME, INNER_DTABLE_DB_URL
 from dtable_events.dtable_io.big_data import import_excel_to_db, update_excel_to_db, export_big_data_to_excel
 from dtable_events.dtable_io.utils import setup_logger, \
@@ -25,7 +27,8 @@ from dtable_events.dtable_io.utils import setup_logger, \
     copy_src_auto_rules_to_json, create_auto_rules_from_src_dtable, sync_app_users_to_table, \
     copy_src_workflows_to_json, create_workflows_from_src_dtable, copy_src_external_app_to_json,\
     create_external_apps_from_src_dtable, zip_big_data_screen, post_big_data_screen_zip_file, \
-    export_page_design_dir_to_path, update_page_design_content_to_path, upload_page_design
+    export_page_design_dir_to_path, update_page_design_content_to_path, upload_page_design, \
+    download_page_design_file
 from dtable_events.db import init_db_session_class
 from dtable_events.dtable_io.excel import parse_excel_csv_to_json, import_excel_csv_by_dtable_server, \
     append_parsed_file_by_dtable_server, parse_append_excel_csv_upload_file_to_json, \
@@ -1156,15 +1159,36 @@ def export_page_design(repo_id, dtable_uuid, page_id, username):
 def import_page_design(repo_id, workspace_id, dtable_uuid, page_id, is_dir, username):
     # check file exists
     need_check_static = False
-    if is_dir:
-        tmp_page_path = os.path.join('/tmp/dtable-io', 'page-design', f'{uuid_str_to_36_chars(dtable_uuid)}-{page_id}')
-        items = os.listdir(tmp_page_path)
-        if 'static_image' in items:
-            need_check_static = True
-    else:
-        tmp_page_path = os.path.join('/tmp/dtable-io', 'page-design', f'{uuid_str_to_36_chars(dtable_uuid)}-{page_id}.json')
+    try:
+        if is_dir:
+            tmp_page_path = os.path.join('/tmp/dtable-io', 'page-design', f'{uuid_str_to_36_chars(dtable_uuid)}-{page_id}')
+            download_page_design_file(repo_id, dtable_uuid, page_id, is_dir, username)
+            items = os.listdir(tmp_page_path)
+            if 'static_image' in items:
+                need_check_static = True
+        else:
+            download_page_design_file(repo_id, dtable_uuid, page_id, is_dir, username)
+            tmp_page_path = os.path.join('/tmp/dtable-io', 'page-design', f'{uuid_str_to_36_chars(dtable_uuid)}-{page_id}.json')
+    except Exception as e:
+        raise e
+    finally:
+        if is_dir:
+            tmp_page_path = os.path.join('/tmp/dtable-io', 'page-design', f'{uuid_str_to_36_chars(dtable_uuid)}-{page_id}')
+            clear_tmp_dir(tmp_page_path)
+            clear_tmp_file(tmp_page_path + '.zip')
+            try:
+                seafile_tmp_file = f'/asset/{uuid_str_to_36_chars(dtable_uuid)}/page-design/{uuid_str_to_36_chars(dtable_uuid)}-{page_id}.zip'
+                if seafile_api.get_file_id_by_path(repo_id, seafile_tmp_file):
+                    seafile_api.del_file(repo_id, os.path.dirname(seafile_tmp_file), os.path.basename(seafile_tmp_file))
+            except Exception as e:
+                dtable_io_logger.exception('delete repo: %s temp zip file: %s error: %s', repo_id, tmp_page_path, e)
+        else:
+            tmp_page_path = os.path.join('/tmp/dtable-io', 'page-design', f'{uuid_str_to_36_chars(dtable_uuid)}-{page_id}.json')
+            clear_tmp_file(tmp_page_path)
+
     if not os.path.exists(tmp_page_path):
         return
+
     try:
         if is_dir:
             # update content and save to file

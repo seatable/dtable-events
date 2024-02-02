@@ -9,6 +9,8 @@ import uuid
 import pytz
 import re
 
+from dtable_events.app.config import INNER_FILE_SERVER_ROOT
+
 logger = logging.getLogger(__name__)
 pyexec = None
 
@@ -239,3 +241,24 @@ def gen_random_option(option_name):
         'text_color': VALID_OPTION_TAGS[index]['text_color']
     }
     return option
+
+
+def get_inner_fileserver_root():
+    """Construct inner seafile fileserver address and port.
+
+    Inner fileserver root allows dtable-events access fileserver through local
+    address, thus avoiding the overhead of DNS queries, as well as other
+    related issues, for example, the server can not ping itself, etc.
+
+    Returns:
+    	http://127.0.0.1:<port>
+    """
+
+    return INNER_FILE_SERVER_ROOT.rstrip('/') if INNER_FILE_SERVER_ROOT else 'http://127.0.0.1:8082'
+
+
+def gen_inner_file_upload_url(token, op, replace=False):
+    url = '%s/%s/%s' % (get_inner_fileserver_root(), op, token)
+    if replace is True:
+        url += '?replace=1'
+    return url

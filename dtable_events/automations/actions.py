@@ -2877,6 +2877,8 @@ class ConvertPageToPDFAction(BaseAction):
         if not self.can_do_action():
             return
         rows = self.auto_rule.get_trigger_conditions_rows(self, warning_rows=CONVERT_PAGE_TO_PDF_ROWS_LIMIT)[:CONVERT_PAGE_TO_PDF_ROWS_LIMIT]
+        if not rows:
+            return
         file_names_dict = {}
         blanks = set(re.findall(r'\{([^{]*?)\}', self.file_name))
         col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}

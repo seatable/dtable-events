@@ -158,6 +158,9 @@ class ConvertPageTOPDFManager:
             file_names_dict = task_info.get('file_names_dict')
             table_id = task_info.get('table_id')
 
+            if not row_ids:
+                continue
+
             # resource check
             # Rather than wait one minute to render a wrong page, a resources check is more effective
             try:

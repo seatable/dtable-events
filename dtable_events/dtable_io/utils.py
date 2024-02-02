@@ -14,6 +14,7 @@ import jwt
 import sys
 import re
 import hashlib
+import shutil
 from io import BytesIO
 from zipfile import ZipFile, is_zipfile
 from dateutil import parser
@@ -1534,15 +1535,44 @@ def export_page_design_dir_to_path(repo_id, dtable_uuid, page_id, tmp_file_path,
     progress = {'zipped': 0, 'total': 1}
     while progress['zipped'] != progress['total']:
         time.sleep(0.5)   # sleep 0.5 second
-        try:
-            progress = json.loads(seafile_api.query_zip_progress(token))
-        except Exception as e:
-            raise e
+        progress = json.loads(seafile_api.query_zip_progress(token))
 
     asset_url = gen_dir_zip_download_url(token)
     resp = requests.get(asset_url)
     with open(tmp_file_path, 'wb') as f:
         f.write(resp.content)
+
+
+def download_page_design_file(repo_id, dtable_uuid, page_id, is_dir, username):
+    if is_dir:
+        file_name = f'{uuid_str_to_36_chars(dtable_uuid)}-{page_id}.zip'
+        seafile_page_file_path = f'/asset/{uuid_str_to_36_chars(dtable_uuid)}/page-design/{file_name}'
+    else:
+        file_name = f'{uuid_str_to_36_chars(dtable_uuid)}-{page_id}.json'
+        seafile_page_file_path = f'/asset/{uuid_str_to_36_chars(dtable_uuid)}/page-design/{file_name}'
+    file_id = seafile_api.get_file_id_by_path(repo_id, seafile_page_file_path)
+    token = seafile_api.get_fileserver_access_token(repo_id, file_id, 'download', username)
+    download_url = gen_inner_file_get_url(token, os.path.basename(seafile_page_file_path))
+    resp = requests.get(download_url)
+    download_path = f'/tmp/dtable-io/page-design/{file_name}'
+    with open(download_path, 'wb') as f:
+        f.write(resp.content)
+    seafile_api.del_file(repo_id, os.path.dirname(seafile_page_file_path), json.dumps([file_name]), username)
+    if is_dir:
+        download_dir_path = f"/tmp/dtable-io/page-design/{file_name.split('.')[0]}"
+        with ZipFile(download_path, 'r') as zip_file:
+            zip_file.extractall(download_dir_path)
+        os.remove(download_path)
+        dir_name = os.listdir(download_dir_path)[0]
+        content_file_name = None
+        for item in os.listdir(os.path.join(download_dir_path, dir_name)):
+            if not content_file_name and item.endswith('.json'):
+                content_file_name = item
+            if not item.endswith('.json') and item not in ['static_image']:
+                continue
+            shutil.move(os.path.join(download_dir_path, dir_name, item), download_dir_path)
+        shutil.rmtree(os.path.join(download_dir_path, dir_name))
+        os.rename(os.path.join(download_dir_path, content_file_name), os.path.join(download_dir_path, f'{page_id}.json'))
 
 
 def update_page_design_content_to_path(workspace_id, dtable_uuid, page_id, tmp_file_path, need_check_static):
