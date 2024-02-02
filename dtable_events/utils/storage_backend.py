@@ -3,7 +3,7 @@ from dtable_events.utils.dtable_storage_server_api import storage_api
 
 FILE_TYPE = '.dtable'
 TMP_PATH = '/tmp/storage-backend/'
-NOT_IN_STORAGE_ERROR_MSG = 'This version only supports Bases storage in storage-server. Please use "/templates/migrate_bases.sh" to migrate Bases to storage-server.'
+NOT_IN_STORAGE_ERROR_MSG = 'This Base needs to be migrated to storage-server. Please use "/templates/migrate_bases.sh" to migrate Bases to storage-server.'
 
 
 class StorageBackend(object):
