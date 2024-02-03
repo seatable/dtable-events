@@ -30,8 +30,7 @@ from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 from dtable_events.utils.dtable_db_api import DTableDBAPI, RowsQueryError, Request429Error
 from dtable_events.notification_rules.utils import get_nickname_by_usernames
-from dtable_events.utils.sql_generator import filter2sql
-from dtable_events.utils.sql_generator import BaseSQLGenerator
+from dtable_events.utils.sql_generator import filter2sql, BaseSQLGenerator, ColumnFilterInvalidError
 from dtable_events.utils.universal_app_api import UniversalAppAPI
 
 
@@ -1742,7 +1741,7 @@ class LinkRecordsAction(BaseAction):
 
         try:
             sql = filter2sql(table_name, columns, filter_conditions, by_group=True)
-        except ValueError as e:
+        except (ValueError, ColumnFilterInvalidError) as e:
             logger.warning('wrong filter in rule: %s linked-table filter_conditions: %s error: %s', self.auto_rule.rule_id, filter_conditions, e)
             raise RuleInvalidException('wrong filter in rule: %s linked-table error: %s' % (self.auto_rule.rule_id, e))
         query_clause = "*"
@@ -3121,7 +3120,7 @@ class AutomationRule:
 
         try:
             sql = filter2sql(table_name, columns, filter_conditions, by_group=True)
-        except ValueError as e:
+        except (ValueError, ColumnFilterInvalidError) as e:
             logger.warning('wrong filter in rule: %s trigger filters filter_conditions: %s error: %s', self.rule_id, filter_conditions, e)
             raise RuleInvalidException('wrong filter in rule: %s trigger filters error: %s' % (self.rule_id, e))
         except Exception as e:
