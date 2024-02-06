@@ -1059,6 +1059,8 @@ def get_summary(summary, summary_col_info, column_name, head_name_to_head):
     # because grouped summary row does not contain format symbol like $, ￥, %, etc
     if column_info and column_info.get('type') == 'formula' and column_info.get('data').get('result_type') == 'number':
         return parse_summary_value(summary.get(summary_type), column_info.get('data'))
+    if column_info and column_info.get('type') == 'duration':
+        return format_duration(summary.get(summary_type), column_info.get('data'))
     return summary.get(summary_type)
 
 
@@ -1440,6 +1442,22 @@ def format_time(cell_data):
         dtable_io_logger.debug(e)
     return cell_data2str(cell_data)
 
+def format_duration(cell_data, column_data):
+    value = str(cell_data)
+    duration_format = column_data.get('duration_format', 'h:mm')
+    duration_value = float(value)
+    h_value = str(duration_value // 3600).split('.')[0]
+    m_value = str((duration_value % 3600) // 60).split('.')[0]
+    s_value = str(duration_value % 60).split('.')[0]
+    if len(m_value) == 1:
+        m_value = '0' + m_value
+    if duration_format == 'h:mm':
+        return h_value + ':' + m_value
+    else:
+        if len(s_value) == 1:
+            s_value = '0' + s_value
+        return h_value + ':' + m_value + ':' + s_value
+
 
 def handle_grouped_row(row, ws, cols_without_hidden, column_name_to_column, sub_level, summary_col_info, head_name_to_head, summaries):
     from openpyxl.cell import WriteOnlyCell
@@ -1521,6 +1539,8 @@ def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_
                 c.number_format = 'YYYY-MM-DD'
         elif col_type in (ColumnTypes.CTIME, ColumnTypes.MTIME):
             c = WriteOnlyCell(ws, value=format_time(cell_value))
+        elif col_type == ColumnTypes.DURATION:
+            c = WriteOnlyCell(ws, value=format_duration(cell_value, column.get('data')))
         elif col_type == ColumnTypes.COLLABORATOR:
             nickname_list = []
             collaborator_email_list = []
