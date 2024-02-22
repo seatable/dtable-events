@@ -18,13 +18,13 @@ from dtable_events.automations.models import get_third_party_account
 from dtable_events.app.metadata_cache_managers import BaseMetadataCacheManager
 from dtable_events.app.event_redis import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, \
-    SEATABLE_FAAS_AUTH_TOKEN, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL
+    SEATABLE_FAAS_AUTH_TOKEN, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, TIME_ZONE
 from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg, batch_send_email_msg
 from dtable_events.page_design.manager import conver_page_to_pdf_manager
 from dtable_events.notification_rules.notification_rules_utils import fill_msg_blanks_with_converted_row, \
     send_notification, fill_msg_blanks_with_sql_row
 from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url, \
-    normalize_file_path, gen_file_get_url, gen_random_option
+    normalize_file_path, gen_file_get_url, gen_random_option, current_now_in_tz
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_web_api import DTableWebAPI
@@ -3182,7 +3182,10 @@ class AutomationRule:
             return True
 
         elif self.run_condition in CRON_CONDITIONS:
-            cur_datetime = datetime.now()
+            tz_str = self.trigger.get('time_zone', None)
+            if not tz_str:
+                tz_str = TIME_ZONE
+            cur_datetime = current_now_in_tz(tz_str)
             cur_hour = cur_datetime.hour
             cur_week_day = cur_datetime.isoweekday()
             cur_month_day = cur_datetime.day
