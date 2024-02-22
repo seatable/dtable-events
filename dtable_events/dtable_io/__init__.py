@@ -250,7 +250,7 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
 
     dtable_io_logger.info('Import DTable: {} success!'.format(dtable_uuid))
 
-def get_dtable_export_asset_files(username, repo_id, dtable_uuid, files, task_id, files_map=None):
+def get_dtable_export_asset_files(username, repo_id, dtable_uuid, files, task_id, config, files_map=None):
     """
     export asset files from dtable
     """
@@ -273,15 +273,18 @@ def get_dtable_export_asset_files(username, repo_id, dtable_uuid, files, task_id
     clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path)
     os.makedirs(tmp_file_path, exist_ok=True)
 
+    db_session = init_db_session_class(config)()
     try:
         # 1. download files to tmp_file_path
-        download_files_to_path(username, repo_id, dtable_uuid, files, tmp_file_path, files_map)
+        download_files_to_path(username, repo_id, dtable_uuid, files, tmp_file_path, db_session, files_map)
         # 2. zip those files to tmp_zip_path
         shutil.make_archive(tmp_zip_path.split('.')[0], 'zip', root_dir=tmp_file_path)
     except Exception as e:
         dtable_io_logger.error('export asset files from dtable failed. ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('export files from dtable: %s success!', dtable_uuid)
+    finally:
+        db_session.close()
 
 def get_dtable_export_big_data_screen(username, repo_id, dtable_uuid, page_id, task_id):
     """
@@ -511,12 +514,21 @@ def _upload_to_seafile(seafile_server_url, access_token, files, parent_dir="/", 
     response = requests.post(upload_url, files=files)
     return response
 
-def get_dtable_transfer_asset_files(username, repo_id, dtable_uuid, files, task_id, files_map, parent_dir, relative_path, replace, repo_api_token, seafile_server_url):
+def get_dtable_transfer_asset_files(username, repo_id, dtable_uuid, files, task_id, files_map, parent_dir, relative_path, replace, repo_api_token, seafile_server_url, config):
     tmp_file_path = os.path.join('/tmp/dtable-io/', dtable_uuid, 'transfer-files', str(task_id))
     os.makedirs(tmp_file_path, exist_ok=True)
 
-    # download files to local
-    local_file_list = download_files_to_path(username, repo_id, dtable_uuid, files, tmp_file_path, files_map)
+    db_session = init_db_session_class(config)()
+    try:
+        # download files to local
+        local_file_list = download_files_to_path(username, repo_id, dtable_uuid, files, tmp_file_path, db_session, files_map)
+    except Exception as e:
+        dtable_io_logger.error('export asset files from dtable failed. ERROR: {}'.format(e))
+        if os.path.exists(tmp_file_path):
+            shutil.rmtree(tmp_file_path)
+        return
+    finally:
+        db_session.close()
 
     # upload files from local to seafile
     try:

@@ -886,18 +886,44 @@ def create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_
         add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, org_id)
 
 
-def download_files_to_path(username, repo_id, dtable_uuid, files, path, files_map=None):
+def download_files_to_path(username, repo_id, dtable_uuid, files, path, db_session, files_map=None):
     """
     download dtable's asset files to path
     """
+    from dtable_events.dtable_io import dtable_io_logger
+
     valid_file_obj_ids = []
+    custom_uuids = []
+    valid_custom_file_obj_ids = []
+
+    # query system files
     base_path = os.path.join('/asset', dtable_uuid)
     for file in files:
-        full_path = os.path.join(base_path, *file.split('/'))
-        obj_id = seafile_api.get_file_id_by_path(repo_id, full_path)
-        if not obj_id:
-            continue
-        valid_file_obj_ids.append((file, obj_id))
+        if not file.startswith('custom-asset://'):
+            full_path = os.path.join(base_path, *file.split('/'))
+            obj_id = seafile_api.get_file_id_by_path(repo_id, full_path)
+            if not obj_id:
+                continue
+            valid_file_obj_ids.append((file, obj_id))
+        else:
+            custom_uuid = file[len('custom-asset://'): len('custom-asset://')+36].replace('-', '')
+            custom_uuids.append(custom_uuid)
+            if files_map:
+                files_map[custom_uuid] = files_map.pop(file, None)
+
+    if custom_uuids:
+        # query custom files
+        sql = "SELECT uuid, parent_path, file_name FROM custom_asset_uuid WHERE uuid IN :uuids AND dtable_uuid=:dtable_uuid"
+        try:
+            results = db_session.execute(sql, {'uuids': custom_uuids, 'dtable_uuid': uuid_str_to_36_chars(dtable_uuid)})
+            for row in results:
+                full_path = os.path.join(base_path, 'custom', row.parent_path, row.file_name)
+                obj_id = seafile_api.get_file_id_by_path(repo_id, full_path)
+                if not obj_id:
+                    continue
+                valid_custom_file_obj_ids.append((row.uuid, obj_id, row.file_name))
+        except Exception as e:
+            dtable_io_logger.error('query dtable: %s custom uuids error: %s', dtable_uuid, e)
 
     tmp_file_list = []
     for file, obj_id in valid_file_obj_ids:
@@ -908,6 +934,20 @@ def download_files_to_path(username, repo_id, dtable_uuid, files, path, files_ma
         file_name = os.path.basename(file)
         if files_map and files_map.get(file, None):
             file_name = files_map.get(file)
+        file_url = gen_inner_file_get_url(token, file_name)
+        content = requests.get(file_url).content
+        filename_by_path = os.path.join(path, file_name)
+        with open(filename_by_path, 'wb') as f:
+            f.write(content)
+        tmp_file_list.append(filename_by_path)
+
+    for custom_uuid, obj_id, file_name in valid_custom_file_obj_ids:
+        token = seafile_api.get_fileserver_access_token(
+            repo_id, obj_id, 'download', username,
+            use_onetime=False
+        )
+        if files_map and files_map.get(custom_uuid):
+            file_name = files_map.get(custom_uuid)
         file_url = gen_inner_file_get_url(token, file_name)
         content = requests.get(file_url).content
         filename_by_path = os.path.join(path, file_name)
