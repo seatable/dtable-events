@@ -6,6 +6,7 @@ import configparser
 import subprocess
 import uuid
 
+import datetime
 import pytz
 import re
 
@@ -262,3 +263,14 @@ def gen_inner_file_upload_url(token, op, replace=False):
     if replace is True:
         url += '?replace=1'
     return url
+
+
+def current_now_in_tz(tz_str):
+    utc_now = datetime.datetime.utcnow()
+    utc_now = pytz.utc.localize(utc_now)
+    try:
+        current_now = utc_now.astimezone(pytz.timezone(tz_str))
+    except Exception as e:
+        logger.error("transfer current now to timezone %s error: %s" % (tz_str, e))
+        current_now = datetime.datetime.now()
+    return current_now
