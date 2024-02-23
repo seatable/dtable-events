@@ -15,6 +15,7 @@ from dateutil import parser
 
 from seaserv import seafile_api
 from dtable_events.automations.models import get_third_party_account
+from dtable_events.automations.auto_rules_stats_updater import auto_rules_stats_updater
 from dtable_events.app.metadata_cache_managers import BaseMetadataCacheManager
 from dtable_events.app.event_redis import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, \
@@ -2927,6 +2928,7 @@ class AutomationRule:
         self.trigger_count = options.get('trigger_count', None)
         self.org_id = options.get('org_id', None)
         self.creator = options.get('creator', None)
+        self.owner = options.get('owner', None)
         self.data = data
         self.db_session = db_session
 
@@ -2950,7 +2952,7 @@ class AutomationRule:
 
         self.metadata_cache_manager = metadata_cache_manager
 
-        self.cache_key = 'AUTOMATION_RULE:%s' % self.rule_id
+        self.cache_key = 'AUTOMATION_RULE:%s' % uuid_str_to_36_chars(self.dtable_uuid)
         self.task_run_success = True
 
         self.done_actions = False
@@ -2958,7 +2960,7 @@ class AutomationRule:
 
         self.current_valid = True
 
-        self.per_minute_trigger_limit = per_minute_trigger_limit or 50
+        self.per_minute_trigger_limit = per_minute_trigger_limit or 1000
 
         self.warnings = []
 
@@ -3441,13 +3443,26 @@ class AutomationRule:
                 trigger_count=trigger_count+1,
                 update_at=:trigger_time
             '''
-
             set_statistic_sql_org = '''
                 INSERT INTO org_auto_rules_statistics (org_id, trigger_date, trigger_count, update_at) VALUES
                 (:org_id, :trigger_date, 1, :trigger_time)
                 ON DUPLICATE KEY UPDATE
                 trigger_count=trigger_count+1,
                 update_at=:trigger_time
+            '''
+            set_statistic_sql_user_per_month = '''
+                INSERT INTO user_auto_rules_statistics_per_month(username, trigger_count, month, updated_at) VALUES
+                (:username, 1, :month, :trigger_time)
+                ON DUPLICATE KEY UPDATE
+                trigger_count=trigger_count+1,
+                updated_at=:trigger_time
+            '''
+            set_statistic_sql_org_per_month = '''
+                INSERT INTO org_auto_rules_statistics_per_month(org_id, trigger_count, month, updated_at) VALUES
+                (:org_id, 1, :month, :trigger_time)
+                ON DUPLICATE KEY UPDATE
+                trigger_count=trigger_count+1,
+                updated_at=:trigger_time
             '''
             set_last_trigger_time_sql = '''
                 UPDATE dtable_automation_rules SET last_trigger_time=:trigger_time, trigger_count=:trigger_count WHERE id=:rule_id;
@@ -3456,25 +3471,32 @@ class AutomationRule:
             sqls = [set_last_trigger_time_sql]
             if self.org_id:
                 if self.org_id == -1:
-                    sqls.append(set_statistic_sql_user)
+                    if '@seafile_group' not in self.owner:
+                        sqls.append(set_statistic_sql_user)
+                        sqls.append(set_statistic_sql_user_per_month)
                 else:
                     sqls.append(set_statistic_sql_org)
+                    sqls.append(set_statistic_sql_org_per_month)
 
             cur_date = datetime.now().date()
             cur_year, cur_month = cur_date.year, cur_date.month
             trigger_date = date(year=cur_year, month=cur_month, day=1)
+            sql_data = {
+                'rule_id': self.rule_id,
+                'trigger_time': datetime.utcnow(),
+                'trigger_date': trigger_date,
+                'trigger_count': self.trigger_count + 1,
+                'username': self.creator,
+                'org_id': self.org_id,
+                'month': str(date.today())[:7]
+            }
             for sql in sqls:
-                self.db_session.execute(sql, {
-                    'rule_id': self.rule_id,
-                    'trigger_time': datetime.utcnow(),
-                    'trigger_date': trigger_date,
-                    'trigger_count': self.trigger_count + 1,
-                    'username': self.creator,
-                    'org_id': self.org_id
-                })
+                self.db_session.execute(sql, sql_data)
             self.db_session.commit()
         except Exception as e:
             logger.exception('set rule: %s error: %s', self.rule_id, e)
+
+        auto_rules_stats_updater.add_info(sql_data)
 
         if self.run_condition == PER_UPDATE and self.per_minute_trigger_limit > 0:
             trigger_times = redis_cache.get(self.cache_key)

@@ -14,6 +14,7 @@ from dtable_events.notification_rules.handler import NotificationRuleHandler
 from dtable_events.notification_rules.dtable_notification_rules_scanner import DTableNofiticationRulesScanner
 from dtable_events.automations.handler import AutomationRuleHandler
 from dtable_events.automations.dtable_automation_rules_scanner import DTableAutomationRulesScanner
+from dtable_events.automations.auto_rules_stats_updater import auto_rules_stats_updater
 from dtable_events.webhook.webhook import Webhooker
 from dtable_events.common_dataset.common_dataset_syncer import CommonDatasetSyncer
 from dtable_events.tasks.big_data_storage_stats_worker import BigDataStorageStatsWorker
@@ -56,6 +57,8 @@ class App(object):
             self._license_expiring_notices_sender = LicenseExpiringNoticesSender()
             # convert pdf manager
             conver_page_to_pdf_manager.init(config)
+            # automation rules statistics updater
+            auto_rules_stats_updater.init(config)
 
     def serve_forever(self):
 
@@ -87,3 +90,5 @@ class App(object):
             self._license_expiring_notices_sender.start()    # always True
             # convert pdf manager
             conver_page_to_pdf_manager.start()               # always True
+            # automation rules statistics updater
+            auto_rules_stats_updater.start()
