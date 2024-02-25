@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from threading import Thread
 
 from apscheduler.schedulers.blocking import BlockingScheduler
+from sqlalchemy import text
 
 from seaserv import seafile_api
 
@@ -28,7 +29,7 @@ class DTableUploadLinkHandler(Thread):
         while True:
             sql = "SELECT dtable_uuid, repo_id FROM dtable_form_upload_link_flags WHERE flag_time=:flag_time LIMIT :offset, :limit"
             try:
-                results = list(session.execute(sql, {'flag_time': flag_time, 'offset': offset, 'limit': limit}))
+                results = list(session.execute(text(sql), {'flag_time': flag_time, 'offset': offset, 'limit': limit}))
             except Exception as e:
                 logger.error('query upload flags flag_time: %s error: %s', flag_time, e)
                 break
@@ -43,7 +44,7 @@ class DTableUploadLinkHandler(Thread):
                     if not repo:
                         continue
                     for dtable_uuid in dtable_uuids:
-                        public_forms_path = f'/asset/{uuid_str_to_36_chars(dtable_uuid)}/public/forms'
+                        public_forms_path = f'/asset/{uuid_str_to_36_chars(dtable_uuid)}/public/forms/temp'
                         dir_id = seafile_api.get_dir_id_by_path(repo_id, public_forms_path)
                         if not dir_id:
                             continue
@@ -71,7 +72,7 @@ class DTableUploadLinkHandler(Thread):
             offset += limit
         sql = "DELETE FROM dtable_form_upload_link_flags WHERE flag_time <= :flag_time"
         try:
-            session.execute(sql, {'flag_time': flag_time})
+            session.execute(text(sql), {'flag_time': flag_time})
             session.commit()
         except Exception as e:
             logger.error('delete upload flags old data flag time: %s error: %s', flag_time, e)
