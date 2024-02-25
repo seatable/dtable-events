@@ -1143,7 +1143,7 @@ def batch_sync_common_dataset(dataset_id, dataset_syncs, db_session, is_force_sy
             WHERE id=:id
         '''
 
-        db_session.execute(sql, {
+        db_session.execute(text(sql), {
             'last_sync_time': datetime.now(),
             'src_version': src_assets.get('src_version'),
             'id': dataset_sync_id

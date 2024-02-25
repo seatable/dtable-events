@@ -32,7 +32,7 @@ def force_sync_common_dataset(context: dict, config):
     '''
     results = []
     with session_class() as db_session:
-        for sync_item in db_session.execute(sql, {'dataset_id': dataset_id}):
+        for sync_item in db_session.execute(text(sql), {'dataset_id': dataset_id}):
             with task_manager.dataset_sync_ids_lock:
                 if task_manager.is_syncing(sync_item.sync_id):
                     continue
