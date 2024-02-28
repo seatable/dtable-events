@@ -42,27 +42,13 @@ from dtable_events.data_sync.data_sync_utils import run_sync_emails
 from dtable_events.utils import get_inner_dtable_server_url, is_valid_email, uuid_str_to_36_chars
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.exception import BaseSizeExceedsLimitError
+from dtable_events.dtable_io.utils import clear_tmp_dir, clear_tmp_file, clear_tmp_files_and_dirs
 
 dtable_io_logger = setup_logger('dtable_events_io.log')
 dtable_message_logger = setup_logger('dtable_events_message.log')
 dtable_data_sync_logger = setup_logger('dtable_events_data_sync.log')
 dtable_plugin_email_logger = setup_logger('dtable_events_plugin_email.log')
 
-
-def clear_tmp_dir(tmp_dir_path):
-    if os.path.exists(tmp_dir_path):
-        shutil.rmtree(tmp_dir_path)
-
-
-def clear_tmp_file(tmp_file_path):
-    if os.path.exists(tmp_file_path):
-        os.remove(tmp_file_path)
-
-
-def clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path):
-    # delete tmp files/dirs
-    clear_tmp_dir(tmp_file_path)
-    clear_tmp_file(tmp_zip_path)
 
 def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asset_dir_id, config):
     """
@@ -316,13 +302,13 @@ def import_big_data_screen(username, repo_id, dtable_uuid, page_id):
     except Exception as e:
         dtable_io_logger.error('rm extracted tmp file failed. ERROR: {}'.format(e))
 
-def parse_excel_csv(username, repo_id, workspace_id, dtable_name, file_type, custom, config):
+def parse_excel_csv(username, repo_id, file_name, file_type, parse_type, dtable_uuid, config):
     """
     parse excel or csv to json file, then upload json file to file server
     """
-    dtable_io_logger.info('Start parse excel or csv: %s.%s.' % (dtable_name, file_type))
+    dtable_io_logger.info('Start parse excel or csv: %s.%s.' % (file_name, file_type))
     try:
-        parse_excel_csv_to_json(repo_id, dtable_name, file_type, custom)
+        parse_excel_csv_to_json(username, repo_id, file_name, file_type, parse_type, dtable_uuid)
     except Exception as e:
         if str(e.args[0]) == 'Excel format error':
             raise Exception('Excel format error')
@@ -330,9 +316,9 @@ def parse_excel_csv(username, repo_id, workspace_id, dtable_name, file_type, cus
             raise Exception('Duplicated column names are not supported')
         dtable_io_logger.exception('parse excel or csv failed. ERROR: {}'.format(e))
     else:
-        dtable_io_logger.info('parse excel %s.xlsx success!' % dtable_name)
+        dtable_io_logger.info('parse excel %s.xlsx success!' % file_name)
 
-def import_excel_csv(username, repo_id, workspace_id, dtable_uuid, dtable_name, lang, config):
+def import_excel_csv(username, repo_id, dtable_uuid, dtable_name, lang, config):
     """
     upload excel or csv json file to dtable-server
     """
@@ -346,13 +332,13 @@ def import_excel_csv(username, repo_id, workspace_id, dtable_uuid, dtable_name, 
     else:
         dtable_io_logger.info('import excel or csv %s success!' % dtable_name)
 
-def import_excel_csv_add_table(username, repo_id, workspace_id, dtable_uuid, dtable_name, lang, config):
+def import_excel_csv_add_table(username, dtable_uuid, dtable_name, lang, config):
     """
     add table, upload excel or csv json file to dtable-server
     """
     dtable_io_logger.info('Start import excel or csv add table: {}.'.format(dtable_uuid))
     try:
-        import_excel_csv_add_table_by_dtable_server(username, repo_id, dtable_uuid, dtable_name, lang)
+        import_excel_csv_add_table_by_dtable_server(username, dtable_uuid, dtable_name, lang)
     except BaseSizeExceedsLimitError:
         raise Exception('Base size exceeds limit')
     except Exception as e:
@@ -362,64 +348,64 @@ def import_excel_csv_add_table(username, repo_id, workspace_id, dtable_uuid, dta
         dtable_io_logger.info('import excel or csv %s add table success!' % dtable_name)
 
 
-def append_excel_csv_append_parsed_file(username, repo_id, dtable_uuid, file_name, table_name):
+def append_excel_csv_append_parsed_file(username, dtable_uuid, file_name, table_name):
     """
     upload excel or csv json file to dtable-server
     """
     dtable_io_logger.info('Start import excel or csv: {}.'.format(dtable_uuid))
     try:
-        append_parsed_file_by_dtable_server(username, repo_id, dtable_uuid, file_name, table_name)
+        append_parsed_file_by_dtable_server(username, dtable_uuid, file_name, table_name)
     except Exception as e:
         dtable_io_logger.exception('append excel or csv failed. dtable_uuid: %s, table_name: %s ERROR:  %s' % (dtable_uuid, table_name, e))
         raise Exception('Import excel or csv error')
     else:
         dtable_io_logger.info('append excel or csv %s success!' % file_name)
 
-def append_excel_csv_upload_file(username, repo_id, file_name, dtable_uuid, table_name, file_type):
+def append_excel_csv_upload_file(username, file_name, dtable_uuid, table_name, file_type):
     """
     parse excel or csv to json file, then upload json file to file server
     """
     dtable_io_logger.info('Start parse append excel or csv: %s.%s' % (file_name, file_type))
     try:
-        parse_append_excel_csv_upload_file_to_json(repo_id, file_name, username, dtable_uuid, table_name, file_type)
+        parse_append_excel_csv_upload_file_to_json(file_name, username, dtable_uuid, table_name, file_type)
     except Exception as e:
         dtable_io_logger.exception('parse append excel or csv failed. ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('parse append excel or csv %s.%s success!' % (file_name, file_type))
 
-def update_excel_csv_update_parsed_file(username, repo_id, dtable_uuid, file_name, table_name, selected_columns):
+def update_excel_csv_update_parsed_file(username, dtable_uuid, file_name, table_name, selected_columns):
     """
     upload excel/csv json file to dtable-server
     """
     dtable_io_logger.info('Start import file: {}.'.format(dtable_uuid))
     try:
-        update_parsed_file_by_dtable_server(username, repo_id, dtable_uuid, file_name, table_name, selected_columns)
+        update_parsed_file_by_dtable_server(username, dtable_uuid, file_name, table_name, selected_columns)
     except Exception as e:
         dtable_io_logger.exception('update excel,csv failed. dtable_uuid: %s, table_name: %s ERROR: %s' % (dtable_uuid, table_name, e))
         raise Exception('Update excel or csv error')
     else:
         dtable_io_logger.info('update excel,csv %s success!' % file_name)
 
-def update_excel_upload_excel(username, repo_id, file_name, dtable_uuid, table_name):
+def update_excel_upload_excel(username, file_name, dtable_uuid, table_name):
     """
     parse excel to json file, then upload json file to file server
     """
     dtable_io_logger.info('Start parse update excel: %s.xlsx.' % file_name)
     try:
-        parse_update_excel_upload_excel_to_json(repo_id, file_name, username, dtable_uuid, table_name)
+        parse_update_excel_upload_excel_to_json(file_name, username, dtable_uuid, table_name)
     except Exception as e:
         dtable_io_logger.exception('parse update excel failed. dtable_uuid: %s, table_name: %s ERROR: %s' % (dtable_uuid, table_name, e))
         raise Exception('Update excel or csv error')
     else:
         dtable_io_logger.info('parse update excel %s.xlsx success!' % file_name)
 
-def update_csv_upload_csv(username, repo_id, file_name, dtable_uuid, table_name):
+def update_csv_upload_csv(username, file_name, dtable_uuid, table_name):
     """
     parse csv to json file, then upload json file to file server
     """
     dtable_io_logger.info('Start parse update csv: %s.csv.' % file_name)
     try:
-        parse_update_csv_upload_csv_to_json(repo_id, file_name, username, dtable_uuid, table_name)
+        parse_update_csv_upload_csv_to_json(file_name, username, dtable_uuid, table_name)
     except Exception as e:
         dtable_io_logger.exception('parse update csv failed. dtable_uuid: %s, table_name: %s ERROR: %s' % (dtable_uuid, table_name, e))
         raise Exception('Update excel or csv error')
@@ -427,7 +413,7 @@ def update_csv_upload_csv(username, repo_id, file_name, dtable_uuid, table_name)
         dtable_io_logger.info('parse update csv %s.csv success!' % file_name)
 
 
-def import_excel_csv_to_dtable(username, repo_id, workspace_id, dtable_name, dtable_uuid, file_type, lang):
+def import_excel_csv_to_dtable(username, repo_id, dtable_name, dtable_uuid, file_type, lang):
     """
     parse excel csv to json, then import excel csv to dtable
     """
@@ -445,13 +431,13 @@ def import_excel_csv_to_dtable(username, repo_id, workspace_id, dtable_name, dta
         dtable_io_logger.info('import excel or csv %s.%s to dtable success!' % (dtable_name, file_type))
 
 
-def import_excel_csv_to_table(username, repo_id, workspace_id, file_name, dtable_uuid, file_type, lang):
+def import_excel_csv_to_table(username, file_name, dtable_uuid, file_type, lang):
     """
     parse excel or csv to json, then import excel or csv to table
     """
     dtable_io_logger.info('Start import excel or csv: %s.%s to table.' % (file_name, file_type))
     try:
-        parse_and_import_excel_csv_to_table(repo_id, file_name, dtable_uuid, username, file_type, lang)
+        parse_and_import_excel_csv_to_table(file_name, dtable_uuid, username, file_type, lang)
     except BaseSizeExceedsLimitError:
         raise Exception('Base size exceeds limit')
     except Exception as e:
@@ -463,13 +449,13 @@ def import_excel_csv_to_table(username, repo_id, workspace_id, file_name, dtable
         dtable_io_logger.info('import excel or csv %s.%s to table success!' % (file_name, file_type))
 
 
-def update_table_via_excel_csv(username, repo_id, file_name, dtable_uuid, table_name, selected_columns, file_type):
+def update_table_via_excel_csv(username, file_name, dtable_uuid, table_name, selected_columns, file_type):
     """
     update excel/csv file to table
     """
     dtable_io_logger.info('Start update file: %s.%s to table.' % (file_name, file_type))
     try:
-        parse_and_update_file_to_table(repo_id, file_name, username, dtable_uuid, table_name, selected_columns, file_type)
+        parse_and_update_file_to_table(file_name, username, dtable_uuid, table_name, selected_columns, file_type)
     except Exception as e:
         dtable_io_logger.exception('update file update to table failed. dtable_uuid: %s, table_name: %s ERROR: %s' % (dtable_uuid, table_name, e))
         raise Exception('Update excel or csv error')
@@ -477,13 +463,13 @@ def update_table_via_excel_csv(username, repo_id, file_name, dtable_uuid, table_
         dtable_io_logger.info('update file %s.%s update to table success!' % (file_name, file_type))
 
 
-def append_excel_csv_to_table(username, repo_id, file_name, dtable_uuid, table_name, file_type):
+def append_excel_csv_to_table(username, file_name, dtable_uuid, table_name, file_type):
     """
     parse excel or csv to json, then append excel or csv to table
     """
     dtable_io_logger.info('Start append excel or csv: %s.%s to table.' % (file_name, file_type))
     try:
-        parse_and_append_excel_csv_to_table(username, repo_id, file_name, dtable_uuid, table_name, file_type)
+        parse_and_append_excel_csv_to_table(username, file_name, dtable_uuid, table_name, file_type)
     except Exception as e:
         dtable_io_logger.exception('append excel or csv to table failed. dtable_uuid: %s, table_name: %s ERROR: %s' % (dtable_uuid, table_name, e))
         if str(e.args[0]) == 'Excel format error':

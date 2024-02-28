@@ -35,7 +35,7 @@ from dtable_events.utils.exception import BaseSizeExceedsLimitError
 
 FILE_URL_PREFIX = 'file://dtable-bundle/asset/files/'
 IMG_URL_PREFIX = 'file://dtable-bundle/asset/images/'
-EXCEL_DIR_PATH = '/tmp/excel/'
+
 
 def setup_logger(logname):
     """
@@ -916,54 +916,6 @@ def download_files_to_path(username, repo_id, dtable_uuid, files, path, files_ma
         tmp_file_list.append(filename_by_path)
     return tmp_file_list
 
-def get_excel_file(repo_id, file_name):
-    from dtable_events.dtable_io import dtable_io_logger
-
-    file_path = EXCEL_DIR_PATH + file_name + '.xlsx'
-    obj_id = seafile_api.get_file_id_by_path(repo_id, file_path)
-    token = seafile_api.get_fileserver_access_token(
-        repo_id, obj_id, 'download', '', use_onetime=True
-    )
-    url = gen_inner_file_get_url(token, file_name + '.xlsx')
-    content = requests.get(url).content
-
-    file_size = sys.getsizeof(content)
-    dtable_io_logger.info('excel file size: %d KB' % (file_size >> 10))
-    return BytesIO(content)
-
-def upload_excel_json_file(repo_id, file_name, content):
-    from dtable_events.dtable_io import dtable_io_logger
-
-    obj_id = json.dumps({'parent_dir': EXCEL_DIR_PATH})
-    token = seafile_api.get_fileserver_access_token(
-        repo_id, obj_id, 'upload', '', use_onetime=True
-    )
-    upload_link = gen_inner_file_upload_url(token, 'upload-api', replace=True)
-    content_type = 'application/json'
-
-    file = content.encode('utf-8')
-    file_size = sys.getsizeof(file)
-    dtable_io_logger.info( 'excel json file size: %d KB' % (file_size >> 10))
-    response = requests.post(upload_link, 
-        data = {'parent_dir': EXCEL_DIR_PATH, 'relative_path': '', 'replace': 1},
-        files = {'file': (file_name + '.json', file, content_type)}
-    )
-
-def get_excel_json_file(repo_id, file_name):
-    file_path = EXCEL_DIR_PATH + file_name + '.json'
-    file_id = seafile_api.get_file_id_by_path(repo_id, file_path)
-    if not file_id:
-        raise FileExistsError('file %s not found' % file_path)
-    token = seafile_api.get_fileserver_access_token(
-        repo_id, file_id, 'download', '', use_onetime=True
-    )
-    url = gen_inner_file_get_url(token, file_name + '.json')
-    json_file = requests.get(url).content
-    return json_file
-
-def delete_excel_file(username, repo_id, file_name):
-    filenames = [file_name + '.xlsx', file_name + '.json']
-    seafile_api.del_file(repo_id, EXCEL_DIR_PATH, json.dumps(filenames), username)
 
 def upload_excel_json_to_dtable_server(username, dtable_uuid, json_file, lang='en'):
     api_url = get_inner_dtable_server_url()
@@ -1016,21 +968,18 @@ def append_rows_by_dtable_server(dtable_server_api, rows_data, table_name):
         time.sleep(0.5)
 
 
-def get_csv_file(repo_id, file_name):
+def get_csv_file(file_path):
     from dtable_events.dtable_io import dtable_io_logger
 
-    file_path = EXCEL_DIR_PATH + file_name + '.csv'
-    obj_id = seafile_api.get_file_id_by_path(repo_id, file_path)
-    token = seafile_api.get_fileserver_access_token(
-        repo_id, obj_id, 'download', '', use_onetime=True
-    )
-    url = gen_inner_file_get_url(token, file_name + '.csv')
-    content = requests.get(url).content.decode('utf-8-sig')
+    # The specified character set is utf-8-sig to automatically process BOM characters
+    # and eliminate the occurrence of \ ufeff
+    with open(file_path, 'r', encoding='utf-8-sig') as f:
+        content = f.read()
 
     file_size = sys.getsizeof(content)
     dtable_io_logger.info('csv file size: %d KB' % (file_size >> 10))
-    from io import StringIO
-    return StringIO(content)
+
+    return content
 
 
 def get_rows_from_dtable_server(username, dtable_uuid, table_name):
@@ -1065,11 +1014,6 @@ def update_rows_by_dtable_server(username, dtable_uuid, update_rows, table_name)
         if res.status_code != 200:
             raise ConnectionError('failed to update excel json %s %s' % (dtable_uuid, res.text))
         time.sleep(0.5)
-
-
-def delete_file(username, repo_id, file_name):
-    filenames = [file_name + '.xlsx', file_name + '.json', file_name + '.csv']
-    seafile_api.del_file(repo_id, EXCEL_DIR_PATH, json.dumps(filenames), username)
 
 
 def get_metadata_from_dtable_server(dtable_uuid, username):
@@ -1602,3 +1546,24 @@ def upload_page_design(repo_id, dtable_uuid, page_id, tmp_page_path, is_dir, use
                 seafile_api.post_file(repo_id, os.path.join(root, file), parent_dir, file, username)
     else:
         seafile_api.post_file(repo_id, tmp_page_path, page_dir, f'{page_id}.json', username)
+
+
+def clear_tmp_dir(tmp_dir_path):
+    if os.path.exists(tmp_dir_path):
+        shutil.rmtree(tmp_dir_path)
+
+
+def clear_tmp_file(tmp_file_path):
+    if os.path.exists(tmp_file_path):
+        os.remove(tmp_file_path)
+
+
+def clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path):
+    # delete tmp files/dirs
+    clear_tmp_dir(tmp_file_path)
+    clear_tmp_file(tmp_zip_path)
+
+
+def save_file_by_path(file_path, content):
+    with open(file_path, 'w') as f:
+        f.write(content)

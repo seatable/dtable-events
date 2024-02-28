@@ -171,15 +171,14 @@ def add_parse_excel_csv_task():
 
     username = request.args.get('username')
     repo_id = request.args.get('repo_id')
-    workspace_id = request.args.get('workspace_id')
-    dtable_name = request.args.get('dtable_name')
-    custom = request.args.get('custom')
+    file_name = request.args.get('file_name')
     file_type = request.args.get('file_type')
-    custom = bool(int(custom))
+    dtable_uuid = request.args.get('dtable_uuid')
+    parse_type = request.args.get('parse_type')
 
     try:
         task_id = task_manager.add_parse_excel_csv_task(
-            username, repo_id, workspace_id, dtable_name, file_type, custom)
+            username, repo_id, file_name, file_type, parse_type, dtable_uuid)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -202,14 +201,13 @@ def add_import_excel_csv_task():
 
     username = request.args.get('username')
     repo_id = request.args.get('repo_id')
-    workspace_id = request.args.get('workspace_id')
     dtable_uuid = request.args.get('dtable_uuid')
     dtable_name = request.args.get('dtable_name')
     lang = request.args.get('lang')
 
     try:
         task_id = task_manager.add_import_excel_csv_task(
-            username, repo_id, workspace_id, dtable_uuid, dtable_name, lang)
+            username, repo_id, dtable_uuid, dtable_name, lang)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -231,15 +229,13 @@ def add_import_excel_csv_add_table_task():
         return make_response(('dtable io server busy.', 400))
 
     username = request.args.get('username')
-    repo_id = request.args.get('repo_id')
-    workspace_id = request.args.get('workspace_id')
     dtable_uuid = request.args.get('dtable_uuid')
     dtable_name = request.args.get('dtable_name')
     lang = request.args.get('lang')
 
     try:
         task_id = task_manager.add_import_excel_csv_add_table_task(
-            username, repo_id, workspace_id, dtable_uuid, dtable_name, lang)
+            username, dtable_uuid, dtable_name, lang)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -261,14 +257,13 @@ def add_append_excel_csv_append_parsed_file_task():
         return make_response(('dtable io server busy.', 400))
 
     username = request.args.get('username')
-    repo_id = request.args.get('repo_id')
     dtable_uuid = request.args.get('dtable_uuid')
     file_name = request.args.get('file_name')
     table_name = request.args.get('table_name')
 
     try:
         task_id = task_manager.add_append_excel_csv_append_parsed_file_task(
-            username, repo_id, dtable_uuid, file_name, table_name)
+            username, dtable_uuid, file_name, table_name)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -290,7 +285,7 @@ def add_append_excel_csv_upload_file_task():
         return make_response(('dtable io server busy.', 400))
 
     username = request.args.get('username')
-    repo_id = request.args.get('repo_id')
+    # repo_id = request.args.get('repo_id')
     file_name = request.args.get('file_name')
     dtable_uuid = request.args.get('dtable_uuid')
     table_name = request.args.get('table_name')
@@ -298,7 +293,7 @@ def add_append_excel_csv_upload_file_task():
 
     try:
         task_id = task_manager.add_append_excel_csv_upload_file_task(
-            username, repo_id, file_name, dtable_uuid, table_name, file_type)
+            username, file_name, dtable_uuid, table_name, file_type)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -685,14 +680,13 @@ def add_update_excel_upload_excel_task():
         return make_response(('dtable io server busy.', 400))
 
     username = request.args.get('username')
-    repo_id = request.args.get('repo_id')
     file_name = request.args.get('file_name')
     dtable_uuid = request.args.get('dtable_uuid')
     table_name = request.args.get('table_name')
 
     try:
         task_id = task_manager.add_update_excel_upload_excel_task(
-            username, repo_id, file_name, dtable_uuid, table_name, )
+            username, file_name, dtable_uuid, table_name, )
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -714,7 +708,6 @@ def add_update_excel_csv_update_parsed_file_task():
         return make_response(('dtable io server busy.', 400))
 
     username = request.args.get('username')
-    repo_id = request.args.get('repo_id')
     dtable_uuid = request.args.get('dtable_uuid')
     file_name = request.args.get('file_name')
     table_name = request.args.get('table_name')
@@ -722,7 +715,7 @@ def add_update_excel_csv_update_parsed_file_task():
 
     try:
         task_id = task_manager.add_update_excel_csv_update_parsed_file_task(
-            username, repo_id, dtable_uuid, file_name, table_name, selected_columns)
+            username, dtable_uuid, file_name, table_name, selected_columns)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -744,14 +737,14 @@ def add_update_csv_upload_csv_task():
         return make_response(('dtable io server busy.', 400))
 
     username = request.args.get('username')
-    repo_id = request.args.get('repo_id')
+    # repo_id = request.args.get('repo_id')
     dtable_uuid = request.args.get('dtable_uuid')
     file_name = request.args.get('file_name')
     table_name = request.args.get('table_name')
 
     try:
         task_id = task_manager.add_update_csv_upload_csv_task(
-            username, repo_id, file_name, dtable_uuid, table_name)
+            username, file_name, dtable_uuid, table_name)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -774,14 +767,13 @@ def add_import_excel_csv_to_dtable_task():
 
     username = request.args.get('username')
     repo_id = request.args.get('repo_id')
-    workspace_id = request.args.get('workspace_id')
     dtable_name = request.args.get('dtable_name')
     dtable_uuid = request.args.get('dtable_uuid')
     file_type = request.args.get('file_type')
     lang = request.args.get('lang')
 
     try:
-        task_id = task_manager.add_import_excel_csv_to_dtable_task(username, repo_id, workspace_id, dtable_name, dtable_uuid, file_type, lang)
+        task_id = task_manager.add_import_excel_csv_to_dtable_task(username, repo_id, dtable_name, dtable_uuid, file_type, lang)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -803,15 +795,13 @@ def add_import_excel_to_table_task():
         return make_response(('dtable io server busy.', 400))
 
     username = request.args.get('username')
-    repo_id = request.args.get('repo_id')
-    workspace_id = request.args.get('workspace_id')
     file_name = request.args.get('file_name')
     dtable_uuid = request.args.get('dtable_uuid')
     file_type = request.args.get('file_type')
     lang = request.args.get('lang')
 
     try:
-        task_id = task_manager.add_import_excel_csv_to_table_task(username, repo_id, workspace_id, file_name, dtable_uuid, file_type, lang)
+        task_id = task_manager.add_import_excel_csv_to_table_task(username, file_name, dtable_uuid, file_type, lang)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -833,7 +823,6 @@ def add_update_table_via_excel_csv_task():
         return make_response(('dtable io server busy.', 400))
 
     username = request.args.get('username')
-    repo_id = request.args.get('repo_id')
     file_name = request.args.get('file_name')
     dtable_uuid = request.args.get('dtable_uuid')
     table_name = request.args.get('table_name')
@@ -842,7 +831,7 @@ def add_update_table_via_excel_csv_task():
 
     try:
         task_id = task_manager.add_update_table_via_excel_csv_task(
-            username, repo_id, file_name, dtable_uuid, table_name, selected_columns, file_type)
+            username, file_name, dtable_uuid, table_name, selected_columns, file_type)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -864,7 +853,6 @@ def add_append_excel_csv_to_table_task():
         return make_response(('dtable io server busy.', 400))
 
     username = request.args.get('username')
-    repo_id = request.args.get('repo_id')
     file_name = request.args.get('file_name')
     dtable_uuid = request.args.get('dtable_uuid')
     table_name = request.args.get('table_name')
@@ -872,7 +860,7 @@ def add_append_excel_csv_to_table_task():
 
     try:
         task_id = task_manager.add_append_excel_csv_to_table_task(
-            username, repo_id, file_name, dtable_uuid, table_name, file_type)
+            username, file_name, dtable_uuid, table_name, file_type)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
