@@ -57,7 +57,7 @@ class DTableUploadLinkHandler(Thread):
                             for dirent in dirents:
                                 if stat.S_ISDIR(dirent.mode):
                                     continue
-                                if (now.timestamp() - datetime.fromtimestamp(dirent.mtime)) > self.interval_hours * 60 * 60:
+                                if (now.timestamp() - dirent.mtime) > self.interval_hours * 60 * 60:
                                     to_delete_files.append(dirent.obj_name)
                             if len(dirents) < f_limit:
                                 break
