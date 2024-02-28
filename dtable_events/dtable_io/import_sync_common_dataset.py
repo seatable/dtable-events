@@ -17,7 +17,6 @@ def force_sync_common_dataset(context: dict, config):
     """
     force apply common dataset to all syncs
     """
-    src_dtable_uuid = uuid_str_to_36_chars(context.get('src_dtable_uuid'))
     dataset_id = context.get('dataset_id')
     # select valid syncs
     session_class = init_db_session_class(config)
