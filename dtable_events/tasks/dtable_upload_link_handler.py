@@ -27,7 +27,7 @@ class DTableUploadLinkHandler(Thread):
         flag_time = (now - timedelta(hours=self.interval_hours)).replace(minute=0, second=0, microsecond=0)
         offset, limit = 0, 1000
         while True:
-            sql = "SELECT dtable_uuid, repo_id FROM dtable_form_upload_link_flags WHERE flag_time=:flag_time LIMIT :offset, :limit"
+            sql = "SELECT dtable_uuid, repo_id FROM dtable_form_upload_link_flags WHERE flag_time<=:flag_time LIMIT :offset, :limit"
             try:
                 results = list(session.execute(text(sql), {'flag_time': flag_time, 'offset': offset, 'limit': limit}))
             except Exception as e:
