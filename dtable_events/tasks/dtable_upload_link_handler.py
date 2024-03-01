@@ -4,6 +4,7 @@ import stat
 from collections import defaultdict
 from datetime import datetime, timedelta
 from threading import Thread
+import json
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 from sqlalchemy import text
@@ -63,8 +64,7 @@ class DTableUploadLinkHandler(Thread):
                                 break
                             f_offset += f_limit
                         logger.debug('repo: %s dtable: %s to delete files: %s', repo_id, dtable_uuid, len(to_delete_files))
-                        for file in to_delete_files:
-                            seafile_api.del_file(repo_id, public_forms_path, file, '')
+                        seafile_api.del_file(repo_id, public_forms_path, json.dumps(to_delete_files), '')
                 except Exception as e:
                     logger.exception('repo: %s handle upload flags error: %s', repo_id, e)
             if len(results) < limit:
