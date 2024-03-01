@@ -164,6 +164,8 @@ def parse_excel_rows(sheet_rows, columns, head_index, max_column):
     for row in value_rows:
         row_data = {}
         for index in range(max_column):
+            if not columns[index]:
+                continue
             try:
                 cell_value = get_excel_cell_value(row, index)
                 column_name = columns[index]['name']
@@ -193,14 +195,14 @@ def parse_excel_rows(sheet_rows, columns, head_index, max_column):
     return rows
 
 
-def parse_column_type(value_list):
+def guess_column_type(value_list):
     from dtable_events.dtable_io import dtable_io_logger
 
     try:
         type_list = []
-        # Check the first 200 rows of data
-        for cell_value in value_list[:200]:
-            if cell_value is None:
+        for cell_value in value_list:
+            # cell_value may be zero
+            if cell_value is None or cell_value == '':
                 continue
             elif isinstance(cell_value, int) or isinstance(cell_value, float):
                 column_type = 'number'
@@ -224,7 +226,7 @@ def parse_column_type(value_list):
                 column_type = 'text'
             type_list.append(column_type)
 
-        max_column_type = max(type_list, key=type_list.count) if type_list else 'text'
+        max_column_type = max(type_list, key=type_list.count) if type_list else None
 
         if max_column_type == 'number' and len(set(type_list)) != 1:
             max_column_type = 'text'
@@ -269,20 +271,25 @@ def parse_excel_columns(sheet_rows, head_index, max_column):
 
     for index in range(max_column):
         name = get_excel_cell_value(head_row, index)
+        # remove whitespace from both ends of name and BOM char(\ufeff)
         column_name = str(name).replace('\ufeff', '').strip() if name else 'Field' + str(index + 1)
 
         if column_name in column_name_set:
             raise Exception('Duplicated column names are not supported')
         column_name_set.add(column_name)
 
-        value_list = [get_excel_cell_value(row, index) for row in value_rows]
-        column_type, column_data = parse_column_type(value_list)
-        column = {
-            'name': column_name,
-            # remove whitespace from both ends of name and BOM char(\ufeff)
-            'type': column_type,
-            'data': column_data,
-        }
+        value_list = [get_excel_cell_value(row, index) for row in value_rows[:200]]
+        # Check the first 200 rows of data to determine column type
+        column_type, column_data = guess_column_type(value_list)
+
+        if not column_type:
+            column = {}
+        else:
+            column = {
+                'name': column_name,
+                'type': column_type,
+                'data': column_data
+            }
         columns.append(column)
 
     return columns
@@ -319,17 +326,18 @@ def parse_excel(file_path):
         head_index = 0
         columns = parse_excel_columns(sheet_rows, head_index, max_column)
         rows = parse_excel_rows(sheet_rows, columns, head_index, max_column)
+        new_columns = [column for column in columns if column]
 
         dtable_io_logger.info(
-            'got table: %s, rows: %d, columns: %d' % (sheet.title, len(rows), len(columns)))
+            'got table: %s, rows: %d, columns: %d' % (sheet.title, len(rows), len(new_columns)))
 
         table = {
             'name': sheet.title,
             'rows': rows,
-            'columns': columns,
+            'columns': new_columns,
             'head_index': head_index,
             'max_row': max_row,
-            'max_column': max_column,
+            'max_column': len(new_columns),
         }
         tables.append(table)
     wb.close()
@@ -348,21 +356,30 @@ def parse_excel(file_path):
 
 def parse_dtable_csv_columns(sheet_rows, max_column):
     head_row = sheet_rows[0]
+    value_rows = sheet_rows[1:]
 
     columns = []
     column_name_set = set()
     for index in range(max_column):
         name = get_csv_cell_value(head_row, index)
-        column_name = str(name) if name else 'Field' + str(index + 1)
+        column_name = str(name).replace('\ufeff', '').strip() if name else 'Field' + str(index + 1)
 
         if column_name in column_name_set:
             raise Exception('Duplicated column names are not supported')
         column_name_set.add(column_name)
 
-        column = {
-            'name': column_name.replace('\ufeff', '').strip(),
-            'type': 'text'
-        }
+        value_list = [get_csv_cell_value(row, index) for row in value_rows[:200]]
+        # Check the first 200 rows of data to determine column type
+        column_type, column_data = guess_column_type(value_list)
+
+        if not column_type:
+            column = {}
+        else:
+            column = {
+                'name': column_name,
+                'type': column_type,
+                'data': column_data
+            }
         columns.append(column)
 
     return columns
@@ -383,6 +400,8 @@ def parse_dtable_csv_rows(sheet_rows, columns, max_column):
     for row in value_rows:
         row_data = {}
         for index in range(max_column):
+            if not columns[index]:
+                continue
             try:
                 cell_value = get_csv_cell_value(row, index)
                 column_name = columns[index]['name']
@@ -439,15 +458,17 @@ def parse_dtable_csv(file_path, dtable_name):
     columns = parse_dtable_csv_columns(csv_rows, max_column)
     rows = parse_dtable_csv_rows(csv_rows, columns, max_column)
 
+    new_columns = [column for column in columns if column]
+
     dtable_io_logger.info(
-        'got table: %s, rows: %d, columns: %d' % (dtable_name, len(rows), len(columns)))
+        'got table: %s, rows: %d, columns: %d' % (dtable_name, len(rows), len(new_columns)))
 
     table = {
         'name': dtable_name,
         'rows': rows,
-        'columns': columns,
+        'columns': new_columns,
         'max_row': max_row,
-        'max_column': max_column,
+        'max_column': len(new_columns),
     }
     tables.append(table)
     return json.dumps(tables)
