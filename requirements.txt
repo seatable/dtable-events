@@ -3,7 +3,7 @@ SQLAlchemy==2.0.18
 apscheduler==3.9.*
 openpyxl==3.0.1
 selenium==3.141.0
-gevent==22.10.*
+gevent==24.2.*
 Flask==2.2.*
 python-dateutil==2.8.*
 imapclient==2.3.*
