@@ -3,6 +3,7 @@ import logging
 import time
 from threading import Thread, Event
 
+from dtable_events.app.config import IS_PRO_VERSION
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.automations.auto_rules_utils import scan_triggered_automation_rules
 from dtable_events.db import init_db_session_class
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 class AutomationRuleHandler(Thread):
     def __init__(self, config):
         Thread.__init__(self)
+        self._enabled = True
         self._finished = Event()
         self._db_session_class = init_db_session_class(config)
         self._redis_client = RedisClient(config)
@@ -38,11 +40,14 @@ class AutomationRuleHandler(Thread):
 
         self.per_minute_trigger_limit = per_minute_trigger_limit
 
+    def is_enabled(self):
+        return self._enabled and IS_PRO_VERSION
+
     def run(self):
         logger.info('Starting handle automation rules...')
         subscriber = self._redis_client.get_subscriber('automation-rule-triggered')
         
-        while not self._finished.is_set():
+        while not self._finished.is_set() and self.is_enabled():
             try:
                 message = subscriber.get_message()
                 if message is not None:

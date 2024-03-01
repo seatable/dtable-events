@@ -5,6 +5,7 @@ from threading import Thread
 from sqlalchemy import text
 from apscheduler.schedulers.blocking import BlockingScheduler
 
+from dtable_events.app.config import IS_PRO_VERSION
 from dtable_events.app.metadata_cache_managers import RuleIntervalMetadataCacheManager
 from dtable_events.automations.auto_rules_utils import run_regular_execution_rule
 from dtable_events.db import init_db_session_class
@@ -49,7 +50,7 @@ class DTableAutomationRulesScanner(object):
         DTableAutomationRulesScannerTimer(self._db_session_class).start()
 
     def is_enabled(self):
-        return self._enabled
+        return self._enabled and IS_PRO_VERSION
 
 
 def scan_dtable_automation_rules(db_session):
