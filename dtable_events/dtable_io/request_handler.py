@@ -204,10 +204,12 @@ def add_import_excel_csv_task():
     dtable_uuid = request.args.get('dtable_uuid')
     dtable_name = request.args.get('dtable_name')
     lang = request.args.get('lang')
+    included_tables = request.args.get('included_tables', '')
+    included_tables = included_tables.split(',')
 
     try:
         task_id = task_manager.add_import_excel_csv_task(
-            username, repo_id, dtable_uuid, dtable_name, lang)
+            username, repo_id, dtable_uuid, dtable_name, included_tables, lang)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -232,10 +234,12 @@ def add_import_excel_csv_add_table_task():
     dtable_uuid = request.args.get('dtable_uuid')
     dtable_name = request.args.get('dtable_name')
     lang = request.args.get('lang')
+    included_tables = request.args.get('included_tables', '')
+    included_tables = included_tables.split(',')
 
     try:
         task_id = task_manager.add_import_excel_csv_add_table_task(
-            username, dtable_uuid, dtable_name, lang)
+            username, dtable_uuid, dtable_name, included_tables, lang)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))

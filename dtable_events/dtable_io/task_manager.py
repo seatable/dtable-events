@@ -123,22 +123,22 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
-    def add_import_excel_csv_task(self, username, repo_id, dtable_uuid, dtable_name, lang):
+    def add_import_excel_csv_task(self, username, repo_id, dtable_uuid, dtable_name, included_tables, lang):
         from dtable_events.dtable_io import import_excel_csv
 
         task_id = str(uuid.uuid4())
         task = (import_excel_csv,
-                (username, repo_id, dtable_uuid, dtable_name, lang, self.config))
+                (username, repo_id, dtable_uuid, dtable_name, included_tables, lang, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         return task_id
 
-    def add_import_excel_csv_add_table_task(self, username, dtable_uuid, dtable_name, lang):
+    def add_import_excel_csv_add_table_task(self, username, dtable_uuid, dtable_name, included_tables, lang):
         from dtable_events.dtable_io import import_excel_csv_add_table
 
         task_id = str(uuid.uuid4())
         task = (import_excel_csv_add_table,
-                (username, dtable_uuid, dtable_name, lang, self.config))
+                (username, dtable_uuid, dtable_name, included_tables, lang, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         return task_id

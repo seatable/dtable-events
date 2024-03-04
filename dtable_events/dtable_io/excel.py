@@ -609,7 +609,7 @@ def parse_excel_csv_to_json(username, repo_id, file_name, file_type, parse_type,
     save_file_by_path(temp_json_path, content)
 
 
-def import_excel_csv_by_dtable_server(username, repo_id, dtable_uuid, dtable_name, lang):
+def import_excel_csv_by_dtable_server(username, repo_id, dtable_uuid, dtable_name, included_tables, lang):
     # get json file
     tmp_file_path = os.path.join(EXCEL_IMPORT_DIR, repo_id, dtable_name + '.json')
     with open(tmp_file_path, 'r') as f:
@@ -617,11 +617,16 @@ def import_excel_csv_by_dtable_server(username, repo_id, dtable_uuid, dtable_nam
 
     clear_tmp_file(tmp_file_path)
 
+    tables = [table for table in json.loads(json_file) if table.get('name') in included_tables]
+    if not tables:
+        raise Exception('tables invalid.')
+    json_file = json.dumps(tables)
+
     # upload json file to dtable-server
     upload_excel_json_to_dtable_server(username, dtable_uuid, json_file, lang)
 
 
-def import_excel_csv_add_table_by_dtable_server(username, dtable_uuid, dtable_name, lang):
+def import_excel_csv_add_table_by_dtable_server(username, dtable_uuid, dtable_name, included_tables, lang):
     # get json file
     tmp_file_path = os.path.join(EXCEL_IMPORT_DIR, dtable_uuid, dtable_name + '.json')
     with open(tmp_file_path, 'r') as f:
@@ -629,6 +634,11 @@ def import_excel_csv_add_table_by_dtable_server(username, dtable_uuid, dtable_na
 
     # delete tmp json file
     clear_tmp_file(tmp_file_path)
+
+    tables = [table for table in json.loads(json_file) if table.get('name') in included_tables]
+    if not tables:
+        raise Exception('tables invalid.')
+    json_file = json.dumps(tables)
 
     # upload json file to dtable-server
     upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, json_file, lang)
