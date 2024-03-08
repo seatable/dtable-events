@@ -26,7 +26,7 @@ from dtable_events.notification_rules.notification_rules_utils import fill_msg_b
     send_notification, fill_msg_blanks_with_sql_row
 from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url, \
     normalize_file_path, gen_file_get_url, gen_random_option
-from dtable_events.utils.constants import ColumnTypes
+from dtable_events.utils.constants import ColumnTypes, FormulaResultType
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 from dtable_events.utils.dtable_db_api import DTableDBAPI, RowsQueryError, Request429Error
@@ -1299,6 +1299,22 @@ class SendEmailAction(BaseAction):
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
         return fill_msg_blanks_with_converted_row(text, blanks, col_name_dict, row, db_session)
 
+    def get_blank_email(self, row, text, blanks):
+        blank_match = re.search(r'\{.*?\}', text)
+        if blank_match:
+            blank = text[blank_match.start()+1: blank_match.end()-1]
+            if blank in blanks:
+                col_name_dict = self.col_name_dict
+                column = col_name_dict.get(blank)
+                column_type = column['type']
+                column_data = column.get('data') or {}
+                result_type = column_data.get('result_type')
+                array_type = column_data.get('array_type')
+                if column_type == ColumnTypes.LINK_FORMULA \
+                    and result_type == FormulaResultType.ARRAY \
+                    and array_type in [ColumnTypes.EMAIL, ColumnTypes.TEXT]:
+                    return row.get(blank) or []
+        return self.fill_msg_blanks(row, text, blanks)
 
     def fill_msg_blanks_with_sql(self, row, text, blanks):
         col_name_dict = self.col_name_dict
@@ -1427,9 +1443,25 @@ class SendEmailAction(BaseAction):
                 if not is_plain_text and html_msg:
                     html_msg = self.fill_msg_blanks_with_sql(row, html_msg, self.column_blanks)
             if self.column_blanks_send_to:
-                send_to_list = [self.fill_msg_blanks(converted_row, send_to, self.column_blanks_send_to) for send_to in send_to_list]
+                for send_to in send_to_list:
+                    blank_email = self.get_blank_email(converted_row, send_to, self.column_blanks_send_to)
+                    if isinstance(blank_email, list):
+                        for blank_email_item in blank_email:
+                            if blank_email_item not in send_to_list:
+                                send_to_list.append(blank_email_item)
+                    else:
+                        if blank_email not in send_to_list:
+                            send_to_list.append(blank_email)
             if self.column_blanks_copy_to:
-                copy_to_list = [self.fill_msg_blanks(converted_row, copy_to, self.column_blanks_copy_to) for copy_to in copy_to_list]
+                for copy_to in copy_to_list:
+                    blank_email = self.get_blank_email(converted_row, copy_to, self.column_blanks_copy_to)
+                    if isinstance(blank_email, list):
+                        for blank_email_item in blank_email:
+                            if blank_email_item not in copy_to_list:
+                                copy_to_list.append(blank_email_item)
+                    else:
+                        if blank_email not in copy_to_list:
+                            copy_to_list.append(blank_email)
 
             file_download_urls = self.get_file_download_urls(attachment_list, row)
 
