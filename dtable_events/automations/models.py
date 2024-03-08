@@ -2,7 +2,7 @@ import logging
 from copy import deepcopy
 
 from sqlalchemy.orm import mapped_column
-from sqlalchemy import Integer, String, DateTime, Text
+from sqlalchemy import Integer, String, DateTime, Text, select
 
 from dtable_events.automations.hasher import AESPasswordHasher
 from dtable_events.db import Base
@@ -59,10 +59,8 @@ class BoundThirdPartyAccounts(Base):
 
 
 def get_third_party_account(session, account_id):
-    account_query = session.query(BoundThirdPartyAccounts).filter(
-        BoundThirdPartyAccounts.id == account_id
-    )
-    account = account_query.first()
+    stmt = select(BoundThirdPartyAccounts).where(BoundThirdPartyAccounts.id == account_id).limit(1)
+    account = session.scalars(stmt).first()
     if account:
         return account.to_dict()
     else:
