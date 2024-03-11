@@ -282,6 +282,9 @@ def parse_excel_columns(sheet_rows, head_index, max_column):
         # Check the first 200 rows of data to determine column type
         column_type, column_data = guess_column_type(value_list)
 
+        if name and not column_type:
+            column_type = 'text'
+
         if not column_type:
             column = {}
         else:
@@ -371,6 +374,9 @@ def parse_dtable_csv_columns(sheet_rows, max_column):
         value_list = [get_csv_cell_value(row, index) for row in value_rows[:200]]
         # Check the first 200 rows of data to determine column type
         column_type, column_data = guess_column_type(value_list)
+
+        if name and not column_type:
+            column_type = 'text'
 
         if not column_type:
             column = {}
