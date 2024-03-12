@@ -249,7 +249,7 @@ def fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, conver
 
             elif col_name_dict[blank]['type'] == ColumnTypes.LINK:
                 value = converted_row.get(blank, [])
-                msg = msg.replace('{' + blank + '}', (', '.join([str(f['display_value']) for f in value if f.get('display_value') is not None])) if value else '')
+                msg = msg.replace('{' + blank + '}', (', '.join([str(f['display_value']) for f in value if f.get('display_value') is not None])) if value is not None else '')
 
             elif col_name_dict[blank]['type'] == ColumnTypes.FILE:
                 value = converted_row.get(blank, [])
