@@ -216,97 +216,100 @@ def convert_zero_in_value(value):
 
 def fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, converted_row, db_session):
     for blank in column_blanks:
-        if col_name_dict[blank]['type'] in [
-            ColumnTypes.TEXT,
-            ColumnTypes.DATE,
-            ColumnTypes.LONG_TEXT,
-            ColumnTypes.SINGLE_SELECT,
-            ColumnTypes.URL,
-            ColumnTypes.DURATION,
-            ColumnTypes.NUMBER,
-            ColumnTypes.EMAIL,
-            ColumnTypes.AUTO_NUMBER,
-            ColumnTypes.CTIME,
-            ColumnTypes.MTIME,
-            ColumnTypes.RATE,
-        ]:
-            value = converted_row.get(blank, '')
-            value = convert_zero_in_value(value)
-            msg = msg.replace('{' + blank + '}', str(value) if value else '')  # maybe value is None and str(None) is 'None'
-
-        elif col_name_dict[blank]['type'] in [
-            ColumnTypes.IMAGE,
-            ColumnTypes.MULTIPLE_SELECT
-        ]:
-            value = converted_row.get(blank, [])
-            if not value:
-                msg = msg.replace('{' + blank + '}', '')  # maybe value is None
-            elif value and isinstance(value, list) and isinstance(value[0], str):
-                msg = msg.replace('{' + blank + '}', ', '.join(value))
-            else:
-                logger.warning('column %s value format error', blank)
-
-        elif col_name_dict[blank]['type'] == ColumnTypes.LINK:
-            value = converted_row.get(blank, [])
-            msg = msg.replace('{' + blank + '}', (', '.join([f['display_value'] for f in value if f['display_value']])) if value else '')
-
-        elif col_name_dict[blank]['type'] == ColumnTypes.FILE:
-            value = converted_row.get(blank, [])
-            msg = msg.replace('{' + blank + '}', (', '.join([f['name'] for f in value])) if value else '')
-
-        elif col_name_dict[blank]['type'] == ColumnTypes.COLLABORATOR:
-            users = converted_row.get(blank, [])
-            if users is None:
-                names = []
-            else:
-                names_dict = get_nickname_by_usernames(users, db_session)
-                names = [names_dict.get(user) for user in users if user in names_dict]
-            msg = msg.replace('{' + blank + '}', ', '.join(names))
-
-        elif col_name_dict[blank]['type'] in [ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
-            value = converted_row.get(blank, '')
-            if value is None:
-                name = ''
-            else:
-                name = get_nickname_by_usernames([value], db_session).get(value, '')
-            msg = msg.replace('{' + blank + '}', name)
-
-        elif col_name_dict[blank]['type'] in [ColumnTypes.FORMULA, ColumnTypes.LINK_FORMULA]:
-            value = converted_row.get(blank, '')
-            column_data = col_name_dict[blank].get('data') or {}
-            result_type = column_data.get('result_type') or 'string'
-            if result_type == 'string':
-                msg = msg.replace('{' + blank + '}', str(value) if value else '')
-            elif result_type == 'number':
+        try:
+            if col_name_dict[blank]['type'] in [
+                ColumnTypes.TEXT,
+                ColumnTypes.DATE,
+                ColumnTypes.LONG_TEXT,
+                ColumnTypes.SINGLE_SELECT,
+                ColumnTypes.URL,
+                ColumnTypes.DURATION,
+                ColumnTypes.NUMBER,
+                ColumnTypes.EMAIL,
+                ColumnTypes.AUTO_NUMBER,
+                ColumnTypes.CTIME,
+                ColumnTypes.MTIME,
+                ColumnTypes.RATE,
+            ]:
+                value = converted_row.get(blank, '')
                 value = convert_zero_in_value(value)
-                msg = msg.replace('{' + blank + '}', str(value) if value else '')
-            elif result_type == 'bool':
-                if isinstance(value, str):
-                    msg = msg.replace('{' + blank + '}', value)
-                elif value is True:
-                    msg = msg.replace('{' + blank + '}', 'true')
-                elif value is False:
-                    msg = msg.replace('{' + blank + '}', 'false')
+                msg = msg.replace('{' + blank + '}', str(value) if value else '')  # maybe value is None and str(None) is 'None'
+
+            elif col_name_dict[blank]['type'] in [
+                ColumnTypes.IMAGE,
+                ColumnTypes.MULTIPLE_SELECT
+            ]:
+                value = converted_row.get(blank, [])
+                if not value:
+                    msg = msg.replace('{' + blank + '}', '')  # maybe value is None
+                elif value and isinstance(value, list) and isinstance(value[0], str):
+                    msg = msg.replace('{' + blank + '}', ', '.join(value))
                 else:
-                    msg = msg.replace('{' + blank + '}', '')
-            elif result_type == 'date':
-                msg = msg.replace('{' + blank + '}', str(value) if value else '')
-            elif result_type == 'array':
-                array_type = column_data.get('array_type')
-                if isinstance(value, list) and array_type in [ColumnTypes.COLLABORATOR, ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
-                    names_dict = get_nickname_by_usernames(value, db_session)
-                    names = [names_dict[username] for username in value if username in names_dict]
-                    msg = msg.replace('{' + blank + '}', ', '.join(names))
+                    logger.warning('column %s value format error', blank)
+
+            elif col_name_dict[blank]['type'] == ColumnTypes.LINK:
+                value = converted_row.get(blank, [])
+                msg = msg.replace('{' + blank + '}', (', '.join([str(f['display_value']) for f in value if f.get('display_value') is not None])) if value else '')
+
+            elif col_name_dict[blank]['type'] == ColumnTypes.FILE:
+                value = converted_row.get(blank, [])
+                msg = msg.replace('{' + blank + '}', (', '.join([f['name'] for f in value])) if value else '')
+
+            elif col_name_dict[blank]['type'] == ColumnTypes.COLLABORATOR:
+                users = converted_row.get(blank, [])
+                if users is None:
+                    names = []
+                else:
+                    names_dict = get_nickname_by_usernames(users, db_session)
+                    names = [names_dict.get(user) for user in users if user in names_dict]
+                msg = msg.replace('{' + blank + '}', ', '.join(names))
+
+            elif col_name_dict[blank]['type'] in [ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
+                value = converted_row.get(blank, '')
+                if value is None:
+                    name = ''
+                else:
+                    name = get_nickname_by_usernames([value], db_session).get(value, '')
+                msg = msg.replace('{' + blank + '}', name)
+
+            elif col_name_dict[blank]['type'] in [ColumnTypes.FORMULA, ColumnTypes.LINK_FORMULA]:
+                value = converted_row.get(blank, '')
+                column_data = col_name_dict[blank].get('data') or {}
+                result_type = column_data.get('result_type') or 'string'
+                if result_type == 'string':
+                    msg = msg.replace('{' + blank + '}', str(value) if value else '')
+                elif result_type == 'number':
+                    value = convert_zero_in_value(value)
+                    msg = msg.replace('{' + blank + '}', str(value) if value else '')
+                elif result_type == 'bool':
+                    if isinstance(value, str):
+                        msg = msg.replace('{' + blank + '}', value)
+                    elif value is True:
+                        msg = msg.replace('{' + blank + '}', 'true')
+                    elif value is False:
+                        msg = msg.replace('{' + blank + '}', 'false')
+                    else:
+                        msg = msg.replace('{' + blank + '}', '')
+                elif result_type == 'date':
+                    msg = msg.replace('{' + blank + '}', str(value) if value else '')
+                elif result_type == 'array':
+                    array_type = column_data.get('array_type')
+                    if isinstance(value, list) and array_type in [ColumnTypes.COLLABORATOR, ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
+                        names_dict = get_nickname_by_usernames(value, db_session)
+                        names = [names_dict[username] for username in value if username in names_dict]
+                        msg = msg.replace('{' + blank + '}', ', '.join(names))
+                    else:
+                        msg = msg.replace('{' + blank + '}', str(value) if value else '')
                 else:
                     msg = msg.replace('{' + blank + '}', str(value) if value else '')
-            else:
+
+            elif col_name_dict[blank]['type'] in [ColumnTypes.GEOLOCATION]:
+                value = converted_row.get(blank, '')
+                value = value and _get_geolocation_infos(value) or ''
                 msg = msg.replace('{' + blank + '}', str(value) if value else '')
 
-        elif col_name_dict[blank]['type'] in [ColumnTypes.GEOLOCATION]:
-            value = converted_row.get(blank, '')
-            value = value and _get_geolocation_infos(value) or ''
-            msg = msg.replace('{' + blank + '}', str(value) if value else '')
-
+        except Exception as e:
+            logger.exception('msg: %s blank: %s col_name_dict: %s fill blank error: %s', msg, blank, col_name_dict, e)
 
     return msg
 
