@@ -1067,7 +1067,7 @@ def gen_dst_assets(dst_dtable_uuid, dst_table_id, dataset_sync_id, db_session):
     }
 
 
-def batch_sync_common_dataset(dataset_id, dataset_syncs, db_session, is_force_sync=False):
+def batch_sync_common_dataset(dataset_id, dataset_syncs, db_session, is_force_sync=False, operator='dtable-events'):
     """
     batch sync CDS content to all syncs
 
@@ -1115,7 +1115,7 @@ def batch_sync_common_dataset(dataset_id, dataset_syncs, db_session, is_force_sy
                 'dst_table_id': dst_table_id,
                 'dst_table_name': dst_table_name,
                 'dst_columns': dst_assets.get('dst_columns'),
-                'operator': 'dtable-events',
+                'operator': operator or 'dtable-events',
                 'lang': 'en',  # TODO: lang
                 'dataset_data': datase_data
             })

@@ -18,6 +18,7 @@ def force_sync_common_dataset(context: dict, config):
     force apply common dataset to all syncs
     """
     dataset_id = context.get('dataset_id')
+    dst_dtable_uuids = context.get('dst_dtable_uuids')
     # select valid syncs
     session_class = init_db_session_class(config)
     sql = '''
@@ -27,11 +28,11 @@ def force_sync_common_dataset(context: dict, config):
         INNER JOIN dtable_common_dataset_sync dcds ON dcds.dataset_id=dcd.id
         INNER JOIN dtables d_src ON dcd.dtable_uuid=d_src.uuid AND d_src.deleted=0
         INNER JOIN dtables d_dst ON dcds.dst_dtable_uuid=d_dst.uuid AND d_dst.deleted=0
-        WHERE dcd.id=:dataset_id AND dcd.is_valid=1 AND dcds.is_valid=1
+        WHERE dcd.id=:dataset_id AND dcd.is_valid=1 AND dcds.is_valid=1 AND dcds.dst_dtable_uuid IN :dst_dtable_uuids
     '''
     results = []
     with session_class() as db_session:
-        for sync_item in db_session.execute(text(sql), {'dataset_id': dataset_id}):
+        for sync_item in db_session.execute(text(sql), {'dataset_id': dataset_id, 'dst_dtable_uuids': dst_dtable_uuids}):
             with task_manager.dataset_sync_ids_lock:
                 if task_manager.is_syncing(sync_item.sync_id):
                     continue
@@ -39,7 +40,7 @@ def force_sync_common_dataset(context: dict, config):
                 task_manager.add_dataset_sync(sync_item.sync_id)
         # sync one by one
         try:
-            batch_sync_common_dataset(dataset_id, results, db_session, is_force_sync=True)
+            batch_sync_common_dataset(dataset_id, results, db_session, is_force_sync=True, operator=context.get('username'))
         except Exception as e:
             dtable_io_logger.exception('force sync dataset: %s error: %s', dataset_id, e)
         else:
