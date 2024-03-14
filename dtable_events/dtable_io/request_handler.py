@@ -186,7 +186,7 @@ def add_parse_excel_csv_task():
     return make_response(({'task_id': task_id}, 200))
 
 
-@app.route('/add-import-excel-csv-task', methods=['GET'])
+@app.route('/add-import-excel-csv-task', methods=['POST'])
 def add_import_excel_csv_task():
     is_valid, error = check_auth_token(request)
     if not is_valid:
@@ -199,13 +199,18 @@ def add_import_excel_csv_task():
                                     task_manager.threads_is_alive()))
         return make_response(('dtable io server busy.', 400))
 
-    username = request.args.get('username')
-    repo_id = request.args.get('repo_id')
-    dtable_uuid = request.args.get('dtable_uuid')
-    dtable_name = request.args.get('dtable_name')
-    lang = request.args.get('lang')
-    included_tables = request.args.get('included_tables', '')
-    included_tables = included_tables.split(',')
+    # Parsing request data
+    try:
+        context = json.loads(request.data)
+    except:
+        return make_response(('add import excel csv context invalid.', 400))
+
+    username = context.get('username')
+    repo_id = context.get('repo_id')
+    dtable_uuid = context.get('dtable_uuid')
+    dtable_name = context.get('dtable_name')
+    lang = context.get('lang')
+    included_tables = context.get('included_tables', [])
 
     try:
         task_id = task_manager.add_import_excel_csv_task(
@@ -217,7 +222,7 @@ def add_import_excel_csv_task():
     return make_response(({'task_id': task_id}, 200))
 
 
-@app.route('/add-import-excel-csv-add-table-task', methods=['GET'])
+@app.route('/add-import-excel-csv-add-table-task', methods=['POST'])
 def add_import_excel_csv_add_table_task():
     is_valid, error = check_auth_token(request)
     if not is_valid:
@@ -230,12 +235,17 @@ def add_import_excel_csv_add_table_task():
                                     task_manager.threads_is_alive()))
         return make_response(('dtable io server busy.', 400))
 
-    username = request.args.get('username')
-    dtable_uuid = request.args.get('dtable_uuid')
-    dtable_name = request.args.get('dtable_name')
-    lang = request.args.get('lang')
-    included_tables = request.args.get('included_tables', '')
-    included_tables = included_tables.split(',')
+    # Parsing request data
+    try:
+        context = json.loads(request.data)
+    except:
+        return make_response(('add import excel csv add table context invalid.', 400))
+
+    username = context.get('username')
+    dtable_uuid = context.get('dtable_uuid')
+    dtable_name = context.get('dtable_name')
+    lang = context.get('lang')
+    included_tables = context.get('included_tables', [])
 
     try:
         task_id = task_manager.add_import_excel_csv_add_table_task(

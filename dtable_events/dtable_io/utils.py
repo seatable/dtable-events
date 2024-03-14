@@ -1607,3 +1607,45 @@ def clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path):
 def save_file_by_path(file_path, content):
     with open(file_path, 'w') as f:
         f.write(content)
+
+
+def get_table_names_by_dtable_server(username, dtable_uuid):
+    from dtable_events.utils.dtable_server_api import DTableServerAPI
+    dtable_server_url = get_inner_dtable_server_url()
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, dtable_server_url)
+    metadata = dtable_server_api.get_metadata()
+
+    tables = metadata.get('tables', [])
+    table_names = set()
+    for t in tables:
+        table_names.add(t.get('name'))
+
+    return table_names
+
+
+def get_non_duplicated_name(name, existed_names):
+    if not existed_names or name not in existed_names:
+        return name
+    return get_no_duplicate_obj_name(name, existed_names)
+
+
+def get_no_duplicate_obj_name(obj_name, exist_obj_names):
+    def no_duplicate(obj_name):
+        for exist_obj_name in exist_obj_names:
+            if exist_obj_name == obj_name:
+                return False
+        return True
+
+    def make_new_name(obj_name, i):
+        return "%s (%d)" % (obj_name, i)
+
+    if no_duplicate(obj_name):
+        return obj_name
+    else:
+        i = 1
+        while True:
+            new_name = make_new_name(obj_name, i)
+            if no_duplicate(new_name):
+                return new_name
+            else:
+                i += 1

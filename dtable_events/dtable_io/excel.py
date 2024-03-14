@@ -17,7 +17,8 @@ from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.dtable_io.utils import clear_tmp_file, save_file_by_path, get_csv_file, \
     upload_excel_json_add_table_to_dtable_server, append_rows_by_dtable_server, get_related_nicknames_from_dtable, \
     extract_select_options, upload_excel_json_to_dtable_server, get_rows_from_dtable_db, update_rows_by_dtable_db, \
-    get_nicknames_from_dtable
+    get_nicknames_from_dtable, get_table_names_by_dtable_server, get_non_duplicated_name
+from dtable_events.utils.exception import ExcelFormatError
 
 timezone = TIME_ZONE
 VIRTUAL_ID_EMAIL_DOMAIN = '@auth.local'
@@ -274,8 +275,8 @@ def parse_excel_columns(sheet_rows, head_index, max_column):
         # remove whitespace from both ends of name and BOM char(\ufeff)
         column_name = str(name).replace('\ufeff', '').strip() if name else 'Field' + str(index + 1)
 
-        if column_name in column_name_set:
-            raise Exception('Duplicated column names are not supported')
+        column_name = column_name.replace('`', '_').replace('{', '_').replace('}', '_').replace('.', '_')
+        column_name = get_non_duplicated_name(column_name, column_name_set)
         column_name_set.add(column_name)
 
         value_list = [get_excel_cell_value(row, index) for row in value_rows[:200]]
@@ -298,8 +299,10 @@ def parse_excel_columns(sheet_rows, head_index, max_column):
     return columns
 
 
-def parse_excel(file_path):
+def parse_excel(file_path, exist_tables=None):
     from dtable_events.dtable_io import dtable_io_logger
+    if exist_tables is None:
+        exist_tables = []
 
     tables = []
     wb = load_workbook(file_path, read_only=True, data_only=True)
@@ -307,9 +310,13 @@ def parse_excel(file_path):
         try:
             sheet_rows = list(sheet.rows)
         except Exception as e:
-            raise Exception('Excel format error')
+            raise ExcelFormatError
         if not sheet_rows:
             continue
+
+        table_name = sheet.title
+        table_name = table_name.replace('`', '_').replace('\\', '_').replace('/', '_')
+        table_name = get_non_duplicated_name(table_name, exist_tables)
 
         # the sheet has some rows, but sheet.max_row maybe get None
         max_row = sheet.max_row if isinstance(sheet.max_row, int) else len(sheet_rows)
@@ -318,7 +325,7 @@ def parse_excel(file_path):
             continue
 
         dtable_io_logger.info(
-            'parse sheet: %s, rows: %d, columns: %d' % (sheet.title, max_row, max_row))
+            'parse sheet: %s, rows: %d, columns: %d' % (table_name, max_row, max_row))
 
         if max_row > 50000:
             max_row = 50000  # rows limit
@@ -332,10 +339,10 @@ def parse_excel(file_path):
         new_columns = [column for column in columns if column]
 
         dtable_io_logger.info(
-            'got table: %s, rows: %d, columns: %d' % (sheet.title, len(rows), len(new_columns)))
+            'got table: %s, rows: %d, columns: %d' % (table_name, len(rows), len(new_columns)))
 
         table = {
-            'name': sheet.title,
+            'name': table_name,
             'rows': rows,
             'columns': new_columns,
             'head_index': head_index,
@@ -367,8 +374,8 @@ def parse_dtable_csv_columns(sheet_rows, max_column):
         name = get_csv_cell_value(head_row, index)
         column_name = str(name).replace('\ufeff', '').strip() if name else 'Field' + str(index + 1)
 
-        if column_name in column_name_set:
-            raise Exception('Duplicated column names are not supported')
+        column_name = column_name.replace('`', '_').replace('{', '_').replace('}', '_').replace('.', '_')
+        column_name = get_non_duplicated_name(column_name, column_name_set)
         column_name_set.add(column_name)
 
         value_list = [get_csv_cell_value(row, index) for row in value_rows[:200]]
@@ -430,8 +437,13 @@ def parse_dtable_csv_rows(sheet_rows, columns, max_column):
     return rows
 
 
-def parse_dtable_csv(file_path, dtable_name):
+def parse_dtable_csv(file_path, dtable_name, exist_tables=None):
     from dtable_events.dtable_io import dtable_io_logger
+    if exist_tables is None:
+        exist_tables = []
+
+    dtable_name = dtable_name.replace('`', '_').replace('\\', '_').replace('/', '_')
+    dtable_name = get_non_duplicated_name(dtable_name, exist_tables)
 
     csv_file = get_csv_file(file_path)
     csv_file = StringIO(csv_file)
@@ -499,14 +511,15 @@ def parse_and_import_excel_csv_to_dtable(repo_id, dtable_name, dtable_uuid, user
 
 def parse_and_import_excel_csv_to_table(file_name, dtable_uuid, username, file_type, lang):
     base_path = os.path.join(EXCEL_IMPORT_DIR, dtable_uuid)
+    exist_table_names = get_table_names_by_dtable_server(username, dtable_uuid)
     try:
         # file_type is xlsx or csv
         if file_type == 'xlsx':
             tmp_file_path = os.path.join(base_path, file_name + '.xlsx')
-            content = parse_excel(tmp_file_path)
+            content = parse_excel(tmp_file_path, exist_tables=exist_table_names)
         else:
             tmp_file_path = os.path.join(base_path, file_name + '.csv')
-            content = parse_dtable_csv(tmp_file_path, file_name)
+            content = parse_dtable_csv(tmp_file_path, file_name, exist_tables=exist_table_names)
     finally:
         # delete excel or csv file
         clear_tmp_file(tmp_file_path)
@@ -594,19 +607,21 @@ def parse_and_append_excel_csv_to_table(username, file_name, dtable_uuid, table_
 
 
 def parse_excel_csv_to_json(username, repo_id, file_name, file_type, parse_type, dtable_uuid):
+    exist_table_names = []
     if parse_type == 'dtable':
         base_path = os.path.join(EXCEL_IMPORT_DIR, repo_id)
     else:
         base_path = os.path.join(EXCEL_IMPORT_DIR, dtable_uuid)
+        exist_table_names = get_table_names_by_dtable_server(username, dtable_uuid)
 
     try:
         # file_type is xlsx or csv
         if file_type == 'xlsx':
             tmp_file_path = os.path.join(base_path, file_name + '.xlsx')
-            content = parse_excel(tmp_file_path)
+            content = parse_excel(tmp_file_path, exist_tables=exist_table_names)
         else:
             tmp_file_path = os.path.join(base_path, file_name + '.csv')
-            content = parse_dtable_csv(tmp_file_path, file_name)
+            content = parse_dtable_csv(tmp_file_path, file_name, exist_tables=exist_table_names)
     finally:
         clear_tmp_file(tmp_file_path)
 
@@ -850,7 +865,10 @@ def parse_dtable_excel_file(file_path, table_name, columns, name_to_email):
     wb = load_workbook(file_path, read_only=True, data_only=True)
     sheet = wb.get_sheet_by_name(wb.sheetnames[0])
 
-    sheet_rows = list(sheet.rows)
+    try:
+        sheet_rows = list(sheet.rows)
+    except Exception as e:
+        raise ExcelFormatError
     if not sheet_rows:
         wb.close()
         table = {

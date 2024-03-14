@@ -41,7 +41,7 @@ from dtable_events.statistics.db import save_email_sending_records, batch_save_e
 from dtable_events.data_sync.data_sync_utils import run_sync_emails
 from dtable_events.utils import get_inner_dtable_server_url, is_valid_email, uuid_str_to_36_chars
 from dtable_events.utils.dtable_server_api import DTableServerAPI
-from dtable_events.utils.exception import BaseSizeExceedsLimitError
+from dtable_events.utils.exception import BaseSizeExceedsLimitError, ExcelFormatError
 from dtable_events.dtable_io.utils import clear_tmp_dir, clear_tmp_file, clear_tmp_files_and_dirs
 
 dtable_io_logger = setup_logger('dtable_events_io.log')
@@ -312,11 +312,9 @@ def parse_excel_csv(username, repo_id, file_name, file_type, parse_type, dtable_
     dtable_io_logger.info('Start parse excel or csv: %s.%s.' % (file_name, file_type))
     try:
         parse_excel_csv_to_json(username, repo_id, file_name, file_type, parse_type, dtable_uuid)
+    except ExcelFormatError as e:
+        raise Exception(e)
     except Exception as e:
-        if str(e.args[0]) == 'Excel format error':
-            raise Exception('Excel format error')
-        if str(e.args[0]) == 'Duplicated column names are not supported':
-            raise Exception('Duplicated column names are not supported')
         dtable_io_logger.exception('parse excel or csv failed. ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('parse excel %s.xlsx success!' % file_name)
@@ -371,6 +369,8 @@ def append_excel_csv_upload_file(username, file_name, dtable_uuid, table_name, f
     dtable_io_logger.info('Start parse append excel or csv: %s.%s' % (file_name, file_type))
     try:
         parse_append_excel_csv_upload_file_to_json(file_name, username, dtable_uuid, table_name, file_type)
+    except ExcelFormatError:
+        raise Exception('Excel format error')
     except Exception as e:
         dtable_io_logger.exception('parse append excel or csv failed. ERROR: {}'.format(e))
     else:
@@ -396,6 +396,8 @@ def update_excel_upload_excel(username, file_name, dtable_uuid, table_name):
     dtable_io_logger.info('Start parse update excel: %s.xlsx.' % file_name)
     try:
         parse_update_excel_upload_excel_to_json(file_name, username, dtable_uuid, table_name)
+    except ExcelFormatError:
+        raise Exception('Excel format error')
     except Exception as e:
         dtable_io_logger.exception('parse update excel failed. dtable_uuid: %s, table_name: %s ERROR: %s' % (dtable_uuid, table_name, e))
         raise Exception('Update excel or csv error')
@@ -425,10 +427,10 @@ def import_excel_csv_to_dtable(username, repo_id, dtable_name, dtable_uuid, file
         parse_and_import_excel_csv_to_dtable(repo_id, dtable_name, dtable_uuid, username, file_type, lang)
     except BaseSizeExceedsLimitError:
         raise Exception('Base size exceeds limit')
+    except ExcelFormatError:
+        raise Exception('Excel format error')
     except Exception as e:
         dtable_io_logger.exception('import excel or csv to dtable failed. dtable_uuid: %s, dtable_name: %s ERROR: %s' % (dtable_uuid, dtable_name, e))
-        if str(e.args[0]) == 'Excel format error':
-            raise Exception('Excel format error')
         raise Exception('Import excel or csv error')
     else:
         dtable_io_logger.info('import excel or csv %s.%s to dtable success!' % (dtable_name, file_type))
@@ -443,10 +445,10 @@ def import_excel_csv_to_table(username, file_name, dtable_uuid, file_type, lang)
         parse_and_import_excel_csv_to_table(file_name, dtable_uuid, username, file_type, lang)
     except BaseSizeExceedsLimitError:
         raise Exception('Base size exceeds limit')
+    except ExcelFormatError:
+        raise Exception('Excel format error')
     except Exception as e:
         dtable_io_logger.exception('import excel or csv to table failed.  dtable_uuid: %s, file_name: %s ERROR: %s' % (dtable_uuid, file_name, e))
-        if str(e.args[0]) == 'Excel format error':
-            raise Exception('Excel format error')
         raise Exception('Import excel or csv error')
     else:
         dtable_io_logger.info('import excel or csv %s.%s to table success!' % (file_name, file_type))
@@ -473,10 +475,10 @@ def append_excel_csv_to_table(username, file_name, dtable_uuid, table_name, file
     dtable_io_logger.info('Start append excel or csv: %s.%s to table.' % (file_name, file_type))
     try:
         parse_and_append_excel_csv_to_table(username, file_name, dtable_uuid, table_name, file_type)
+    except ExcelFormatError:
+        raise Exception('Excel format error')
     except Exception as e:
         dtable_io_logger.exception('append excel or csv to table failed. dtable_uuid: %s, table_name: %s ERROR: %s' % (dtable_uuid, table_name, e))
-        if str(e.args[0]) == 'Excel format error':
-            raise Exception('Excel format error')
         raise Exception('Import excel or csv error')
     else:
         dtable_io_logger.info('append excel or csv %s.%s to table success!' % (file_name, file_type))

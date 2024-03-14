@@ -12,3 +12,8 @@ class BaseSizeExceedsLimitError(DTableIOException):
 
     def __str__(self):
         return "The base size exceeds the limits."
+
+
+class ExcelFormatError(DTableIOException):
+    def __str__(self):
+        return "Excel format error"
