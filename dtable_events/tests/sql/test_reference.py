@@ -1,3 +1,24 @@
+from datetime import timedelta, datetime
+def get_expected_sql_for_modifier(filter_modifier, column_name):
+    today = datetime.today()
+    week_day = today.isoweekday()
+    if filter_modifier == 'the_past_week':
+        start_date = today - timedelta(days=(week_day + 6))
+        end_date = today - timedelta(days=week_day)
+    elif filter_modifier == 'this_week':
+        start_date = today - timedelta(days=week_day - 1)
+        end_date = today + timedelta(days=7 - week_day)
+    elif filter_modifier == 'the_next_week':
+        start_date = today + timedelta(days=8 - week_day)
+        end_date = today + timedelta(days=14 - week_day)
+
+    start_date = start_date.strftime("%Y-%m-%d")
+    end_date = end_date.strftime("%Y-%m-%d")
+    expected_sql = "SELECT * FROM `Table1` WHERE `%s` >= '%s' and `%s` <= '%s' LIMIT 0, 100" % (column_name, start_date, column_name, end_date)
+    return expected_sql
+
+
+
 TEST_CONDITIONS = [
     # Text / Email / URL Column
     {
@@ -191,6 +212,39 @@ TEST_CONDITIONS = [
             "sorts":[],
         },
         "expected_sql": "SELECT * FROM `Table1` WHERE `Time2d` >= '2021-12-20' and `Time2d` < '2021-12-21' LIMIT 0, 100",
+        "by_group": False,
+    },
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'Time2d', 'filter_predicate': 'is_within', 'filter_term': '', 'filter_term_modifier':'this_week'}
+            ],
+            "filter_predicate": 'And',
+            "sorts":[],
+        },
+        "expected_sql": get_expected_sql_for_modifier('this_week', 'Time2d'),
+        "by_group": False,
+    },
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'Time2d', 'filter_predicate': 'is_within', 'filter_term': '', 'filter_term_modifier':'the_past_week'}
+            ],
+            "filter_predicate": 'And',
+            "sorts":[],
+        },
+        "expected_sql": get_expected_sql_for_modifier('the_past_week', 'Time2d'),
+        "by_group": False,
+    },
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'Time2d', 'filter_predicate': 'is_within', 'filter_term': '', 'filter_term_modifier':'the_next_week'}
+            ],
+            "filter_predicate": 'And',
+            "sorts":[],
+        },
+        "expected_sql": get_expected_sql_for_modifier('the_next_week', 'Time2d'),
         "by_group": False,
     },
     {
