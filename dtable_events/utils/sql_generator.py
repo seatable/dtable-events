@@ -689,7 +689,7 @@ class DateOperator(Operator):
         if self.is_need_filter_term() and not self.filter_term and self.filter_term != 0:
             return ''
         start_date, end_date = self._other_date()
-        if not (start_date, end_date):
+        if not (start_date, end_date ):
             return ""
         return "`%(column_name)s` >= '%(start_date)s' and `%(column_name)s` <= '%(end_date)s'" % ({
             "column_name": self.column_name,
@@ -1148,7 +1148,6 @@ class StatisticSQLGenerator(object):
         filter_conjunction = statistic.get('filter_conjunction', 'and')
         self.filter_conjunction = filter_conjunction.upper()
         self.filter_sql = self._filter_2_sql()
-        logger.info('generated filter...%s', self.filter_sql)
 
     def _get_column_by_key(self, column_key):
         return self.column_key_map.get(column_key, None)
