@@ -73,7 +73,7 @@ class ConvertPageTOPDFManager:
 
         # query rows
         row_ids_str = ', '.join(map(lambda row_id: f"'{row_id}'", step_row_ids))
-        sql = f"SELECT `_id`, `{target_column['name']}` FROM `{table_name}` WHERE _id IN ({row_ids_str})"
+        sql = f"SELECT `_id`, `{target_column['name']}` FROM `{table_name}` WHERE _id IN ({row_ids_str}) LIMIT {len(step_row_ids)}"
         try:
             rows, _ = dtable_db_api.query(sql)
         except Exception as e:
@@ -129,7 +129,7 @@ class ConvertPageTOPDFManager:
 
         # rows
         row_ids_str = ', '.join(map(lambda row_id: f"'{row_id}'", row_ids))
-        sql = f"SELECT _id FROM `{table['name']}` WHERE _id IN ({row_ids_str})"
+        sql = f"SELECT _id FROM `{table['name']}` WHERE _id IN ({row_ids_str}) LIMIT {len(row_ids)}"
         try:
             rows, _ = dtable_db_api.query(sql)
         except Exception as e:
