@@ -1218,6 +1218,7 @@ class SendEmailAction(BaseAction):
         self.column_blanks = []
         self.column_blanks_send_to = []
         self.column_blanks_copy_to = []
+        self.column_blank_reply_to = ''
         self.column_blanks_subject = []
         self.col_name_dict = {}
         self.repo_id = repo_id
@@ -1251,6 +1252,13 @@ class SendEmailAction(BaseAction):
             if res:
                 blanks.extend(res)
         self.column_blanks_copy_to = [blank for blank in blanks if blank in self.col_name_dict]
+
+    def init_notify_reply_to(self):
+        reply_to = self.send_info.get('reply_to')
+        blanks = []
+        blanks = re.findall(r'\{([^{]*?)\}', reply_to)
+        valid_blanks = [blank for blank in blanks if blank in self.col_name_dict]
+        self.column_blank_reply_to = valid_blanks[0] if valid_blanks else ''
 
     def init_notify_subject(self):
         subject = self.send_info.get('subject')
@@ -1287,6 +1295,7 @@ class SendEmailAction(BaseAction):
         self.init_notify_msg()
         self.init_notify_send_to()
         self.init_notify_copy_to()
+        self.init_notify_reply_to()
         self.init_notify_subject()
         self.init_notify_images()
 
@@ -1314,7 +1323,7 @@ class SendEmailAction(BaseAction):
                 for item in (row.get(blank) or []):
                     emails.extend(email2list(item))
                 return emails
-        return email2list(self.fill_msg_blanks(row, blank, blanks))
+        return email2list(self.fill_msg_blanks(row, '{%s}' % blank, blanks))
 
     def fill_msg_blanks_with_sql(self, row, text, blanks):
         col_name_dict = self.col_name_dict
@@ -1363,6 +1372,7 @@ class SendEmailAction(BaseAction):
         subject = self.send_info.get('subject', '')
         send_to_list = self.send_info.get('send_to', [])
         copy_to_list = self.send_info.get('copy_to', [])
+        reply_to = self.send_info.get('reply_to', '')
         attachment_list = self.send_info.get('attachment_list', [])
 
         if self.column_blanks:
@@ -1382,6 +1392,9 @@ class SendEmailAction(BaseAction):
                 for blank_email in blank_emails:
                     if blank_email not in copy_to_list:
                         copy_to_list.append(blank_email)
+        if self.column_blank_reply_to:
+            blank_emails = self.get_blank_emails(row, self.column_blank_reply_to, [self.column_blank_reply_to])
+            reply_to = blank_emails[0] if blank_emails else ''
 
         file_download_urls = self.get_file_download_urls(attachment_list, self.data['row'])
 
@@ -1400,6 +1413,7 @@ class SendEmailAction(BaseAction):
             'subject': subject,
             'send_to': [send_to for send_to in send_to_list if self.is_valid_email(send_to)],
             'copy_to': [copy_to for copy_to in copy_to_list if self.is_valid_email(copy_to)],
+            'reply_to': reply_to if self.is_valid_email(reply_to) else '',
             'file_download_urls': file_download_urls,
         })
         try:
@@ -1444,6 +1458,7 @@ class SendEmailAction(BaseAction):
             subject = send_info.get('subject', '')
             send_to_list = send_info.get('send_to', [])
             copy_to_list = send_info.get('copy_to', [])
+            reply_to = send_info.get('reply_to', '')
             attachment_list = send_info.get('attachment_list', [])
             if self.column_blanks:
                 if is_plain_text and msg:
@@ -1462,6 +1477,9 @@ class SendEmailAction(BaseAction):
                     for blank_email in blank_emails:
                         if blank_email not in copy_to_list:
                             copy_to_list.append(blank_email)
+            if self.column_blank_reply_to:
+                blank_emails = self.get_blank_emails(converted_row, self.column_blank_reply_to, [self.column_blank_reply_to])
+                reply_to = blank_emails[0] if blank_emails else ''
 
             file_download_urls = self.get_file_download_urls(attachment_list, row)
 
@@ -1480,6 +1498,7 @@ class SendEmailAction(BaseAction):
                 'subject': subject,
                 'send_to': [send_to for send_to in send_to_list if self.is_valid_email(send_to)],
                 'copy_to': [copy_to for copy_to in copy_to_list if self.is_valid_email(copy_to)],
+                'reply_to': reply_to if self.is_valid_email(reply_to) else '',
                 'file_download_urls': file_download_urls,
             })
 
@@ -3353,6 +3372,7 @@ class AutomationRule:
                     subject = action_info.get('subject', '')
                     send_to_list = email2list(action_info.get('send_to', ''))
                     copy_to_list = email2list(action_info.get('copy_to', ''))
+                    reply_to = action_info.get('reply_to', '')
                     attachment_list = email2list(action_info.get('attachments', ''))
                     repo_id = action_info.get('repo_id')
 
@@ -3363,6 +3383,7 @@ class AutomationRule:
                         'images_info': images_info,
                         'send_to': send_to_list,
                         'copy_to': copy_to_list,
+                        'reply_to': reply_to,
                         'subject': subject,
                         'attachment_list': attachment_list,
                     }
