@@ -1,7 +1,6 @@
 # simulate from https://github.com/seatable/dtable-ui-component/blob/master/src/index.js
 
 import logging
-from unittest import result
 
 from dateutil import parser
 
