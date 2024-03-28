@@ -1218,7 +1218,7 @@ class SendEmailAction(BaseAction):
         self.column_blanks = []
         self.column_blanks_send_to = []
         self.column_blanks_copy_to = []
-        self.column_blank_reply_to = ''
+        self.column_blanks_reply_to = ''
         self.column_blanks_subject = []
         self.col_name_dict = {}
         self.repo_id = repo_id
@@ -1255,10 +1255,8 @@ class SendEmailAction(BaseAction):
 
     def init_notify_reply_to(self):
         reply_to = self.send_info.get('reply_to')
-        blanks = []
         blanks = re.findall(r'\{([^{]*?)\}', reply_to)
-        valid_blanks = [blank for blank in blanks if blank in self.col_name_dict]
-        self.column_blank_reply_to = valid_blanks[0] if valid_blanks else ''
+        self.column_blanks_reply_to = [blank for blank in blanks if blank in self.col_name_dict]
 
     def init_notify_subject(self):
         subject = self.send_info.get('subject')
@@ -1307,23 +1305,6 @@ class SendEmailAction(BaseAction):
         col_name_dict = self.col_name_dict
         db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
         return fill_msg_blanks_with_converted_row(text, blanks, col_name_dict, row, db_session)
-
-    def get_blank_emails(self, row, blank, blanks):
-        col_name_dict = self.col_name_dict
-        column = col_name_dict.get(blank)
-        column_type = column['type']
-        column_data = column.get('data') or {}
-        result_type = column_data.get('result_type')
-        array_type = column_data.get('array_type')
-        if column_type == ColumnTypes.LINK_FORMULA and result_type == FormulaResultType.ARRAY:
-            if array_type == ColumnTypes.EMAIL and isinstance(row.get(blank), list):
-                return row.get(blank) or []
-            if array_type == ColumnTypes.TEXT and isinstance(row.get(blank), list):
-                emails = []
-                for item in (row.get(blank) or []):
-                    emails.extend(email2list(item))
-                return emails
-        return email2list(self.fill_msg_blanks(row, '{%s}' % blank, blanks))
 
     def fill_msg_blanks_with_sql(self, row, text, blanks):
         col_name_dict = self.col_name_dict
@@ -1381,20 +1362,15 @@ class SendEmailAction(BaseAction):
             if not is_plain_text and html_msg:
                 html_msg = self.fill_msg_blanks(row, html_msg, self.column_blanks)
         if self.column_blanks_send_to:
-            for blank in self.column_blanks_send_to:
-                blank_emails = self.get_blank_emails(row, blank, self.column_blanks_send_to)
-                for blank_email in blank_emails:
-                    if blank_email not in send_to_list:
-                        send_to_list.append(blank_email)
+            temp = [self.fill_msg_blanks(row, send_to, self.column_blanks_send_to) for send_to in send_to_list]
+            send_to_list = list(set([item.strip() for sublist in temp for item in sublist.split(',')]))
         if self.column_blanks_copy_to:
-            for blank in self.column_blanks_copy_to:
-                blank_emails = self.get_blank_emails(row, blank, self.column_blanks_copy_to)
-                for blank_email in blank_emails:
-                    if blank_email not in copy_to_list:
-                        copy_to_list.append(blank_email)
-        if self.column_blank_reply_to:
-            blank_emails = self.get_blank_emails(row, self.column_blank_reply_to, [self.column_blank_reply_to])
-            reply_to = blank_emails[0] if blank_emails else ''
+            temp = [self.fill_msg_blanks(row, copy_to, self.column_blanks_copy_to) for copy_to in copy_to_list]
+            copy_to_list = list(set([item.strip() for sublist in temp for item in sublist.split(',')]))
+        if self.column_blanks_reply_to:
+            temp = [self.fill_msg_blanks(row, reply_to, self.column_blanks_reply_to)]
+            reply_to_list = list(set([item.strip() for sublist in temp for item in sublist.split(',')]))
+            reply_to = next(filter(lambda temp_reply_to: is_valid_email(temp_reply_to), reply_to_list), '')
 
         file_download_urls = self.get_file_download_urls(attachment_list, self.data['row'])
 
@@ -1466,20 +1442,15 @@ class SendEmailAction(BaseAction):
                 if not is_plain_text and html_msg:
                     html_msg = self.fill_msg_blanks_with_sql(row, html_msg, self.column_blanks)
             if self.column_blanks_send_to:
-                for blank in self.column_blanks_send_to:
-                    blank_emails = self.get_blank_emails(converted_row, blank, self.column_blanks_send_to)
-                    for blank_email in blank_emails:
-                        if blank_email not in send_to_list:
-                            send_to_list.append(blank_email)
+                temp = [self.fill_msg_blanks_with_sql(row, send_to, self.column_blanks_send_to) for send_to in send_to_list]
+                send_to_list = list(set([item.strip() for sublist in temp for item in sublist.split(',')]))
             if self.column_blanks_copy_to:
-                for blank in self.column_blanks_copy_to:
-                    blank_emails = self.get_blank_emails(converted_row, blank, self.column_blanks_copy_to)
-                    for blank_email in blank_emails:
-                        if blank_email not in copy_to_list:
-                            copy_to_list.append(blank_email)
-            if self.column_blank_reply_to:
-                blank_emails = self.get_blank_emails(converted_row, self.column_blank_reply_to, [self.column_blank_reply_to])
-                reply_to = blank_emails[0] if blank_emails else ''
+                temp = [self.fill_msg_blanks_with_sql(row, copy_to, self.column_blanks_copy_to) for copy_to in copy_to_list]
+                copy_to_list = list(set([item.strip() for sublist in temp for item in sublist.split(',')]))
+            if self.column_blanks_reply_to:
+                temp = [self.fill_msg_blanks_with_sql(row, reply_to, self.column_blanks_reply_to)]
+                reply_to_list = list(set([item.strip() for sublist in temp for item in sublist.split(',')]))
+                reply_to = next(filter(lambda temp_reply_to: is_valid_email(temp_reply_to), reply_to_list), '')
 
             file_download_urls = self.get_file_download_urls(attachment_list, row)
 

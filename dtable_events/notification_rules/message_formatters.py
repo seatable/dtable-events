@@ -6,7 +6,7 @@ from unittest import result
 from dateutil import parser
 
 from dtable_events.notification_rules.utils import get_nickname_by_usernames
-from dtable_events.utils.constants import ARRAY_FORMAL_COLUMNS, DURATION_ZERO_DISPLAY, SIMPLE_CELL_FORMULA_RESULTS, ColumnTypes, DurationFormatsType, FormulaResultType
+from dtable_events.utils.constants import ARRAY_FORMAL_COLUMNS, DURATION_ZERO_DISPLAY, ColumnTypes, DurationFormatsType, FormulaResultType
 
 
 logger = logging.getLogger(__name__)
@@ -38,12 +38,12 @@ class CheckboxMessageFormatter(BaseMessageFormatter):
 
 class ImageMessageFormatter(BaseMessageFormatter):
 
-    EMPTY_MESSAGE = '[]'
+    EMPTY_MESSAGE = ''
 
     def format_message(self, value):
         if not isinstance(value, list) or not value:
             return self.format_empty_message()
-        return '[%s]' % ', '.join([str(v) for v in value])
+        return ', '.join([str(v) for v in value])
 
 
 class LongTextMessageFormatter(BaseMessageFormatter):
@@ -76,7 +76,7 @@ class SingleSelectMessageFormatter(BaseMessageFormatter):
 
 class MultipleSelectFormatter(BaseMessageFormatter):
 
-    EMPTY_MESSAGE = '[]'
+    EMPTY_MESSAGE = ''
 
     def format_message(self, value):
         if not value:
@@ -89,12 +89,12 @@ class MultipleSelectFormatter(BaseMessageFormatter):
             for option in options:
                 if option['id'] == v:
                     real_values.append(option['name'])
-        return '[%s]' % ', '.join(real_values)
+        return ', '.join(real_values)
 
 
 class FileMessageFormatter(BaseMessageFormatter):
 
-    EMPTY_MESSAGE = '[]'
+    EMPTY_MESSAGE = ''
 
     def format_message(self, value):
         if not value:
@@ -106,12 +106,12 @@ class FileMessageFormatter(BaseMessageFormatter):
             if not isinstance(file, dict):
                 continue
             real_values.append(str(file.get('name', '')))
-        return '[%s]' % ', '.join(real_values)
+        return ', '.join(real_values)
 
 
 class LinkMessageFormatter(BaseMessageFormatter):
 
-    EMPTY_MESSAGE = '[]'
+    EMPTY_MESSAGE = ''
 
     def format_message(self, value, db_session):
         if not value:
@@ -127,12 +127,12 @@ class LinkMessageFormatter(BaseMessageFormatter):
                 real_values.append(str(v))
                 continue
             real_values.append(str(v.get('display_value') or ''))
-        return '[%s]' % ', '.join(real_values)
+        return ', '.join(real_values)
 
 
 class CollaboratorMessageFormatter(BaseMessageFormatter):
 
-    EMPTY_MESSAGE = '[]'
+    EMPTY_MESSAGE = ''
 
     def format_message(self, value, db_session):
         if not value:
@@ -141,7 +141,7 @@ class CollaboratorMessageFormatter(BaseMessageFormatter):
             value = [value]
         names_dict = get_nickname_by_usernames(value, db_session)
         names = [names_dict.get(str(user)) for user in value if user in names_dict]
-        return '%s' % ', '.join(names)
+        return ', '.join(names)
 
 
 class NumberMessageFormatter(BaseMessageFormatter):
@@ -347,17 +347,17 @@ class FormulaMessageFormatter(BaseMessageFormatter):
             return CheckboxMessageFormatter({'data': column_data}).format_message(value)
         elif result_type == FormulaResultType.ARRAY:
             if not isinstance(value, list):
-                return '[]'
+                return ''
             if array_type in [
                 ColumnTypes.LINK,
                 ColumnTypes.LINK_FORMULA,
                 ColumnTypes.FORMULA
             ]:
-                return '[]'
+                return ''
             if array_type in ARRAY_FORMAL_COLUMNS:
                 formatter_class = formatter_map.get(array_type)
                 if not formatter_class:
-                    return '[]'
+                    return ''
                 formatter_params = create_formatter_params(array_type, value=list(set(flat(value))), db_session=db_session)
                 return formatter_class({'data': array_data}).format_message(**formatter_params)
             if array_type == FormulaResultType.STRING:
@@ -366,7 +366,7 @@ class FormulaMessageFormatter(BaseMessageFormatter):
                 array_type = ColumnTypes.CHECKBOX
             formatter_class = formatter_map.get(array_type)
             if not formatter_class:
-                    return '[]'
+                    return ''
             real_values = []
             for v in value:
                 formatter_params = create_formatter_params(array_type, value=v, db_session=db_session)
@@ -374,9 +374,9 @@ class FormulaMessageFormatter(BaseMessageFormatter):
                 if not tmp:
                     continue
                 real_values.append(tmp)
-            return '[%s]' % ', '.join(real_values)
+            return ', '.join(real_values)
         else:
-            return '[]'
+            return ''
 
 
 class LinkFormulaMessageFormatter(FormulaMessageFormatter):
