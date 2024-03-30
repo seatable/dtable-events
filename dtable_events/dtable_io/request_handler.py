@@ -210,7 +210,7 @@ def add_import_excel_csv_task():
     dtable_uuid = context.get('dtable_uuid')
     dtable_name = context.get('dtable_name')
     lang = context.get('lang')
-    included_tables = context.get('included_tables', [])
+    included_tables = context.get('included_tables', {})
 
     try:
         task_id = task_manager.add_import_excel_csv_task(
@@ -245,7 +245,7 @@ def add_import_excel_csv_add_table_task():
     dtable_uuid = context.get('dtable_uuid')
     dtable_name = context.get('dtable_name')
     lang = context.get('lang')
-    included_tables = context.get('included_tables', [])
+    included_tables = context.get('included_tables', {})
 
     try:
         task_id = task_manager.add_import_excel_csv_add_table_task(

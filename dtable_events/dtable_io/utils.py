@@ -1649,3 +1649,35 @@ def get_no_duplicate_obj_name(obj_name, exist_obj_names):
                 return new_name
             else:
                 i += 1
+
+
+def filter_imported_tables(tables, included_tables):
+    for table in tables:
+        table_name = table.get('name')
+        columns = table.get('columns')
+        rows = table.get('rows')
+        included_columns = included_tables.get(table_name)
+
+        origin_columns_set = {column.get('name') for column in columns}
+        excluded_columns_set = origin_columns_set - set(included_columns)
+        if excluded_columns_set:
+            new_columns = []
+            for column in columns:
+                column_name = column.get('name')
+                if column_name in excluded_columns_set:
+                    continue
+                new_columns.append(column)
+            if not new_columns:
+                raise Exception('column can not be empty.')
+            table['columns'] = new_columns
+
+            new_rows = []
+            for row in rows:
+                for column_name in excluded_columns_set:
+                    row.pop(column_name, None)
+                # filter empty column
+                if not row:
+                    continue
+                new_rows.append(row)
+            table['rows'] = new_rows
+    return tables

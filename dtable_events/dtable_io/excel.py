@@ -17,7 +17,7 @@ from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.dtable_io.utils import clear_tmp_file, save_file_by_path, get_csv_file, \
     upload_excel_json_add_table_to_dtable_server, append_rows_by_dtable_server, get_related_nicknames_from_dtable, \
     extract_select_options, upload_excel_json_to_dtable_server, get_rows_from_dtable_db, update_rows_by_dtable_db, \
-    get_nicknames_from_dtable, get_table_names_by_dtable_server, get_non_duplicated_name
+    get_nicknames_from_dtable, get_table_names_by_dtable_server, get_non_duplicated_name, filter_imported_tables
 from dtable_events.utils.exception import ExcelFormatError
 
 timezone = TIME_ZONE
@@ -639,6 +639,7 @@ def import_excel_csv_by_dtable_server(username, repo_id, dtable_uuid, dtable_nam
     clear_tmp_file(tmp_file_path)
 
     tables = [table for table in json.loads(json_file) if table.get('name') in included_tables]
+    tables = filter_imported_tables(tables, included_tables)
     if not tables:
         raise Exception('tables invalid.')
     json_file = json.dumps(tables)
@@ -657,6 +658,7 @@ def import_excel_csv_add_table_by_dtable_server(username, dtable_uuid, dtable_na
     clear_tmp_file(tmp_file_path)
 
     tables = [table for table in json.loads(json_file) if table.get('name') in included_tables]
+    tables = filter_imported_tables(tables, included_tables)
     if not tables:
         raise Exception('tables invalid.')
     json_file = json.dumps(tables)
