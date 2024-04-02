@@ -1542,7 +1542,7 @@ class RunPythonScriptAction(BaseAction):
         else:
             return True
         try:
-            resp = requests.get(permission_url, headers=headers, json=json_data)
+            resp = requests.get(permission_url, headers=headers, json=json_data, timeout=30)
             if resp.status_code != 200:
                 logger.error('check run script permission error response: %s', resp.status_code)
                 return False
@@ -1576,7 +1576,7 @@ class RunPythonScriptAction(BaseAction):
         url = DTABLE_WEB_SERVICE_URL.strip('/') + '/api/v2.1/scripts-running-limit/'
         headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
         try:
-            resp = requests.get(url, headers=headers, params=params)
+            resp = requests.get(url, headers=headers, params=params, timeout=30)
             if resp.status_code != 200:
                 logger.error('get scripts running limit error response: %s', resp.status_code)
                 return 0
@@ -2321,7 +2321,7 @@ class TriggerWorkflowAction(BaseAction):
         logger.debug('trigger workflow data: %s', data)
         try:
             header_token = 'Token ' + jwt.encode({'token': self.token}, DTABLE_PRIVATE_KEY, 'HS256')
-            resp = requests.post(internal_submit_workflow_url, data=data, headers={'Authorization': header_token})
+            resp = requests.post(internal_submit_workflow_url, data=data, headers={'Authorization': header_token}, timeout=30)
             if resp.status_code != 200:
                 logger.error('rule: %s row_id: %s new workflow: %s task error status code: %s content: %s', self.auto_rule.rule_id, row_id, self.token, resp.status_code, resp.content)
             self.auto_rule.set_done_actions()

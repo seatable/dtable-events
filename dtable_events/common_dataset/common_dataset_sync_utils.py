@@ -8,7 +8,7 @@ from sqlalchemy import text
 from dateutil import parser
 from sqlalchemy.orm.session import sessionmaker
 
-from dtable_events.utils.sql_generator import BaseSQLGenerator
+from dtable_events.utils.sql_generator import BaseSQLGenerator, SQLGeneratorOptionInvalidError, ColumnFilterInvalidError
 from dtable_events.app.config import INNER_DTABLE_DB_URL
 from dtable_events.utils import get_inner_dtable_server_url, uuid_str_to_36_chars
 from dtable_events.utils.constants import ColumnTypes
@@ -798,6 +798,22 @@ def get_dataset_data(src_dtable_uuid, src_table, src_view_id, server_only=True):
         sql_generator = BaseSQLGenerator(src_table['name'], src_table['columns'], filter_conditions=filter_conditions)
         filter_clause = sql_generator._filter2sql()
         sort_clause = sql_generator._sort2sql()
+    except ColumnFilterInvalidError as e:
+        logger.warning('src dtable: %s src table: %s src view: %s filter_conditions: %s to sql ColumnFilterInvalidError: %s', src_dtable_uuid, src_table['name'], src_view['_id'], filter_conditions, e)
+        return None, {
+            'dst_table_id': None,
+            'error_msg': 'generate src view sql error: %s' % e,
+            'error_type': 'wrong_filter_in_filters',
+            'task_status_code': 400
+        }
+    except SQLGeneratorOptionInvalidError as e:
+        logger.warning('src dtable: %s src table: %s src view: %s filter_conditions: %s to sql option invalid error: %s', src_dtable_uuid, src_table['name'], src_view['_id'], filter_conditions, e)
+        return None, {
+            'dst_table_id': None,
+            'error_msg': 'generate src view sql error: %s' % e,
+            'error_type': 'wrong_filter_in_filters',
+            'task_status_code': 400
+        }
     except Exception as e:
         logger.exception('src dtable: %s src table: %s src view: %s filter_conditions: %s to sql error: %s', src_dtable_uuid, src_table['name'], src_view['_id'], filter_conditions, e)
         return None, {
@@ -1087,6 +1103,8 @@ def batch_sync_common_dataset(dataset_id, dataset_syncs, db_session, is_force_sy
     except Exception as e:
         logging.exception('request dtable: %s table: %s view: %s data error: %s', src_dtable_uuid, src_table_id, src_view_id, e)
     if error:
+        if error.get('task_status_code') == 400 and error.get('error_type') == 'wrong_filter_in_filters':
+            set_common_dataset_syncs_invalid(sync_ids, db_session)
         logging.error('request dtable: %s table: %s view: %s data error: %s', src_dtable_uuid, src_table_id, src_view_id, error)
         return
     for dataset_sync in dataset_syncs:
