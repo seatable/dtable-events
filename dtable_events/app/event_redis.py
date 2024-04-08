@@ -69,25 +69,13 @@ class RedisCache(object):
         self._redis_client = RedisClient(config)
 
     def get(self, key):
-        try:
-            return self._redis_client.get(key)
-        except Exception as e:
-            logger.error('redis get key: %s error: %s', key, e)
-            return None
+        return self._redis_client.get(key)
 
     def set(self, key, value, timeout=None):
-        try:
-            return self._redis_client.set(key, value, timeout=timeout)
-        except Exception as e:
-            logger.error('redis set key: %s error: %s', key, e)
-            return None
+        return self._redis_client.set(key, value, timeout=timeout)
 
     def delete(self, key):
-        try:
-            return self._redis_client.delete(key)
-        except Exception as e:
-            logger.error('redis delete key: %s error: %s', key, e)
-            return None
+        return self._redis_client.delete(key)
 
 
 redis_cache = RedisCache()
