@@ -34,20 +34,14 @@ class RedisClient(object):
         if config.has_option('REDIS', 'password'):
             self._password = config.get('REDIS', 'password')
 
-    def auth_check(self):
-        try:
-            return self.connection.ping()
-        except redis.AuthenticationError as e:
-            logger.critical('connect to redis auth error: %s', e)
-            return None
-
     def get_subscriber(self, channel_name):
-        if not self.auth_check():
-            raise redis.AuthenticationError('redis username or password invalid')
         while True:
             try:
                 subscriber = self.connection.pubsub(ignore_subscribe_messages=True)
                 subscriber.subscribe(channel_name)
+            except redis.AuthenticationError as e:
+                logger.critical('connect to redis auth error: %s', e)
+                raise e
             except Exception as e:
                 logger.error('redis pubsub failed. {} retry after 10s'.format(e))
                 time.sleep(10)
@@ -55,25 +49,28 @@ class RedisClient(object):
                 return subscriber
 
     def get(self, key):
-        if not self.auth_check():
-            logger.error('redis username or password invalid')
+        try:
+            return self.connection.get(key)
+        except Exception as e:
+            logger.error('redis get key: %s error: %s', key, e)
             return None
-        return self.connection.get(key)
 
     def set(self, key, value, timeout=None):
-        if not self.auth_check():
-            logger.error('redis username or password invalid')
+        try:
+            if not timeout:
+                return self.connection.set(key, value)
+            else:
+                return self.connection.setex(key, timeout, value)
+        except Exception as e:
+            logger.error('redis set key: %s error: %s', key, e)
             return None
-        if not timeout:
-            return self.connection.set(key, value)
-        else:
-            return self.connection.setex(key, timeout, value)
 
     def delete(self, key):
-        if not self.auth_check():
-            logger.error('redis username or password invalid')
+        try:
+            return self.connection.delete(key)
+        except Exception as e:
+            logger.error('redis delete key: %s error: %s', key, e)
             return None
-        return self.connection.delete(key)
 
 
 class RedisCache(object):
