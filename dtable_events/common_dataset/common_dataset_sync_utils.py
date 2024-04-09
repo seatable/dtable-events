@@ -241,7 +241,9 @@ def generate_synced_columns(src_columns, dst_columns=None):
             to_be_updated_columns.append(dst_col)
         else:
             if dst_column_name_dict.get(col.get('name')):
-                return None, None, 'Column %s exists' % (col.get('name'),)
+                column_name = col.get('name')
+                err_msg = f"column {column_name} exists"
+                return None, None, err_msg
             to_be_appended_columns.append(col)
     return to_be_updated_columns, to_be_appended_columns, None
 
