@@ -231,7 +231,7 @@ class DTableServerAPI(object):
         response = requests.post(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
-    def append_row(self, table_name, row_data, apply_default=False):
+    def append_row(self, table_name, row_data, apply_default=None):
         logger.debug('append row table_name: %s row_data: %s', table_name, row_data)
         url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/rows/?from=dtable_events'
         json_data = {
