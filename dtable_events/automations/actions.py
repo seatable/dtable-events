@@ -2204,7 +2204,7 @@ class AddRecordToOtherTableAction(BaseAction):
             return
 
         try:
-            row = self.auto_rule.dtable_server_api.append_row(self.get_table_name(self.dst_table_id), self.row_data['row'])
+            row = self.auto_rule.dtable_server_api.append_row(self.get_table_name(self.dst_table_id), self.row_data['row'], apply_default=True)
         except Exception as e:
             logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
