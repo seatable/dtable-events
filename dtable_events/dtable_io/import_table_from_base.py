@@ -191,7 +191,6 @@ def generate_column(src_column):
         column['column_data'] = column_data
     return column
 
-
 def import_table_from_base(context):
     """import table from base
     """
@@ -285,6 +284,8 @@ def import_table_from_base(context):
             'lang': lang,
             'table_name': dst_table_name,
             'columns': dst_columns,
+            'views' : src_table.get('views', []),
+            'view_structure' : src_table.get('view_structure', {})
         }
         try:
             resp = requests.post(url, headers=dst_headers, json=data, timeout=180)
