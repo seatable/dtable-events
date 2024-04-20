@@ -233,9 +233,9 @@ class DateMessageFormatter(BaseMessageFormatter):
             value = datetime_obj.strftime('%Y-%m-%d')
         elif format == 'YYYY-MM-DD HH:mm':
             value = datetime_obj.strftime('%Y-%m-%d %H:%M')
-        elif format == 'DD.MM.YY':
+        elif format == 'DD.MM.YYYY':
             value = datetime_obj.strftime('%d.%m.%Y')
-        elif format == 'DD.MM.YY HH:mm':
+        elif format == 'DD.MM.YYYY HH:mm':
             value = datetime_obj.strftime('%d.%m.%Y %H:%M')
         else:
             value = datetime_obj.strftime('%Y-%m-%d')
