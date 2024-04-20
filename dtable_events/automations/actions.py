@@ -1350,16 +1350,16 @@ class SendEmailAction(BaseAction):
             'reply_to': reply_to if self.is_valid_email(reply_to) else '',
             'file_download_urls': file_download_urls,
         })
-        logger.info('send_info: %s', send_info)
-        # try:
-        #     send_email_msg(
-        #         auth_info=self.auth_info,
-        #         send_info=send_info,
-        #         username='automation-rules',  # username send by automation rules,
-        #         db_session=self.auto_rule.db_session
-        #     )
-        # except Exception as e:
-        #     logger.error('send email error: %s', e)
+        logger.debug('send_info: %s', send_info)
+        try:
+            send_email_msg(
+                auth_info=self.auth_info,
+                send_info=send_info,
+                username='automation-rules',  # username send by automation rules,
+                db_session=self.auto_rule.db_session
+            )
+        except Exception as e:
+            logger.error('send email error: %s', e)
 
     def cron_notify(self):
         send_info = deepcopy(self.send_info)
@@ -1431,21 +1431,21 @@ class SendEmailAction(BaseAction):
                 'reply_to': reply_to if self.is_valid_email(reply_to) else '',
                 'file_download_urls': file_download_urls,
             })
-            logger.info('send_info: %s', send_info)
+            logger.debug('send_info: %s', send_info)
 
             send_info_list.append(send_info)
 
-        # step = 10
-        # for i in range(0, len(send_info_list), step):
-        #     try:
-        #         batch_send_email_msg(
-        #             auth_info=self.auth_info,
-        #             send_info_list=send_info_list[i: i+step],
-        #             username='automation-rules',  # username send by automation rules,
-        #             db_session=self.auto_rule.db_session
-        #         )
-        #     except Exception as e:
-        #         logger.error('batch send email error: %s', e)
+        step = 10
+        for i in range(0, len(send_info_list), step):
+            try:
+                batch_send_email_msg(
+                    auth_info=self.auth_info,
+                    send_info_list=send_info_list[i: i+step],
+                    username='automation-rules',  # username send by automation rules,
+                    db_session=self.auto_rule.db_session
+                )
+            except Exception as e:
+                logger.error('batch send email error: %s', e)
 
     def do_action(self):
         if not self.auto_rule.current_valid:
