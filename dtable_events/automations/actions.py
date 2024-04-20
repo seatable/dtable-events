@@ -22,8 +22,7 @@ from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY,
     SEATABLE_FAAS_AUTH_TOKEN, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL
 from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg, batch_send_email_msg
 from dtable_events.page_design.manager import conver_page_to_pdf_manager
-from dtable_events.notification_rules.notification_rules_utils import fill_msg_blanks_with_converted_row, \
-    send_notification, fill_msg_blanks_with_sql_row
+from dtable_events.notification_rules.notification_rules_utils import send_notification, fill_msg_blanks_with_sql_row
 from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url, \
     normalize_file_path, gen_file_get_url, gen_random_option
 from dtable_events.utils.constants import ColumnTypes
@@ -322,19 +321,13 @@ class UpdateAction(BaseAction):
         if format_length == 1:
             return cur_datetime_offset.strftime("%Y-%m-%d")
 
-    def fill_msg_blanks(self, row, text, blanks):
-        col_name_dict = self.col_name_dict
-        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks_with_converted_row(text, blanks, col_name_dict, row, db_session)
-
-    
     def fill_msg_blanks_with_sql(self, row, text, blanks):
         col_name_dict = self.col_name_dict
-        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
+        db_session = self.auto_rule.db_session
         return fill_msg_blanks_with_sql_row(text, blanks, col_name_dict, row, db_session)
 
 
-    def formate_update_datas(self, converted_row, row, fill_msg_blank_func):
+    def format_update_datas(self, converted_row, row, fill_msg_blank_func):
         src_row = converted_row
         # filter columns in view and type of column is in VALID_COLUMN_TYPES
         filtered_updates = {}
@@ -460,12 +453,15 @@ class UpdateAction(BaseAction):
         self.col_key_dict = {col.get('key'):  col for col in self.auto_rule.table_info['columns']}
         if not self.data:
             return None
-        src_row = self.data.get('converted_row', None)
-        if not src_row:
+        sql_row = self.auto_rule.get_sql_row()
+        if not sql_row:
             return None
-        filtered_updates = self.formate_update_datas(src_row, src_row, self.fill_msg_blanks)
+        converted_row = {self.col_key_dict.get(key).get('name') if self.col_key_dict.get(key) else key:
+                         self.parse_column_value(self.col_key_dict.get(key), sql_row.get(key)) if self.col_key_dict.get(key) else sql_row.get(key)
+                         for key in sql_row}
+        filtered_updates = self.format_update_datas(converted_row, converted_row, self.fill_msg_blanks_with_sql)
         self.update_data['row'] = filtered_updates
-        self.update_data['row_id'] = src_row.get('_id')
+        self.update_data['row_id'] = sql_row.get('_id')
 
     def can_do_action(self):
         if not self.update_data.get('row') or not self.update_data.get('row_id'):
@@ -501,7 +497,7 @@ class UpdateAction(BaseAction):
                              self.parse_column_value(self.col_key_dict.get(key), row.get(key)) if self.col_key_dict.get(key) else row.get(key)
                              for key in row}
             batch_update_list.append({
-                'row': self.formate_update_datas(converted_row, row, self.fill_msg_blanks_with_sql),
+                'row': self.format_update_datas(converted_row, row, self.fill_msg_blanks_with_sql),
                 'row_id': row.get('_id')
             })
         table_name = self.auto_rule.table_info['name']
@@ -713,23 +709,18 @@ class NotifyAction(BaseAction):
         self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
         self.column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
 
-    def fill_msg_blanks(self, row):
-        msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
-        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, row, db_session)
-
     def fill_msg_blanks_with_sql(self, row):
         msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
-        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
+        db_session = self.auto_rule.db_session
         return fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, row, db_session)
 
     def per_update_notify(self):
-        dtable_uuid, row, raw_row = self.auto_rule.dtable_uuid, self.data['converted_row'], self.data['row']
+        dtable_uuid, sql_row = self.auto_rule.dtable_uuid, self.auto_rule.get_sql_row()
         table_id, view_id = self.auto_rule.table_id, self.auto_rule.view_id
 
         msg = self.msg
         if self.column_blanks:
-            msg = self.fill_msg_blanks(row)
+            msg = self.fill_msg_blanks_with_sql(sql_row)
 
         detail = {
             'table_id': table_id,
@@ -738,7 +729,7 @@ class NotifyAction(BaseAction):
             'rule_id': self.auto_rule.rule_id,
             'rule_name': self.auto_rule.rule_name,
             'msg': msg,
-            'row_id_list': [row['_id']],
+            'row_id_list': [sql_row['_id']],
         }
 
         user_msg_list = []
@@ -746,8 +737,7 @@ class NotifyAction(BaseAction):
         if self.users_column_key:
             user_column = self.get_user_column_by_key()
             if user_column:
-                users_column_name = user_column.get('name')
-                users_from_column = row.get(users_column_name, [])
+                users_from_column = sql_row.get(user_column['key'], [])
                 if not users_from_column:
                     users_from_column = []
                 if not isinstance(users_from_column, list):
@@ -801,9 +791,6 @@ class NotifyAction(BaseAction):
 
         user_msg_list = []
         for row in rows_data:
-            converted_row = {col_key_dict.get(key).get('name') if col_key_dict.get(key) else key:
-                             self.parse_column_value(col_key_dict.get(key), row.get(key)) if col_key_dict.get(key) else row.get(key)
-                             for key in row}
             msg = self.msg
             if self.column_blanks:
                 msg = self.fill_msg_blanks_with_sql(row)
@@ -815,15 +802,14 @@ class NotifyAction(BaseAction):
                 'rule_id': self.auto_rule.rule_id,
                 'rule_name': self.auto_rule.rule_name,
                 'msg': msg,
-                'row_id_list': [converted_row['_id']],
+                'row_id_list': [row['_id']],
             }
 
             users = self.users
             if self.users_column_key:
                 user_column = self.get_user_column_by_key()
                 if user_column:
-                    users_column_name = user_column.get('name')
-                    users_from_column = converted_row.get(users_column_name, [])
+                    users_from_column = row.get(user_column['key'], [])
                     if not users_from_column:
                         users_from_column = []
                     if not isinstance(users_from_column, list):
@@ -903,23 +889,18 @@ class AppNotifyAction(BaseAction):
         self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
         self.column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
 
-    def fill_msg_blanks(self, row):
-        msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
-        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, row, db_session)
-
     def fill_msg_blanks_with_sql(self, row):
         msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
-        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
+        db_session = self.auto_rule.db_session
         return fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, row, db_session)
 
     def per_update_notify(self):
-        dtable_uuid, row, raw_row = self.auto_rule.dtable_uuid, self.data['converted_row'], self.data['row']
+        sql_row = self.auto_rule.get_sql_row()
         table_id, view_id = self.auto_rule.table_id, self.auto_rule.view_id
 
         msg = self.msg
         if self.column_blanks:
-            msg = self.fill_msg_blanks(row)
+            msg = self.fill_msg_blanks_with_sql(sql_row)
 
         detail = {
             'table_id': table_id,
@@ -928,7 +909,7 @@ class AppNotifyAction(BaseAction):
             'rule_id': self.auto_rule.rule_id,
             'rule_name': self.auto_rule.rule_name,
             'msg': msg,
-            'row_id_list': [row['_id']],
+            'row_id_list': [sql_row['_id']],
         }
 
         user_msg_list = []
@@ -936,8 +917,7 @@ class AppNotifyAction(BaseAction):
         if self.users_column_key:
             user_column = self.get_user_column_by_key()
             if user_column:
-                users_column_name = user_column.get('name')
-                users_from_column = row.get(users_column_name, [])
+                users_from_column = sql_row.get(user_column['key'], [])
                 if not users_from_column:
                     users_from_column = []
                 if not isinstance(users_from_column, list):
@@ -960,7 +940,6 @@ class AppNotifyAction(BaseAction):
             logger.error('send users: %s notifications error: %s', e)
 
     def cron_notify(self):
-        dtable_uuid = self.auto_rule.dtable_uuid
         table_id, view_id = self.auto_rule.table_id, self.auto_rule.view_id
         detail = {
             'table_id': table_id,
@@ -985,16 +964,11 @@ class AppNotifyAction(BaseAction):
 
     def condition_cron_notify(self):
         table_id, view_id = self.auto_rule.table_id, self.auto_rule.view_id
-        dtable_uuid = self.auto_rule.dtable_uuid
 
         rows_data = self.auto_rule.get_trigger_conditions_rows(self, warning_rows=NOTIFICATION_CONDITION_ROWS_LIMIT)[:NOTIFICATION_CONDITION_ROWS_LIMIT]
-        col_key_dict = {col.get('key'): col for col in self.auto_rule.view_columns}
 
         user_msg_list = []
         for row in rows_data:
-            converted_row = {col_key_dict.get(key).get('name') if col_key_dict.get(key) else key:
-                             self.parse_column_value(col_key_dict.get(key), row.get(key)) if col_key_dict.get(key) else row.get(key)
-                             for key in row}
             msg = self.msg
             if self.column_blanks:
                 msg = self.fill_msg_blanks_with_sql(row)
@@ -1006,15 +980,14 @@ class AppNotifyAction(BaseAction):
                 'rule_id': self.auto_rule.rule_id,
                 'rule_name': self.auto_rule.rule_name,
                 'msg': msg,
-                'row_id_list': [converted_row['_id']],
+                'row_id_list': [row['_id']],
             }
 
             users = self.users
             if self.users_column_key:
                 user_column = self.get_user_column_by_key()
                 if user_column:
-                    users_column_name = user_column.get('name')
-                    users_from_column = converted_row.get(users_column_name, [])
+                    users_from_column = row.get(user_column['key'], [])
                     if not users_from_column:
                         users_from_column = []
                     if not isinstance(users_from_column, list):
@@ -1070,21 +1043,16 @@ class SendWechatAction(BaseAction):
         self.column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
         self.webhook_url = account_dict.get('detail', {}).get('webhook_url', '')
 
-    def fill_msg_blanks(self, row):
-        msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
-        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, row, db_session)
-
     def fill_msg_blanks_with_sql(self, row):
         msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
-        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
+        db_session = self.auto_rule.db_session
         return fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, row, db_session)
 
     def per_update_notify(self):
-        row = self.data['converted_row']
+        sql_row = self.auto_rule.get_sql_row()
         msg = self.msg
         if self.column_blanks:
-            msg = self.fill_msg_blanks(row)
+            msg = self.fill_msg_blanks_with_sql(sql_row)
         try:
             send_wechat_msg(self.webhook_url, msg, self.msg_type)
         except Exception as e:
@@ -1146,21 +1114,16 @@ class SendDingtalkAction(BaseAction):
         self.column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
         self.webhook_url = account_dict.get('detail', {}).get('webhook_url', '')
 
-    def fill_msg_blanks(self, row):
-        msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
-        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, row, db_session)
-
     def fill_msg_blanks_with_sql(self, row):
         msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
-        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
+        db_session = self.auto_rule.db_session
         return fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, row, db_session)
 
     def per_update_notify(self):
-        row = self.data['converted_row']
+        sql_row = self.auto_rule.get_sql_row()
         msg = self.msg
         if self.column_blanks:
-            msg = self.fill_msg_blanks(row)
+            msg = self.fill_msg_blanks(sql_row)
         try:
             send_dingtalk_msg(self.webhook_url, msg, self.msg_type, self.msg_title)
         except Exception as e:
@@ -1301,14 +1264,9 @@ class SendEmailAction(BaseAction):
 
         self.auth_info = account_detail
 
-    def fill_msg_blanks(self, row, text, blanks):
-        col_name_dict = self.col_name_dict
-        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks_with_converted_row(text, blanks, col_name_dict, row, db_session)
-
     def fill_msg_blanks_with_sql(self, row, text, blanks):
         col_name_dict = self.col_name_dict
-        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
+        db_session = self.auto_rule.db_session
         return fill_msg_blanks_with_sql_row(text, blanks, col_name_dict, row, db_session)
 
     def get_file_down_url(self, file_url):
@@ -1346,7 +1304,7 @@ class SendEmailAction(BaseAction):
         return file_download_urls_dict
 
     def per_update_notify(self):
-        row = self.data['converted_row']
+        sql_row = self.auto_rule.get_sql_row()
         msg = self.send_info.get('message', '')
         is_plain_text = self.send_info.get('is_plain_text', True)
         html_msg = self.send_info.get('html_message', '')
@@ -1358,24 +1316,24 @@ class SendEmailAction(BaseAction):
 
         if self.column_blanks:
             if is_plain_text and msg:
-                msg = self.fill_msg_blanks(row, msg, self.column_blanks)
+                msg = self.fill_msg_blanks_with_sql(sql_row, msg, self.column_blanks)
             if not is_plain_text and html_msg:
-                html_msg = self.fill_msg_blanks(row, html_msg, self.column_blanks)
+                html_msg = self.fill_msg_blanks_with_sql(sql_row, html_msg, self.column_blanks)
         if self.column_blanks_send_to:
-            temp = [self.fill_msg_blanks(row, send_to, self.column_blanks_send_to) for send_to in send_to_list]
+            temp = [self.fill_msg_blanks_with_sql(sql_row, send_to, self.column_blanks_send_to) for send_to in send_to_list]
             send_to_list = list(set([item.strip() for sublist in temp for item in sublist.split(',')]))
         if self.column_blanks_copy_to:
-            temp = [self.fill_msg_blanks(row, copy_to, self.column_blanks_copy_to) for copy_to in copy_to_list]
+            temp = [self.fill_msg_blanks_with_sql(sql_row, copy_to, self.column_blanks_copy_to) for copy_to in copy_to_list]
             copy_to_list = list(set([item.strip() for sublist in temp for item in sublist.split(',')]))
         if self.column_blanks_reply_to:
-            temp = [self.fill_msg_blanks(row, reply_to, self.column_blanks_reply_to)]
+            temp = [self.fill_msg_blanks_with_sql(sql_row, reply_to, self.column_blanks_reply_to)]
             reply_to_list = list(set([item.strip() for sublist in temp for item in sublist.split(',')]))
             reply_to = next(filter(lambda temp_reply_to: is_valid_email(temp_reply_to), reply_to_list), '')
 
         file_download_urls = self.get_file_download_urls(attachment_list, self.data['row'])
 
         if self.column_blanks_subject:
-            subject = self.fill_msg_blanks(row, subject, self.column_blanks_subject)
+            subject = self.fill_msg_blanks_with_sql(sql_row, subject, self.column_blanks_subject)
 
         send_info = deepcopy(self.send_info)
         if is_plain_text:
@@ -1392,15 +1350,16 @@ class SendEmailAction(BaseAction):
             'reply_to': reply_to if self.is_valid_email(reply_to) else '',
             'file_download_urls': file_download_urls,
         })
-        try:
-            send_email_msg(
-                auth_info=self.auth_info,
-                send_info=send_info,
-                username='automation-rules',  # username send by automation rules,
-                db_session=self.auto_rule.db_session
-            )
-        except Exception as e:
-            logger.error('send email error: %s', e)
+        logger.info('send_info: %s', send_info)
+        # try:
+        #     send_email_msg(
+        #         auth_info=self.auth_info,
+        #         send_info=send_info,
+        #         username='automation-rules',  # username send by automation rules,
+        #         db_session=self.auto_rule.db_session
+        #     )
+        # except Exception as e:
+        #     logger.error('send email error: %s', e)
 
     def cron_notify(self):
         send_info = deepcopy(self.send_info)
@@ -1472,20 +1431,21 @@ class SendEmailAction(BaseAction):
                 'reply_to': reply_to if self.is_valid_email(reply_to) else '',
                 'file_download_urls': file_download_urls,
             })
+            logger.info('send_info: %s', send_info)
 
             send_info_list.append(send_info)
 
-        step = 10
-        for i in range(0, len(send_info_list), step):
-            try:
-                batch_send_email_msg(
-                    auth_info=self.auth_info,
-                    send_info_list=send_info_list[i: i+step],
-                    username='automation-rules',  # username send by automation rules,
-                    db_session=self.auto_rule.db_session
-                )
-            except Exception as e:
-                logger.error('batch send email error: %s', e)
+        # step = 10
+        # for i in range(0, len(send_info_list), step):
+        #     try:
+        #         batch_send_email_msg(
+        #             auth_info=self.auth_info,
+        #             send_info_list=send_info_list[i: i+step],
+        #             username='automation-rules',  # username send by automation rules,
+        #             db_session=self.auto_rule.db_session
+        #         )
+        #     except Exception as e:
+        #         logger.error('batch send email error: %s', e)
 
     def do_action(self):
         if not self.auto_rule.current_valid:
@@ -1516,11 +1476,15 @@ class RunPythonScriptAction(BaseAction):
 
         script_file_path = os.path.join('/asset', uuid_str_to_36_chars(self.auto_rule.dtable_uuid), 'scripts', self.script_name)
         try:
+            logger.debug('rule: %s start to get repo: %s', self.auto_rule.rule_id, self.repo_id)
             repo = seafile_api.get_repo(self.repo_id)
+            logger.debug('rule: %s repo: %s', self.auto_rule.rule_id, repo)
             if not repo:
                 logger.warning('rule: %s script: %s repo: %s not found', self.auto_rule.rule_id, self.script_name, self.repo_id)
                 raise RuleInvalidException('rule: %s script: %s repo: %s not found' % (self.auto_rule.rule_id, self.script_name, self.repo_id))
+            logger.debug('rule: %s start to get file: %s', self.auto_rule.rule_id, script_file_path)
             script_file_id = seafile_api.get_file_id_by_path(self.repo_id, script_file_path)
+            logger.debug('rule: %s file: %s id: %s', self.auto_rule.rule_id, script_file_path, script_file_id)
             if not script_file_id:
                 logger.warning('rule: %s script: %s repo: %s file: %s not found', self.auto_rule.rule_id, self.script_name, self.repo_id, script_file_path)
                 raise RuleInvalidException('rule: %s script: %s repo: %s file: %s not found' % (self.auto_rule.rule_id, self.script_name, self.repo_id, script_file_path))
@@ -2042,10 +2006,10 @@ class AddRecordToOtherTableAction(BaseAction):
                 return table.get('columns', [])
         return []
 
-    def fill_msg_blanks(self, row, text, blanks):
+    def fill_msg_blanks_with_sql(self, row, text, blanks):
         col_name_dict = self.col_name_dict
-        db_session, dtable_metadata = self.auto_rule.db_session, self.auto_rule.dtable_metadata
-        return fill_msg_blanks_with_converted_row(text, blanks, col_name_dict, row, db_session)
+        db_session = self.auto_rule.db_session
+        return fill_msg_blanks_with_sql_row(text, blanks, col_name_dict, row, db_session)
 
     def format_time_by_offset(self, offset, format_length):
         cur_datetime = datetime.now()
@@ -2069,6 +2033,7 @@ class AddRecordToOtherTableAction(BaseAction):
         return value
 
     def init_append_rows(self):
+        sql_row = self.auto_rule.get_sql_row()
         src_row = self.data['converted_row']
         src_columns = self.auto_rule.table_info['columns']
         self.col_name_dict = {col.get('name'): col for col in src_columns}
@@ -2081,7 +2046,7 @@ class AddRecordToOtherTableAction(BaseAction):
                 continue
             blanks = set(re.findall(r'\{([^{]*?)\}', cell_value))
             self.column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
-            self.row[row_id] = self.fill_msg_blanks(src_row, cell_value, self.column_blanks)
+            self.row[row_id] = self.fill_msg_blanks_with_sql(sql_row, cell_value, self.column_blanks)
 
         dst_columns = self.get_columns(self.dst_table_id)
 
@@ -2971,6 +2936,8 @@ class AutomationRule:
         self._related_users_dict = None
         self._trigger_conditions_rows = None
 
+        self._sql_row = None
+
         self.metadata_cache_manager = metadata_cache_manager
 
         self.cache_key = 'AUTOMATION_RULE:%s' % self.rule_id
@@ -3088,6 +3055,20 @@ class AutomationRule:
             self._related_users_dict = {user['email']: user for user in self.related_users}
         return self._related_users_dict
 
+    def get_sql_row(self):
+        if self._sql_row is not None:
+            return self._sql_row
+        if not self.data:
+            return None
+        if not self.data.get('row'):
+            return None
+        row_id = self.data['row']['_id']
+        sql = f"SELECT * FROM `{self.table_info['name']}` WHERE _id='{row_id}'"
+        sql_rows, _ = self.dtable_db_api.query(sql, convert=False)
+        if not sql_rows:
+            return None
+        self._sql_row = sql_rows[0]
+        return self._sql_row
 
     def get_temp_api_token(self, username=None, app_name=None):
         payload = {

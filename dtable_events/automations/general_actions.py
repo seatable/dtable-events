@@ -17,8 +17,7 @@ from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY,
     SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL
 from dtable_events.automations.models import BoundThirdPartyAccounts
 from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg
-from dtable_events.notification_rules.notification_rules_utils import fill_msg_blanks_with_converted_row, \
-    send_notification
+from dtable_events.notification_rules.notification_rules_utils import fill_msg_blanks_with_sql_row, send_notification
 from dtable_events.utils import is_valid_email, get_inner_dtable_server_url, uuid_str_to_36_chars
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI, NotFoundException
@@ -288,6 +287,22 @@ class BaseContext:
             return None
         return converted_row
 
+    def get_sql_row(self, table_id, row_id):
+        table = self.get_table_by_id(table_id)
+        logger.debug('table_id: %s table_name: %s row_id: %s', table and table['name'], table_id, row_id)
+        if not table:
+            logger.error('dtable: %s table: %s not found', self.dtable_uuid, table_id)
+            return None
+        try:
+            sql = f"SELECT * FROM `{table['name']}` WHERE _id='{row_id}'"
+            sql_rows, _ = self.dtable_db_api.query(sql, convert=False)
+            if not sql_rows:
+                return None
+            return sql_rows[0]
+        except Exception as e:
+            logger.error('dtable: %s table: %s row: %s error: %s', self.dtable_uuid, table_id, row_id, e)
+            return None
+
 
 class ActionInvalid(Exception):
     pass
@@ -307,8 +322,8 @@ class BaseAction:
         self.context = context
         self.table = self.context.table
 
-    def generate_real_msg(self, msg, converted_row):
-        if not converted_row:
+    def generate_real_msg(self, msg, sql_row):
+        if not sql_row:
             return msg
         blanks = set(re.findall(r'\{([^{]*?)\}', msg))
         col_name_dict = {col.get('name'): col for col in self.context.table['columns']}
@@ -316,14 +331,14 @@ class BaseAction:
         if not column_blanks:
             return msg
         try:
-            return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, converted_row, self.context.db_session)
+            return fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, sql_row, self.context.db_session)
         except Exception as e:
             logger.exception(e)
             logger.error('msg: %s col_name_dict: %s column_blanks: %s fill error: %s', msg, col_name_dict, column_blanks, e)
             return msg
 
-    def batch_generate_real_msgs(self, msg, converted_rows):
-        return [self.generate_real_msg(msg, converted_row) for converted_row in converted_rows]
+    def batch_generate_real_msgs(self, msg, sql_rows):
+        return [self.generate_real_msg(msg, sql_row) for sql_row in sql_rows]
 
     def generate_filter_updates(self, add_or_updates, table):
         filter_updates = {}
@@ -472,7 +487,8 @@ class NotifyAction(BaseAction):
             detail['row_id_list'] = [converted_row['_id']]
         elif self.notify_type == self.NOTIFY_TYPE_WORKFLOW:
             detail['row_id'] = converted_row['_id']
-        detail['msg'] = self.generate_real_msg(self.msg, converted_row)
+        sql_row = self.context.get_sql_row(self.table['_id'], converted_row['_id'])
+        detail['msg'] = self.generate_real_msg(self.msg, sql_row)
         self.send_to_users(users, detail, self.MSG_TYPES_DICT[self.notify_type])
 
 
@@ -497,16 +513,17 @@ class SendEmailAction(BaseAction):
 
     def do_action_with_row(self, converted_row):
         final_send_to_list, final_copy_to_list = [], []
+        sql_row = self.context.get_sql_row(self.table['_id'], converted_row['_id'])
         if self.send_to_list:
             for send_to in self.send_to_list:
-                real_send_to = self.generate_real_msg(send_to, converted_row)
+                real_send_to = self.generate_real_msg(send_to, sql_row)
                 if is_valid_email(real_send_to):
                     final_send_to_list.append(real_send_to)
         if not final_send_to_list:
             return
         if self.copy_to_list:
             for copy_to in self.copy_to_list:
-                real_copy_to = self.generate_real_msg(copy_to, converted_row)
+                real_copy_to = self.generate_real_msg(copy_to, sql_row)
                 if is_valid_email(real_copy_to):
                     final_copy_to_list.append(real_copy_to)
         account_detail = self.account_dict.get('detail', {})
@@ -522,7 +539,7 @@ class SendEmailAction(BaseAction):
             'subject': self.subject
         }
         try:
-            send_info['message'] = self.generate_real_msg(self.msg, converted_row)
+            send_info['message'] = self.generate_real_msg(self.msg, sql_row)
             send_email_msg(
                 auth_info=auth_info,
                 send_info=send_info,
@@ -552,8 +569,9 @@ class SendWechatAction(BaseAction):
         if not webhook_url:
             logger.warning('account: %s no webhook_url', self.account_dict)
             return
+        sql_row = self.context.get_sql_row(self.table['_id'], converted_row['_id'])
         try:
-            real_msg = self.generate_real_msg(self.msg, converted_row)
+            real_msg = self.generate_real_msg(self.msg, sql_row)
             send_wechat_msg(webhook_url, real_msg, self.msg_type)
         except Exception as e:
             logger.exception(e)
@@ -578,8 +596,9 @@ class SendDingtalkAction(BaseAction):
         webhook_url = self.account_dict.get('detail', {}).get('webhook_url', '')
         if not webhook_url:
             return
+        sql_row = self.context.get_sql_row(self.table['_id'], converted_row['_id'])
         try:
-            real_msg = self.generate_real_msg(self.msg, converted_row)
+            real_msg = self.generate_real_msg(self.msg, sql_row)
             send_dingtalk_msg(webhook_url, real_msg, self.msg_type, self.msg_title)
         except Exception as e:
             logger.exception(e)

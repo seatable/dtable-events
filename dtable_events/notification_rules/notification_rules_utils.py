@@ -62,12 +62,11 @@ def get_dtable_server_token(dtable_uuid):
 
 def scan_triggered_notification_rules(event_data, db_session):
     row = event_data.get('row')
-    converted_row = event_data.get('converted_row')
     message_dtable_uuid = event_data.get('dtable_uuid', '')
     table_id = event_data.get('table_id', '')
     rule_id = event_data.get('notification_rule_id')
     op_type = event_data.get('op_type')
-    if not row or not converted_row or not message_dtable_uuid or not table_id or not rule_id:
+    if not row or not message_dtable_uuid or not table_id or not rule_id:
         logger.error(f'redis event data not valid, event_data = {event_data}')
         return
 
@@ -78,7 +77,7 @@ def scan_triggered_notification_rules(event_data, db_session):
     rule_intent_metadata_cache_manager = RuleIntentMetadataCacheManger()
     for rule in rules:
         try:
-            trigger_notification_rule(rule, table_id, row, converted_row, db_session, op_type, rule_intent_metadata_cache_manager)
+            trigger_notification_rule(rule, table_id, row, db_session, op_type, rule_intent_metadata_cache_manager)
         except Exception as e:
             logger.exception(e)
             logger.error(f'check rule failed. {rule}, error: {e}')
@@ -214,105 +213,6 @@ def convert_zero_in_value(value):
 
     return value
 
-def fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, converted_row, db_session):
-    for blank in column_blanks:
-        try:
-            if col_name_dict[blank]['type'] in [
-                ColumnTypes.TEXT,
-                ColumnTypes.DATE,
-                ColumnTypes.LONG_TEXT,
-                ColumnTypes.SINGLE_SELECT,
-                ColumnTypes.URL,
-                ColumnTypes.DURATION,
-                ColumnTypes.NUMBER,
-                ColumnTypes.EMAIL,
-                ColumnTypes.AUTO_NUMBER,
-                ColumnTypes.CTIME,
-                ColumnTypes.MTIME,
-                ColumnTypes.RATE,
-            ]:
-                value = converted_row.get(blank, '')
-                value = convert_zero_in_value(value)
-                msg = msg.replace('{' + blank + '}', str(value) if value else '')  # maybe value is None and str(None) is 'None'
-
-            elif col_name_dict[blank]['type'] in [
-                ColumnTypes.IMAGE,
-                ColumnTypes.MULTIPLE_SELECT
-            ]:
-                value = converted_row.get(blank, [])
-                if not value:
-                    msg = msg.replace('{' + blank + '}', '')  # maybe value is None
-                elif value and isinstance(value, list) and isinstance(value[0], str):
-                    msg = msg.replace('{' + blank + '}', ', '.join(value))
-                else:
-                    logger.warning('column %s value format error', blank)
-
-            elif col_name_dict[blank]['type'] == ColumnTypes.LINK:
-                value = converted_row.get(blank, [])
-                msg = msg.replace('{' + blank + '}', (', '.join([str(f['display_value']) for f in value if f.get('display_value') is not None])) if value is not None else '')
-
-            elif col_name_dict[blank]['type'] == ColumnTypes.FILE:
-                value = converted_row.get(blank, [])
-                msg = msg.replace('{' + blank + '}', (', '.join([f['name'] for f in value])) if value else '')
-
-            elif col_name_dict[blank]['type'] == ColumnTypes.COLLABORATOR:
-                users = converted_row.get(blank, [])
-                if users is None:
-                    names = []
-                else:
-                    names_dict = get_nickname_by_usernames(users, db_session)
-                    names = [names_dict.get(user) for user in users if user in names_dict]
-                msg = msg.replace('{' + blank + '}', ', '.join(names))
-
-            elif col_name_dict[blank]['type'] in [ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
-                value = converted_row.get(blank, '')
-                if value is None:
-                    name = ''
-                else:
-                    name = get_nickname_by_usernames([value], db_session).get(value, '')
-                msg = msg.replace('{' + blank + '}', name)
-
-            elif col_name_dict[blank]['type'] in [ColumnTypes.FORMULA, ColumnTypes.LINK_FORMULA]:
-                value = converted_row.get(blank, '')
-                column_data = col_name_dict[blank].get('data') or {}
-                result_type = column_data.get('result_type') or 'string'
-                if result_type == 'string':
-                    msg = msg.replace('{' + blank + '}', str(value) if value else '')
-                elif result_type == 'number':
-                    value = convert_zero_in_value(value)
-                    msg = msg.replace('{' + blank + '}', str(value) if value else '')
-                elif result_type == 'bool':
-                    if isinstance(value, str):
-                        msg = msg.replace('{' + blank + '}', value)
-                    elif value is True:
-                        msg = msg.replace('{' + blank + '}', 'true')
-                    elif value is False:
-                        msg = msg.replace('{' + blank + '}', 'false')
-                    else:
-                        msg = msg.replace('{' + blank + '}', '')
-                elif result_type == 'date':
-                    msg = msg.replace('{' + blank + '}', str(value) if value else '')
-                elif result_type == 'array':
-                    array_type = column_data.get('array_type')
-                    if isinstance(value, list) and array_type in [ColumnTypes.COLLABORATOR, ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
-                        names_dict = get_nickname_by_usernames(value, db_session)
-                        names = [names_dict[username] for username in value if username in names_dict]
-                        msg = msg.replace('{' + blank + '}', ', '.join(names))
-                    else:
-                        msg = msg.replace('{' + blank + '}', str(value) if value else '')
-                else:
-                    msg = msg.replace('{' + blank + '}', str(value) if value else '')
-
-            elif col_name_dict[blank]['type'] in [ColumnTypes.GEOLOCATION]:
-                value = converted_row.get(blank, '')
-                value = value and _get_geolocation_infos(value) or ''
-                msg = msg.replace('{' + blank + '}', str(value) if value else '')
-
-        except Exception as e:
-            logger.exception('msg: %s blank: %s col_name_dict: %s fill blank error: %s', msg, blank, col_name_dict, e)
-
-    return msg
-
 
 def fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, row, db_session):
     for blank in column_blanks:
@@ -349,15 +249,6 @@ def get_column_blanks(blanks, columns):
     return column_blanks, col_name_dict
 
 
-def gen_noti_msg_with_converted_row(msg, row, column_blanks, col_name_dict, db_session):
-    if not msg:
-        return msg
-    if not column_blanks:
-        return msg
-
-    return fill_msg_blanks_with_converted_row(msg, column_blanks, col_name_dict, row, db_session)
-
-
 def gen_noti_msg_with_sql_row(msg, row, column_blanks, col_name_dict, db_session):
     if not msg:
         return msg
@@ -382,7 +273,7 @@ def get_column_by_key(dtable_metadata, table_id, column_key):
     return None
 
 
-def trigger_notification_rule(rule, message_table_id, row, converted_row, db_session, op_type, rule_intent_metadata_cache_manager: RuleIntentMetadataCacheManger):
+def trigger_notification_rule(rule, message_table_id, row, db_session, op_type, rule_intent_metadata_cache_manager: RuleIntentMetadataCacheManger):
     rule_id = rule[0]
     trigger = rule[1]
     action = rule[2]
@@ -402,6 +293,7 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, db_ses
         return
 
     dtable_server_api = DTableServerAPI('notification-rule', dtable_uuid, get_inner_dtable_server_url(), access_token_timeout=3600)
+    dtable_db_api = DTableDBAPI('notification-rule', dtable_uuid, INNER_DTABLE_DB_URL)
     dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
     dtable_metadata = rule_intent_metadata_cache_manager.get_metadata(dtable_uuid)
     target_table, target_view = None, None
@@ -441,21 +333,27 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, db_ses
         if not is_trigger_time_satisfy(last_trigger_time):
             return
 
+        row_id = row['_id']
+        sql = f"SELECT * FROM `{target_table['name']}` WHERE _id='{row_id}'"
+        rows, _ = dtable_db_api.query(sql, convert=False)
+        if not rows:
+            return
+        sql_row = rows[0]
+
         detail = {
             'table_id': table_id,
             'view_id': view_id,
             'condition': CONDITION_ROWS_MODIFIED,
             'rule_id': rule.id,
             'rule_name': rule_name,
-            'msg': gen_noti_msg_with_converted_row(msg, converted_row, column_blanks, col_name_dict, db_session),
+            'msg': gen_noti_msg_with_sql_row(msg, sql_row, column_blanks, col_name_dict, db_session),
             'row_id_list': [row['_id']],
         }
 
         if users_column_key:
             user_column = get_column_by_key(dtable_metadata, table_id, users_column_key)
             if user_column:
-                users_column_name = user_column.get('name')
-                users_from_column = converted_row.get(users_column_name, [])
+                users_from_column = sql_row.get(user_column['key'], [])
                 if not users_from_column:
                     users_from_column = []
                 if not isinstance(users_from_column, list):
@@ -476,20 +374,27 @@ def trigger_notification_rule(rule, message_table_id, row, converted_row, db_ses
 
     elif (op_type in ('modify_row', 'modify_rows', 'add_link', 'update_links', 'update_rows_links') and trigger['condition'] == CONDITION_FILTERS_SATISFY) or \
          (op_type in ('insert_row', 'append_rows', 'insert_rows') and trigger['condition'] == CONDITION_ROWS_ADDED):
+
+        row_id = row['_id']
+        sql = f"SELECT * FROM `{target_table['name']}` WHERE _id='{row_id}'"
+        rows, _ = dtable_db_api.query(sql, convert=False)
+        if not rows:
+            return
+        sql_row = rows[0]
+
         detail = {
             'table_id': table_id,
             'view_id': view_id,
             'condition': CONDITION_FILTERS_SATISFY,
             'rule_id': rule.id,
             'rule_name': rule_name,
-            'msg': gen_noti_msg_with_converted_row(msg, converted_row, column_blanks, col_name_dict, db_session),
+            'msg': gen_noti_msg_with_sql_row(msg, sql_row, column_blanks, col_name_dict, db_session),
             'row_id_list': [row['_id']],
         }
         if users_column_key:
             user_column = get_column_by_key(dtable_metadata, table_id, users_column_key)
             if user_column:
-                users_column_name = user_column.get('name')
-                users_from_column = converted_row.get(users_column_name, [])
+                users_from_column = sql.get(user_column['key'], [])
                 if not users_from_column:
                     users_from_column = []
                 if not isinstance(users_from_column, list):

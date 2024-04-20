@@ -170,7 +170,7 @@ class NumberMessageFormatter(BaseMessageFormatter):
 
         decimal = column_data.get('decimal', 'dot')
         thousands = column_data.get('thousands', 'no')
-        precision = column_data.get('precision', 2)
+        precision = column_data.get('precision') or 2
         enable_precision = column_data.get('enable_precision', False)
         currency_symbol = column_data.get('currency_symbol', '$')
         currency_symbol_position = column_data.get('currency_symbol_position', 'before')
