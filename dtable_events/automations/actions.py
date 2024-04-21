@@ -447,7 +447,7 @@ class UpdateAction(BaseAction):
                         cell_value = fill_msg_blank_func(row, cell_value, column_blanks)
                     filtered_updates[col_name] = self.parse_column_value(col, cell_value)
         return filtered_updates
-        
+
     def init_updates(self):
         self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
         self.col_key_dict = {col.get('key'):  col for col in self.auto_rule.table_info['columns']}
@@ -459,7 +459,7 @@ class UpdateAction(BaseAction):
         converted_row = {self.col_key_dict.get(key).get('name') if self.col_key_dict.get(key) else key:
                          self.parse_column_value(self.col_key_dict.get(key), sql_row.get(key)) if self.col_key_dict.get(key) else sql_row.get(key)
                          for key in sql_row}
-        filtered_updates = self.format_update_datas(converted_row, converted_row, self.fill_msg_blanks_with_sql)
+        filtered_updates = self.format_update_datas(converted_row, sql_row, self.fill_msg_blanks_with_sql)
         self.update_data['row'] = filtered_updates
         self.update_data['row_id'] = sql_row.get('_id')
 
