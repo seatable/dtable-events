@@ -235,13 +235,15 @@ class BaseAction:
 
     def parse_column_value(self, column, value):
         if column.get('type') == ColumnTypes.SINGLE_SELECT:
-            select_options = column.get('data', {}).get('options', [])
+            column_data = column.get('data') or {}
+            select_options = column_data.get('options') or []
             for option in select_options:
                 if value == option.get('id'):
                     return option.get('name')
 
         elif column.get('type') == ColumnTypes.MULTIPLE_SELECT:
-            m_select_options = column.get('data', {}).get('options', [])
+            m_column_data = column.get('data') or {}
+            m_select_options = m_column_data.get('options') or []
             if isinstance(value, list):
                 parse_value_list = []
                 for option in m_select_options:
@@ -299,8 +301,9 @@ class UpdateAction(BaseAction):
 
     def add_or_create_options(self, column, value):
         table_name = self.update_data['table_name']
+        column_data = column.get('data') or {}
         
-        select_options = column.get('data', {}).get('options', [])
+        select_options = column_data.get('options') or []
         for option in select_options:
             if value == option.get('name'):
                 return value
@@ -1629,13 +1632,15 @@ class LinkRecordsAction(BaseAction):
 
     def parse_column_value(self, column, value):
         if column.get('type') == ColumnTypes.SINGLE_SELECT:
-            select_options = column.get('data', {}).get('options', [])
+            column_data = column.get('data') or {}
+            select_options = column_data.get('options') or []
             for option in select_options:
                 if value == option.get('name'):
                     return option.get('id')
 
         elif column.get('type') == ColumnTypes.MULTIPLE_SELECT:
-            m_select_options = column.get('data', {}).get('options', [])
+            m_column_data = column.get('data') or {}
+            m_select_options = m_column_data.get('options') or []
             if isinstance(value, list):
                 parse_value_list = []
                 for option in m_select_options:
@@ -2021,7 +2026,8 @@ class AddRecordToOtherTableAction(BaseAction):
 
     def add_or_create_options(self, column, value):
         table_name = self.row_data['table_name']
-        select_options = column.get('data', {}).get('options', [])
+        column_data = column.get('data') or {}
+        select_options = column_data.get('options') or []
         for option in select_options:
             if value == option.get('name'):
                 return value
