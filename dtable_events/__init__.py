@@ -3,7 +3,8 @@ from dtable_events.activities.db import get_table_activities, get_activities_det
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.statistics.db import get_user_activity_stats_by_day, get_daily_active_users, get_email_sending_logs
 from dtable_events.dtable_io.excel import get_insert_update_rows
-from dtable_events.dtable_io.utils import update_page_design_static_image, update_universal_app_custom_page_static_image
+from dtable_events.dtable_io.utils import update_page_design_static_image, rename_universal_app_static_assets_dir, \
+    update_universal_app_custom_page_static_image, update_universal_app_single_record_page_static_assets
 from dtable_events.utils.sql_generator import filter2sql, statistic2sql, linkRecords2sql, SQLGeneratorOptionInvalidError, \
     DateTimeQueryInvalidError, ColumnFilterInvalidError
 from dtable_events.utils.dtable_db_api import convert_db_rows

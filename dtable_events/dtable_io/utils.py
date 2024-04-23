@@ -342,7 +342,7 @@ def convert_dtable_import_file_url(dtable_content, workspace_id, dtable_uuid):
                                                 str(UUID(dtable_uuid)), 'images', img_name])
                             v['images'][idx] = new_url
                             v['text'] = v['text'].replace(item, v['images'][idx])
-    
+
     plugin_settings = dtable_content.get('plugin_settings', {})
 
     # page desgin settings
@@ -353,7 +353,7 @@ def convert_dtable_import_file_url(dtable_content, workspace_id, dtable_uuid):
                                         dtable_uuid, 'page-design', page_id, '%s.json'%(page_id)])
         page['poster_url'] = '/'.join([dtable_web_service_url, 'workspace', workspace_id, 'asset',
                                         dtable_uuid, 'page-design', page_id, '%s.png'%(page_id)])
-    
+
     return dtable_content
 
 
@@ -486,7 +486,7 @@ def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_n
         storage_backend.save_dtable(dtable_uuid, json.dumps(content_json), username, in_storage, repo_id, dtable_file_name)
     except Exception as e:
         raise e
-    
+
     return content_json
 
 
@@ -581,7 +581,7 @@ def update_page(repo_id, workspace_id, dtable_uuid, page, inner_file_server_root
 def update_page_design_static_image(page_design_settings, repo_id, workspace_id, dtable_uuid, content_json_tmp_path, dtable_web_service_url, file_server_port, username):
     if not isinstance(page_design_settings, list):
         return
-    
+
     # valid_dtable_web_service_url = dtable_web_service_url.strip('/')
     inner_file_server_root = 'http://127.0.0.1:' + str(file_server_port)
     from dtable_events.dtable_io import dtable_io_logger
@@ -606,36 +606,56 @@ def update_page_design_static_image(page_design_settings, repo_id, workspace_id,
         dtable_io_logger.warning('update page design static image failed. ERROR: {}'.format(e))
 
 
-def update_universal_app_custom_page_static_image(pages, app_id, repo_id, workspace_id, dtable_uuid, content_json_tmp_path, dtable_web_service_url, file_server_port, username):
+def rename_universal_app_static_assets_dir(pages, app_id, repo_id, dtable_uuid, username):
+    if not isinstance(pages, list):
+            return
+
+    from dtable_events.dtable_io import dtable_io_logger
+
+    app_parent_dir = '/asset/%s/external-apps'%(dtable_uuid)
+    for page in pages:
+        page_id = page['id']
+        content_url = page['content_url']
+        if not content_url:
+            continue
+
+        # support relative path: /app_id/page_id/
+        parent_dir_re = r'/\d+/%s/%s.json'%(page_id, page_id)
+        if re.search(parent_dir_re, content_url):
+            old_content_app_id = content_url.split('/')[1]
+            content_path = '%s/%s/%s/%s.json' % (app_parent_dir, old_content_app_id, page_id, page_id)
+            content_file_id = seafile_api.get_file_id_by_path(repo_id, content_path)
+
+            # just rename the dir which content file exist
+            if not content_file_id:
+                continue
+
+            try:
+                seafile_api.rename_file(repo_id, app_parent_dir, '%s'%old_content_app_id, '%s'%app_id, username)
+            except Exception as e:
+                dtable_io_logger.warning('rename custom page\'s content dir of external app failed. ERROR: {}'.format(e))
+            break
+
+def update_universal_app_custom_page_static_image(pages, app_id, repo_id, workspace_id, dtable_uuid, content_json_tmp_path, file_server_port, username):
     if not isinstance(pages, list):
         return
 
     custom_pages = [ page for page in pages if page.get('type', '') == 'custom_page' ]
-    
-    valid_dtable_web_service_url = dtable_web_service_url.strip('/')
+
     inner_file_server_root = 'http://127.0.0.1:' + str(file_server_port)
     from dtable_events.dtable_io import dtable_io_logger
     try:
         for page in custom_pages:
             page_id = page['id']
             page_content_file_name = '%s.json'%(page_id)
-            page_content_url = page['content_url']
-            app_parent_dir = '/asset/%s/external-apps'%(dtable_uuid)
-            parent_dir_re = r'/\d+-%s/%s.json'%(page_id, page_id)
-            new_content_parent_dir_name = '%s-%s'%(app_id, page_id)
 
-            # rename dir
-            if re.search(parent_dir_re, page_content_url):
-                old_content_parent_dir_name = page_content_url.split('/')[-2]
-                if old_content_parent_dir_name != new_content_parent_dir_name:
-                    seafile_api.rename_file(repo_id, app_parent_dir, old_content_parent_dir_name, new_content_parent_dir_name, username)
-                parent_dir = '/asset/%s/external-apps/%s-%s'%(dtable_uuid, app_id, page_id)
-                page_content_url = re.sub(parent_dir_re, '/%s-%s/%.json'%(app_id, page_id, page_id), page_content_url)
-            else:
-                parent_dir = '/asset/%s/external-apps/%s'%(dtable_uuid, page_id)
-
+            # /app_id/page_id/
+            parent_dir = '/asset/%s/external-apps/%s/%s'%(dtable_uuid, app_id, page_id)
             file_path = parent_dir + '/' + page_content_file_name
             page_json_file_id = seafile_api.get_file_id_by_path(repo_id, file_path)
+            if not page_json_file_id:
+                continue
+
             token = seafile_api.get_fileserver_access_token(
                 repo_id, page_json_file_id, 'view', '', use_onetime=False
             )
@@ -659,17 +679,7 @@ def update_universal_app_custom_page_static_image(pages, app_id, repo_id, worksp
                     for block_children_id in block_children:
                         element = block_by_id.get(block_children_id, {})
                         element_type = element.get('type', '')
-                        if element_type == 'static_image':
-                            static_image_url = element.get('value', '')
-                            file_name = '/'.join(static_image_url.split('/')[-1:])
-                            if re.search(r'/\d+\%s/'%(page_id), static_image_url):
-                                image_parent_dir = '%s-%s'%(app_id, page_id)
-                            else:
-                                image_parent_dir = page_id
-                            element['value'] = '/'.join([valid_dtable_web_service_url, 'workspace', str(workspace_id),
-                                                    'asset', str(dtable_uuid), 'external-apps', image_parent_dir, file_name])
-                            is_changed = True
-                        elif element_type == 'static_long_text':
+                        if element_type == 'static_long_text':
                             old_value_text = element['value']['text']
                             dst_image_url_part = '%s/asset/%s' % (str(workspace_id), str(dtable_uuid))
                             element['value']['text'] = re.sub(r'\d+/asset/[-0-9a-f]{36}', dst_image_url_part, old_value_text)
@@ -684,6 +694,56 @@ def update_universal_app_custom_page_static_image(pages, app_id, repo_id, worksp
                     seafile_api.put_file(repo_id, page_content_save_path, parent_dir, '%s.json'%(page_id), username, None)
     except Exception as e:
         dtable_io_logger.warning('update custom page\'s static image of external app failed. ERROR: {}'.format(e))
+
+
+def update_universal_app_single_record_page_static_assets(pages, app_id, repo_id, workspace_id, dtable_uuid, content_json_tmp_path, file_server_port, username):
+    if not isinstance(pages, list):
+        return
+
+    single_record_pages = [ page for page in pages if page.get('type', '') == 'single_record_page' ]
+
+    inner_file_server_root = 'http://127.0.0.1:' + str(file_server_port)
+    from dtable_events.dtable_io import dtable_io_logger
+    try:
+        for page in single_record_pages:
+            page_id = page['id']
+            page_content_file_name = '%s.json'%(page_id)
+
+            # /app_id/page_id/
+            parent_dir = '/asset/%s/external-apps/%s/%s'%(dtable_uuid, app_id, page_id)
+            file_path = parent_dir + '/' + page_content_file_name
+            page_json_file_id = seafile_api.get_file_id_by_path(repo_id, file_path)
+            if not page_json_file_id:
+                continue
+
+            token = seafile_api.get_fileserver_access_token(
+                repo_id, page_json_file_id, 'view', '', use_onetime=False
+            )
+            content_url = '%s/files/%s/%s'%(inner_file_server_root, token,
+                                    urlquote(page_content_file_name))
+            page_content_response = requests.get(content_url)
+            is_changed = False
+            if page_content_response.status_code == 200:
+                page_content = page_content_response.json()
+                elements = page_content.get('elements', [])
+                for element in elements:
+                    element_type = element.get('type', '')
+                    if element_type == 'long_text':
+                        old_value_text = element['value']['text']
+                        dst_image_url_part = '%s/asset/%s' % (str(workspace_id), str(dtable_uuid))
+                        element['value']['text'] = re.sub(r'\d+/asset/[-0-9a-f]{36}', dst_image_url_part, old_value_text)
+                        is_changed = True
+
+                if is_changed:
+                    if not os.path.exists(content_json_tmp_path):
+                        os.makedirs(content_json_tmp_path)
+                    page_content_save_path = os.path.join(content_json_tmp_path, page_content_file_name)
+                    with open(page_content_save_path, 'w') as f:
+                        json.dump(page_content, f)
+                    seafile_api.put_file(repo_id, page_content_save_path, parent_dir, '%s.json'%(page_id), username, None)
+    except Exception as e:
+        dtable_io_logger.warning('update single record page\'s static assets of external app failed. ERROR: {}'.format(e))
+
 
 def gen_form_id(length=4):
     return ''.join(random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(length))
@@ -782,7 +842,7 @@ def add_a_workflow_to_db(username, workflow, workspace_id, repo_id, dtable_uuid,
     old_new_workflow_token_dict[old_token] = new_token
 
 def add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, org_id):
-    sql = """INSERT INTO dtable_external_apps (`app_uuid`,`dtable_uuid`,`app_type`, `app_config`, `creator`, `created_at`, `org_id`) 
+    sql = """INSERT INTO dtable_external_apps (`app_uuid`,`dtable_uuid`,`app_type`, `app_config`, `creator`, `created_at`, `org_id`)
                 VALUES (:app_uuid, :dtable_uuid, :app_type, :app_config, :creator, :created_at, :org_id)"""
     app_uuid = str(uuid.uuid4())
     app_type = external_app['app_config'].get('app_type')
@@ -801,7 +861,7 @@ def add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, o
     if app_type == 'universal-app':
         sql_app_id = """SELECT `id` FROM dtable_external_apps WHERE app_uuid=:app_uuid"""
         app_id = [x[0] for x in db_session.execute(text(sql_app_id), {'app_uuid': app_uuid})][0]
-        sql_app_default_role = """INSERT INTO dtable_app_roles (`app_id`,`role_name`,`role_permission`, `created_at`) 
+        sql_app_default_role = """INSERT INTO dtable_app_roles (`app_id`,`role_name`,`role_permission`, `created_at`)
                         VALUES (:app_id, :role_name, :role_permission, :created_at)"""
         db_session.execute(text(sql_app_default_role), {
             'app_id': app_id,
@@ -819,7 +879,7 @@ def create_forms_from_src_dtable(workspace_id, dtable_uuid, db_session):
     forms_json_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted/', 'forms.json')
     if not os.path.exists(forms_json_path):
         return
-    
+
     with open(forms_json_path, 'r') as fp:
         forms_json = fp.read()
     forms = json.loads(forms_json)
@@ -873,16 +933,16 @@ def create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_
     for external_app in external_apps:
         if 'app_config' not in external_app:
             continue
+        app_id = external_app['id']
         app_config = external_app['app_config']
         if app_config['app_type'] == 'universal-app':
              settings = app_config.get('settings', {})
              pages = settings.get('pages', [])
              for page in pages:
+                page_id = page.get('id', '')
                 page_type = page.get('type', '')
-                if page_type == 'custom_page':
-                    content_url = page.get('content_url', '')
-                    new_content_url = trans_page_content_url(content_url, workspace_id, dtable_uuid)
-                    page['content_url'] = new_content_url
+                if page_type == 'custom_page' or page_type == 'single_record_page':
+                    page['content_url'] = '/%s/%s/%s.json' % (app_id, page_id, page_id)
         add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, org_id)
 
 
@@ -1351,15 +1411,15 @@ def zip_big_data_screen(username, repo_id, dtable_uuid, page_id, tmp_file_path):
     base_dir = '/asset/' + dtable_uuid
     big_data_file_path = 'files/plugins/big-data-screen/%(page_id)s/%(page_id)s.json' % ({
             'page_id': page_id,
-        }) 
+        })
     big_data_poster_path = 'files/plugins/big-data-screen/%(page_id)s/%(page_id)s.png' % ({
         'page_id': page_id
     })
-    
+
     asset_path = "%s/%s" % (base_dir, big_data_file_path)
 
     poster_asset_path = "%s/%s" % (base_dir, big_data_poster_path)
-    
+
     # 1. get the json file and poster of big-data-screen page
     #   a. json file
     asset_id = seafile_api.get_file_id_by_path(repo_id, asset_path)
@@ -1455,7 +1515,7 @@ def post_big_data_screen_zip_file(username, repo_id, dtable_uuid, page_id, tmp_e
     except:
         content = {}
 
-    
+
     base_dir = '/asset/' + dtable_uuid
     big_data_file_path = 'files/plugins/big-data-screen/%(page_id)s/' % ({
             'page_id': page_id,
@@ -1463,14 +1523,14 @@ def post_big_data_screen_zip_file(username, repo_id, dtable_uuid, page_id, tmp_e
     image_file_path = 'files/plugins/big-data-screen/bg_images/'
     current_file_path = os.path.join(base_dir, big_data_file_path)
     current_image_path = os.path.join(base_dir, image_file_path)
-    
+
     # 1. handle page_content
     page_content_dict = content.get('page_content')
     page_content_dict['page_id'] = page_id # update page_id
     tmp_page_json_path = os.path.join(tmp_extracted_path, '%s.json' % page_id)
     with open(tmp_page_json_path, 'wb') as f:
         f.write(json.dumps(page_content_dict).encode('utf-8'))
-    
+
     path_id = seafile_api.get_dir_id_by_path(repo_id, current_file_path)
     if not path_id:
         seafile_api.mkdir_with_parents(repo_id, '/', current_file_path[1:], username)
