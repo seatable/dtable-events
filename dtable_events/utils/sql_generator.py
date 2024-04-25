@@ -1177,11 +1177,11 @@ class StatisticSQLGenerator(object):
         return filter_sql
 
     def _update_filter_sql(self, x_axis_include_empty, x_axis_column):
-        column_name = x_axis_column.get('name', '')
         if x_axis_include_empty:
             if self.filter_sql:
                 self.filter_sql = 'WHERE %s' % self.filter_sql
         else:
+            column_name = x_axis_column.get('name', '')
             not_include_empty_sql = '`%s` is not null' % column_name
             if self.filter_sql:
                 self.filter_sql = 'WHERE %s AND (%s)' % (not_include_empty_sql, self.filter_sql)
@@ -1723,6 +1723,7 @@ class StatisticSQLGenerator(object):
     def _basic_number_card_chart_statistic_2_sql(self):
         summary_type = self.statistic.get('summary_type', '');
         if summary_type == 'count':
+            self._update_filter_sql(True, None)
             return 'SELECT COUNT(*) FROM %s %s LIMIT 0, 5000' % (self.table_name, self.filter_sql)
 
         numeric_column_key = self.statistic.get('numeric_column_key', '')
