@@ -23,7 +23,7 @@ from urllib.parse import quote as urlquote
 from sqlalchemy import text
 from seaserv import seafile_api
 
-from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL
+from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL, FILE_SERVER_PORT
 from dtable_events.dtable_io.external_app import APP_USERS_COUMNS_TYPE_MAP, match_user_info, update_app_sync, \
     get_row_ids_for_delete, get_app_users
 from dtable_events.dtable_io.task_manager import task_manager
@@ -35,6 +35,7 @@ from dtable_events.utils.exception import BaseSizeExceedsLimitError
 
 FILE_URL_PREFIX = 'file://dtable-bundle/asset/files/'
 IMG_URL_PREFIX = 'file://dtable-bundle/asset/images/'
+DTABLE_IO_DIR = '/tmp/dtable-io/'
 
 
 def setup_logger(logname):
@@ -282,12 +283,13 @@ def copy_src_workflows_to_json(dtable_uuid, tmp_file_path, db_session):
 def copy_src_external_app_to_json(dtable_uuid, tmp_file_path, db_session):
     if not db_session:
         return
-    sql = """SELECT `app_config` FROM dtable_external_apps WHERE dtable_uuid=:dtable_uuid"""
+    sql = """SELECT `id`, `app_config` FROM dtable_external_apps WHERE dtable_uuid=:dtable_uuid"""
     src_external_apps = db_session.execute(text(sql), {'dtable_uuid': ''.join(dtable_uuid.split('-'))})
     src_external_apps_json = []
     for src_external_app in src_external_apps:
         external_app = {
-            'app_config': json.loads(src_external_app[0])
+            'app_config': json.loads(src_external_app.app_config),
+            'id': src_external_app.id
         }
         src_external_apps_json.append(external_app)
     if src_external_apps_json:
@@ -615,7 +617,7 @@ def rename_universal_app_static_assets_dir(pages, app_id, repo_id, dtable_uuid, 
     app_parent_dir = '/asset/%s/external-apps'%(dtable_uuid)
     for page in pages:
         page_id = page['id']
-        content_url = page['content_url']
+        content_url = page.get('content_url')
         if not content_url:
             continue
 
@@ -841,7 +843,7 @@ def add_a_workflow_to_db(username, workflow, workspace_id, repo_id, dtable_uuid,
     db_session.commit()
     old_new_workflow_token_dict[old_token] = new_token
 
-def add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, org_id):
+def add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, org_id, workspace_id, repo_id):
     sql = """INSERT INTO dtable_external_apps (`app_uuid`,`dtable_uuid`,`app_type`, `app_config`, `creator`, `created_at`, `org_id`)
                 VALUES (:app_uuid, :dtable_uuid, :app_type, :app_config, :creator, :created_at, :org_id)"""
     app_uuid = str(uuid.uuid4())
@@ -870,7 +872,22 @@ def add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, o
             'created_at': datetime.datetime.now(),
         })
         db_session.commit()
-
+        app_settings = external_app['app_config'].get('settings') or {}
+        pages = app_settings.get('pages') or []
+        rename_universal_app_static_assets_dir(pages, app_id, repo_id, dtable_uuid, username)
+        os.makedirs(DTABLE_IO_DIR, exist_ok=True)
+        update_universal_app_custom_page_static_image(pages, app_id, repo_id, workspace_id,
+                dtable_uuid, DTABLE_IO_DIR, FILE_SERVER_PORT, username)
+        update_universal_app_single_record_page_static_assets(pages, app_id, repo_id, workspace_id,
+                dtable_uuid, DTABLE_IO_DIR, FILE_SERVER_PORT, username)
+        for page in pages:
+            page_type = page.get('type', '')
+            page_id = page.get('id', '')
+            if page_type == 'custom_page' or page_type == 'single_record_page':
+                page['content_url'] = '/%s/%s/%s.json' % (app_id, page_id, page_id)
+        sql = "UPDATE `dtable_external_apps` SET `app_config`=:app_config WHERE `id`=:id"
+        db_session.execute(text(sql), {'app_config': json.dumps(external_app['app_config']), 'id': app_id})
+        db_session.commit()
 
 
 def create_forms_from_src_dtable(workspace_id, dtable_uuid, db_session):
@@ -919,7 +936,7 @@ def create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uui
         add_a_workflow_to_db(username, workflow, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, db_session)
 
 
-def create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_id, workspace_id):
+def create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_id, workspace_id, repo_id):
     from dtable_events.dtable_io.import_table_from_base import trans_page_content_url
     if not db_session:
         return
@@ -943,7 +960,7 @@ def create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_
                 page_type = page.get('type', '')
                 if page_type == 'custom_page' or page_type == 'single_record_page':
                     page['content_url'] = '/%s/%s/%s.json' % (app_id, page_id, page_id)
-        add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, org_id)
+        add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, org_id, workspace_id, repo_id)
 
 
 def download_files_to_path(username, repo_id, dtable_uuid, files, path, db_session, files_map=None):
