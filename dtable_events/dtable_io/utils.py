@@ -23,7 +23,7 @@ from urllib.parse import quote as urlquote
 from sqlalchemy import text
 from seaserv import seafile_api
 
-from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL, FILE_SERVER_PORT
+from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_FILE_SERVER_ROOT
 from dtable_events.dtable_io.external_app import APP_USERS_COUMNS_TYPE_MAP, match_user_info, update_app_sync, \
     get_row_ids_for_delete, get_app_users
 from dtable_events.dtable_io.task_manager import task_manager
@@ -580,12 +580,11 @@ def update_page(repo_id, workspace_id, dtable_uuid, page, inner_file_server_root
     }
 
 # page_design_settings, repo_id, workspace_id, dtable_uuid, content_json_tmp_path, username
-def update_page_design_static_image(page_design_settings, repo_id, workspace_id, dtable_uuid, content_json_tmp_path, dtable_web_service_url, file_server_port, username):
+def update_page_design_static_image(page_design_settings, repo_id, workspace_id, dtable_uuid, content_json_tmp_path, username):
     if not isinstance(page_design_settings, list):
         return
 
-    # valid_dtable_web_service_url = dtable_web_service_url.strip('/')
-    inner_file_server_root = 'http://127.0.0.1:' + str(file_server_port)
+    inner_file_server_root = INNER_FILE_SERVER_ROOT.strip('/')
     from dtable_events.dtable_io import dtable_io_logger
     try:
         for page in page_design_settings:
@@ -638,13 +637,13 @@ def rename_universal_app_static_assets_dir(pages, app_id, repo_id, dtable_uuid, 
                 dtable_io_logger.warning('rename custom page\'s content dir of external app failed. ERROR: {}'.format(e))
             break
 
-def update_universal_app_custom_page_static_image(pages, app_id, repo_id, workspace_id, dtable_uuid, content_json_tmp_path, file_server_port, username):
+def update_universal_app_custom_page_static_image(pages, app_id, repo_id, workspace_id, dtable_uuid, content_json_tmp_path, username):
     if not isinstance(pages, list):
         return
 
     custom_pages = [ page for page in pages if page.get('type', '') == 'custom_page' ]
 
-    inner_file_server_root = 'http://127.0.0.1:' + str(file_server_port)
+    inner_file_server_root = INNER_FILE_SERVER_ROOT.strip('/')
     from dtable_events.dtable_io import dtable_io_logger
     try:
         for page in custom_pages:
@@ -698,13 +697,13 @@ def update_universal_app_custom_page_static_image(pages, app_id, repo_id, worksp
         dtable_io_logger.warning('update custom page\'s static image of external app failed. ERROR: {}'.format(e))
 
 
-def update_universal_app_single_record_page_static_assets(pages, app_id, repo_id, workspace_id, dtable_uuid, content_json_tmp_path, file_server_port, username):
+def update_universal_app_single_record_page_static_assets(pages, app_id, repo_id, workspace_id, dtable_uuid, content_json_tmp_path, username):
     if not isinstance(pages, list):
         return
 
     single_record_pages = [ page for page in pages if page.get('type', '') == 'single_record_page' ]
 
-    inner_file_server_root = 'http://127.0.0.1:' + str(file_server_port)
+    inner_file_server_root = INNER_FILE_SERVER_ROOT.strip('/')
     from dtable_events.dtable_io import dtable_io_logger
     try:
         for page in single_record_pages:
@@ -877,9 +876,9 @@ def add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, o
         rename_universal_app_static_assets_dir(pages, app_id, repo_id, dtable_uuid, username)
         os.makedirs(DTABLE_IO_DIR, exist_ok=True)
         update_universal_app_custom_page_static_image(pages, app_id, repo_id, workspace_id,
-                dtable_uuid, DTABLE_IO_DIR, FILE_SERVER_PORT, username)
+                dtable_uuid, DTABLE_IO_DIR, username)
         update_universal_app_single_record_page_static_assets(pages, app_id, repo_id, workspace_id,
-                dtable_uuid, DTABLE_IO_DIR, FILE_SERVER_PORT, username)
+                dtable_uuid, DTABLE_IO_DIR, username)
         for page in pages:
             page_type = page.get('type', '')
             page_id = page.get('id', '')

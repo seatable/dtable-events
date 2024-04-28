@@ -26,7 +26,6 @@ try:
     ENABLE_DTABLE_SERVER_CLUSTER = getattr(seahub_settings, 'ENABLE_DTABLE_SERVER_CLUSTER', False)
     DTABLE_PROXY_SERVER_URL = getattr(seahub_settings, 'DTABLE_PROXY_SERVER_URL', '')
     FILE_SERVER_ROOT = getattr(seahub_settings, 'FILE_SERVER_ROOT', 'http://127.0.0.1:8082')
-    FILE_SERVER_PORT = getattr(seahub_settings, 'FILE_SERVER_PORT', '8082')
     INNER_FILE_SERVER_ROOT = getattr(seahub_settings, 'INNER_FILE_SERVER_ROOT', 'http://127.0.0.1:8082')
     SEATABLE_FAAS_AUTH_TOKEN = getattr(seahub_settings, 'SEATABLE_FAAS_AUTH_TOKEN', '')
     SEATABLE_FAAS_URL = getattr(seahub_settings, 'SEATABLE_FAAS_URL', '')

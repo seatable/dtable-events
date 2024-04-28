@@ -10,15 +10,12 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr, parseaddr
-from selenium import webdriver
 from urllib import parse
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
 from datetime import datetime
 
 from seaserv import seafile_api
 
-from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, SESSION_COOKIE_NAME, INNER_DTABLE_DB_URL
+from dtable_events.app.config import DTABLE_WEB_SERVICE_URL
 from dtable_events.dtable_io.big_data import import_excel_to_db, update_excel_to_db, export_big_data_to_excel
 from dtable_events.dtable_io.utils import setup_logger, \
     prepare_asset_file_folder, post_dtable_json, post_asset_files, \
@@ -35,7 +32,6 @@ from dtable_events.dtable_io.excel import parse_excel_csv_to_json, import_excel_
     import_excel_csv_add_table_by_dtable_server, update_parsed_file_by_dtable_server, \
     parse_update_excel_upload_excel_to_json, parse_update_csv_upload_csv_to_json, parse_and_import_excel_csv_to_dtable, \
     parse_and_import_excel_csv_to_table, parse_and_update_file_to_table, parse_and_append_excel_csv_to_table
-from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.page_design.utils import CHROME_DATA_DIR, convert_page_to_pdf as _convert_page_to_pdf, get_driver
 from dtable_events.statistics.db import save_email_sending_records, batch_save_email_sending_records
 from dtable_events.data_sync.data_sync_utils import run_sync_emails
@@ -221,11 +217,9 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
             page_design_settings = plugin_settings.get('page-design', [])
             page_design_content_json_tmp_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'page-design')
             # handle different url in settings.py
-            dtable_web_service_url = DTABLE_WEB_SERVICE_URL
-            file_server_port = task_manager.conf['file_server_port']
-            update_page_design_static_image(page_design_settings, repo_id, workspace_id, dtable_uuid, page_design_content_json_tmp_path, dtable_web_service_url, file_server_port, username)
+            update_page_design_static_image(page_design_settings, repo_id, workspace_id, dtable_uuid, page_design_content_json_tmp_path, username)
     except Exception as e:
-        dtable_io_logger.error('update page design static image failed. ERROR: {}'.format(e))
+        dtable_io_logger.exception('update page design static image failed. ERROR: {}'.format(e))
 
     # remove extracted tmp file
     dtable_io_logger.info('Remove extracted tmp file.')
