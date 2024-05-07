@@ -394,7 +394,7 @@ def trigger_notification_rule(rule, message_table_id, row, db_session, op_type, 
         if users_column_key:
             user_column = get_column_by_key(dtable_metadata, table_id, users_column_key)
             if user_column:
-                users_from_column = sql.get(user_column['key'], [])
+                users_from_column = sql_row.get(user_column['key'], [])
                 if not users_from_column:
                     users_from_column = []
                 if not isinstance(users_from_column, list):

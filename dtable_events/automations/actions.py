@@ -1126,7 +1126,7 @@ class SendDingtalkAction(BaseAction):
         sql_row = self.auto_rule.get_sql_row()
         msg = self.msg
         if self.column_blanks:
-            msg = self.fill_msg_blanks(sql_row)
+            msg = self.fill_msg_blanks_with_sql(sql_row)
         try:
             send_dingtalk_msg(self.webhook_url, msg, self.msg_type, self.msg_title)
         except Exception as e:
