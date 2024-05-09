@@ -1438,15 +1438,16 @@ def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, i
     from PIL import Image as PILImage
     from urllib.parse import unquote, urljoin, urlparse
     from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, TwoCellAnchor
-    from dtable_events.dtable_io.utils import image_position_transfer
+    from dtable_events.dtable_io.utils import image_column_offset_transfer, image_row_offset_transfer
 
     images = cell_value
     col_width = column.get('width', 200)
 
-    from_row_offset = 30000
-    to_row_offset = -30000
+    row_offset = image_row_offset_transfer(row_height)
+    from_row_offset = row_offset
+    to_row_offset = -row_offset
 
-    from_col_offset = 0
+    from_col_offset = row_offset
     to_col_offset = -col_width * 7700
     for image_url in images:
         if image_num >= EXPORT_IMAGE_LIMIT:
@@ -1491,7 +1492,7 @@ def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, i
         img_width, image_height = img.width, img.height
         # to prevent the image from extending beyond the cell
         if to_col_offset < 0:
-            to_col_offset += image_position_transfer(row_height, img_width, image_height)
+            to_col_offset += image_column_offset_transfer(row_height, img_width, image_height)
 
         from_anchor = AnchorMarker(col_num, from_col_offset, row_num, from_row_offset)
         to_anchor = AnchorMarker(col_num + 1, to_col_offset, row_num + 1, to_row_offset)
@@ -1499,7 +1500,7 @@ def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, i
 
         ws.add_image(img)
         if to_col_offset < 0:
-            from_col_offset += image_position_transfer(row_height, img_width, image_height)
+            from_col_offset += image_column_offset_transfer(row_height, img_width, image_height)
         image_num += 1
     return image_num
 

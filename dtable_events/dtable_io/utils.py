@@ -1758,13 +1758,26 @@ def filter_imported_tables(tables, included_tables):
             table['rows'] = new_rows
     return tables
 
-def image_position_transfer(row_height, img_width, image_height):
-    height_dict = {
-        'default': 36.5,
-        'double': 61.5,
-        'triple': 76,
-        'quadruple': 125
-    }
-    per_from_col_offset = height_dict.get(row_height, 'default') * 7700 * (img_width / image_height)
 
-    return per_from_col_offset
+def image_column_offset_transfer(row_height, img_width, image_height):
+    height_dict = {
+        'default': 36,
+        'double': 61,
+        'triple': 76,
+        'quadruple': 120
+    }
+    col_offset = height_dict.get(row_height, 36) * 7700 * (img_width / image_height)
+
+    return col_offset
+
+
+def image_row_offset_transfer(row_height):
+    height_dict = {
+        'default': 2,
+        'double': 4,
+        'triple': 6,
+        'quadruple': 8
+    }
+    col_offset = height_dict.get(row_height, 2) * 7700
+
+    return col_offset
