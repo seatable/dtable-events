@@ -1757,3 +1757,14 @@ def filter_imported_tables(tables, included_tables):
                 new_rows.append(row)
             table['rows'] = new_rows
     return tables
+
+def image_position_transfer(row_height, img_width, image_height):
+    height_dict = {
+        'default': 36.5,
+        'double': 61.5,
+        'triple': 76,
+        'quadruple': 125
+    }
+    per_from_col_offset = height_dict.get(row_height, 'default') * 7700 * (img_width / image_height)
+
+    return per_from_col_offset

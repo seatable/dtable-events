@@ -58,14 +58,6 @@ TEMP_EXPORT_VIEW_DIR = '/tmp/dtable-io/export-view-to-excel/'
 
 ILLEGAL_CHARACTERS_RE = re.compile(r'[\000-\010]|[\013-\014]|[\016-\037]')
 
-# image offset in excel cell
-FROM_COL_START_OFFSET = 20000
-FROM_ROW_START_OFFSET = 20000
-TO_COL_START_OFFSET = -80000
-TO_ROW_START_OFFSET = -80000
-IMAGE_CELL_ROW_HEIGHT = 50
-IMAGE_CELL_COLUMN_WIDTH = 30
-
 IMAGE_TMP_DIR = '/tmp/dtable-io/export-excel/images/'
 
 EXPORT_IMAGE_LIMIT = 1000
@@ -1440,19 +1432,22 @@ def get_file_download_url(file_url, dtable_uuid, repo_id):
     url = gen_file_get_url(token, asset_name)
     return url
 
-def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, image_num, images_target_dir):
+def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, image_num, images_target_dir, column, row_height):
     import requests
     from openpyxl.drawing.image import Image
     from PIL import Image as PILImage
     from urllib.parse import unquote, urljoin, urlparse
     from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, TwoCellAnchor
+    from dtable_events.dtable_io.utils import image_position_transfer
 
     images = cell_value
-    row_pos = str(row_num + 1)
-    # set image cell height
-    ws.row_dimensions[int(row_pos)].height = IMAGE_CELL_ROW_HEIGHT
+    col_width = column.get('width', 200)
 
-    offset_increment = 0
+    from_row_offset = 30000
+    to_row_offset = -30000
+
+    from_col_offset = 0
+    to_col_offset = -col_width * 7700
     for image_url in images:
         if image_num >= EXPORT_IMAGE_LIMIT:
             return image_num
@@ -1493,17 +1488,18 @@ def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, i
             os.remove(tmp_image_path)
             img = Image(new_tmp_image_path)
 
-        from_col_offset = FROM_COL_START_OFFSET + offset_increment
-        from_row_offset = FROM_ROW_START_OFFSET + offset_increment
-        to_col_offset = TO_COL_START_OFFSET + offset_increment
-        to_row_offset = TO_ROW_START_OFFSET + offset_increment
+        img_width, image_height = img.width, img.height
+        # to prevent the image from extending beyond the cell
+        if to_col_offset < 0:
+            to_col_offset += image_position_transfer(row_height, img_width, image_height)
 
         from_anchor = AnchorMarker(col_num, from_col_offset, row_num, from_row_offset)
         to_anchor = AnchorMarker(col_num + 1, to_col_offset, row_num + 1, to_row_offset)
         img.anchor = TwoCellAnchor('twoCell', from_anchor, to_anchor)
 
         ws.add_image(img)
-        offset_increment += 20000
+        if to_col_offset < 0:
+            from_col_offset += image_position_transfer(row_height, img_width, image_height)
         image_num += 1
     return image_num
 
@@ -1577,7 +1573,7 @@ def handle_grouped_row(row, ws, cols_without_hidden, column_name_to_column, sub_
     return cell_list
 
 
-def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id, image_param, cols_without_hidden, is_big_data_view=False):
+def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id, image_param, cols_without_hidden, row_height, is_big_data_view=False):
     from openpyxl.cell import WriteOnlyCell
     cell_list = []
     col_num = 0
@@ -1652,7 +1648,7 @@ def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_
             image_num = image_param.get('num')
             images_target_dir = image_param.get('images_target_dir')
             if image_num < EXPORT_IMAGE_LIMIT:
-                num = add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, image_num, images_target_dir)
+                num = add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, image_num, images_target_dir, column, row_height)
                 image_param['num'] = num
         else:
             if col_type == ColumnTypes.GEOLOCATION:
@@ -1692,15 +1688,9 @@ def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, rep
             try:
                 c = WriteOnlyCell(ws, value=col.get('name'))
                 col_pos = get_column_letter(col_num + 1)
-                if col.get('type') == ColumnTypes.IMAGE:
-
-                    # set image column width
-                    ws.column_dimensions[col_pos].width = IMAGE_CELL_COLUMN_WIDTH
-
-                else:
-                    col_width = col.get('width', 200)
-                    col_width_xls = width_transfer(col_width)
-                    ws.column_dimensions[col_pos].width = col_width_xls
+                col_width = col.get('width', 200)
+                col_width_xls = width_transfer(col_width)
+                ws.column_dimensions[col_pos].width = col_width_xls
 
             except Exception as e:
                 if not column_error_log_exists:
@@ -1722,14 +1712,14 @@ def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, rep
         row_num_info = {'row_num': row_num + 1}
         sub_level = 0
         handle_grouped_view_rows(data_list, row_num_info, ws, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid,
-                         repo_id, image_param, cols_without_hidden, column_name_to_column, summary_col_info, row_list, sub_level)
+                         repo_id, image_param, cols_without_hidden, column_name_to_column, summary_col_info, row_list, sub_level, row_height)
     else:
         row_list = []
         for row in data_list:
             row_num += 1  # for big data view
             try:
                 params = (row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id,
-                          image_param, cols_without_hidden, is_big_data_view)
+                          image_param, cols_without_hidden, row_height, is_big_data_view)
                 row_cells = handle_row(*params)
                 ws.row_dimensions[row_num + 1].height = height_transfer(row_height)
             except Exception as e:
@@ -1750,7 +1740,7 @@ def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, rep
 
 
 def handle_grouped_view_rows(view_rows, row_num_info, ws, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid,
-                    repo_id, image_param, cols_without_hidden, column_name_to_column, summary_col_info, row_list, sub_level):
+                    repo_id, image_param, cols_without_hidden, column_name_to_column, summary_col_info, row_list, sub_level, row_height):
     head_name_to_head = {head.get('name'): head for head in cols_without_hidden}
     for row in view_rows:
         group_subgroups = row.get('subgroups')
@@ -1764,11 +1754,11 @@ def handle_grouped_view_rows(view_rows, row_num_info, ws, email2nickname, unknow
 
         if group_rows is None and group_subgroups:
             handle_grouped_view_rows(group_subgroups, row_num_info, ws, email2nickname, unknown_user_set, unknown_cell_list,
-                            dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, summary_col_info, row_list, sub_level + 1)
+                            dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, summary_col_info, row_list, sub_level + 1, row_height)
         else:
             for group_row in group_rows:
                 # write normal row to ws
                 row_cells = handle_row(group_row, row_num_info.get('row_num'), ws, email2nickname, unknown_user_set, unknown_cell_list,
-                                       dtable_uuid, repo_id, image_param, cols_without_hidden)
+                                       dtable_uuid, repo_id, image_param, cols_without_hidden, row_height)
                 row_list.append(row_cells)
                 row_num_info['row_num'] += 1
