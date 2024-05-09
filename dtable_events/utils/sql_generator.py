@@ -413,6 +413,63 @@ class SingleSelectOperator(Operator):
         })
 
 
+class DepartmentMultipleSelectOperator(Operator):
+    SUPPORT_FILTER_PREDICATE = [
+        FilterPredicateTypes.HAS_ANY_OF,
+        FilterPredicateTypes.HAS_NONE_OF,
+        FilterPredicateTypes.HAS_ALL_OF,
+        FilterPredicateTypes.IS_EXACTLY,
+        FilterPredicateTypes.EMPTY,
+        FilterPredicateTypes.NOT_EMPTY,
+    ]
+
+    def __init__(self, column, filter_item):
+        super(DepartmentMultipleSelectOperator, self).__init__(column, filter_item)
+    
+    def op_has_any_of(self):
+        if not self.filter_term:
+            return ""
+        filter_term = self.filter_term
+        option_names = ["%s" % op_name for op_name in filter_term]
+        filter_term_str = ', '.join(option_names)
+        return "`%(column_name)s` in (%(filter_term_str)s)" % ({
+            "column_name": self.column_name,
+            "filter_term_str": filter_term_str
+        })
+    
+    def op_has_none_of(self):
+        if not self.filter_term:
+            return ""
+        filter_term = self.filter_term
+        option_names = ["%s" % op_name for op_name in filter_term]
+        filter_term_str = ', '.join(option_names)
+        return "`%(column_name)s` has none of (%(filter_term_str)s)" % ({
+            "column_name": self.column_name,
+            "filter_term_str": filter_term_str
+        })
+    
+    def op_has_all_of(self):
+        if not self.filter_term:
+            return ""
+        filter_term = self.filter_term
+        option_names = ["%s" % op_name for op_name in filter_term]
+        filter_term_str = ', '.join(option_names)
+        return "`%(column_name)s` has all of (%(filter_term_str)s)" % ({
+            "column_name": self.column_name,
+            "filter_term_str": filter_term_str
+        })
+    
+    def op_is_exactly(self):
+        if not self.filter_term:
+            return ""
+        filter_term = self.filter_term
+        option_names = ["%s" % op_name for op_name in filter_term]
+        filter_term_str = ', '.join(option_names)
+        return "`%(column_name)s` is exactly (%(filter_term_str)s)" % ({
+            "column_name": self.column_name,
+            "filter_term_str": filter_term_str
+        })
+
 class MultipleSelectOperator(Operator):
     SUPPORT_FILTER_PREDICATE = [
         FilterPredicateTypes.HAS_ANY_OF,
@@ -950,6 +1007,9 @@ class ArrayOperator(object):
 
         if array_type == ColumnTypes.SINGLE_SELECT:
             return MultipleSelectOperator(linked_column, filter_item)
+
+        if array_type == ColumnTypes.DEPARTMENT_SINGLE_SELECT:
+            return DepartmentMultipleSelectOperator(linked_column, filter_item)
 
         if array_type in [ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
             return CollaboratorOperator(linked_column, filter_item)
