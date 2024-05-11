@@ -430,8 +430,7 @@ class DepartmentMultipleSelectOperator(Operator):
         if not self.filter_term:
             return ""
         filter_term = self.filter_term
-        option_names = ["%s" % op_name for op_name in filter_term]
-        filter_term_str = ', '.join(option_names)
+        filter_term_str = ', '.join(filter_term)
         return "`%(column_name)s` in (%(filter_term_str)s)" % ({
             "column_name": self.column_name,
             "filter_term_str": filter_term_str
@@ -441,8 +440,7 @@ class DepartmentMultipleSelectOperator(Operator):
         if not self.filter_term:
             return ""
         filter_term = self.filter_term
-        option_names = ["%s" % op_name for op_name in filter_term]
-        filter_term_str = ', '.join(option_names)
+        filter_term_str = ', '.join(filter_term)
         return "`%(column_name)s` has none of (%(filter_term_str)s)" % ({
             "column_name": self.column_name,
             "filter_term_str": filter_term_str
@@ -452,8 +450,7 @@ class DepartmentMultipleSelectOperator(Operator):
         if not self.filter_term:
             return ""
         filter_term = self.filter_term
-        option_names = ["%s" % op_name for op_name in filter_term]
-        filter_term_str = ', '.join(option_names)
+        filter_term_str = ', '.join(filter_term)
         return "`%(column_name)s` has all of (%(filter_term_str)s)" % ({
             "column_name": self.column_name,
             "filter_term_str": filter_term_str
@@ -463,8 +460,7 @@ class DepartmentMultipleSelectOperator(Operator):
         if not self.filter_term:
             return ""
         filter_term = self.filter_term
-        option_names = ["%s" % op_name for op_name in filter_term]
-        filter_term_str = ', '.join(option_names)
+        filter_term_str = ', '.join(filter_term)
         return "`%(column_name)s` is exactly (%(filter_term_str)s)" % ({
             "column_name": self.column_name,
             "filter_term_str": filter_term_str
