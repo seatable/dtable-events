@@ -76,6 +76,8 @@ def sync_common_dataset(context, config):
 
     dataset_id = context.get('dataset_id')
 
+    org_id = context.get('org_id')
+
     # get database version
     try:
         db_session = init_db_session_class(config)()
@@ -134,7 +136,8 @@ def sync_common_dataset(context, config):
                 'dst_columns': dst_columns,
                 'operator': operator,
                 'lang': lang,
-                'dataset_data': dataset_data
+                'dataset_data': dataset_data,
+                'org_id': org_id
             })
     except Exception as e:
         dtable_io_logger.exception(e)
@@ -195,6 +198,8 @@ def import_common_dataset(context, config):
 
     dataset_id = context.get('dataset_id')
 
+    org_id = context.get('org_id')
+
     try:
         dataset_data, result = get_dataset_data(src_dtable_uuid, src_table, src_view_id)
         if result:
@@ -209,7 +214,8 @@ def import_common_dataset(context, config):
                 'dst_table_name': dst_table_name,
                 'operator': operator,
                 'lang': lang,
-                'dataset_data': dataset_data
+                'dataset_data': dataset_data,
+                'org_id': org_id
             })
     except Exception as e:
         dtable_io_logger.exception(e)
