@@ -1607,6 +1607,7 @@ class StatisticSQLGenerator(object):
                 summary_column_name = self._summary_column_2_sql(summary_method, summary_column)
                 if summary_column_name not in column_groupby_numeric_column_names:
                     column_groupby_numeric_column_names.append(summary_column_name)
+            right_summary_column_name = None
             if right_summary_type == 'COUNT':
                 right_summary_column_name = self._summary_column_2_sql('COUNT', groupby_column)
             else:
@@ -1624,6 +1625,7 @@ class StatisticSQLGenerator(object):
         summary_method = y_axis_left_summary_method.upper()
         left_summary_column_name = self._summary_column_2_sql(summary_method, summary_column)
 
+        right_summary_column_name = None
         if right_summary_type == 'COUNT':
             right_summary_column_name = self._summary_column_2_sql('COUNT', groupby_column)
         else:
