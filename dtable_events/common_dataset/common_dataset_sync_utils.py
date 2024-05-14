@@ -1022,7 +1022,7 @@ def import_sync_CDS(context):
     stats_manager['org_id'] = context.get('org_id')
     stats_manager['dataset_id'] = context.get('dataset_id')
     stats_manager['src_dtable_uuid'] = uuid_str_to_32_chars(context.get('src_dtable_uuid'))
-    stats_manager['src_table_id'] = (context.get('src_table') or {})['_id']
+    stats_manager['src_table_id'] = (context.get('src_table') or {}).get('_id')
     stats_manager['src_view_id'] = context.get('src_view_id')
     stats_manager['dst_dtable_uuid'] = uuid_str_to_32_chars(context.get('dst_dtable_uuid'))
     if context.get('dst_table_id'):

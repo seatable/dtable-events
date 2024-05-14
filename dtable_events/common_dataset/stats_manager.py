@@ -45,16 +45,54 @@ class StatsManager:
     def save(self):
         try:
             sql = '''
-            INSERT INTO common_dataset_stats(org_id, dataset_id, import_or_sync, operator, started_at, finished_at,
-            src_dtable_uuid, src_table_id, src_view_id, dst_dtable_uuid, dst_table_id,
-            to_be_appended_rows_count, to_be_updated_rows_count, to_be_deleted_rows_count,
-            appended_rows_count, updated_rows_count, deleted_rows_count,
-            columns_count, link_formula_columns_count, is_success, error) VALUES
-            (:org_id, :dataset_id, :import_or_sync, :operator, :started_at, :finished_at,
-             :src_dtable_uuid, :src_table_id, :src_view_id, :dst_dtable_uuid, :dst_table_id,
-             :to_be_appended_rows_count, :to_be_updated_rows_count, :to_be_deleted_rows_count,
-             :appended_rows_count, :updated_rows_count, :deleted_rows_count,
-             :columns_count, :link_formula_columns_count, :is_success, :error)
+            INSERT INTO
+              common_dataset_stats(
+                  org_id,
+                  dataset_id,
+                  import_or_sync,
+                  operator,
+                  started_at,
+                  finished_at,
+                  src_dtable_uuid,
+                  src_table_id,
+                  src_view_id,
+                  dst_dtable_uuid,
+                  dst_table_id,
+                  to_be_appended_rows_count,
+                  to_be_updated_rows_count,
+                  to_be_deleted_rows_count,
+                  appended_rows_count,
+                  updated_rows_count,
+                  deleted_rows_count,
+                  columns_count,
+                  link_formula_columns_count,
+                  is_success,
+                  error
+              )
+              VALUES
+              (
+                  :org_id,
+                  :dataset_id,
+                  :import_or_sync,
+                  :operator,
+                  :started_at,
+                  :finished_at,
+                  :src_dtable_uuid,
+                  :src_table_id,
+                  :src_view_id,
+                  :dst_dtable_uuid,
+                  :dst_table_id,
+                  :to_be_appended_rows_count,
+                  :to_be_updated_rows_count,
+                  :to_be_deleted_rows_count,
+                  :appended_rows_count,
+                  :updated_rows_count,
+                  :deleted_rows_count,
+                  :columns_count,
+                  :link_formula_columns_count,
+                  :is_success,
+                  :error
+              )
             '''
             self.db_session.execute(text(sql), self.info)
             self.db_session.commit()
