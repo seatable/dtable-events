@@ -1021,8 +1021,15 @@ def import_sync_CDS(context):
 
     stats_manager['org_id'] = context.get('org_id')
     stats_manager['dataset_id'] = context.get('dataset_id')
-    stats_manager['sync_id'] = context.get('sync_id')
-    stats_manager['import_or_sync'] = 'sync' if context.get('dst_table_id') else 'import'
+    stats_manager['src_dtable_uuid'] = uuid_str_to_32_chars(context.get('src_dtable_uuid'))
+    stats_manager['src_table_id'] = (context.get('src_table') or {})['_id']
+    stats_manager['src_view_id'] = context.get('src_view_id')
+    stats_manager['dst_dtable_uuid'] = uuid_str_to_32_chars(context.get('dst_dtable_uuid'))
+    if context.get('dst_table_id'):
+        stats_manager['import_or_sync'] = 'sync'
+        stats_manager['dst_table_id'] = context.get('dst_table_id')
+    else:
+        stats_manager['import_or_sync'] = 'import'
     stats_manager['operator'] = context.get('operator')
     stats_manager['started_at'] = datetime.now()
 
@@ -1035,6 +1042,7 @@ def import_sync_CDS(context):
         stats_manager['error'] = traceback.format_exc()
         raise e
     else:
+        stats_manager['dst_table_id'] = result.get('dst_table_id')
         stats_manager['is_success'] = True
     finally:
         stats_manager['finished_at'] = datetime.now()
