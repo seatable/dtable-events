@@ -40,7 +40,7 @@ def force_sync_common_dataset(context: dict, config):
                 task_manager.add_dataset_sync(sync_item.sync_id)
         # sync one by one
         try:
-            batch_sync_common_dataset(dataset_id, results, db_session, is_force_sync=True, operator=context.get('username'))
+            batch_sync_common_dataset(dataset_id, results, db_session, is_force_sync=True, operator=context.get('operator'))
         except Exception as e:
             dtable_io_logger.exception('force sync dataset: %s error: %s', dataset_id, e)
         else:
@@ -137,7 +137,8 @@ def sync_common_dataset(context, config):
                 'operator': operator,
                 'lang': lang,
                 'dataset_data': dataset_data,
-                'org_id': org_id
+                'org_id': org_id,
+                'db_session': db_session
             })
     except Exception as e:
         dtable_io_logger.exception(e)
@@ -201,6 +202,13 @@ def import_common_dataset(context, config):
     org_id = context.get('org_id')
 
     try:
+        db_session = init_db_session_class(config)()
+    except Exception as e:
+        db_session = None
+        dtable_io_logger.error('create db session failed. ERROR: {}'.format(e))
+        return
+
+    try:
         dataset_data, result = get_dataset_data(src_dtable_uuid, src_table, src_view_id)
         if result:
             dtable_io_logger.error('dtable: %s table: %s view: %s get dataset data error: %s', src_dtable_uuid, src_table['_id'], src_view_id, result)
@@ -215,7 +223,8 @@ def import_common_dataset(context, config):
                 'operator': operator,
                 'lang': lang,
                 'dataset_data': dataset_data,
-                'org_id': org_id
+                'org_id': org_id,
+                'db_session': db_session
             })
     except Exception as e:
         dtable_io_logger.exception(e)
@@ -227,13 +236,6 @@ def import_common_dataset(context, config):
             error_msg = 'import_sync_common_dataset:%s' % json.dumps(result)
             raise Exception(error_msg)
         dst_table_id = result.get('dst_table_id')
-
-    try:
-        db_session = init_db_session_class(config)()
-    except Exception as e:
-        db_session = None
-        dtable_io_logger.error('create db session failed. ERROR: {}'.format(e))
-        return
 
     # get base's metadata
     src_dtable_server_api = DTableServerAPI(operator, src_dtable_uuid, dtable_server_url)

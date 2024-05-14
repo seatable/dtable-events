@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 import re
+import traceback
 from copy import deepcopy
 from datetime import datetime
 
@@ -716,11 +717,12 @@ def create_dst_table_or_update_columns(dst_dtable_uuid, dst_table_id, dst_table_
     return dst_table_id, None
 
 
-def append_dst_rows(dst_dtable_uuid, dst_table_name, to_be_appended_rows, dst_dtable_server_api):
+def append_dst_rows(dst_dtable_uuid, dst_table_name, to_be_appended_rows, dst_dtable_server_api, stats_manager: StatsManager):
     step = INSERT_UPDATE_ROWS_LIMIT
     for i in range(0, len(to_be_appended_rows), step):
         try:
             dst_dtable_server_api.batch_append_rows(dst_table_name, to_be_appended_rows[i: i+step], need_convert_back=False)
+            stats_manager['appended_rows_count'] += len(to_be_appended_rows[i: i+step])
         except BaseExceedsException as e:
             return {
                 'dst_table_id': None,
@@ -737,7 +739,7 @@ def append_dst_rows(dst_dtable_uuid, dst_table_name, to_be_appended_rows, dst_dt
             }
 
 
-def update_dst_rows(dst_dtable_uuid, dst_table_name, to_be_updated_rows, dst_dtable_server_api):
+def update_dst_rows(dst_dtable_uuid, dst_table_name, to_be_updated_rows, dst_dtable_server_api, stats_manager: StatsManager):
     step = INSERT_UPDATE_ROWS_LIMIT
     for i in range(0, len(to_be_updated_rows), step):
         updates = []
@@ -749,6 +751,7 @@ def update_dst_rows(dst_dtable_uuid, dst_table_name, to_be_updated_rows, dst_dta
             })
         try:
             dst_dtable_server_api.batch_update_rows(dst_table_name, updates, need_convert_back=False)
+            stats_manager['updated_rows_count'] += len(to_be_updated_rows[i: i+step])
         except BaseExceedsException as e:
             return {
                 'dst_table_id': None,
@@ -765,11 +768,12 @@ def update_dst_rows(dst_dtable_uuid, dst_table_name, to_be_updated_rows, dst_dta
             }
 
 
-def delete_dst_rows(dst_dtable_uuid, dst_table_name, to_be_deleted_row_ids, dst_dtable_server_api):
+def delete_dst_rows(dst_dtable_uuid, dst_table_name, to_be_deleted_row_ids, dst_dtable_server_api, stats_manager: StatsManager):
     step = DELETE_ROWS_LIMIT
     for i in range(0, len(to_be_deleted_row_ids), step):
         try:
             dst_dtable_server_api.batch_delete_rows(dst_table_name, to_be_deleted_row_ids[i: i+step])
+            stats_manager['deleted_rows_count'] += len(to_be_deleted_row_ids[i: i+step])
         except Exception as e:
             logger.error('sync dataset delete rows dst dtable: %s dst table: %s error: %s', dst_dtable_uuid, dst_table_name, e)
 
@@ -871,11 +875,7 @@ def _import_sync_CDS(context):
     operator = context.get('operator')
     lang = context.get('lang', 'en')
 
-    operate_from = context.get('operate_from')
-
     dataset_data = context.get('dataset_data')
-
-    org_id = context.get('org_id')
 
     stats_manager = context.get('stats_manager') or {}
 
@@ -883,10 +883,6 @@ def _import_sync_CDS(context):
     dst_dtable_db_api = DTableDBAPI(operator, dst_dtable_uuid, INNER_DTABLE_DB_URL)
 
     is_sync = bool(dst_table_id)
-
-    stats_manager['org_id'] = org_id
-    stats_manager['import_or_sync'] = 'sync' if is_sync else 'import'
-    stats_manager['operate_from'] = operate_from
 
     # create dst table or update dst table columns
     # fetch all src view rows id, S
@@ -949,7 +945,7 @@ def _import_sync_CDS(context):
 
     # delete dst to-be-deleted-rows
     logger.debug('will delete %s rows', len(to_be_deleted_rows_id_set))
-    delete_dst_rows(dst_dtable_uuid, dst_table_name, list(to_be_deleted_rows_id_set), dst_dtable_server_api)
+    delete_dst_rows(dst_dtable_uuid, dst_table_name, list(to_be_deleted_rows_id_set), dst_dtable_server_api, stats_manager)
 
     dst_query_columns = ', '.join(['_id'] + ["`%s`" % col['name'] for col in final_columns])
 
@@ -978,7 +974,7 @@ def _import_sync_CDS(context):
         ## update
         to_be_updated_rows, _ = generate_synced_rows(src_rows, src_columns, final_columns, rows_invalid_infos, dst_rows=dst_rows)
         logger.debug('step src update-rows: %s to-be-updated-rows: %s', len(to_be_updated_rows_id_list[i: i+step]), len(to_be_updated_rows))
-        error_resp = update_dst_rows(dst_dtable_uuid, dst_table_name, to_be_updated_rows, dst_dtable_server_api)
+        error_resp = update_dst_rows(dst_dtable_uuid, dst_table_name, to_be_updated_rows, dst_dtable_server_api, stats_manager)
         if error_resp:
             return error_resp
 
@@ -999,7 +995,7 @@ def _import_sync_CDS(context):
         src_rows = [dataset_data['rows_dict'][row_id] for row_id in step_to_be_appended_rows_id_list]
         src_rows = sorted(src_rows, key=lambda row: step_row_sort_dict[row['_id']])
         _, to_be_appended_rows = generate_synced_rows(src_rows, src_columns, final_columns, rows_invalid_infos)
-        error_resp = append_dst_rows(dst_dtable_uuid, dst_table_name, to_be_appended_rows, dst_dtable_server_api)
+        error_resp = append_dst_rows(dst_dtable_uuid, dst_table_name, to_be_appended_rows, dst_dtable_server_api, stats_manager)
         if error_resp:
             return error_resp
 
@@ -1021,15 +1017,29 @@ def _import_sync_CDS(context):
 
 
 def import_sync_CDS(context):
-    stats_manager = StatsManager()
+    stats_manager = StatsManager(context.get('db_session'))
+
+    stats_manager['org_id'] = context.get('org_id')
+    stats_manager['dataset_id'] = context.get('dataset_id')
+    stats_manager['sync_id'] = context.get('sync_id')
+    stats_manager['import_or_sync'] = 'sync' if context.get('dst_table_id') else 'import'
+    stats_manager['operator'] = context.get('operator')
+    stats_manager['started_at'] = datetime.now()
+
     context['stats_manager'] = stats_manager
+
     try:
-        _import_sync_CDS(context)
+        result = _import_sync_CDS(context)
     except Exception as e:
         stats_manager['is_success'] = False
+        stats_manager['error'] = traceback.format_exc()
         raise e
     else:
         stats_manager['is_success'] = True
+    finally:
+        stats_manager['finished_at'] = datetime.now()
+        stats_manager.save()
+    return result
 
 
 def set_common_dataset_invalid(dataset_id, db_session):
@@ -1082,8 +1092,8 @@ def gen_src_assets(src_dtable_uuid, src_table_id, src_view_id, dataset_sync_ids,
     src_version = src_dtable_metadata.get('version')
 
     # query org_id
-    sql = "SELECT w.org_id FROM workspaces w JOIN dtables ON w.id=d.workspace_id WHERE d.uuid=:dtable_uuid"
-    results = db_session.execute(sql, {'dtable_uuid': uuid_str_to_32_chars(src_dtable_uuid)})
+    sql = "SELECT w.org_id FROM workspaces w JOIN dtables d ON w.id=d.workspace_id WHERE d.uuid=:dtable_uuid"
+    results = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(src_dtable_uuid)})
     src_workspace = next(results, None)
     org_id = src_workspace.org_id
 
@@ -1173,7 +1183,8 @@ def batch_sync_common_dataset(dataset_id, dataset_syncs, db_session, is_force_sy
                 'operator': operator or 'dtable-events',
                 'lang': 'en',  # TODO: lang
                 'dataset_data': dataset_data,
-                'org_id': src_assets.get('org_id')
+                'org_id': src_assets.get('org_id'),
+                'db_session': db_session
             })
         except Exception as e:
             logging.error('sync common dataset src-uuid: %s src-table: %s src-view: %s dst-uuid: %s dst-table: %s error: %s', 
