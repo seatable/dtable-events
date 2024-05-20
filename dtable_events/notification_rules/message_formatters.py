@@ -170,7 +170,9 @@ class NumberMessageFormatter(BaseMessageFormatter):
 
         decimal = column_data.get('decimal', 'dot')
         thousands = column_data.get('thousands', 'no')
-        precision = column_data.get('precision') or 2
+        precision = column_data.get('precision')
+        if precision is None:
+            precision = 2
         enable_precision = column_data.get('enable_precision', False)
         currency_symbol = column_data.get('currency_symbol', '$')
         currency_symbol_position = column_data.get('currency_symbol_position', 'before')
@@ -183,13 +185,16 @@ class NumberMessageFormatter(BaseMessageFormatter):
         int_part = value.split('.')[0]
         if str(precision) != '0':
             float_part = value.split('.')[1]
+        else:
+            float_part = ''
 
         if thousands != 'no':
             int_part = ('{:%s}' % self.separator_map[thousands]).format(int(int_part))
-        if enable_precision and str(precision) != '0':
-            value = int_part + self.separator_map[decimal] + float_part
-        else:
-            value = int_part
+        if enable_precision:
+            if str(precision) != '0':
+                value = int_part + self.separator_map[decimal] + float_part
+            else:
+                value = int_part
 
         if number_format in ['dollar', 'euro', 'yuan']:
             value = self.currency_map[number_format] + value
