@@ -34,6 +34,9 @@ class RedisClient(object):
         if config.has_option('REDIS', 'password'):
             self._password = config.get('REDIS', 'password')
 
+    def publish(self, channel_name, message):
+        self.connection.publish(channel_name, message)
+
     def get_subscriber(self, channel_name):
         while True:
             try:
