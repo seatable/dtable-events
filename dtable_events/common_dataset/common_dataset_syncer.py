@@ -15,7 +15,8 @@ from dtable_events.utils import get_opt_from_conf_or_env, parse_bool
 
 class CommonDatasetSyncer(object):
 
-    def __init__(self, config):
+    def __init__(self, app, config):
+        self.app = app
         self._enabled = True
         self._prepara_config(config)
         self._db_session_class = init_db_session_class(config)
@@ -35,7 +36,7 @@ class CommonDatasetSyncer(object):
         if not self.is_enabled():
             logging.warning('Common dataset syncer not enabled')
             return
-        CommonDatasetSyncerTimer(self._db_session_class).start()
+        CommonDatasetSyncerTimer(self.app, self._db_session_class).start()
 
     def is_enabled(self):
         return self._enabled
@@ -78,19 +79,20 @@ def list_pending_common_dataset_syncs(db_session):
     return dataset_list
 
 
-def check_common_dataset(session_class):
+def check_common_dataset(app, session_class):
     with session_class() as db_session:
         dataset_sync_list = list(list_pending_common_dataset_syncs(db_session))
         cds_dst_dict = defaultdict(list)
         for dataset_sync in dataset_sync_list:
             cds_dst_dict[dataset_sync.dataset_id].append(dataset_sync)
         for dataset_id, dataset_syncs in cds_dst_dict.items():
-            batch_sync_common_dataset(dataset_id, dataset_syncs, db_session)
+            batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session)
 
 
 class CommonDatasetSyncerTimer(Thread):
-    def __init__(self, db_session_class):
+    def __init__(self, app, db_session_class):
         super(CommonDatasetSyncerTimer, self).__init__()
+        self.app = app
         self.db_session_class = db_session_class
 
     def run(self):
@@ -100,7 +102,7 @@ class CommonDatasetSyncerTimer(Thread):
         def timed_job():
             logging.info('Starts to scan common dataset syncs...')
             try:
-                check_common_dataset(self.db_session_class)
+                check_common_dataset(self.app, self.db_session_class)
             except Exception as e:
                 logging.exception('check periodcal common dataset syncs error: %s', e)
 
