@@ -1,6 +1,7 @@
 # simulate from https://github.com/seatable/dtable-ui-component/blob/master/src/index.js
 
 import logging
+from copy import deepcopy
 
 from dateutil import parser
 
@@ -161,6 +162,7 @@ class NumberMessageFormatter(BaseMessageFormatter):
     def format_message(self, value):
         if not value and value != 0:
             return self.format_empty_message()
+        src_value = deepcopy(value)
         try:
             value = float(value)
         except:
@@ -195,6 +197,8 @@ class NumberMessageFormatter(BaseMessageFormatter):
                 value = int_part + self.separator_map[decimal] + float_part
             else:
                 value = int_part
+        else:
+            value = str(src_value)
 
         if number_format in ['dollar', 'euro', 'yuan']:
             value = self.currency_map[number_format] + value
