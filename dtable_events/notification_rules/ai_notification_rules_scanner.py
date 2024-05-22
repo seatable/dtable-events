@@ -88,7 +88,7 @@ def trigger_ai_notification_rule(rule):
     detail = rule[2]
 
     detail = json.loads(detail)
-    notify_hour = detail.get('users', 0)
+    notify_hour = detail.get('notify_hour', 0)
     users = detail.get('users', [])
 
     dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
