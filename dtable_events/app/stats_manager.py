@@ -2,15 +2,14 @@ import json
 import logging
 from datetime import datetime
 
-import redis
-
 from dtable_events.app.event_redis import RedisClient
 
 
 logger = logging.getLogger(__name__)
 
+
 class CommonDatasetStatsWorker:
-    key = 'stats_cds'
+    channel = 'stats_cds'
 
     def __init__(self, redis_client: RedisClient) -> None:
         self.info = {
@@ -53,21 +52,6 @@ class CommonDatasetStatsWorker:
                 self.info['started_at'] = self.info['started_at'].isoformat()
             if self.info.get('finished_at') and isinstance(self.info.get('finished_at'), datetime):
                 self.info['finished_at'] = self.info['finished_at'].isoformat()
-            self.redis_client.publish(self.key, json.dumps(self.info))
+            self.redis_client.publish(self.channel, json.dumps(self.info))
         except Exception as e:
-            logger.warning('publish stats to %s error: %s', self.key, e)
-
-
-class RedisStasWorkerFactory:
-
-    def __init__(self):
-        self.redis_client = None
-
-    def init_redis(self, config):
-        self.redis_client = RedisClient(config)
-
-    def get_common_dataset_stats_worker(self):
-        return CommonDatasetStatsWorker(self.redis_client)
-
-
-redis_stats_worker_factory = RedisStasWorkerFactory()
+            logger.warning('publish stats to %s error: %s', self.channel, e)

@@ -9,7 +9,8 @@ from sqlalchemy import text
 from dateutil import parser
 
 from dtable_events.app.config import INNER_DTABLE_DB_URL
-from dtable_events.app.stats_manager import redis_stats_worker_factory, CommonDatasetStatsWorker
+from dtable_events.app.event_redis import redis_cache
+from dtable_events.app.stats_manager import CommonDatasetStatsWorker
 from dtable_events.utils import get_inner_dtable_server_url, uuid_str_to_36_chars, uuid_str_to_32_chars
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import BaseExceedsException, DTableServerAPI
@@ -1016,7 +1017,9 @@ def _import_sync_CDS(context):
 
 
 def import_sync_CDS(context):
-    stats_worker = redis_stats_worker_factory.get_common_dataset_stats_worker()
+    # use _redis_client from redis_cache because RedisClint in redis_cache has been instantiated
+    # avoiding lots of instantiation of redis connection pools
+    stats_worker = CommonDatasetStatsWorker(redis_cache._redis_client)
 
     stats_worker['org_id'] = context.get('org_id')
     stats_worker['dataset_id'] = context.get('dataset_id')
