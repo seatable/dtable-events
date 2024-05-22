@@ -27,7 +27,8 @@ class TaskManager(object):
 
         self.conf = {}
 
-    def init(self, workers, file_server_port, io_task_timeout, config):
+    def init(self, app, workers, file_server_port, io_task_timeout, config):
+        self.app = app
         self.conf['file_server_port'] = file_server_port
         self.conf['io_task_timeout'] = io_task_timeout
         self.conf['workers'] = workers
@@ -280,6 +281,7 @@ class TaskManager(object):
         from dtable_events.dtable_io.import_sync_common_dataset import import_common_dataset
 
         task_id = str(uuid.uuid4())
+        context['app'] = self.app
         task = (import_common_dataset, (context, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
@@ -299,6 +301,7 @@ class TaskManager(object):
             self.add_dataset_sync(dataset_sync_id)
 
         task_id = str(uuid.uuid4())
+        context['app'] = self.app
         task = (sync_common_dataset, (context, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
@@ -318,6 +321,7 @@ class TaskManager(object):
             self.force_sync_dataset_ids.add(dataset_id)
 
         task_id = str(uuid.uuid4())
+        context['app'] = self.app
         task = (force_sync_common_dataset, (context, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task

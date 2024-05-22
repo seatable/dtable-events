@@ -40,7 +40,7 @@ def force_sync_common_dataset(context: dict, config):
                 task_manager.add_dataset_sync(sync_item.sync_id)
         # sync one by one
         try:
-            batch_sync_common_dataset(dataset_id, results, db_session, is_force_sync=True, operator=context.get('operator'))
+            batch_sync_common_dataset(context.get('app'), dataset_id, results, db_session, is_force_sync=True, operator=context.get('operator'))
         except Exception as e:
             dtable_io_logger.exception('force sync dataset: %s error: %s', dataset_id, e)
         else:
@@ -138,7 +138,8 @@ def sync_common_dataset(context, config):
                 'lang': lang,
                 'dataset_data': dataset_data,
                 'org_id': org_id,
-                'db_session': db_session
+                'db_session': db_session,
+                'app': context.get('app')
             })
     except Exception as e:
         dtable_io_logger.exception(e)
@@ -224,7 +225,8 @@ def import_common_dataset(context, config):
                 'lang': lang,
                 'dataset_data': dataset_data,
                 'org_id': org_id,
-                'db_session': db_session
+                'db_session': db_session,
+                'app': context.get('app')
             })
     except Exception as e:
         dtable_io_logger.exception(e)

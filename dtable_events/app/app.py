@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from dtable_events.activities.handlers import MessageHandler
-from dtable_events.app.stats_sender import stats_sender
+from dtable_events.app.stats_sender import StatsSender
 from dtable_events.statistics.counter import UserActivityCounter
 from dtable_events.dtable_io.dtable_io_server import DTableIOServer
 from dtable_events.tasks.instant_notices_sender import InstantNoticeSender
@@ -29,10 +29,10 @@ class App(object):
         self._enable_foreground_tasks = task_mode.enable_foreground_tasks
         self._enable_background_tasks = task_mode.enable_background_tasks
 
-        stats_sender.init_config(config)
+        self._stats_sender = StatsSender(config)
 
         if self._enable_foreground_tasks:
-            self._dtable_io_server = DTableIOServer(config)
+            self._dtable_io_server = DTableIOServer(self, config)
 
         if self._enable_background_tasks:
             # redis client subscriber
@@ -51,7 +51,7 @@ class App(object):
             self._dtable_notification_rules_scanner = DTableNofiticationRulesScanner(config)
             self._dtable_automation_rules_scanner = DTableAutomationRulesScanner(config)
             self._ldap_syncer = LDAPSyncer(config)
-            self._common_dataset_syncer = CommonDatasetSyncer(config)
+            self._common_dataset_syncer = CommonDatasetSyncer(self, config)
             self._big_data_storage_stats_worker = BigDataStorageStatsWorker(config)
             self._data_syncr = DataSyncer(config)
             self._workflow_schedule_scanner = WorkflowSchedulesScanner(config)

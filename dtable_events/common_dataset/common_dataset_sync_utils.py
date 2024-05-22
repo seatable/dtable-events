@@ -9,7 +9,6 @@ from sqlalchemy import text
 from dateutil import parser
 
 from dtable_events.app.config import INNER_DTABLE_DB_URL
-from dtable_events.app.stats_sender import stats_sender
 from dtable_events.utils import get_inner_dtable_server_url, uuid_str_to_36_chars, uuid_str_to_32_chars
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import BaseExceedsException, DTableServerAPI
@@ -1016,10 +1015,11 @@ def _import_sync_CDS(context):
 
 
 def import_sync_CDS(context):
+    stats_sender = context.get('app')._stats_sender
     stats_info = stats_sender.get_stats_cds_info_template()
 
     stats_info['org_id'] = context.get('org_id')
-    stats_info['dataset_id'] = context.get('dataset_id')
+    stats_info['dataset_id'] = int(context.get('dataset_id'))
     stats_info['src_dtable_uuid'] = uuid_str_to_32_chars(context.get('src_dtable_uuid'))
     stats_info['src_table_id'] = (context.get('src_table') or {}).get('_id')
     stats_info['src_view_id'] = context.get('src_view_id')
@@ -1137,7 +1137,7 @@ def gen_dst_assets(dst_dtable_uuid, dst_table_id, dataset_sync_id, db_session):
     }
 
 
-def batch_sync_common_dataset(dataset_id, dataset_syncs, db_session, is_force_sync=False, operator='dtable-events'):
+def batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session, is_force_sync=False, operator='dtable-events'):
     """
     batch sync CDS content to all syncs
 
@@ -1191,7 +1191,8 @@ def batch_sync_common_dataset(dataset_id, dataset_syncs, db_session, is_force_sy
                 'lang': 'en',  # TODO: lang
                 'dataset_data': dataset_data,
                 'org_id': src_assets.get('org_id'),
-                'db_session': db_session
+                'db_session': db_session,
+                'app': app
             })
         except Exception as e:
             logging.error('sync common dataset src-uuid: %s src-table: %s src-view: %s dst-uuid: %s dst-table: %s error: %s', 

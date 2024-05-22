@@ -10,11 +10,8 @@ class StatsSender:
 
     CDS_CHANNEL = 'stats_cds'
 
-    def __init__(self):
+    def __init__(self, config):
         self.config = None
-        self.redis_client = None
-
-    def init_config(self, config):
         self._redis_client = RedisClient(config)
 
     def send(self, channel: str, info: dict):
@@ -47,6 +44,3 @@ class StatsSender:
             'is_success': None,
             'error': None
         }
-
-
-stats_sender = StatsSender()

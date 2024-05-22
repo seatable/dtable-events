@@ -12,10 +12,11 @@ from dtable_events.dtable_io.task_plugin_email_manager import plugin_email_task_
 
 class DTableIOServer(Thread):
 
-    def __init__(self, config):
+    def __init__(self, app, config):
         Thread.__init__(self)
         self._parse_config(config)
-        task_manager.init(self._workers, self._file_server_port, self._io_task_timeout, config)
+        self.app = app
+        task_manager.init(self.app, self._workers, self._file_server_port, self._io_task_timeout, config)
         message_task_manager.init(self._workers, self._file_server_port, self._io_task_timeout, config)
         data_sync_task_manager.init(self._workers, self._file_server_port, self._io_task_timeout, config)
         plugin_email_task_manager.init(self._workers, self._file_server_port, self._io_task_timeout, config)

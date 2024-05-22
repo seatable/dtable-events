@@ -9,11 +9,10 @@ from sqlalchemy import text
 import jwt
 import requests
 
-from dtable_events import filter2sql
+from dtable_events.utils.sql_generator import filter2sql
 from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL
 from dtable_events.app.metadata_cache_managers import RuleIntentMetadataCacheManger, RuleIntervalMetadataCacheManager
-from dtable_events.notification_rules.utils import get_nickname_by_usernames
-from dtable_events.utils import is_valid_email, uuid_str_to_36_chars, get_inner_dtable_server_url
+from dtable_events.utils import is_valid_email, get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes, FormulaResultType
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_web_api import DTableWebAPI
