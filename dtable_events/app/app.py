@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from dtable_events.activities.handlers import MessageHandler
+from dtable_events.app.stats_sender import stats_sender
 from dtable_events.statistics.counter import UserActivityCounter
 from dtable_events.dtable_io.dtable_io_server import DTableIOServer
 from dtable_events.tasks.instant_notices_sender import InstantNoticeSender
@@ -27,6 +28,8 @@ class App(object):
     def __init__(self, config, task_mode):
         self._enable_foreground_tasks = task_mode.enable_foreground_tasks
         self._enable_background_tasks = task_mode.enable_background_tasks
+
+        stats_sender.init_config(config)
 
         if self._enable_foreground_tasks:
             self._dtable_io_server = DTableIOServer(config)
