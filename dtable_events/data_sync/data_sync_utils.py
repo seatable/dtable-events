@@ -220,6 +220,8 @@ def update_threads(seatable, dtable_db_api, email_table_name, link_table_name, e
                                        limit=step)
         thread_id_row_id_dict.update({row['Thread ID']: [row['_id'], get_thread_email_ids(row.get('Emails'))] for row in thread_rows})
 
+    if not to_be_updated_thread_dict:
+        return
     # batch update Last Updated
     to_be_updated_last_updated_rows = [{
         'row_id': thread_id_row_id_dict[key][0],
