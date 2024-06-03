@@ -104,6 +104,17 @@ class BigDataTaskManager(object):
 
         return task_id
 
+    def add_convert_app_table_page_to_execl_task(self, dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_conditions, shown_column_keys, is_support_image):
+        from dtable_events.dtable_io import convert_app_table_page_to_execl
+
+        task_id = str(uuid.uuid4())
+        task = (convert_app_table_page_to_execl,
+                (dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_conditions, shown_column_keys, task_id, self.tasks_status_map, is_support_image))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+
+        return task_id
+
     def run(self):
         thread_num = self.conf['workers']
         for i in range(thread_num):

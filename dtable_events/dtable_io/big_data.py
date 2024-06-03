@@ -478,3 +478,116 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
         shutil.rmtree(images_target_dir)
     except:
         pass
+
+
+def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_conditions, shown_column_keys, task_id, tasks_status_map, is_support_image=False):
+    from dtable_events.dtable_io import dtable_io_logger
+
+    tasks_status_map[task_id] = {
+        'status': 'initializing',
+        'err_msg': '',
+        'handled_row_count': 0,
+        'total_row_count': 0,
+    }
+
+    target_dir = TEMP_EXPORT_VIEW_DIR + dtable_uuid
+    if not os.path.isdir(target_dir):
+        os.makedirs(target_dir)
+
+    try:
+        nicknames = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
+    except Exception as e:
+        dtable_io_logger.error('get nicknames. ERROR: {}'.format(e))
+        return
+    email2nickname = {nickname['email']: nickname['name'] for nickname in nicknames}
+
+    try:
+        metadata = get_metadata_from_dtable_server(dtable_uuid, username)
+    except Exception as e:
+        dtable_io_logger.error('get metadata. ERROR: {}'.format(e))
+        return
+
+    target_table = {}
+    for table in metadata.get('tables', []):
+        if table.get('_id', '') == table_id:
+            target_table = table
+            break
+
+    if not target_table:
+        dtable_io_logger.warning('Table %s not found.' % table_id)
+        return
+
+    cols = target_table.get('columns', [])
+    table_name = target_table.get('name', '')
+    cols_without_hidden = []
+    column_name_to_column = {}
+    for col in cols:
+        column_name_to_column[col.get('name')] = col
+        if col.get('key', '') in shown_column_keys:
+            cols_without_hidden.append(col)
+
+    sheet_name = escape_sheet_name(page_name)
+    excel_name = app_name + '_' + page_name + '.xlsx'
+    target_path = os.path.join(target_dir, excel_name)
+    images_target_dir = os.path.join(IMAGE_TMP_DIR, dtable_uuid, str(uuid.uuid4()))
+    image_param = {'num': 0, 'is_support': is_support_image, 'images_target_dir': images_target_dir}
+
+    wb = openpyxl.Workbook(write_only=True)
+    ws = wb.create_sheet(sheet_name)
+
+    dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
+    try:
+        row_count_sql = 'select count(*) as total_count from `%s`' % table_name
+        result, _ = dtable_db_api.query(row_count_sql, server_only=False)
+        total_row_count = result[0].get('total_count', 0)
+    except Exception as e:
+        dtable_io_logger.error('get big data rows count error: %s', e)
+        tasks_status_map[task_id]['status'] = 'terminated'
+        tasks_status_map[task_id]['err_msg'] = 'get big data rows count failed'
+        return
+
+    # exported row number should less than ARCHIVE_VIEW_EXPORT_ROW_LIMIT
+    if total_row_count > int(ARCHIVE_VIEW_EXPORT_ROW_LIMIT):
+        total_row_count = int(ARCHIVE_VIEW_EXPORT_ROW_LIMIT)
+
+    tasks_status_map[task_id]['total_row_count'] = total_row_count
+    filter_conditions['sorts'] = filter_conditions.get('sorts')
+    filter_conditions['filters'] = filter_conditions.get('filters')
+    filter_conditions['filter_conjunction'] = filter_conditions.get('filter_conjunction')
+
+    offset = 10000
+    start = 0
+    while True:
+        # exported row number should less than ARCHIVE_VIEW_EXPORT_ROW_LIMIT
+        if (start + offset) > total_row_count:
+            offset = total_row_count - start
+
+        filter_conditions['start'] = start
+        filter_conditions['limit'] = offset
+        sql = filter2sql(table_name, cols, filter_conditions, by_group=False)
+        response_rows, db_metadata = dtable_db_api.query(sql, convert=True, server_only=False)
+
+        row_num = start
+        try:
+            write_xls_with_type(response_rows, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, is_big_data_view=True)
+        except Exception as e:
+            dtable_io_logger.exception(e)
+            dtable_io_logger.error('head_list = {}\n{}'.format(cols_without_hidden, e))
+            tasks_status_map[task_id]['status'] = 'terminated'
+            tasks_status_map[task_id]['err_msg'] = 'write xls error'
+            return
+
+        start += offset
+        tasks_status_map[task_id]['handled_row_count'] = start
+        tasks_status_map[task_id]['status'] = 'running'
+
+        if start >= total_row_count or len(response_rows) < offset:
+            break
+
+    tasks_status_map[task_id]['status'] = 'success'
+    wb.save(target_path)
+    # remove tmp images
+    try:
+        shutil.rmtree(images_target_dir)
+    except:
+        pass

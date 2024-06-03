@@ -1333,3 +1333,36 @@ def query_plugin_email_send_status():
 
     resp = dict(is_finished=is_finished)
     return make_response((resp, 200))
+
+
+@app.route('/add-convert-app-table-page-to-excel-task', methods=['POST'])
+def convert_app_table_page_to_excel():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    if big_data_task_manager.tasks_queue.full():
+        from dtable_events.dtable_io import dtable_io_logger
+        dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
+                                 % (big_data_task_manager.tasks_queue.qsize(), big_data_task_manager.current_task_info,
+                                    big_data_task_manager.threads_is_alive()))
+        return make_response(('dtable io server busy.', 400))
+
+    data = request.form
+    dtable_uuid = data.get('dtable_uuid')
+    table_id = data.get('table_id')
+    username = data.get('username')
+    app_name = data.get('app_name')
+    repo_id = data.get('repo_id')
+    page_name = data.get('page_name')
+    filter_conditions = json.loads(data.get('filter_conditions'))
+    shown_column_keys = json.loads(data.get('shown_column_keys'))
+    is_support_image = to_python_boolean(data.get('is_support_image', 'false'))
+
+    try:
+        task_id = big_data_task_manager.add_convert_app_table_page_to_execl_task(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_conditions, shown_column_keys, is_support_image)
+    except Exception as e:
+        logger.error(e)
+        return make_response((e, 500))
+
+    return make_response(({'task_id': task_id}, 200))
