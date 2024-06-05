@@ -681,9 +681,13 @@ def update_universal_app_custom_page_static_image(pages, app_id, repo_id, worksp
                         element = block_by_id.get(block_children_id, {})
                         element_type = element.get('type', '')
                         if element_type == 'static_long_text':
-                            old_value_text = element['value']['text']
-                            dst_image_url_part = '%s/asset/%s' % (str(workspace_id), str(dtable_uuid))
-                            element['value']['text'] = re.sub(r'\d+/asset/[-0-9a-f]{36}', dst_image_url_part, old_value_text)
+                            # images in external-apps/form_long_text_image
+                            dst_image_url_part = '%s/asset/%s/external-apps/form_long_text_image' % (str(workspace_id), str(dtable_uuid))
+                            element['value']['text'] = re.sub(r'\d+/asset/[-0-9a-f]{36}/external-apps/form_long_text_image', dst_image_url_part, element['value']['text'])
+                            # images in external-apps/<app_id>/page_id
+                            dst_image_url_part = '%s/asset/%s/external-apps/%s/%s' % (str(workspace_id), str(dtable_uuid), app_id, page_id)
+                            element['value']['text'] = re.sub(r'\d+/asset/[-0-9a-f]{36}/external-apps/\d+/\w+', dst_image_url_part, element['value']['text'])
+
                             is_changed = True
 
                 if is_changed:
@@ -730,9 +734,13 @@ def update_universal_app_single_record_page_static_assets(pages, app_id, repo_id
                 for element in elements:
                     element_type = element.get('type', '')
                     if element_type == 'long_text':
-                        old_value_text = element['value']['text']
-                        dst_image_url_part = '%s/asset/%s' % (str(workspace_id), str(dtable_uuid))
-                        element['value']['text'] = re.sub(r'\d+/asset/[-0-9a-f]{36}', dst_image_url_part, old_value_text)
+                        # images in external-apps/form_long_text_image
+                        dst_image_url_part = '%s/asset/%s/external-apps/form_long_text_image' % (str(workspace_id), str(dtable_uuid))
+                        element['value']['text'] = re.sub(r'\d+/asset/[-0-9a-f]{36}/external-apps/form_long_text_image', dst_image_url_part, element['value']['text'])
+                        # images in external-apps/<app_id>/page_id
+                        dst_image_url_part = '%s/asset/%s/external-apps/%s/%s' % (str(workspace_id), str(dtable_uuid), app_id, page_id)
+                        element['value']['text'] = re.sub(r'\d+/asset/[-0-9a-f]{36}/external-apps/\d+/\w+', dst_image_url_part, element['value']['text'])
+
                         is_changed = True
 
                 if is_changed:
