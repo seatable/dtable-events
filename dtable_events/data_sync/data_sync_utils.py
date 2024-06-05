@@ -401,7 +401,7 @@ def run_sync_emails(context):
             logger.error('send_date invalid.')
             return
 
-    account = get_third_party_account(db_session, account_id)
+    account = get_third_party_account(db_session, account_id, dtable_uuid)
     if not account or account.get('account_type') != 'email' or not account.get('detail'):
         set_data_sync_invalid(data_sync_id, db_session)
         logger.warning('third party account not found.')

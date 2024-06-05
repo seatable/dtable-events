@@ -15,10 +15,10 @@ from seaserv import seafile_api
 
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, SEATABLE_FAAS_AUTH_TOKEN, \
     SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL
-from dtable_events.automations.models import BoundThirdPartyAccounts
+from dtable_events.automations.models import BoundThirdPartyAccounts, DTableBoundThirdPartyAccounts
 from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg
 from dtable_events.notification_rules.notification_rules_utils import fill_msg_blanks_with_sql_row, send_notification
-from dtable_events.utils import is_valid_email, get_inner_dtable_server_url, uuid_str_to_36_chars
+from dtable_events.utils import is_valid_email, get_inner_dtable_server_url, uuid_str_to_36_chars, uuid_str_to_32_chars
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI, NotFoundException
 from dtable_events.utils.dtable_web_api import DTableWebAPI
@@ -47,14 +47,19 @@ AUTO_RULE_TRIGGER_TIMES_PER_MINUTE_TIMEOUT = 60
 
 
 
-def get_third_party_account(session, account_id):
-    stmt = select(BoundThirdPartyAccounts).where(BoundThirdPartyAccounts.id == account_id).limit(1)
-    account = session.scalars(stmt).first()
-    if account:
-        return account.to_dict()
-    else:
-        logger.warning("Third party account %s does not exists." % account_id)
-        return None
+def get_third_party_account(session, account_id, dtable_uuid):
+    stmt_bound = select(DTableBoundThirdPartyAccounts).where(
+        DTableBoundThirdPartyAccounts.account_id == account_id,
+        dtable_uuid == uuid_str_to_32_chars(dtable_uuid)
+    )
+    account_bound = session.scalars(stmt_bound).first()
+    if account_bound:
+        stmt = select(BoundThirdPartyAccounts).where(BoundThirdPartyAccounts.id == account_id).limit(1)
+        account = session.scalars(stmt).first()
+        if account:
+            return account.to_dict()
+    logger.warning("Third party account %s does not exists." % account_id)
+    return None
 
 def email2list(email_str, split_pattern='[,，]'):
     email_list = [value.strip() for value in re.split(split_pattern, email_str) if value.strip()]
@@ -501,7 +506,7 @@ class SendEmailAction(BaseAction):
 
     def __init__(self, context: BaseContext, account_id, subject, msg, send_to, copy_to, send_from):
         super().__init__(context)
-        self.account_dict = get_third_party_account(self.context.db_session, account_id)
+        self.account_dict = get_third_party_account(self.context.db_session, account_id, self.context.dtable_uuid)
         if not self.account_dict:
             raise ActionInvalid('account_id: %s not found' % account_id)
         self.msg = msg
@@ -557,7 +562,7 @@ class SendWechatAction(BaseAction):
 
     def __init__(self, context: BaseContext, account_id, msg, msg_type):
         super().__init__(context)
-        self.account_dict = get_third_party_account(self.context.db_session, account_id)
+        self.account_dict = get_third_party_account(self.context.db_session, account_id, self.context.dtable_uuid)
         if not self.account_dict:
             raise ActionInvalid('account_id: %s not found' % account_id)
         self.msg = msg
@@ -587,7 +592,7 @@ class SendDingtalkAction(BaseAction):
         self.msg = msg
         self.msg_type = msg_type
         self.msg_title = msg_title
-        self.account_dict = get_third_party_account(self.context.db_session, account_id)
+        self.account_dict = get_third_party_account(self.context.db_session, account_id, self.context.dtable_uuid)
         if not self.account_dict:
             raise ActionInvalid('account_id: %s not found' % account_id)
 

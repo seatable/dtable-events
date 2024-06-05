@@ -1038,7 +1038,7 @@ class SendWechatAction(BaseAction):
         self.init_notify(msg)
 
     def init_notify(self, msg):
-        account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id)
+        account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id, self.auto_rule.dtable_uuid)
         if not account_dict:
             raise RuleInvalidException('Send wechat no account')
         blanks = set(re.findall(r'\{([^{]*?)\}', msg))
@@ -1109,7 +1109,7 @@ class SendDingtalkAction(BaseAction):
         self.init_notify(msg)
 
     def init_notify(self, msg):
-        account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id)
+        account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id, self.auto_rule.dtable_uuid)
         if not account_dict:
             raise RuleInvalidException('Send dingtalk no account')
         blanks = set(re.findall(r'\{([^{]*?)\}', msg))
@@ -1252,7 +1252,7 @@ class SendEmailAction(BaseAction):
             self.image_cid_url_map[cid] = image_url
 
     def init_notify(self):
-        account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id)
+        account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id, self.auto_rule.dtable_uuid)
         if not account_dict:
             raise RuleInvalidException('Send email no account')
         self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
