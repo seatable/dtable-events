@@ -130,3 +130,16 @@ class DTableWebAPI:
             'type': msg_type
         }, headers=headers)
         return parse_response(resp)
+
+    def add_issues_notification(self, users, assistant_uuid):
+        logger.debug('add issues notification to users: %s assistant_uuid: %s', users, assistant_uuid)
+        url = '%(server_url)s/api/v2.1/ai/internal/issues-notification/?from=dtable_events' % {
+            'server_url': self.dtable_web_service_url
+        }
+        token = jwt.encode({}, DTABLE_PRIVATE_KEY, algorithm='HS256')
+        headers = {'Authorization': 'Token ' + token}
+        resp = requests.post(url, json={
+            'assistant_uuid': assistant_uuid,
+            'users': users,
+        }, headers=headers)
+        return parse_response(resp)
