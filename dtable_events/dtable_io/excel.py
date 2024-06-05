@@ -1408,6 +1408,7 @@ def add_nickname_to_cell(unknown_user_set, unknown_cell_list):
 def parse_dtable_long_text(cell_value):
     if not isinstance(cell_value, str):
         return ''
+    cell_value = cell_value.replace('&#x20;', '')
     if cell_value.find('\n\n') == -1:
         return cell_value
     return parse_dtable_long_text(cell_value.replace('\n\n', '\n'))
