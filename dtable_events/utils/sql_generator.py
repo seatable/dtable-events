@@ -1297,8 +1297,6 @@ class StatisticSQLGenerator(object):
             if filter_type not in ['column_key', 'modified_date', 'modified_geolocation']:
                 continue
             groupby_column_names = [groupby_column['groupby_name'] for groupby_column in groupby_columns_dict.values()]
-            print('groupby_columns: ', groupby_columns_dict.keys())
-            print('groupby_column_names: ', groupby_column_names)
             column_key = detail_filter.get('column_key')
             if column_key not in groupby_columns_dict:
                 continue
@@ -1336,7 +1334,6 @@ class StatisticSQLGenerator(object):
                     continue
                 filter_sqls.append(f"{detail_column_name}='{detail_value}'")
 
-        print('filter_sqls: ', filter_sqls)
         if filter_sqls:
             if self.filter_sql:
                 filter_sqls_str = ' AND '.join(filter_sqls)
@@ -2208,8 +2205,6 @@ class StatisticSQLGenerator(object):
         if self.statistic_type in [StatisticType.BAR_GROUP, StatisticType.LINE_GROUP, StatisticType.AREA_GROUP, StatisticType.HORIZONTAL_GROUP_BAR, StatisticType.STACKED_HORIZONTAL_BAR, StatisticType.BAR_STACK]:
             column_groupby_column_key = self.statistic.get('column_groupby_column_key', '')
             column_groupby_multiple_numeric_column = self.statistic.get('column_groupby_multiple_numeric_column', False) or False
-            print('column_groupby_column_key: ', column_groupby_column_key)
-            print('column_groupby_multiple_numeric_column: ', column_groupby_multiple_numeric_column)
             if not (column_groupby_column_key or column_groupby_multiple_numeric_column):
                 sql = self._basic_statistic_2_sql()
                 return sql, self.error
