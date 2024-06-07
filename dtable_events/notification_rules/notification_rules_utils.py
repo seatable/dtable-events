@@ -213,14 +213,14 @@ def convert_zero_in_value(value):
     return value
 
 
-def fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, row, db_session):
+def fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, row, db_session, convert_to_html=False):
     for blank in column_blanks:
         value = row.get(col_name_dict[blank]['key'])
         column_type = col_name_dict[blank]['type']
         formatter_class = formatter_map.get(column_type)
         if not formatter_class:
             continue
-        params = create_formatter_params(column_type, value=value, db_session=db_session)
+        params = create_formatter_params(column_type, value=value, db_session=db_session, convert_to_html=convert_to_html)
         if value is None:
             message = formatter_class(col_name_dict[blank]).format_empty_message()
             msg = msg.replace('{' + blank + '}', str(message))

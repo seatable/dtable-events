@@ -3,6 +3,7 @@
 import logging
 from copy import deepcopy
 
+import markdown
 from dateutil import parser
 
 from dtable_events.notification_rules.utils import get_nickname_by_usernames
@@ -48,14 +49,22 @@ class ImageMessageFormatter(BaseMessageFormatter):
 
 class LongTextMessageFormatter(BaseMessageFormatter):
 
-    def format_message(self, value):
+    def format_message(self, value, convert_to_html=False):
         if isinstance(value, str):
-            return value.strip()
-        if not value:
-            return self.format_empty_message()
-        if not isinstance(value, dict):
-            return self.format_empty_message()
-        return str(value.get('text') or '').strip()
+            return_value = value.strip()
+        else:
+            if not value:
+                return self.format_empty_message()
+            if not isinstance(value, dict):
+                return self.format_empty_message()
+            return_value = value.get('text') or ''
+        if convert_to_html:
+            try:
+                return_value = markdown.markdown(return_value).strip()
+            except Exception as e:
+                logger.warning('value: %s convert to html error: %s', value, e)
+                return_value = str(value.get('text') or '').strip()
+        return return_value
 
 
 class TextMessageFormatter(BaseMessageFormatter):
@@ -474,6 +483,9 @@ def create_formatter_params(formatter_type, **kwargs):
         ColumnTypes.FORMULA
     ]:
         params['db_session'] = db_session
+    if formatter_type == ColumnTypes.LONG_TEXT:
+        convert_to_html = kwargs.get('convert_to_html') or False
+        params['convert_to_html'] = convert_to_html
     return params
 
 
