@@ -1293,19 +1293,17 @@ class StatisticSQLGenerator(object):
         detail_filters = self.detail_filter_conditions.get('filters') or []
         filter_sqls = []
         for detail_filter in detail_filters:
-            filter_type = detail_filter.get('filter_type')
-            if filter_type not in ['column_key', 'modified_date', 'modified_geolocation']:
-                continue
+            filter_value = detail_filter.get('value')
             groupby_column_names = [groupby_column['groupby_name'] for groupby_column in groupby_columns_dict.values()]
             column_key = detail_filter.get('column_key')
             if column_key not in groupby_columns_dict:
                 continue
-            if filter_type == 'column_key':
+            if not filter_value:
                 filter_column = self._get_column_by_key(column_key)
                 if not filter_column:
-                    continue
+                    raise ValueError('filter: %s column not found')
                 if f"`{filter_column['name']}`" not in groupby_column_names:
-                    continue
+                    raise ValueError('filter: %s invalid for current statistic')
                 column_type = filter_column.get('type')
                 operator_cls = _get_operator_by_type(column_type)
                 if not operator_cls:
@@ -1315,24 +1313,14 @@ class StatisticSQLGenerator(object):
                 if not sql_condition:
                     continue
                 filter_sqls.append(sql_condition)
-            elif filter_type == 'modified_date':
-                detail_value = detail_filter['value']
+            else:  # some columns like date or geolocation, being set in statistic config
                 detail_column = self._get_column_by_key(column_key)
                 if not detail_column:
-                    continue
+                    raise ValueError('filter: %s column not found')
                 detail_column_name = self._statistic_column_name_to_sql(detail_column, groupby_columns_dict[column_key]['group_by'])
                 if detail_column_name not in groupby_column_names:
-                    continue
-                filter_sqls.append(f"{detail_column_name}='{detail_value}'")
-            elif filter_type == 'modified_geolocation':
-                detail_value = detail_filter['value']
-                detail_column = self._get_column_by_key(column_key)
-                if not detail_column:
-                    continue
-                detail_column_name = self._statistic_column_name_to_sql(detail_column, groupby_columns_dict[column_key]['group_by'])
-                if detail_column_name not in groupby_column_names:
-                    continue
-                filter_sqls.append(f"{detail_column_name}='{detail_value}'")
+                    raise ValueError('filter: %s invalid for current statistic')
+                filter_sqls.append(f"{detail_column_name}='{filter_value}'")
 
         if filter_sqls:
             if self.filter_sql:
