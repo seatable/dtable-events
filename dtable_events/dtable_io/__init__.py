@@ -16,7 +16,8 @@ from datetime import datetime
 from seaserv import seafile_api
 
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL
-from dtable_events.dtable_io.big_data import import_excel_to_db, update_excel_to_db, export_big_data_to_excel
+from dtable_events.dtable_io.big_data import import_excel_to_db, update_excel_to_db, export_big_data_to_excel, \
+    export_app_table_page_to_excel
 from dtable_events.dtable_io.utils import setup_logger, \
     prepare_asset_file_folder, post_dtable_json, post_asset_files, \
     download_files_to_path, create_forms_from_src_dtable, copy_src_forms_to_json, \
@@ -1208,3 +1209,13 @@ def import_page_design(repo_id, workspace_id, dtable_uuid, page_id, is_dir, user
             clear_tmp_file(tmp_page_path + '.zip')
         else:
             clear_tmp_file(tmp_page_path)
+
+
+def convert_app_table_page_to_execl(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_conditions, shown_column_keys, task_id, tasks_status_map, is_support_image):
+    dtable_io_logger.info('Start export app table to excel: {}.'.format(dtable_uuid))
+    try:
+        export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_conditions, shown_column_keys, task_id, tasks_status_map, is_support_image)
+    except Exception as e:
+        dtable_io_logger.exception('export app table failed. ERROR: {}'.format(e))
+    else:
+        dtable_io_logger.info('export app app_name: %s, page_name: %s success!', app_name, page_name)
