@@ -868,7 +868,7 @@ def parse_dtable_excel_file(file_path, table_name, columns, name_to_email):
         table = {
             'name': table_name,
             'rows': [],
-            'columns': columns,
+            'columns': [],
             'max_row': 0,
             'max_column': 0,
         }
@@ -891,17 +891,22 @@ def parse_dtable_excel_file(file_path, table_name, columns, name_to_email):
         max_column = len(columns)
 
     sheet_rows = sheet_rows[:max_row]
-    rows = parse_dtable_excel_rows(sheet_rows, columns, len(columns), name_to_email)
+
+    sheet_head = sheet_rows[0]
+    head_dict = {sheet_head[index].value: index for index in range(len(sheet_head))}
+
+    columns = [column for column in columns if column.get('name') in head_dict]
+    rows = parse_dtable_excel_rows(sheet_rows, columns, name_to_email)
 
     dtable_io_logger.info(
-        'got table: %s, rows: %d, columns: %d' % (sheet.title, len(rows), max_column))
+        'got table: %s, rows: %d, columns: %d' % (sheet.title, len(rows), len(columns)))
 
     table = {
         'name': table_name,
         'rows': rows,
         'columns': columns,
-        'max_row': max_row,
-        'max_column': max_column,
+        'max_row': len(rows),
+        'max_column': len(columns),
     }
     tables.append(table)
     wb.close()
@@ -926,7 +931,7 @@ def parse_update_excel_upload_excel_to_json(file_name, username, dtable_uuid, ta
     save_file_by_path(tmp_file_path, json.dumps(content))
 
 
-def parse_dtable_excel_rows(sheet_rows, columns, column_length, name_to_email):
+def parse_dtable_excel_rows(sheet_rows, columns, name_to_email):
     """
     parse excel according to dtable
     """
@@ -937,6 +942,7 @@ def parse_dtable_excel_rows(sheet_rows, columns, column_length, name_to_email):
     sheet_head = sheet_rows[0]
     head_dict = {sheet_head[index].value: index for index in range(len(sheet_head))}
     rows = []
+    column_length = len(columns)
 
     location_tree = get_location_tree_json()
 
@@ -969,7 +975,25 @@ def parse_csv_file(file_path, file_name, table_name, columns, name_to_email):
 
     tables = []
     max_column = 500  # columns limit
-    rows, max_column, csv_row_num, csv_column_num = parse_csv_rows(StringIO(csv_file), columns, max_column, name_to_email)
+    csv_file = StringIO(csv_file)
+
+    delimiter = guess_delimiter(deepcopy(csv_file))
+    csv_rows = [row for row in csv.reader(csv_file, delimiter=delimiter)]
+
+    if not csv_rows:
+        table = {
+            'name': table_name,
+            'rows': [],
+            'columns': [],
+            'max_row': 0,
+            'max_column': 0,
+        }
+        tables.append(table)
+        return tables
+    csv_head = csv_rows[0]
+
+    columns = [column for column in columns if column.get('name') in csv_head]
+    rows, max_column, csv_row_num, csv_column_num = parse_csv_rows(csv_rows, columns, max_column, name_to_email)
     dtable_io_logger.info(
         'parse csv: %s, rows: %d, columns: %d' % (file_name, csv_row_num, csv_column_num))
 
@@ -979,14 +1003,14 @@ def parse_csv_file(file_path, file_name, table_name, columns, name_to_email):
     rows = rows[:max_row]
 
     dtable_io_logger.info(
-        'got table: %s, rows: %d, columns: %d' % (file_name, len(rows), max_column))
+        'got table: %s, rows: %d, columns: %d' % (file_name, len(rows), len(columns)))
 
     table = {
         'name': table_name,
         'rows': rows,
         'columns': columns,
-        'max_row': max_row,
-        'max_column': max_column,
+        'max_row': len(rows),
+        'max_column': len(columns),
     }
     tables.append(table)
     return tables
@@ -1021,13 +1045,11 @@ def guess_delimiter(csv_file):
     return delimiter
 
 
-def parse_csv_rows(csv_file, columns, max_column, name_to_email):
+def parse_csv_rows(csv_rows, columns, max_column, name_to_email):
     from dtable_events.dtable_io import dtable_io_logger
     from dtable_events.utils import get_location_tree_json
 
     rows = []
-    delimiter = guess_delimiter(deepcopy(csv_file))
-    csv_rows = [row for row in csv.reader(csv_file, delimiter=delimiter)]
 
     if not csv_rows:
         return rows, 0, 0, 0
