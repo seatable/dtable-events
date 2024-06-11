@@ -1321,6 +1321,7 @@ class SendEmailAction(BaseAction):
             if is_plain_text and msg:
                 msg = self.fill_msg_blanks_with_sql(sql_row, msg, self.column_blanks)
             if not is_plain_text and html_msg:
+                # html message, when filling long-text value, convert markdown string to html string
                 html_msg = self.fill_msg_blanks_with_sql(sql_row, html_msg, self.column_blanks, convert_to_html=True)
         if self.column_blanks_send_to:
             temp = [self.fill_msg_blanks_with_sql(sql_row, send_to, self.column_blanks_send_to) for send_to in send_to_list]
