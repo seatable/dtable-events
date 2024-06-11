@@ -1267,10 +1267,10 @@ class SendEmailAction(BaseAction):
 
         self.auth_info = account_detail
 
-    def fill_msg_blanks_with_sql(self, row, text, blanks):
+    def fill_msg_blanks_with_sql(self, row, text, blanks, convert_to_html=False):
         col_name_dict = self.col_name_dict
         db_session = self.auto_rule.db_session
-        return fill_msg_blanks_with_sql_row(text, blanks, col_name_dict, row, db_session)
+        return fill_msg_blanks_with_sql_row(text, blanks, col_name_dict, row, db_session, convert_to_html=convert_to_html)
 
     def get_file_down_url(self, file_url):
         file_path = unquote('/'.join(file_url.split('/')[7:]).strip())
@@ -1321,7 +1321,8 @@ class SendEmailAction(BaseAction):
             if is_plain_text and msg:
                 msg = self.fill_msg_blanks_with_sql(sql_row, msg, self.column_blanks)
             if not is_plain_text and html_msg:
-                html_msg = self.fill_msg_blanks_with_sql(sql_row, html_msg, self.column_blanks)
+                # html message, when filling long-text value, convert markdown string to html string
+                html_msg = self.fill_msg_blanks_with_sql(sql_row, html_msg, self.column_blanks, convert_to_html=True)
         if self.column_blanks_send_to:
             temp = [self.fill_msg_blanks_with_sql(sql_row, send_to, self.column_blanks_send_to) for send_to in send_to_list]
             send_to_list = list(set([item.strip() for sublist in temp for item in sublist.split(',')]))
@@ -1399,7 +1400,7 @@ class SendEmailAction(BaseAction):
                 if is_plain_text and msg:
                     msg = self.fill_msg_blanks_with_sql(row, msg, self.column_blanks)
                 if not is_plain_text and html_msg:
-                    html_msg = self.fill_msg_blanks_with_sql(row, html_msg, self.column_blanks)
+                    html_msg = self.fill_msg_blanks_with_sql(row, html_msg, self.column_blanks, convert_to_html=True)
             if self.column_blanks_send_to:
                 temp = [self.fill_msg_blanks_with_sql(row, send_to, self.column_blanks_send_to) for send_to in send_to_list]
                 send_to_list = list(set([item.strip() for sublist in temp for item in sublist.split(',')]))
