@@ -101,7 +101,7 @@ class TaskMessageManager(object):
                 dtable_message_logger.info('Run task success: %s cost %ds \n' % (self.current_task_info, int(finish_time - start_time)))
                 self.current_task_info = None
             except Exception as e:
-                dtable_message_logger.error('Failed to handle task %s, error: %s \n' % (task_id, e))
+                dtable_message_logger.exception('Failed to handle task %s, error: %s \n' % (task_id, e))
                 self.tasks_map.pop(task_id, None)
                 self.current_task_info = None
 
