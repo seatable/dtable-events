@@ -22,6 +22,7 @@ from dtable_events.data_sync.data_syncer import DataSyncer
 from dtable_events.workflow.workflow_actions import WorkflowActionsHandler
 from dtable_events.workflow.workflow_schedules_scanner import WorkflowSchedulesScanner
 from dtable_events.page_design.manager import conver_page_to_pdf_manager
+from dtable_events.api_calls.api_calls_counter import APICallsCounter
 
 
 class App(object):
@@ -43,6 +44,7 @@ class App(object):
             self._dtable_real_time_rows_counter = DTableRealTimeRowsCounter(config)
             self._workflow_actions_handler = WorkflowActionsHandler(config)
             self._webhooker = Webhooker(config)
+            self._api_calls_counter = APICallsCounter(config)
             # cron jobs
             self._instant_notices_sender = InstantNoticeSender(config)
             self._email_notices_sender = EmailNoticesSender(config)
@@ -74,6 +76,7 @@ class App(object):
             self._dtable_real_time_rows_counter.start()      # default True
             self._workflow_actions_handler.start()           # always True
             self._webhooker.start()                          # always True
+            self._api_calls_counter.start()                  # always True
             # cron jobs
             self._instant_notices_sender.start()             # default True
             self._email_notices_sender.start()               # default True
