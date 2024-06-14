@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 class APICallsCounter:
     def __init__(self, config):
-        Thread.__init__(self)
         self._finished = Event()
         self._db_session_class = init_db_session_class(config)
         self._redis_client = RedisClient(config)
