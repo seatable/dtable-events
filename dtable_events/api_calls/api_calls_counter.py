@@ -6,7 +6,8 @@ from collections import defaultdict
 from datetime import datetime
 from threading import Thread, Event
 
-from dateutil import parser
+from apscheduler.schedulers.blocking import BlockingScheduler
+from dateutil import parser, relativedelta
 from sqlalchemy import text
 
 from dtable_events.app.event_redis import RedisClient
@@ -16,12 +17,13 @@ from dtable_events.utils import uuid_str_to_32_chars
 logger = logging.getLogger(__name__)
 
 
-class APICallsCounter(Thread):
+class APICallsCounter:
     def __init__(self, config):
         Thread.__init__(self)
         self._finished = Event()
         self._db_session_class = init_db_session_class(config)
         self._redis_client = RedisClient(config)
+        self.keep_months = 3  # including this month
 
     def count_api_gateway(self, info, db_session):
         try:
@@ -43,7 +45,7 @@ class APICallsCounter(Thread):
                 org_counts_dict[org_id][api_name] += count
             else:
                 owner_ids_dict[owner_id][api_name] += count
-        month = info_time.strftime('%Y-%m')
+        month = info_time.strftime('%Y-%m-01')
         updated_at = str(datetime.now())
         step = 100
 
@@ -53,7 +55,7 @@ class APICallsCounter(Thread):
                 values.append(f"('{dtable_uuid}', '{api_name}', {count}, '{month}', '{updated_at}')")
         for i in range(0, len(values), step):
             sql = '''
-                INSERT INTO stats_api_gateway_by_base (`dtable_uuid`, `api_name`, `count`, `month`, `updated_at`)
+                INSERT INTO `stats_api_gateway_by_base` (`dtable_uuid`, `api_name`, `count`, `month`, `updated_at`)
                 VALUES %(values)s
                 ON DUPLICATE KEY UPDATE `count`=`count`+VALUES(`count`), `updated_at`='%(updated_at)s'
             ''' % {
@@ -69,7 +71,7 @@ class APICallsCounter(Thread):
                 values.append(f"({org_id}, '{api_name}', {count}, '{month}', '{updated_at}')")
         for i in range(0, len(values), step):
             sql = '''
-                INSERT INTO stats_api_gateway_by_team (`org_id`, `api_name`, `count`, `month`, `updated_at`)
+                INSERT INTO `stats_api_gateway_by_team` (`org_id`, `api_name`, `count`, `month`, `updated_at`)
                 VALUES %(values)s
                 ON DUPLICATE KEY UPDATE `count`=`count`+VALUES(`count`), `updated_at`='%(updated_at)s'
             ''' % {
@@ -85,7 +87,7 @@ class APICallsCounter(Thread):
                 values.append(f"('{owner_id}', '{api_name}', {count}, '{month}', '{updated_at}')")
         for i in range(0, len(values), step):
             sql = '''
-                INSERT INTO stats_api_gateway_by_owner (`owner_id`, `api_name`, `count`, `month`, `updated_at`)
+                INSERT INTO `stats_api_gateway_by_owner` (`owner_id`, `api_name`, `count`, `month`, `updated_at`)
                 VALUES %(values)s
                 ON DUPLICATE KEY UPDATE `count`=`count`+VALUES(`count`), `updated_at`='%(updated_at)s'
             ''' % {
@@ -103,7 +105,7 @@ class APICallsCounter(Thread):
         except Exception as e:
             logger.exception('stats api_gateway api calls info: %s error: %s', info, e)
 
-    def run(self):
+    def count(self):
         logger.info('Starting count api calls...')
         subscriber = self._redis_client.get_subscriber('stats_api_calls')
 
@@ -124,3 +126,28 @@ class APICallsCounter(Thread):
             except Exception as e:
                 logger.error('Failed get message from redis: %s' % e)
                 subscriber = self._redis_client.get_subscriber('stats_api_calls')
+
+    def clean(self):
+        logger.info('Starting schedule clean api calls...')
+        sched = BlockingScheduler()
+        # fire at 0 o'clock in every day of week
+        @sched.scheduled_job('cron', day_of_week='*', hour='0')
+        def timed_job():
+            session = self._db_session_class()
+            clean_month = (datetime.now() - relativedelta.relativedelta(months=self.keep_months)).strftime('%Y-%m-01')
+            try:
+                # clean stats-api-gateway records
+                session.execute(f"DELETE FROM `stats_api_gateway_by_base` WHERE `month` <= '{clean_month}'")
+                session.execute(f"DELETE FROM `stats_api_gateway_by_owner` WHERE `month` <= '{clean_month}'")
+                session.execute(f"DELETE FROM `stats_api_gateway_by_team` WHERE `month` <= '{clean_month}'")
+                session.commit()
+            except Exception as e:
+                logger.exception('clean api calls counter error: %s', e)
+            finally:
+                session.close()
+
+        sched.start()
+
+    def start(self):
+        Thread(target=self.count, daemon=True).start()
+        Thread(target=self.clean, daemon=True).start()
