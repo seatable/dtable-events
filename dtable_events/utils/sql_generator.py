@@ -2198,6 +2198,9 @@ class BaseSQLGenerator(object):
                 )
                 group_string_list.append(filter_content)
 
+        if not group_string_list:
+            return ''
+
         return "%s%s" % (
             filter_header,
             group_conjunction_split.join(group_string_list)
