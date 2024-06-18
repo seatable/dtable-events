@@ -1112,7 +1112,7 @@ def import_big_excel(username, dtable_uuid, table_name, file_path, task_id, task
     try:
         import_excel_to_db(username, dtable_uuid, table_name, file_path, task_id, tasks_status_map)
     except Exception as e:
-        dtable_io_logger.error('import big excel failed. ERROR: {}'.format(e))
+        dtable_io_logger.exception('import big excel failed. ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('import big excel %s.xlsx success!' % table_name)
 
@@ -1126,7 +1126,7 @@ def update_big_excel(username, dtable_uuid, table_name, file_path, ref_columns, 
     try:
         update_excel_to_db(username, dtable_uuid, table_name, file_path, ref_columns, is_insert_new_data, task_id, tasks_status_map)
     except Exception as e:
-        dtable_io_logger.error('update big excel failed. ERROR: {}'.format(e))
+        dtable_io_logger.exception('update big excel failed. ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('update big excel %s.xlsx success!' % table_name)
 

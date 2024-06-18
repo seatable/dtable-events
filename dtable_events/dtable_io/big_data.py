@@ -2,6 +2,7 @@ import openpyxl
 import os
 import shutil
 import uuid
+from copy import deepcopy
 
 from dtable_events.dtable_io.excel import parse_row, write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR
 from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, get_metadata_from_dtable_server, \
@@ -30,19 +31,6 @@ FILE_READ_ERROR_CODE = 2
 COLUMN_MATCH_ERROR_CODE = 3
 ROW_INSERT_ERROR_CODE = 4
 INTERNAL_ERROR_CODE = 5
-
-
-def match_columns(authed_base, table_name, target_columns):
-    table_columns = authed_base.list_columns(table_name)
-    for col in table_columns:
-        col_type = col.get('type')
-        if col_type in AUTO_GENERATED_COLUMNS:
-            continue
-        col_name = col.get('name')
-        if col_name not in target_columns:
-            return False, col_name, table_columns
-
-    return True, None, table_columns
 
 
 def _parse_excel_row(excel_row_data, column_name_type_map, name_to_email, location_tree):
@@ -138,12 +126,19 @@ def import_excel_to_db(
     try:
 
         dtable_server_url = get_inner_dtable_server_url()
-        excel_columns = [cell.value for cell in ws[1]]
 
         base = DTableServerAPI(username, dtable_uuid, dtable_server_url)
-        column_matched, column_name, base_columns = match_columns(base, table_name, excel_columns)
-        if not column_matched:
-            tasks_status_map[task_id]['err_msg'] = 'Column %s does not match in excel' % column_name
+        column_name_type_map = {col.get('name'): col.get('type') for col in base.list_columns(table_name)}
+        matched_columns = []
+        excel_columns = []
+        for cell in ws[1]:
+            excel_columns.append(cell.value)
+            col_type = column_name_type_map.get(cell.value)
+            if col_type and col_type not in AUTO_GENERATED_COLUMNS:
+                matched_columns.append(cell.value)
+
+        if not matched_columns:
+            tasks_status_map[task_id]['err_msg'] = 'No matching columns in excel'
             tasks_status_map[task_id]['status'] = 'terminated'
             tasks_status_map[task_id]['err_code'] = COLUMN_MATCH_ERROR_CODE
             os.remove(file_path)
@@ -165,7 +160,6 @@ def import_excel_to_db(
     status = 'success'
     tasks_status_map[task_id]['status'] = 'running'
 
-    column_name_type_map = {col.get('name'): col.get('type') for col in base_columns}
     related_users = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
     name_to_email = {user.get('name'): user.get('email') for user in related_users}
 
@@ -184,6 +178,8 @@ def import_excel_to_db(
                 parsed_row_data = {}
                 for col_name, value in row_data.items():
                     col_type = column_name_type_map.get(col_name)
+                    if not col_type or col_type in AUTO_GENERATED_COLUMNS:
+                        continue
                     parsed_row_data[col_name] = value and parse_row(col_type, value, name_to_email, location_tree=location_tree) or ''
                 slice_data.append(parsed_row_data)
                 if len(slice_data) == 100:
@@ -252,7 +248,7 @@ def update_excel_to_db(
     try:
         dtable_server_url = get_inner_dtable_server_url()
         excel_columns = [cell.value for cell in ws[1]]
-        for ref_col  in ref_columns:
+        for ref_col in ref_columns:
             if ref_col not in excel_columns:
                 tasks_status_map[task_id]['err_msg'] = 'Column %s does not exist in excel' % ref_col
                 tasks_status_map[task_id]['status'] = 'terminated'
@@ -291,7 +287,15 @@ def update_excel_to_db(
             if index > 0: # skip header row
                 row_list = [r.value for r in row]
                 row_data = dict(zip(excel_columns, row_list))
-                excel_row_datas.append(row_data)
+
+                row_data1 = deepcopy(row_data)
+                for col_name, value in row_data.items():
+                    col_type = column_name_type_map.get(col_name)
+                    if not col_type or col_type in AUTO_GENERATED_COLUMNS:
+                        row_data1.pop(col_name, None)
+                        continue
+
+                excel_row_datas.append(row_data1)
                 if len(excel_row_datas) >= 100:
                     rows_for_import, rows_for_update = handle_excel_row_datas(
                         db_handler, table_name,
