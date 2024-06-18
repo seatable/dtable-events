@@ -280,12 +280,14 @@ def import_table_from_base(context):
                     continue
             dst_columns.append(column_dict)
 
+        src_rows = new_table.get('rows', [])
         data = {
             'lang': lang,
             'table_name': dst_table_name,
             'columns': dst_columns,
             'views' : src_table.get('views', []),
-            'view_structure' : src_table.get('view_structure', {})
+            'view_structure' : src_table.get('view_structure', {}),
+            'rows': src_rows
         }
         try:
             resp = requests.post(url, headers=dst_headers, json=data, timeout=180)
@@ -296,29 +298,6 @@ def import_table_from_base(context):
         except Exception as e:
             error_msg = 'create dst table error: %s' % e
             raise Exception(error_msg)
-
-        # import src_rows step by step
-        src_rows = new_table.get('rows', [])
-        step = 1000
-        url = '%s/api/v1/dtables/%s/batch-append-rows/?from=dtable_events' % (dtable_server_url, dst_dtable_uuid)
-        for i in range(0, len(src_rows), step):
-            data = {
-                'table_name': dst_table_name,
-                'rows': src_rows[i: i + step],
-                'need_convert_back': False
-            }
-            try:
-                resp = requests.post(url, headers=dst_headers, json=data, timeout=180)
-                if resp.status_code != 200:
-                    error_msg = 'batch append rows to dst dtable: %s dst table: %s error: %s status_code: %s' % \
-                                (dst_dtable_uuid, dst_table_name, resp.text, resp.status_code)
-                    dtable_io_logger.error(error_msg)
-                    raise Exception(error_msg)
-            except Exception as e:
-                error_msg = 'batch append rows to dst dtable: %s dst table: %s error: %s' % \
-                            (dst_dtable_uuid, dst_table_name, e)
-                dtable_io_logger.error(error_msg)
-                raise Exception(error_msg)
     except Exception as e:
         error_msg = 'import_table_from_base: %s' % e
         try:
