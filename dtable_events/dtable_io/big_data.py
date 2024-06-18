@@ -7,7 +7,7 @@ from copy import deepcopy
 from dtable_events.dtable_io.excel import parse_row, write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR
 from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, get_metadata_from_dtable_server, \
     escape_sheet_name
-from dtable_events.utils import get_inner_dtable_server_url, get_location_tree_json
+from dtable_events.utils import get_inner_dtable_server_url, get_location_tree_json, gen_random_option
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.app.config import INNER_DTABLE_DB_URL, BIG_DATA_ROW_IMPORT_LIMIT, BIG_DATA_ROW_UPDATE_LIMIT, \
     ARCHIVE_VIEW_EXPORT_ROW_LIMIT
@@ -33,14 +33,24 @@ ROW_INSERT_ERROR_CODE = 4
 INTERNAL_ERROR_CODE = 5
 
 
-def _parse_excel_row(excel_row_data, column_name_type_map, name_to_email, location_tree):
+def _parse_excel_row(excel_row_data, column_name_type_map, name_to_email, location_tree, excel_select_column_options):
     parsed_row_data = {}
     for col_name, value in excel_row_data.items():
         col_type = column_name_type_map.get(col_name)
         if not value:
             continue
-        parsed_row_data[col_name] = parse_row(col_type, value, name_to_email,location_tree=location_tree)
-    return parsed_row_data
+        excel_value = parse_row(col_type, value, name_to_email, location_tree=location_tree)
+        parsed_row_data[col_name] = excel_value
+
+        if excel_value and col_type in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
+            col_options = excel_select_column_options.get(col_name, set())
+            if not col_options:
+                excel_select_column_options[col_name] = col_options
+            if col_type == ColumnTypes.MULTIPLE_SELECT:
+                col_options.update(set(excel_value))
+            else:
+                col_options.add(excel_value)
+    return parsed_row_data, excel_select_column_options
 
 
 def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column_name_type_map, name_to_email, location_tree, insert_new_row=False):
@@ -79,20 +89,38 @@ def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column
 
     query_rows_from_base, db_metadata = db_api.query(sql, convert=True, server_only=False)
     query_rows_from_base = convert_db_rows(db_metadata, query_rows_from_base)
+    excel_select_column_options = {}
     for excel_row in excel_row_datas:
-        excel_ref_data = {col: excel_row.get(col) for col in ref_cols if  excel_row.get(col)}
+        excel_ref_data = {col: excel_row.get(col) for col in ref_cols if excel_row.get(col)}
+        parsed_row, excel_select_column_options = _parse_excel_row(excel_row, column_name_type_map, name_to_email, location_tree, excel_select_column_options)
+
         find_tag = False
         for base_row in query_rows_from_base:
             base_ref_data = {col: base_row.get(col) for col in ref_cols if base_row.get(col)}
             if base_ref_data and excel_ref_data and base_ref_data == excel_ref_data:
                 rows_for_update.append({
                     "row_id": base_row.get('_id'),
-                    "row": _parse_excel_row(excel_row, column_name_type_map, name_to_email, location_tree) # parse
+                    "row": parsed_row  # parse
                 })
                 find_tag = True
         if insert_new_row and excel_ref_data and not find_tag:
-            rows_for_import.append(_parse_excel_row(excel_row, column_name_type_map, name_to_email, location_tree)) # parse
-    return rows_for_import, rows_for_update
+            rows_for_import.append(parsed_row)  # parse
+    return rows_for_import, rows_for_update, excel_select_column_options
+
+
+def add_column_options(dtable_server_api, table_name, excel_select_column_options, dtable_col_name_to_column):
+    # add select column options
+    is_added_options = False
+    for col_name, excel_options in excel_select_column_options.items():
+        column = dtable_col_name_to_column.get(col_name)
+        col_data = column.get('data')
+        dtable_options = col_data and col_data.get('options') or []
+        to_be_added_options = excel_options - set([op.get('name') for op in dtable_options])
+        if to_be_added_options:
+            options = [gen_random_option(option) for option in to_be_added_options]
+            dtable_server_api.add_column_options(table_name, col_name, options)
+            is_added_options = True
+    return is_added_options
 
 
 def import_excel_to_db(
@@ -128,7 +156,8 @@ def import_excel_to_db(
         dtable_server_url = get_inner_dtable_server_url()
 
         base = DTableServerAPI(username, dtable_uuid, dtable_server_url)
-        column_name_type_map = {col.get('name'): col.get('type') for col in base.list_columns(table_name)}
+        base_columns = base.list_columns(table_name)
+        column_name_type_map = {col.get('name'): col.get('type') for col in base_columns}
         matched_columns = []
         excel_columns = []
         for cell in ws[1]:
@@ -156,7 +185,6 @@ def import_excel_to_db(
     insert_count = 0
     slice_data = []
 
-
     status = 'success'
     tasks_status_map[task_id]['status'] = 'running'
 
@@ -167,12 +195,15 @@ def import_excel_to_db(
 
     index = 0
     exceed_flag = False
+
+    excel_select_column_options = {}
+    dtable_col_name_to_column = {col['name']: col for col in base_columns}
     for row in ws.rows:
         if index > BIG_DATA_ROW_IMPORT_LIMIT:
             exceed_flag = True
             break
         try:
-            if index > 0: # skip header row
+            if index > 0:  # skip header row
                 row_list = [r.value for r in row]
                 row_data = dict(zip(excel_columns, row_list))
                 parsed_row_data = {}
@@ -180,10 +211,28 @@ def import_excel_to_db(
                     col_type = column_name_type_map.get(col_name)
                     if not col_type or col_type in AUTO_GENERATED_COLUMNS:
                         continue
-                    parsed_row_data[col_name] = value and parse_row(col_type, value, name_to_email, location_tree=location_tree) or ''
+
+                    excel_value = value and parse_row(col_type, value, name_to_email, location_tree=location_tree) or ''
+                    if excel_value and col_type in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
+                        col_options = excel_select_column_options.get(col_name, set())
+                        if not col_options:
+                            excel_select_column_options[col_name] = col_options
+                        if col_type == ColumnTypes.MULTIPLE_SELECT:
+                            col_options.update(set(excel_value))
+                        else:
+                            col_options.add(excel_value)
+                    parsed_row_data[col_name] = excel_value
+
                 slice_data.append(parsed_row_data)
                 if len(slice_data) == 100:
                     tasks_status_map[task_id]['rows_imported'] = insert_count
+                    is_added_options = add_column_options(base, table_name, excel_select_column_options, dtable_col_name_to_column)
+                    if is_added_options:
+                        # if column option is added, update base_columns
+                        base_columns = base.list_columns(table_name)
+                        dtable_col_name_to_column = {col['name']: col for col in base_columns}
+                        excel_select_column_options = {}
+
                     db_handler.insert_rows(table_name, slice_data)
                     insert_count += len(slice_data)
                     slice_data = []
@@ -193,11 +242,12 @@ def import_excel_to_db(
             tasks_status_map[task_id]['err_msg'] = 'Row inserted error'
             tasks_status_map[task_id]['status'] = 'terminated'
             tasks_status_map[task_id]['err_code'] = ROW_INSERT_ERROR_CODE
-            dtable_io_logger.error(str(err))
+            dtable_io_logger.exception(err)
             os.remove(file_path)
             return
 
     if slice_data:
+        add_column_options(base, table_name, excel_select_column_options, dtable_col_name_to_column)
         db_handler.insert_rows(table_name, slice_data)
         insert_count += len(slice_data)
 
@@ -258,7 +308,8 @@ def update_excel_to_db(
 
         db_handler = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
         base = DTableServerAPI(username, dtable_uuid, dtable_server_url)
-        column_name_type_map = {col.get('name'): col.get('type') for col in base.list_columns(table_name)}
+        base_columns = base.list_columns(table_name)
+        column_name_type_map = {col.get('name'): col.get('type') for col in base_columns}
     except Exception as err:
         tasks_status_map[task_id]['err_msg'] = str(err)
         tasks_status_map[task_id]['status'] = 'terminated'
@@ -278,13 +329,14 @@ def update_excel_to_db(
 
     excel_row_datas = []
     exceed_flag = False
+    dtable_col_name_to_column = {col['name']: col for col in base_columns}
     for row in ws.rows:
         if index > BIG_DATA_ROW_UPDATE_LIMIT:
             exceed_flag = True
             break
 
         try:
-            if index > 0: # skip header row
+            if index > 0:  # skip header row
                 row_list = [r.value for r in row]
                 row_data = dict(zip(excel_columns, row_list))
 
@@ -296,13 +348,19 @@ def update_excel_to_db(
                         continue
 
                 excel_row_datas.append(row_data1)
-                if len(excel_row_datas) >= 100:
-                    rows_for_import, rows_for_update = handle_excel_row_datas(
+                if len(excel_row_datas) >= 2:
+                    rows_for_import, rows_for_update, excel_select_column_options = handle_excel_row_datas(
                         db_handler, table_name,
                         excel_row_datas, ref_columns,
                         column_name_type_map, name_to_email, location_tree,
                         is_insert_new_data
                     )
+                    is_added_options = add_column_options(base, table_name, excel_select_column_options, dtable_col_name_to_column)
+                    if is_added_options:
+                        # if column option is added, update base_columns
+                        base_columns = base.list_columns(table_name)
+                        dtable_col_name_to_column = {col['name']: col for col in base_columns}
+
                     if is_insert_new_data and rows_for_import:
                         db_handler.insert_rows(table_name, rows_for_import)
                     if rows_for_update:
@@ -315,17 +373,19 @@ def update_excel_to_db(
             tasks_status_map[task_id]['err_msg'] = 'Row updated error'
             tasks_status_map[task_id]['status'] = 'terminated'
             tasks_status_map[task_id]['err_code'] = ROW_INSERT_ERROR_CODE
-            dtable_io_logger.error(str(err))
+            dtable_io_logger.exception(err)
             os.remove(file_path)
             return
 
     if excel_row_datas:
-        rows_for_import, rows_for_update = handle_excel_row_datas(
+        rows_for_import, rows_for_update, excel_select_column_options = handle_excel_row_datas(
             db_handler, table_name,
             excel_row_datas, ref_columns,
             column_name_type_map, name_to_email, location_tree,
             is_insert_new_data
         )
+        add_column_options(base, table_name, excel_select_column_options, dtable_col_name_to_column)
+
         if is_insert_new_data and rows_for_import:
             db_handler.insert_rows(table_name, rows_for_import)
         if rows_for_update:
