@@ -1182,7 +1182,7 @@ def _get_operator_by_type(column_type):
 
 class StatisticSQLGenerator(object):
 
-    def __init__(self, table, statistic_type, statistic, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids, detail_filter_conditions=None):
+    def __init__(self, table, statistic_type, statistic, username, id_in_org, detail_filter_conditions=None):
         self.error = None
         self.statistic_type = statistic_type
         table_name = table.get('name', '')
@@ -1197,15 +1197,10 @@ class StatisticSQLGenerator(object):
         filters = statistic.get('filters', [])
         if filters:
             for item in filters:
-                filter_term = item.get('filter_term')
                 if item.get('filter_predicate') == 'include_me':
                     item['filter_term'].append(username)
                 if item.get('filter_predicate') == 'is_current_user_ID':
                     item['filter_term'] = id_in_org
-                if filter_term == 'current_user_department':
-                    item['filter_term'] = current_user_department_ids
-                if filter_term == 'current_user_department_and_sub':
-                    item['filter_term'] = current_user_department_and_sub_ids
         self.filters = filters
 
         filter_conjunction = statistic.get('filter_conjunction', 'and')
@@ -2553,8 +2548,8 @@ def db_query(dtable_uuid, sql):
         return []
 
 
-def statistic2sql(table, statistic_type, statistic, username='', id_in_org='', current_user_department_ids=[], current_user_department_and_sub_ids=[], detail_filter_conditions=None):
-    sql_generator = StatisticSQLGenerator(table, statistic_type, statistic, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids, detail_filter_conditions=detail_filter_conditions)
+def statistic2sql(table, statistic_type, statistic, username='', id_in_org='', detail_filter_conditions=None):
+    sql_generator = StatisticSQLGenerator(table, statistic_type, statistic, username, id_in_org, detail_filter_conditions=detail_filter_conditions)
     return sql_generator.to_sql()
 
 def linkRecords2sql(current_table, link_column, link_record_ids, tables):
