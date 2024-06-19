@@ -854,23 +854,22 @@ class RunPythonScriptAction(BaseAction):
         scripts_running_limit = self.get_scripts_running_limit()
 
         # request faas url
-        headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
+        dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
         try:
-            resp = requests.post(self.RUN_SCRIPT_URL, json={
-                'dtable_uuid': str(UUID(self.context.dtable_uuid)),
-                'script_name': self.script_name,
-                'context_data': context_data,
-                'owner': self.owner,
-                'org_id': self.org_id,
-                'temp_api_token': self.context.get_temp_api_token(app_name=self.script_name),
-                'scripts_running_limit': scripts_running_limit,
-                'operate_from': self.operate_from,
-                'operator': self.operator
-            }, headers=headers, timeout=10)
-            if resp.status_code != 200:
-                logger.warning('dtable: %s run script: %s error status code: %s content: %s', self.context.dtable_uuid, self.script_name, resp.status_code, resp.content)
+            dtable_web_api.run_script(
+                uuid_str_to_36_chars(self.context.dtable_uuid),
+                self.script_name,
+                context_data,
+                self.owner,
+                self.org_id,
+                scripts_running_limit,
+                self.operate_from,
+                self.operator
+            )
+        except ConnectionError as e:
+            logger.warning('dtable: %s run script: %s operate_from: %s operator: %s error: %s', self.context.dtable_uuid, self.script_name, self.operate_from, self.operator, e)
         except Exception as e:
-            logger.error('dtable: %s run script: %s error: %s', self.context.dtable_uuid, self.script_name, e)
+            logger.warning('dtable: %s run script: %s operate_from: %s operator: %s error: %s', self.context.dtable_uuid, self.script_name, self.operate_from, self.operator, e)
 
 
 class AddRecordToOtherTableAction(BaseAction):
