@@ -10,6 +10,7 @@ from seaserv import seafile_api
 from dtable_events.dtable_io.utils import get_dtable_server_token
 from dtable_events.app.config import INNER_FILE_SERVER_ROOT
 from dtable_events.utils import uuid_str_to_36_chars
+from dtable_events.utils.exception import BaseSizeExceedsLimitError
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,8 @@ def parse_response(response):
             raise BaseExceedsException('exceed_columns_limit', 'Exceed the columns limit')
         if error_type == 'base_exceeds_limit' or error_msg == 'The base size exceeds the limit of 200MB, the operation cannot be performed.':
             raise BaseExceedsException('base_exceeds_limit', 'The base size exceeds the limit of 200MB, the operation cannot be performed.')
+        if error_type == 'base_exceeds_limit':
+            raise BaseSizeExceedsLimitError
 
         raise ConnectionError(response.status_code, response.text)
     else:
@@ -122,7 +125,7 @@ class DTableServerAPI(object):
         response = requests.get(url, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
-    def add_table(self, table_name, lang='cn', columns=None):
+    def add_table(self, table_name, lang='cn', columns=None, rows=None):
         logger.debug('add table table_name: %s columns: %s', table_name, columns)
         url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/tables/?from=dtable_events'
         json_data = {
@@ -131,7 +134,25 @@ class DTableServerAPI(object):
         }
         if columns:
             json_data['columns'] = columns
+            if rows:
+                json_data['rows'] = rows
         response = requests.post(url, json=json_data, headers=self.headers, timeout=self.timeout)
+        return parse_response(response)
+
+    def import_excel(self, json_file, lang='en'):
+        url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/import-excel/?from=dtable_events&lang=' + lang
+        files = {
+            'excel_json': json_file
+        }
+        response = requests.post(url, headers=self.headers, files=files, timeout=180)
+        return parse_response(response)
+
+    def import_excel_add_table(self, json_file, lang='en'):
+        url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/import-excel-add-table/?from=dtable_events&lang=' + lang
+        files = {
+            'excel_json': json_file
+        }
+        response = requests.post(url, headers=self.headers, files=files, timeout=180)
         return parse_response(response)
 
     def list_rows(self, table_name, start=None, limit=None):
@@ -146,7 +167,7 @@ class DTableServerAPI(object):
         response = requests.get(url, params=params, headers=self.headers, timeout=self.timeout)
         data = parse_response(response)
         return data.get('rows')
-    
+
     def get_row(self, table_name, row_id, convert_link_id=False):
         """
         :param table_name: str
@@ -181,6 +202,17 @@ class DTableServerAPI(object):
             'convert_link_id': True,
             'has_hidden_columns': has_hidden_columns,
         }
+        response = requests.get(url, params=params, headers=self.internal_headers, timeout=self.timeout)
+        data = parse_response(response)
+        return data.get('rows')
+
+    def table_rows(self, table_name, convert_link_id=False):
+        url = self.dtable_server_url + '/api/v1/internal/dtables/' + self.dtable_uuid + '/table-rows/?from=dtable_events'
+        params = {
+            'table_name': table_name
+        }
+        if convert_link_id:
+            params['convert_link_id'] = 'true'
         response = requests.get(url, params=params, headers=self.internal_headers, timeout=self.timeout)
         data = parse_response(response)
         return data.get('rows')

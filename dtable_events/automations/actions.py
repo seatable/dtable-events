@@ -1498,33 +1498,17 @@ class RunPythonScriptAction(BaseAction):
         if self.auto_rule.can_run_python is not None:
             return self.auto_rule.can_run_python
 
-        permission_url = DTABLE_WEB_SERVICE_URL.strip('/') + '/api/v2.1/script-permissions/'
-        headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
-        if self.org_id != -1:
-            json_data = {'org_ids': [self.org_id]}
-        elif self.org_id == -1 and '@seafile_group' not in self.owner:
-            json_data = {'users': [self.owner]}
-        else:
-            return True
+        dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
         try:
-            resp = requests.get(permission_url, headers=headers, json=json_data, timeout=30)
-            if resp.status_code != 200:
-                logger.error('check run script permission error response: %s', resp.status_code)
-                return False
-            permission_dict = resp.json()
+            if self.org_id != -1:
+                can_run_python = dtable_web_api.can_org_run_python(self.org_id)
+            elif self.org_id == -1 and '@seafile_group' not in self.owner:
+                can_run_python = dtable_web_api.can_user_run_python(self.owner)
+            else:
+                return True
         except Exception as e:
-            logger.error('check run script permission error: %s', e)
+            logger.exception('can run python org_id: %s owner: %s error: %s', self.org_id, self.owner, e)
             return False
-
-        # response dict like
-        # {
-        #   'user_script_permissions': {username1: {'can_run_python_script': True/False}}
-        #   'can_schedule_run_script': {org1: {'can_run_python_script': True/False}}
-        # }
-        if self.org_id != -1:
-            can_run_python = permission_dict['org_script_permissions'][str(self.org_id)]['can_run_python_script']
-        else:
-            can_run_python = permission_dict['user_script_permissions'][self.owner]['can_run_python_script']
 
         self.auto_rule.can_run_python = can_run_python
         return can_run_python
