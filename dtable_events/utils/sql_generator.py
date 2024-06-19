@@ -1206,6 +1206,15 @@ class StatisticSQLGenerator(object):
                     item['filter_term'] = current_user_department_ids
                 if filter_term == 'current_user_department_and_sub':
                     item['filter_term'] = current_user_department_and_sub_ids
+                if isinstance(filter_term, list):
+                    if 'current_user_department' in filter_term or 'current_user_department_and_sub' in filter_term:
+                        for i in range(len(filter_term)):
+                            if filter_term[i] == 'current_user_department':
+                                filter_term[i] = current_user_department_ids
+                            elif filter_term[i] == 'current_user_department_and_sub':
+                                filter_term[i] = current_user_department_and_sub_ids
+                        flat_result = [item for sublist in filter_term for item in (sublist if isinstance(sublist, list) else [sublist])]
+                        item['filter_term'] = list(set(flat_result))
         self.filters = filters
 
         filter_conjunction = statistic.get('filter_conjunction', 'and')
