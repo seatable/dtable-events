@@ -1,10 +1,11 @@
 import json
 import logging
+import time
 
 import jwt
 import requests
 
-from dtable_events.app.config import SEATABLE_FAAS_AUTH_TOKEN, DTABLE_PRIVATE_KEY
+from dtable_events.app.config import SEATABLE_FAAS_URL, SEATABLE_FAAS_AUTH_TOKEN, DTABLE_PRIVATE_KEY
 from dtable_events.dtable_io.utils import get_dtable_server_token
 from dtable_events.utils import uuid_str_to_36_chars
 
@@ -116,6 +117,47 @@ class DTableWebAPI:
             logger.error('get script running limit error: %s', e)
             return 0
         return scripts_running_limit
+
+    def get_temp_api_token(self, username=None, app_name=None):
+        payload = {
+            'dtable_uuid': self.dtable_uuid,
+            'exp': int(time.time()) + 60 * 60,
+        }
+        if username:
+            payload['username'] = username
+        if app_name:
+            payload['app_name'] = app_name
+        temp_api_token = jwt.encode(payload, SEATABLE_FAAS_AUTH_TOKEN, algorithm='HS256')
+        return temp_api_token
+
+    def run_python(self, dtable_uuid, script_name, context_data, owner, org_id, scripts_running_limit, operate_from, operator):
+        headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
+        url = SEATABLE_FAAS_URL.strip('/') + '/run-script/'
+        response = requests.post(url, json={
+            'dtable_uuid': uuid_str_to_36_chars(dtable_uuid),
+            'script_name': script_name,
+            'context_data': context_data,
+            'owner': owner,
+            'org_id': org_id,
+            'temp_api_token': self.get_temp_api_token(app_name=self.script_name),
+            'scripts_running_limit': scripts_running_limit,
+            'operate_from': operate_from,
+            'operator': operator
+        }, headers=headers, timeout=10)
+        return parse_response(response)
+    
+    def get_users_common_info(self, user_id_list):
+        url = self.dtable_web_service_url + '/api/v2.1/users-common-info/'
+        json_data = {
+                'user_id_list': user_id_list,
+            }
+        payload = {
+            'exp': int(time.time()) + 60
+        }
+        access_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
+        headers = {'Authorization': 'Token ' + access_token}
+        res = requests.post(url, headers=headers, json=json_data)
+        return parse_response(res)
 
     def internal_add_notification(self, to_users, msg_type, detail):
         logger.debug('internal add notification to users: %s detail: %s', to_users, detail)
