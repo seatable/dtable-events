@@ -118,9 +118,9 @@ class DTableWebAPI:
             return 0
         return scripts_running_limit
 
-    def get_temp_api_token(self, username=None, app_name=None):
+    def get_temp_api_token(self, dtable_uuid, username=None, app_name=None):
         payload = {
-            'dtable_uuid': self.dtable_uuid,
+            'dtable_uuid': uuid_str_to_36_chars(dtable_uuid),
             'exp': int(time.time()) + 60 * 60,
         }
         if username:
@@ -130,7 +130,7 @@ class DTableWebAPI:
         temp_api_token = jwt.encode(payload, SEATABLE_FAAS_AUTH_TOKEN, algorithm='HS256')
         return temp_api_token
 
-    def run_python(self, dtable_uuid, script_name, context_data, owner, org_id, scripts_running_limit, operate_from, operator):
+    def run_script(self, dtable_uuid, script_name, context_data, owner, org_id, scripts_running_limit, operate_from, operator):
         headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
         url = SEATABLE_FAAS_URL.strip('/') + '/run-script/'
         response = requests.post(url, json={
@@ -139,7 +139,7 @@ class DTableWebAPI:
             'context_data': context_data,
             'owner': owner,
             'org_id': org_id,
-            'temp_api_token': self.get_temp_api_token(app_name=self.script_name),
+            'temp_api_token': self.get_temp_api_token(dtable_uuid, app_name=script_name),
             'scripts_running_limit': scripts_running_limit,
             'operate_from': operate_from,
             'operator': operator
@@ -171,4 +171,21 @@ class DTableWebAPI:
             'to_users': to_users,
             'type': msg_type
         }, headers=headers)
+        return parse_response(resp)
+    
+    def internal_submit_row_workflow(self, workflow_token, row_id, rule_id=None):
+        logger.debug('internal submit row workflow token: %s row_id: %s rule_id: %s', workflow_token, row_id, rule_id)
+        url = '%(server_url)s/api/v2.1/workflows/%(workflow_token)s/internal-task-submit/' % {
+            'server_url': self.dtable_web_service_url,
+            'workflow_token': workflow_token
+        }
+        data = {
+            'row_id': row_id,
+            'replace': 'true',
+            'submit_from': 'Automation Rule'
+        }
+        if rule_id:
+            data['automation_rule_id'] = rule_id
+        header_token = 'Token ' + jwt.encode({'token': workflow_token}, DTABLE_PRIVATE_KEY, 'HS256')
+        resp = requests.post(url, data=data, headers={'Authorization': header_token}, timeout=30)
         return parse_response(resp)

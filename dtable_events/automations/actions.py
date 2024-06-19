@@ -1516,23 +1516,16 @@ class RunPythonScriptAction(BaseAction):
     def get_scripts_running_limit(self):
         if self.auto_rule.scripts_running_limit is not None:
             return self.auto_rule.scripts_running_limit
-        if self.org_id != -1:
-            params = {'org_id': self.org_id}
-        elif self.org_id == -1 and '@seafile_group' not in self.owner:
-            params = {'username': self.owner}
-        else:
-            return -1
-        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/api/v2.1/scripts-running-limit/'
-        headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
+        dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
         try:
-            resp = requests.get(url, headers=headers, params=params, timeout=30)
-            if resp.status_code != 200:
-                logger.error('get scripts running limit error response: %s', resp.status_code)
-                return 0
-            scripts_running_limit = resp.json()['scripts_running_limit']
+            if self.org_id != -1:
+                scripts_running_limit = dtable_web_api.get_org_scripts_running_limit(self.org_id)
+            elif self.org_id == -1 and '@seafile_group' not in self.owner:
+                scripts_running_limit = dtable_web_api.get_user_scripts_running_limit(self.owner)
+            else:
+                return -1
         except Exception as e:
-            logger.error('get script running limit error: %s', e)
-            return 0
+            logger.exception('get script running limit error: %s', e)
         self.auto_rule.scripts_running_limit = scripts_running_limit
         return scripts_running_limit
 
@@ -1546,27 +1539,22 @@ class RunPythonScriptAction(BaseAction):
         scripts_running_limit = self.get_scripts_running_limit()
 
         # request faas url
-        headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
-        url = SEATABLE_FAAS_URL.strip('/') + '/run-script/'
+        dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
         try:
-            response = requests.post(url, json={
-                'dtable_uuid': str(UUID(self.auto_rule.dtable_uuid)),
-                'script_name': self.script_name,
-                'context_data': context_data,
-                'owner': self.owner,
-                'org_id': self.org_id,
-                'temp_api_token': self.auto_rule.get_temp_api_token(app_name=self.script_name),
-                'scripts_running_limit': scripts_running_limit,
-                'operate_from': 'automation-rule',
-                'operator': self.auto_rule.rule_id
-            }, headers=headers, timeout=10)
+            dtable_web_api.run_script(
+                uuid_str_to_36_chars(self.auto_rule.dtable_uuid),
+                self.script_name,
+                context_data,
+                self.owner,
+                self.org_id,
+                scripts_running_limit,
+                'automation-rule',
+                self.auto_rule.rule_id
+            )
+        except ConnectionError as e:
+            logger.warning('dtable: %s rule: %s run script: %s context: %s error: %s', self.auto_rule.dtable_uuid, self.auto_rule.rule_id, self.script_name, context_data, e)
         except Exception as e:
-            logger.exception(e)
-            logger.error(e)
-            return
-
-        if response.status_code != 200:
-            logger.warning('run script error status code: %s', response.status_code)
+            logger.exception('dtable: %s rule: %s run script: %s context: %s error: %s', self.auto_rule.dtable_uuid, self.auto_rule.rule_id, self.script_name, context_data, e)
         else:
             self.auto_rule.set_done_actions()
 
@@ -2264,22 +2252,13 @@ class TriggerWorkflowAction(BaseAction):
             logger.error('rule: %s submit workflow: %s append row dtable: %s, error: %s', self.auto_rule.rule_id, self.token, self.auto_rule.dtable_uuid, e)
             return
 
-        internal_submit_workflow_url = DTABLE_WEB_SERVICE_URL.strip('/') + '/api/v2.1/workflows/%s/internal-task-submit/' % self.token
-        data = {
-            'row_id': row_id,
-            'replace': 'true',
-            'submit_from': 'Automation Rule',
-            'automation_rule_id': self.auto_rule.rule_id
-        }
-        logger.debug('trigger workflow data: %s', data)
+        dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
         try:
-            header_token = 'Token ' + jwt.encode({'token': self.token}, DTABLE_PRIVATE_KEY, 'HS256')
-            resp = requests.post(internal_submit_workflow_url, data=data, headers={'Authorization': header_token}, timeout=30)
-            if resp.status_code != 200:
-                logger.error('rule: %s row_id: %s new workflow: %s task error status code: %s content: %s', self.auto_rule.rule_id, row_id, self.token, resp.status_code, resp.content)
-            self.auto_rule.set_done_actions()
+            dtable_web_api.internal_submit_row_workflow(self.token, row_id, self.auto_rule.rule_id)
         except Exception as e:
-            logger.error('submit workflow: %s row_id: %s error: %s', self.token, row_id, e)
+            logger.exception('auto rule: %s submit workflow: %s row: %s error: %s', self.auto_rule.rule_id, self.token, row_id, e)
+        else:
+            self.auto_rule.set_done_actions()
 
 
 class CalculateAction(BaseAction):
