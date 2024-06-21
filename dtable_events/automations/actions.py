@@ -2933,21 +2933,6 @@ class AutomationRule:
         self.action_infos = json.loads(raw_actions)
 
     @property
-    def access_token(self):
-
-        if not self._access_token:
-            self._access_token = jwt.encode(
-                payload={
-                    'exp': int(time.time()) + 300,
-                    'dtable_uuid': uuid_str_to_36_chars(self.dtable_uuid),
-                    'username': 'Automation Rule',
-                    'permission': 'rw',
-                },
-                key=DTABLE_PRIVATE_KEY
-            )
-        return self._access_token
-
-    @property
     def headers(self):
         return self.dtable_server_api.headers
     
@@ -3038,18 +3023,6 @@ class AutomationRule:
             return None
         self._sql_row = sql_rows[0]
         return self._sql_row
-
-    def get_temp_api_token(self, username=None, app_name=None):
-        payload = {
-            'dtable_uuid': self.dtable_uuid,
-            'exp': int(time.time()) + 60 * 60,
-        }
-        if username:
-            payload['username'] = username
-        if app_name:
-            payload['app_name'] = app_name
-        temp_api_token = jwt.encode(payload, SEATABLE_FAAS_AUTH_TOKEN, algorithm='HS256')
-        return temp_api_token
 
     def get_trigger_conditions_rows(self, action: BaseAction, warning_rows=50):
         if self._trigger_conditions_rows is not None:

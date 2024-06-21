@@ -151,27 +151,6 @@ class BaseContext:
         }
 
     @property
-    def access_token(self):
-        if self._access_token:
-            return self._access_token
-        payload = {
-            'username': self.caller,
-            'exp': int(time.time()) + 60 * 60 * 15,
-            'dtable_uuid': str(UUID(self.dtable_uuid)),
-            'permission': 'rw',
-            'id_in_org': ''
-        }
-        access_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, 'HS256')
-        self._access_token = access_token
-        return self._access_token
-
-    @property
-    def headers(self):
-        if self._headers:
-            return self._headers
-        return {'Authorization': 'Token ' + self.access_token}
-
-    @property
     def dtable_metadata(self):
         if self._dtable_metadata:
             return self._dtable_metadata
@@ -260,18 +239,6 @@ class BaseContext:
             if col['key'] == column_key:
                 return col
         return None
-
-    def get_temp_api_token(self, username=None, app_name=None):
-        payload = {
-            'dtable_uuid': self.dtable_uuid,
-            'exp': int(time.time()) + 60 * 60,
-        }
-        if username:
-            payload['username'] = username
-        if app_name:
-            payload['app_name'] = app_name
-        temp_api_token = jwt.encode(payload, SEATABLE_FAAS_AUTH_TOKEN, algorithm='HS256')
-        return temp_api_token
 
     def get_converted_row(self, table_id, row_id):
         table = self.get_table_by_id(table_id)
