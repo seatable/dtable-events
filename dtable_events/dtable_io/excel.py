@@ -520,7 +520,7 @@ def parse_and_import_excel_csv_to_table(file_name, dtable_uuid, username, file_t
 
 
 def parse_and_update_file_to_table(file_name, username, dtable_uuid, table_name, selected_columns, file_type):
-    related_users = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
+    related_users = get_related_nicknames_from_dtable(dtable_uuid)
     name_to_email = {user.get('name'): user.get('email') for user in related_users}
 
     dtable_server_url = get_inner_dtable_server_url()
@@ -563,7 +563,7 @@ def parse_and_update_file_to_table(file_name, username, dtable_uuid, table_name,
 
 
 def parse_and_append_excel_csv_to_table(username, file_name, dtable_uuid, table_name, file_type):
-    related_users = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
+    related_users = get_related_nicknames_from_dtable(dtable_uuid)
     name_to_email = {user.get('name'): user.get('email') for user in related_users}
 
     dtable_server_url = get_inner_dtable_server_url()
@@ -696,7 +696,7 @@ def append_parsed_file_by_dtable_server(username, dtable_uuid, file_name, table_
 
 def parse_append_excel_csv_upload_file_to_json(file_name, username, dtable_uuid, table_name, file_type):
     # parse
-    related_users = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
+    related_users = get_related_nicknames_from_dtable(dtable_uuid)
     name_to_email = {user.get('name'): user.get('email') for user in related_users}
 
     dtable_server_url = get_inner_dtable_server_url()
@@ -918,7 +918,7 @@ def parse_dtable_excel_file(file_path, table_name, columns, name_to_email, suppo
 
 
 def parse_update_excel_upload_excel_to_json(file_name, username, dtable_uuid, table_name):
-    related_users = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
+    related_users = get_related_nicknames_from_dtable(dtable_uuid)
     name_to_email = {user.get('name'): user.get('email') for user in related_users}
 
     dtable_server_url = get_inner_dtable_server_url()
@@ -1023,7 +1023,7 @@ def parse_csv_file(file_path, file_name, table_name, columns, name_to_email, sup
 
 
 def parse_update_csv_upload_csv_to_json(file_name, username, dtable_uuid, table_name):
-    related_users = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
+    related_users = get_related_nicknames_from_dtable(dtable_uuid)
     name_to_email = {user.get('name'): user.get('email') for user in related_users}
 
     dtable_server_url = get_inner_dtable_server_url()

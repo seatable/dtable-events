@@ -231,7 +231,7 @@ class BaseAction:
                 'msg_type': 'selected_collaborator',
                 'detail': detail,
             })
-        send_notification(self.auto_rule.dtable_uuid, user_msg_list, self.auto_rule.access_token)
+        send_notification(self.auto_rule.dtable_uuid, user_msg_list, self.auto_rule.username)
 
     def parse_column_value(self, column, value):
         if column.get('type') == ColumnTypes.SINGLE_SELECT:
@@ -757,7 +757,7 @@ class NotifyAction(BaseAction):
                 'detail': detail,
                 })
         try:
-            send_notification(dtable_uuid, user_msg_list, self.auto_rule.access_token)
+            send_notification(dtable_uuid, user_msg_list, self.auto_rule.username)
         except Exception as e:
             logger.error('send users: %s notifications error: %s', e)
 
@@ -781,7 +781,7 @@ class NotifyAction(BaseAction):
                 'detail': detail,
             })
         try:
-            send_notification(dtable_uuid, user_msg_list, self.auto_rule.access_token)
+            send_notification(dtable_uuid, user_msg_list, self.auto_rule.username)
         except Exception as e:
             logger.error('send users: %s notifications error: %s', e)
 
@@ -829,7 +829,7 @@ class NotifyAction(BaseAction):
                     'detail': detail,
                     })
         try:
-            send_notification(dtable_uuid, user_msg_list, self.auto_rule.access_token)
+            send_notification(dtable_uuid, user_msg_list, self.auto_rule.username)
         except Exception as e:
             logger.error('send users: %s notifications error: %s', e)
 
@@ -2885,8 +2885,10 @@ class AutomationRule:
         self.data = data
         self.db_session = db_session
 
-        self.dtable_server_api = DTableServerAPI('Automation Rule', str(UUID(self.dtable_uuid)), get_inner_dtable_server_url())
-        self.dtable_db_api = DTableDBAPI('Automation Rule', str(UUID(self.dtable_uuid)), INNER_DTABLE_DB_URL)
+        self.username = 'Automation Rule'
+
+        self.dtable_server_api = DTableServerAPI(self.username, str(UUID(self.dtable_uuid)), get_inner_dtable_server_url())
+        self.dtable_db_api = DTableDBAPI(self.username, str(UUID(self.dtable_uuid)), INNER_DTABLE_DB_URL)
         self.dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
 
         self.table_id = None
@@ -3010,7 +3012,7 @@ class AutomationRule:
     def related_users(self):
         if not self._related_users:
             try:
-                self._related_users = self.dtable_web_api.get_related_users(self.dtable_uuid)
+                self._related_users = self.dtable_web_api.get_related_users(self.dtable_uuid)['user_list']
             except Exception as e:
                 logger.error('rule: %s uuid: %srequest related users error: %s', self.rule_id, self.dtable_uuid, e)
                 raise RuleInvalidException('rule: %s uuid: %srequest related users error: %s' % (self.rule_id, self.dtable_uuid, e))

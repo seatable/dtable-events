@@ -338,11 +338,11 @@ class TaskManager(object):
 
         return task_id
 
-    def add_convert_table_to_execl_task(self, dtable_uuid, table_id, username, permission, name, repo_id, is_support_image):
+    def add_convert_table_to_execl_task(self, dtable_uuid, table_id, username, name, repo_id, is_support_image):
         from dtable_events.dtable_io import convert_table_to_execl
 
         task_id = str(uuid.uuid4())
-        task = (convert_table_to_execl, (dtable_uuid, table_id, username, permission, name, repo_id, is_support_image))
+        task = (convert_table_to_execl, (dtable_uuid, table_id, username, name, repo_id, is_support_image))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
 

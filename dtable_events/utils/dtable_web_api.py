@@ -6,11 +6,26 @@ import jwt
 import requests
 
 from dtable_events.app.config import SEATABLE_FAAS_URL, SEATABLE_FAAS_AUTH_TOKEN, DTABLE_PRIVATE_KEY
-from dtable_events.dtable_io.utils import get_dtable_server_token
 from dtable_events.utils import uuid_str_to_36_chars
 
 
 logger = logging.getLogger(__name__)
+
+
+def get_dtable_server_token(username, dtable_uuid, timeout=300, is_internal=False):
+    payload = {
+        'exp': int(time.time()) + timeout,
+        'dtable_uuid': dtable_uuid,
+        'username': username,
+        'permission': 'rw',
+    }
+    if is_internal:
+        payload['is_internal'] = True
+    access_token = jwt.encode(
+        payload, DTABLE_PRIVATE_KEY, algorithm='HS256'
+    )
+
+    return access_token
 
 
 def parse_response(response):
@@ -39,7 +54,7 @@ class DTableWebAPI:
         access_token = get_dtable_server_token(username, dtable_uuid)
         headers = {'Authorization': 'Token ' + access_token}
         response = requests.get(url, headers=headers)
-        return parse_response(response)['user_list']
+        return parse_response(response)
 
     def can_user_run_python(self, user):
         logger.debug('can user run python user: %s', user)

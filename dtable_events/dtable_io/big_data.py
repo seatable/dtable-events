@@ -188,7 +188,7 @@ def import_excel_to_db(
     status = 'success'
     tasks_status_map[task_id]['status'] = 'running'
 
-    related_users = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
+    related_users = get_related_nicknames_from_dtable(dtable_uuid)
     name_to_email = {user.get('name'): user.get('email') for user in related_users}
 
     location_tree = get_location_tree_json()
@@ -318,7 +318,7 @@ def update_excel_to_db(
         return
 
     total_count = 0  # data in excel scanned
-    related_users = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
+    related_users = get_related_nicknames_from_dtable(dtable_uuid)
     name_to_email = {user.get('name'): user.get('email') for user in related_users}
 
     location_tree = get_location_tree_json()
@@ -422,7 +422,7 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
         os.makedirs(target_dir)
 
     try:
-        nicknames = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
+        nicknames = get_related_nicknames_from_dtable(dtable_uuid)
     except Exception as e:
         dtable_io_logger.error('get nicknames. ERROR: {}'.format(e))
         return
@@ -559,7 +559,7 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
         os.makedirs(target_dir)
 
     try:
-        nicknames = get_related_nicknames_from_dtable(dtable_uuid, username, 'r')
+        nicknames = get_related_nicknames_from_dtable(dtable_uuid)
     except Exception as e:
         dtable_io_logger.error('get nicknames. ERROR: {}'.format(e))
         return
