@@ -221,7 +221,7 @@ class BaseContext:
     @property
     def related_users(self):
         if not self._related_users:
-            self._related_users = self.dtable_web_api.get_related_users(self.dtable_uuid, self.caller)
+            self._related_users = self.dtable_web_api.get_related_users(self.dtable_uuid, self.caller)['user_list']
         return self._related_users
 
     @property
@@ -468,7 +468,7 @@ class NotifyAction(BaseAction):
                 'detail': detail
             })
         try:
-            send_notification(self.context.dtable_uuid, user_msg_list, self.context.access_token)
+            send_notification(self.context.dtable_uuid, user_msg_list, self.context.caller)
         except Exception as e:
             logger.exception(e)
             logger.error('msg detail: %s send users: %s notifications error: %s', detail, to_users, e)

@@ -1,18 +1,55 @@
+import io
 import json
 import logging
-import requests
-import io
 import os
+import time
+from copy import deepcopy
+from datetime import datetime
 from urllib import parse
 from uuid import UUID
-from datetime import datetime
+
 from seaserv import seafile_api
-from dtable_events.dtable_io.utils import get_dtable_server_token
-from dtable_events.app.config import INNER_FILE_SERVER_ROOT
-from dtable_events.utils import uuid_str_to_36_chars
+
+import jwt
+import requests
+
+from dtable_events.app.config import INNER_FILE_SERVER_ROOT, DTABLE_PRIVATE_KEY
+from dtable_events.utils import uuid_str_to_36_chars, is_valid_email
 from dtable_events.utils.exception import BaseSizeExceedsLimitError
 
 logger = logging.getLogger(__name__)
+
+
+def get_dtable_server_token(username, dtable_uuid, timeout=300, permission=None, kwargs=None):
+    payload = {
+        'exp': int(time.time()) + timeout,
+        'dtable_uuid': dtable_uuid,
+        'permission': permission if permission else 'rw',
+    }
+    if username:
+        payload['username'] = username
+        if is_valid_email(username):
+            if kwargs and isinstance(kwargs, dict) and 'user_department_ids_map' in kwargs:
+                payload['user_department_ids_map'] = kwargs['user_department_ids_map']
+            if kwargs and isinstance(kwargs, dict) and 'id_in_org' in kwargs:
+                payload['id_in_org'] = kwargs['id_in_org']
+
+    access_token = jwt.encode(
+        payload, DTABLE_PRIVATE_KEY, algorithm='HS256'
+    )
+
+    internal_payload = deepcopy(payload)
+    internal_payload['is_internal'] = True
+    internal_access_token = jwt.encode(
+        internal_payload, DTABLE_PRIVATE_KEY, algorithm='HS256'
+    )
+
+    return {
+        'payload': payload,
+        'access_token': access_token,
+        'internal_payload': internal_payload,
+        'internal_access_token': internal_access_token
+    }
 
 
 class WrongFilterException(Exception):
@@ -86,7 +123,7 @@ def gen_inner_file_upload_url(token, op, replace=False):
 class DTableServerAPI(object):
     # simple version of python sdk without authorization for base or table manipulation
 
-    def __init__(self, username, dtable_uuid, dtable_server_url, server_url=None, repo_id=None, workspace_id=None, timeout=180, access_token_timeout=3600):
+    def __init__(self, username, dtable_uuid, dtable_server_url, server_url=None, repo_id=None, workspace_id=None, timeout=180, access_token_timeout=3600, permission='rw', kwargs=None):
         self.username = username
         self.dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
         self.headers = None
@@ -99,12 +136,17 @@ class DTableServerAPI(object):
         self.access_token_timeout = access_token_timeout
         self.access_token = ''
         self.internal_access_token = ''
+        self.permission = permission
+        self.kwargs = kwargs
         self._init()
 
     def _init(self):
-        self.access_token = get_dtable_server_token(self.username, self.dtable_uuid, timeout=self.access_token_timeout)
-        self.internal_access_token = get_dtable_server_token(self.username, self.dtable_uuid, timeout=self.access_token_timeout, is_internal=True)
+        info = get_dtable_server_token(self.username, self.dtable_uuid, timeout=self.access_token_timeout, permission=self.permission, kwargs=self.kwargs)
+        self.payload = info['payload']
+        self.access_token = info['access_token']
         self.headers = {'Authorization': 'Token ' + self.access_token}
+        self.internal_payload = info['internal_payload']
+        self.internal_access_token = info['internal_access_token']
         self.internal_headers = {'Authorization': 'Token ' + self.internal_access_token}
 
     def get_metadata(self):
@@ -194,14 +236,14 @@ class DTableServerAPI(object):
         data = parse_response(response)
         return data.get('columns')
 
-    def view_rows(self, table_name, view_name, has_hidden_columns):
+    def view_rows(self, table_name, view_name, convert_link_id=None):
         url = self.dtable_server_url + '/api/v1/internal/dtables/' + self.dtable_uuid + '/view-rows/?from=dtable_events'
         params = {
             'table_name': table_name,
-            'view_name': view_name,
-            'convert_link_id': True,
-            'has_hidden_columns': has_hidden_columns,
+            'view_name': view_name
         }
+        if convert_link_id is not None:
+            params['convert_link_id'] = True
         response = requests.get(url, params=params, headers=self.internal_headers, timeout=self.timeout)
         data = parse_response(response)
         return data.get('rows')
