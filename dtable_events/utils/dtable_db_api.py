@@ -133,7 +133,7 @@ class DTableDBAPI(object):
 
     def __init__(self, username, dtable_uuid, dtable_db_url):
         self.username = username
-        self.dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
+        self.dtable_uuid = uuid_str_to_36_chars(dtable_uuid) if dtable_uuid else None
         self.headers = None
         self.dtable_db_url = dtable_db_url.rstrip('/') if dtable_db_url else None
         self._init()
@@ -255,5 +255,6 @@ class DTableDBAPI(object):
             params['offset'] = offset
         if limit is not None:
             params['limit'] = limit
+        params['from'] = 'dtable_events'
         resp = requests.get(url, params=params, headers=self.admin_headers)
         return parse_response(resp)
