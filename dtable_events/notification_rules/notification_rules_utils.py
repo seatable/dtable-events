@@ -42,23 +42,6 @@ def update_rule_last_trigger_time(rule_id, db_session):
     db_session.execute(text(cmd), {'new_time': datetime.utcnow(), 'rule_id': rule_id})
 
 
-def get_dtable_server_token(dtable_uuid):
-    payload = {
-        'exp': int(time.time()) + 60,
-        'dtable_uuid': dtable_uuid,
-        'username': 'dtable-web',
-        'permission': 'rw',
-    }
-    try:
-        access_token = jwt.encode(
-            payload, DTABLE_PRIVATE_KEY, algorithm='HS256'
-        )
-    except Exception as e:
-        logger.error(e)
-        return
-    return access_token
-
-
 def scan_triggered_notification_rules(event_data, db_session):
     row = event_data.get('row')
     message_dtable_uuid = event_data.get('dtable_uuid', '')

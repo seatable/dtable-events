@@ -71,35 +71,6 @@ def gen_inner_file_upload_url(token, op, replace=False):
     return url
 
 
-def get_dtable_server_token(username, dtable_uuid, timeout=300, is_internal=False):
-    payload = {
-        'exp': int(time.time()) + timeout,
-        'dtable_uuid': dtable_uuid,
-        'username': username,
-        'permission': 'rw',
-    }
-    if is_internal:
-        payload['is_internal'] = True
-    access_token = jwt.encode(
-        payload, DTABLE_PRIVATE_KEY, algorithm='HS256'
-    )
-
-    return access_token
-
-def get_app_access_token(username, app_uuid):
-    payload = {
-        'exp': int(time.time()) + 300,
-        'app_uuid': app_uuid,
-        'username': username,
-        'permission': 'rw',
-    }
-    access_token = jwt.encode(
-        payload, DTABLE_PRIVATE_KEY, algorithm='HS256'
-    )
-
-    return access_token
-
-
 def gen_dir_zip_download_url(token):
     """
     Generate fileserver file url.
