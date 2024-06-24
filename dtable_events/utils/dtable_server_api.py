@@ -77,7 +77,7 @@ def parse_response(response):
             error_msg = response.text
         else:
             error_type = response_json.get('error_type')
-            error_msg = response_json.get('error_msg')
+            error_msg = response_json.get('error_msg') or response_json.get('error')
 
         if error_type == 'wrong_filter_in_filters':
             raise WrongFilterException()
@@ -87,6 +87,8 @@ def parse_response(response):
             raise BaseExceedsException('exceed_columns_limit', 'Exceed the columns limit')
         if error_type == 'base_exceeds_limit' or error_msg == 'The base size exceeds the limit of 200MB, the operation cannot be performed.':
             raise BaseExceedsException('base_exceeds_limit', 'The base size exceeds the limit of 200MB, the operation cannot be performed.')
+        if error_type == 'exceed_tables_limit' or error_msg == 'Number of tables exceeds 200 limit':
+            raise BaseExceedsException('exceed_tables_limit', 'Number of tables exceeds 200 limit')
         if error_type == 'base_exceeds_limit':
             raise BaseSizeExceedsLimitError
 

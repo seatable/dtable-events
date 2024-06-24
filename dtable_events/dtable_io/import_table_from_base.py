@@ -13,7 +13,7 @@ from dtable_events.utils import get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes, DATE_FORMATS, DURATION_FORMATS, NUMBER_FORMATS, NUMBER_DECIMALS,\
     NUMBER_THOUSANDS, GEO_FORMATS
 from dtable_events.utils.dtable_column_utils import AutoNumberUtils
-from dtable_events.utils.dtable_server_api import DTableServerAPI
+from dtable_events.utils.dtable_server_api import DTableServerAPI, BaseExceedsException
 
 service_url = DTABLE_WEB_SERVICE_URL.strip()
 dtable_server_url = get_inner_dtable_server_url().rstrip('/')
@@ -257,21 +257,17 @@ def import_table_from_base(context):
             dst_columns.append(column_dict)
 
         src_rows = new_table.get('rows', [])
-        try:
-            dst_table_name = get_non_duplicated_name(dst_table_name, [t['name'] for t in dst_dtable_json['tables']])
-            dst_dtable_server_api.add_table(dst_table_name, lang=lang, columns=dst_columns, rows=src_rows)
-        except Exception as e:
-            error_msg = 'create dst table error: %s' % e
-            raise Exception(error_msg)
+        dst_table_name = get_non_duplicated_name(dst_table_name, [t['name'] for t in dst_dtable_json['tables']])
+        dst_dtable_server_api.add_table(dst_table_name, lang=lang, columns=dst_columns, rows=src_rows)
+    except BaseExceedsException as e:
+        error_msg = 'import_table_from_base: %s' % json.dumps({'error_type': e.args[0], 'error_msg': e.args[1]})
+        raise Exception(error_msg)
+    except ConnectionError as e:
+        dtable_io_logger.exception('import table from base context: %s error: %s', context, e)
+        error_msg = 'import_table_from_base: %s' % e.args[1]
+        raise Exception(error_msg)
     except Exception as e:
+        dtable_io_logger.exception('import table from base context: %s error: %s', context, e)
         error_msg = 'import_table_from_base: %s' % e
-        try:
-            error_info = json.loads(error_msg[error_msg.find('resp text: ')+11:])
-        except:
-            dtable_io_logger.exception(error_msg, exc_info=e)
-        else:
-            if error_info.get('error_type') == 'table_exist':
-                dtable_io_logger.warning('table: %s exists in dtable: %s', dst_table_name, dst_dtable_uuid)
-            else:
-                dtable_io_logger.exception(error_msg)
+        dtable_io_logger.exception(error_msg)
         raise Exception(error_msg)
