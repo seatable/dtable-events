@@ -42,23 +42,6 @@ class CommonDatasetSyncer(object):
         return self._enabled
 
 
-def get_dtable_server_header(dtable_uuid):
-    try:
-        access_token = jwt.encode({
-            'dtable_uuid': dtable_uuid,
-            'username': 'dtable-events',
-            'permission': 'rw',
-            'exp': int(time.time()) + 60
-        },
-            DTABLE_PRIVATE_KEY,
-            algorithm='HS256'
-        )
-    except Exception as e:
-        logging.error(e)
-        return
-    return {'Authorization': 'Token ' + access_token}
-
-
 def list_pending_common_dataset_syncs(db_session):
     sql = '''
             SELECT dcds.dst_dtable_uuid, dcds.dst_table_id, dcd.table_id AS src_table_id, dcd.view_id AS src_view_id,

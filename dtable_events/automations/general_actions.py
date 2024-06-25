@@ -151,27 +151,6 @@ class BaseContext:
         }
 
     @property
-    def access_token(self):
-        if self._access_token:
-            return self._access_token
-        payload = {
-            'username': self.caller,
-            'exp': int(time.time()) + 60 * 60 * 15,
-            'dtable_uuid': str(UUID(self.dtable_uuid)),
-            'permission': 'rw',
-            'id_in_org': ''
-        }
-        access_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, 'HS256')
-        self._access_token = access_token
-        return self._access_token
-
-    @property
-    def headers(self):
-        if self._headers:
-            return self._headers
-        return {'Authorization': 'Token ' + self.access_token}
-
-    @property
     def dtable_metadata(self):
         if self._dtable_metadata:
             return self._dtable_metadata
@@ -221,7 +200,7 @@ class BaseContext:
     @property
     def related_users(self):
         if not self._related_users:
-            self._related_users = self.dtable_web_api.get_related_users(self.dtable_uuid, self.caller)
+            self._related_users = self.dtable_web_api.get_related_users(self.dtable_uuid, self.caller)['user_list']
         return self._related_users
 
     @property
@@ -260,18 +239,6 @@ class BaseContext:
             if col['key'] == column_key:
                 return col
         return None
-
-    def get_temp_api_token(self, username=None, app_name=None):
-        payload = {
-            'dtable_uuid': self.dtable_uuid,
-            'exp': int(time.time()) + 60 * 60,
-        }
-        if username:
-            payload['username'] = username
-        if app_name:
-            payload['app_name'] = app_name
-        temp_api_token = jwt.encode(payload, SEATABLE_FAAS_AUTH_TOKEN, algorithm='HS256')
-        return temp_api_token
 
     def get_converted_row(self, table_id, row_id):
         table = self.get_table_by_id(table_id)
@@ -468,7 +435,7 @@ class NotifyAction(BaseAction):
                 'detail': detail
             })
         try:
-            send_notification(self.context.dtable_uuid, user_msg_list, self.context.access_token)
+            send_notification(self.context.dtable_uuid, user_msg_list, self.context.caller)
         except Exception as e:
             logger.exception(e)
             logger.error('msg detail: %s send users: %s notifications error: %s', detail, to_users, e)
@@ -854,23 +821,22 @@ class RunPythonScriptAction(BaseAction):
         scripts_running_limit = self.get_scripts_running_limit()
 
         # request faas url
-        headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
+        dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
         try:
-            resp = requests.post(self.RUN_SCRIPT_URL, json={
-                'dtable_uuid': str(UUID(self.context.dtable_uuid)),
-                'script_name': self.script_name,
-                'context_data': context_data,
-                'owner': self.owner,
-                'org_id': self.org_id,
-                'temp_api_token': self.context.get_temp_api_token(app_name=self.script_name),
-                'scripts_running_limit': scripts_running_limit,
-                'operate_from': self.operate_from,
-                'operator': self.operator
-            }, headers=headers, timeout=10)
-            if resp.status_code != 200:
-                logger.warning('dtable: %s run script: %s error status code: %s content: %s', self.context.dtable_uuid, self.script_name, resp.status_code, resp.content)
+            dtable_web_api.run_script(
+                uuid_str_to_36_chars(self.context.dtable_uuid),
+                self.script_name,
+                context_data,
+                self.owner,
+                self.org_id,
+                scripts_running_limit,
+                self.operate_from,
+                self.operator
+            )
+        except ConnectionError as e:
+            logger.warning('dtable: %s run script: %s operate_from: %s operator: %s error: %s', self.context.dtable_uuid, self.script_name, self.operate_from, self.operator, e)
         except Exception as e:
-            logger.error('dtable: %s run script: %s error: %s', self.context.dtable_uuid, self.script_name, e)
+            logger.warning('dtable: %s run script: %s operate_from: %s operator: %s error: %s', self.context.dtable_uuid, self.script_name, self.operate_from, self.operator, e)
 
 
 class AddRecordToOtherTableAction(BaseAction):

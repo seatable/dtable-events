@@ -1,21 +1,19 @@
 # -*- coding: utf-8 -*-
 import os
 import re
-import time
 import json
 from urllib.parse import unquote
 
-import jwt
-import requests
-
 from seaserv import seafile_api
 
-from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL
+from dtable_events.app.config import DTABLE_WEB_SERVICE_URL
 from dtable_events.dtable_io import dtable_io_logger
+from dtable_events.dtable_io.utils import get_non_duplicated_name
 from dtable_events.utils import get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes, DATE_FORMATS, DURATION_FORMATS, NUMBER_FORMATS, NUMBER_DECIMALS,\
     NUMBER_THOUSANDS, GEO_FORMATS
 from dtable_events.utils.dtable_column_utils import AutoNumberUtils
+from dtable_events.utils.dtable_server_api import DTableServerAPI, BaseExceedsException
 
 service_url = DTABLE_WEB_SERVICE_URL.strip()
 dtable_server_url = get_inner_dtable_server_url().rstrip('/')
@@ -205,21 +203,11 @@ def import_table_from_base(context):
     dst_table_name = context['dst_table_name']
     lang = context.get('lang', 'en')
 
+    src_dtable_server_api = DTableServerAPI(username, src_dtable_uuid, dtable_server_url)
+    dst_dtable_server_api = DTableServerAPI(username, dst_dtable_uuid, dtable_server_url)
     try:
-        # generate src_headers
-        src_payload = {
-            'dtable_uuid': src_dtable_uuid,
-            'username': username,
-            'permission': 'r',
-            'exp': int(time.time()) + 60
-        }
-        src_access_token = jwt.encode(src_payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
-        src_headers = {'Authorization': 'Token ' + src_access_token}
-
-        # get src_base's data
-        url = '%s/dtables/%s/?from=dtable_events' % (dtable_server_url, src_dtable_uuid)
-        resp = requests.get(url, headers=src_headers, timeout=180)
-        src_dtable_json = resp.json()
+        src_dtable_json = src_dtable_server_api.get_base()
+        dst_dtable_json = dst_dtable_server_api.get_base()
 
         # get src_table and src_columns
         src_table = None
@@ -245,18 +233,6 @@ def import_table_from_base(context):
             dtable_io_logger.error(error_msg)
             raise Exception(error_msg)
 
-        # generate dst_headers
-        dst_payload = {
-            'dtable_uuid': dst_dtable_uuid,
-            'username': username,
-            'permission': 'rw',
-            'exp': int(time.time()) + 60*5
-        }
-        dst_access_token = jwt.encode(dst_payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
-        dst_headers = {'Authorization': 'Token ' + dst_access_token}
-
-        # create dst_table
-        url = '%s/api/v1/dtables/%s/tables/?from=dtable_events' % (dtable_server_url, dst_dtable_uuid)
         dst_columns = []
 
         for col in src_columns:
@@ -280,54 +256,17 @@ def import_table_from_base(context):
                     continue
             dst_columns.append(column_dict)
 
-        data = {
-            'lang': lang,
-            'table_name': dst_table_name,
-            'columns': dst_columns,
-            'views' : src_table.get('views', []),
-            'view_structure' : src_table.get('view_structure', {})
-        }
-        try:
-            resp = requests.post(url, headers=dst_headers, json=data, timeout=180)
-            if resp.status_code != 200:
-                error_msg = 'create dst table error, status code: %s, resp text: %s' \
-                            % (resp.status_code, resp.text)
-                raise Exception(error_msg)
-        except Exception as e:
-            error_msg = 'create dst table error: %s' % e
-            raise Exception(error_msg)
-
-        # import src_rows step by step
         src_rows = new_table.get('rows', [])
-        step = 1000
-        url = '%s/api/v1/dtables/%s/batch-append-rows/?from=dtable_events' % (dtable_server_url, dst_dtable_uuid)
-        for i in range(0, len(src_rows), step):
-            data = {
-                'table_name': dst_table_name,
-                'rows': src_rows[i: i + step],
-                'need_convert_back': False
-            }
-            try:
-                resp = requests.post(url, headers=dst_headers, json=data, timeout=180)
-                if resp.status_code != 200:
-                    error_msg = 'batch append rows to dst dtable: %s dst table: %s error: %s status_code: %s' % \
-                                (dst_dtable_uuid, dst_table_name, resp.text, resp.status_code)
-                    dtable_io_logger.error(error_msg)
-                    raise Exception(error_msg)
-            except Exception as e:
-                error_msg = 'batch append rows to dst dtable: %s dst table: %s error: %s' % \
-                            (dst_dtable_uuid, dst_table_name, e)
-                dtable_io_logger.error(error_msg)
-                raise Exception(error_msg)
+        dst_table_name = get_non_duplicated_name(dst_table_name, [t['name'] for t in dst_dtable_json['tables']])
+        dst_dtable_server_api.add_table(dst_table_name, lang=lang, columns=dst_columns, rows=src_rows)
+    except BaseExceedsException as e:
+        error_msg = 'import_table_from_base: %s' % json.dumps({'error_type': e.args[0], 'error_msg': e.args[1]})
+        raise Exception(error_msg)
+    except ConnectionError as e:
+        dtable_io_logger.exception('import table from base context: %s error: %s', context, e)
+        error_msg = 'import_table_from_base: %s' % e.args[1]
+        raise Exception(error_msg)
     except Exception as e:
+        dtable_io_logger.exception('import table from base context: %s error: %s', context, e)
         error_msg = 'import_table_from_base: %s' % e
-        try:
-            error_info = json.loads(error_msg[error_msg.find('resp text: ')+11:])
-        except:
-            dtable_io_logger.exception(error_msg, exc_info=e)
-        else:
-            if error_info.get('error_type') == 'table_exist':
-                dtable_io_logger.warning('table: %s exists in dtable: %s', dst_table_name, dst_dtable_uuid)
-            else:
-                dtable_io_logger.exception(error_msg)
         raise Exception(error_msg)

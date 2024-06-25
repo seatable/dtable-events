@@ -1,9 +1,27 @@
 import json
 import logging
+import time
+
+import jwt
 import requests
-from dtable_events.dtable_io.utils import get_app_access_token
+
+from dtable_events.app.config import DTABLE_PRIVATE_KEY
 
 logger = logging.getLogger(__name__)
+
+
+def get_app_access_token(username, app_uuid):
+    payload = {
+        'exp': int(time.time()) + 300,
+        'app_uuid': app_uuid,
+        'username': username,
+        'permission': 'rw',
+    }
+    access_token = jwt.encode(
+        payload, DTABLE_PRIVATE_KEY, algorithm='HS256'
+    )
+
+    return access_token
 
 
 class WrongFilterException(Exception):

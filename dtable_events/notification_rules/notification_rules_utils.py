@@ -42,23 +42,6 @@ def update_rule_last_trigger_time(rule_id, db_session):
     db_session.execute(text(cmd), {'new_time': datetime.utcnow(), 'rule_id': rule_id})
 
 
-def get_dtable_server_token(dtable_uuid):
-    payload = {
-        'exp': int(time.time()) + 60,
-        'dtable_uuid': dtable_uuid,
-        'username': 'dtable-web',
-        'permission': 'rw',
-    }
-    try:
-        access_token = jwt.encode(
-            payload, DTABLE_PRIVATE_KEY, algorithm='HS256'
-        )
-    except Exception as e:
-        logger.error(e)
-        return
-    return access_token
-
-
 def scan_triggered_notification_rules(event_data, db_session):
     row = event_data.get('row')
     message_dtable_uuid = event_data.get('dtable_uuid', '')
@@ -83,17 +66,11 @@ def scan_triggered_notification_rules(event_data, db_session):
     db_session.commit()
 
 
-def send_notification(dtable_uuid, user_msg_list, dtable_server_access_token):
-    api_url = get_inner_dtable_server_url()
-    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/notifications-batch/?from=dtable_events'
-    headers = {'Authorization': 'Token ' + dtable_server_access_token}
-    body = {
-        'user_messages': user_msg_list,
-    }
-    res = requests.post(url, headers=headers, json=body)
+def send_notification(dtable_uuid, user_msg_list, username='dtable-events'):
+    from dtable_events.utils.dtable_server_api import DTableServerAPI
 
-    if res.status_code != 200:
-        logger.error(f'dtable {dtable_uuid} failed to send_notification {res.text}')
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, get_inner_dtable_server_url())
+    dtable_server_api.batch_send_notification(user_msg_list)
 
 
 def deal_invalid_rule(rule_id, db_session):
@@ -311,7 +288,7 @@ def trigger_notification_rule(rule, message_table_id, row, db_session, op_type, 
         deal_invalid_rule(rule_id, db_session)
         return
 
-    related_users_dict = {user['email']: user for user in dtable_web_api.get_related_users(dtable_uuid)}
+    related_users_dict = {user['email']: user for user in dtable_web_api.get_related_users(dtable_uuid)['user_list']}
     temp_users = []
     for user in users:
         if user and user not in related_users_dict:
@@ -369,7 +346,7 @@ def trigger_notification_rule(rule, message_table_id, row, db_session, op_type, 
                 'msg_type': 'notification_rules',
                 'detail': detail,
                 })
-        send_notification(dtable_uuid, user_msg_list, dtable_server_api.access_token)
+        send_notification(dtable_uuid, user_msg_list, 'notification-rule')
 
     elif (op_type in ('modify_row', 'modify_rows', 'add_link', 'update_links', 'update_rows_links') and trigger['condition'] == CONDITION_FILTERS_SATISFY) or \
          (op_type in ('insert_row', 'append_rows', 'insert_rows') and trigger['condition'] == CONDITION_ROWS_ADDED):
@@ -410,7 +387,7 @@ def trigger_notification_rule(rule, message_table_id, row, db_session, op_type, 
                 'msg_type': 'notification_rules',
                 'detail': detail,
                 })
-        send_notification(dtable_uuid, user_msg_list, dtable_server_api.access_token)
+        send_notification(dtable_uuid, user_msg_list, 'notification-rule')
 
     else:
         return
@@ -474,7 +451,7 @@ def trigger_near_deadline_notification_rule(rule, db_session, rule_interval_meta
         if cur_hour != 12:
             return
 
-    related_users_dict = {user['email']: user for user in dtable_web_api.get_related_users(dtable_uuid)}
+    related_users_dict = {user['email']: user for user in dtable_web_api.get_related_users(dtable_uuid)['user_list']}
     temp_users = []
     for user in users:
         if user and user not in related_users_dict:
@@ -541,6 +518,6 @@ def trigger_near_deadline_notification_rule(rule, db_session, rule_interval_meta
                 'msg_type': 'notification_rules',
                 'detail': detail,
             })
-        send_notification(dtable_uuid, user_msg_list, dtable_server_api.access_token)
+        send_notification(dtable_uuid, user_msg_list, 'notification-rule')
 
     update_rule_last_trigger_time(rule_id, db_session)
