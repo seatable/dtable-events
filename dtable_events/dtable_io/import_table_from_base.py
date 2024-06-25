@@ -269,5 +269,4 @@ def import_table_from_base(context):
     except Exception as e:
         dtable_io_logger.exception('import table from base context: %s error: %s', context, e)
         error_msg = 'import_table_from_base: %s' % e
-        dtable_io_logger.exception(error_msg)
         raise Exception(error_msg)
