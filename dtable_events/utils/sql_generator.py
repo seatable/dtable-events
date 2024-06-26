@@ -1188,7 +1188,6 @@ class StatisticSQLGenerator(object):
         table_name = table.get('name', '')
         self.table_name = '`%s`' % table_name
         self.statistic = statistic
-
         columns = table.get('columns', [])
         self.column_key_map = {}
         for column in columns:
@@ -1252,7 +1251,7 @@ class StatisticSQLGenerator(object):
         if type == ColumnTypes.CTIME or type == ColumnTypes.MTIME or type == ColumnTypes.DATE:
             date_granularity = group_by.get('date_granularity', '')
             date_granularity = date_granularity.upper()
-            if date_granularity == 'DAY':
+            if date_granularity in ('DAY', 'DAYS_7','DAYS_30'):
                 return 'ISODATE(%s)' % valid_column_name
             if date_granularity == 'WEEK':
                 return 'ISODATE(STARTOFWEEK(%s, "monday"))' % valid_column_name
