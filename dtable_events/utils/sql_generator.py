@@ -1188,7 +1188,7 @@ class StatisticSQLGenerator(object):
         table_name = table.get('name', '')
         self.table_name = '`%s`' % table_name
         self.statistic = statistic
-        
+
         columns = table.get('columns', [])
         self.column_key_map = {}
         for column in columns:
