@@ -1761,9 +1761,6 @@ class StatisticSQLGenerator(object):
         groupby_include_empty_cells = self.statistic.get('groupby_include_empty_cells', False)
         summary_method = self.statistic.get('summary_method', '')
         summary_columns = self.statistic.get('summary_columns', [])
-        if not summary_method:
-            self.error = 'Summary method is not valid'
-            return ''
 
         groupby_column = self._get_column_by_key(groupby_column_key)
         if not groupby_column:
