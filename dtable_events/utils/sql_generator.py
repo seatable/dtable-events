@@ -1852,9 +1852,11 @@ class StatisticSQLGenerator(object):
         column_groupby_column_key = self.statistic.get('column_groupby_column_key', '')
         summary_type = self.statistic.get('summary_type', '')
         summary_column_key = self.statistic.get('summary_column_key', '')
+        
         groupby_date_granularity = self.statistic.get('groupby_date_granularity', '')
         groupby_geolocation_granularity = self.statistic.get('groupby_geolocation_granularity', '')
         groupby_include_empty_cells = self.statistic.get('groupby_include_empty_cells', False)
+        
         column_groupby_date_granularity = self.statistic.get('column_groupby_date_granularity', '')
         column_groupby_geolocation_granularity = self.statistic.get('column_groupby_geolocation_granularity', '')
         summary_method = self.statistic.get('summary_method', '')
@@ -1889,7 +1891,14 @@ class StatisticSQLGenerator(object):
 
         if self.detail_filter_conditions:
             return self._get_detail_sql({
-                groupby_column_key: {'groupby_name': groupby_column_name, 'group_by': { 'date_granularity': groupby_date_granularity, 'geolocation_granularity': groupby_geolocation_granularity }}
+                column_groupby_column_key: {
+                    'groupby_name': column_groupby_column_name, 
+                    'group_by': { 'date_granularity': column_groupby_date_granularity, 'geolocation_granularity': column_groupby_geolocation_granularity }
+                },
+                groupby_column_key: {
+                    'groupby_name': groupby_column_name, 
+                    'group_by': { 'date_granularity': groupby_date_granularity, 'geolocation_granularity': groupby_geolocation_granularity }
+                }
             })
         return 'SELECT %s, %s, %s FROM %s %s GROUP BY %s, %s LIMIT 0, 5000' % (groupby_column_name, column_groupby_column_name, summary_column_names_str, self.table_name, self.filter_sql, groupby_column_name, column_groupby_column_name)
 
