@@ -1820,9 +1820,7 @@ class StatisticSQLGenerator(object):
                 summary_column_names_str = ', %s' % summary_column_names_str
 
             if self.detail_filter_conditions:
-                return self._get_detail_sql({
-                    groupby_column_key: {'groupby_name': groupby_column_name, 'group_by': { 'date_granularity': groupby_date_granularity, 'geolocation_granularity': groupby_geolocation_granularity }}
-                })
+                return self._get_detail_sql(groupby_dict)
             return 'SELECT %s%s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, summary_column_names_str, self.table_name, self.filter_sql, groupby_column_name)
 
         summary_method = summary_method.upper()
