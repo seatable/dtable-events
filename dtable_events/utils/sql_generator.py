@@ -1784,9 +1784,16 @@ class StatisticSQLGenerator(object):
             summary_column = self._get_column_by_key(summary_column_key)
             summary_method = summary_method.upper()
             summary_column_names = []
+            groupby_dict = {}
             if summary_column and (is_numeric_column(summary_column) or is_date_column(summary_column)):
                 summary_column_name = self._summary_column_2_sql(summary_method, summary_column)
                 summary_column_names.append(summary_column_name)
+                groupby_dict[summary_column_key] = {
+                    summary_column_key:{
+                        'groupby_name': summary_column_name,
+                        'group_by': {'date_granularity': groupby_date_granularity, 'geolocation_granularity': groupby_geolocation_granularity }
+                    }
+                }
 
             for column_option in summary_columns:
                 column_key = column_option.get('column_key', '')
@@ -1796,15 +1803,20 @@ class StatisticSQLGenerator(object):
                 if column and (is_numeric_column(column) or is_date_column(column)):
                     column_name = self._summary_column_2_sql(method, column)
                     summary_column_names.append(column_name)
+                    # TODO: maybe need to use column_option's date_granularity, but front end doesn't support right now
+                    groupby_dict[column_key] = {
+                    column_key:{
+                        'groupby_name': column_name,
+                        'group_by': {'date_granularity': groupby_date_granularity }
+                    }
+                }
 
             summary_column_names_str = ', '.join(summary_column_names)
             if summary_column_names_str:
                 summary_column_names_str = ', %s' % summary_column_names_str
 
             if self.detail_filter_conditions:
-                return self._get_detail_sql({
-                    groupby_column_key: {'groupby_name': groupby_column_name, 'group_by': { 'date_granularity': groupby_date_granularity, 'geolocation_granularity': groupby_geolocation_granularity }}
-                })
+                return self._get_detail_sql(groupby_dict)
             return 'SELECT %s%s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, summary_column_names_str, self.table_name, self.filter_sql, groupby_column_name)
 
         summary_method = summary_method.upper()
