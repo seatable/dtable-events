@@ -1752,6 +1752,11 @@ class StatisticSQLGenerator(object):
             })
         return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, left_summary_column_name, self.table_name, self.filter_sql, groupby_column_name)
 
+
+    def _summary_columns_2_sql(self, summary_columns, summary_column_key, groupby_column, summary_method):
+        summary_column = self._get_column_by_key(summary_column_key);
+        summary_method = summary_method.toUpperCase();
+
     def _one_dimension_statistic_table_2_sql(self):
         groupby_column_key = self.statistic.get('groupby_column_key', '')
         summary_type = self.statistic.get('summary_type', '')
@@ -1796,6 +1801,19 @@ class StatisticSQLGenerator(object):
                 if column and (is_numeric_column(column) or is_date_column(column)):
                     column_name = self._summary_column_2_sql(method, column)
                     summary_column_names.append(column_name)
+            
+            if groupby_column.type == ColumnTypes.COLLABORATOR:
+                for index in range(len(summary_column_names)):
+                    summary_column_name = summary_column_names[index]
+                    if summary_column_name.startswith('AVG'):
+                        summary_column_names[index] = 'SUM' + summary_column_name[3:]
+                summary_column_names.append('COUNT(*)')
+            
+            for index in range(len(summary_column_names)):
+                summary_column_name = summary_column_names[index]
+                if summary_column_name.startswith('AVG'):
+                    group_column_name = self._summary_column_2_sql('ROW_COUNT', groupby_column)
+                    summary_column_names[index] = summary_column_name + ', SUM' + summary_column_name[3:] + ', ' + group_column_name
 
             summary_column_names_str = ', '.join(summary_column_names)
             if summary_column_names_str:
