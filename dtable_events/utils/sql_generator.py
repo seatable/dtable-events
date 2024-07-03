@@ -1292,18 +1292,21 @@ class StatisticSQLGenerator(object):
     def _get_detail_sql(self, groupby_columns_dict):
         detail_filters = self.detail_filter_conditions.get('filters') or []
         filter_sqls = []
+        groupby_column_names = [groupby_column['groupby_name'] for groupby_column in groupby_columns_dict.values()]
         for detail_filter in detail_filters:
             filter_value = detail_filter.get('value')
-            groupby_column_names = [groupby_column['groupby_name'] for groupby_column in groupby_columns_dict.values()]
             column_key = detail_filter.get('column_key')
             if column_key not in groupby_columns_dict:
                 continue
-            if not filter_value:
+            if not filter_value:  # normal filter item
+                # judge is filter valid
+                if 'filter_predicate' not in detail_filter:
+                    continue
                 filter_column = self._get_column_by_key(column_key)
                 if not filter_column:
-                    raise ValueError('filter: %s column not found')
+                    continue
                 if f"`{filter_column['name']}`" not in groupby_column_names:
-                    raise ValueError('filter: %s invalid for current statistic')
+                    continue
                 column_type = filter_column.get('type')
                 operator_cls = _get_operator_by_type(column_type)
                 if not operator_cls:
@@ -1316,10 +1319,10 @@ class StatisticSQLGenerator(object):
             else:  # some columns like date or geolocation, being set in statistic config
                 detail_column = self._get_column_by_key(column_key)
                 if not detail_column:
-                    raise ValueError('filter: %s column not found')
+                    continue
                 detail_column_name = self._statistic_column_name_to_sql(detail_column, groupby_columns_dict[column_key]['group_by'])
                 if detail_column_name not in groupby_column_names:
-                    raise ValueError('filter: %s invalid for current statistic')
+                    continue
                 filter_sqls.append(f"{detail_column_name}='{filter_value}'")
 
         if filter_sqls:
@@ -1820,7 +1823,9 @@ class StatisticSQLGenerator(object):
                 summary_column_names_str = ', %s' % summary_column_names_str
 
             if self.detail_filter_conditions:
-                return self._get_detail_sql(groupby_dict)
+                return self._get_detail_sql({
+                    groupby_column_key: {'groupby_name': groupby_column_name, 'group_by': { 'date_granularity': groupby_date_granularity, 'geolocation_granularity': groupby_geolocation_granularity }}
+                })
             return 'SELECT %s%s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, summary_column_names_str, self.table_name, self.filter_sql, groupby_column_name)
 
         summary_method = summary_method.upper()
@@ -1850,11 +1855,9 @@ class StatisticSQLGenerator(object):
         column_groupby_column_key = self.statistic.get('column_groupby_column_key', '')
         summary_type = self.statistic.get('summary_type', '')
         summary_column_key = self.statistic.get('summary_column_key', '')
-        
         groupby_date_granularity = self.statistic.get('groupby_date_granularity', '')
         groupby_geolocation_granularity = self.statistic.get('groupby_geolocation_granularity', '')
         groupby_include_empty_cells = self.statistic.get('groupby_include_empty_cells', False)
-        
         column_groupby_date_granularity = self.statistic.get('column_groupby_date_granularity', '')
         column_groupby_geolocation_granularity = self.statistic.get('column_groupby_geolocation_granularity', '')
         summary_method = self.statistic.get('summary_method', '')
@@ -1889,14 +1892,8 @@ class StatisticSQLGenerator(object):
 
         if self.detail_filter_conditions:
             return self._get_detail_sql({
-                column_groupby_column_key: {
-                    'groupby_name': column_groupby_column_name, 
-                    'group_by': { 'date_granularity': column_groupby_date_granularity, 'geolocation_granularity': column_groupby_geolocation_granularity }
-                },
-                groupby_column_key: {
-                    'groupby_name': groupby_column_name, 
-                    'group_by': { 'date_granularity': groupby_date_granularity, 'geolocation_granularity': groupby_geolocation_granularity }
-                }
+                groupby_column_key: {'groupby_name': groupby_column_name, 'group_by': { 'date_granularity': groupby_date_granularity, 'geolocation_granularity': groupby_geolocation_granularity }},
+                column_groupby_column_key: {'groupby_name': column_groupby_column_name, 'group_by': { 'date_granularity': column_groupby_date_granularity, 'geolocation_granularity': column_groupby_geolocation_granularity }}
             })
         return 'SELECT %s, %s, %s FROM %s %s GROUP BY %s, %s LIMIT 0, 5000' % (groupby_column_name, column_groupby_column_name, summary_column_names_str, self.table_name, self.filter_sql, groupby_column_name, column_groupby_column_name)
 
