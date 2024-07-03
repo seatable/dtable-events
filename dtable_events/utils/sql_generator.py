@@ -1510,15 +1510,16 @@ class StatisticSQLGenerator(object):
             column_groupby_column_name = self._statistic_column_name_to_sql(column_groupby_column, { 'date_granularity': date_granularity, 'geolocation_granularity': geolocation_granularity })
             if self.detail_filter_conditions:
                 return self._get_detail_sql({
-                    groupby_column_key: {'groupby_name': group_by_column_name },
+                    groupby_column_key: {'groupby_name': f'`{group_by_column_name}`' },
                     column_groupby_column_key: {'groupby_name': column_groupby_column_name, 'group_by': { 'date_granularity': date_granularity, 'geolocation_granularity': geolocation_granularity }}
                 })
             return 'SELECT `%s`, %s, SUM(`%s`), SUM(`%s`) FROM %s %s GROUP BY `%s`, %s LIMIT 0, 5000' % (group_by_column_name, column_groupby_column_name, target_column_name, completed_column_name, self.table_name, self.filter_sql, group_by_column_name, column_groupby_column_name)
 
         if self.detail_filter_conditions:
             return self._get_detail_sql({
-                groupby_column_key: {'groupby_name': group_by_column_name },
-                column_groupby_column_key: {'groupby_name': column_groupby_column_name, 'group_by': { 'date_granularity': date_granularity, 'geolocation_granularity': geolocation_granularity }}
+                groupby_column_key: {'groupby_name': f'`{group_by_column_name}`' },
+                target_column_key: {'groupby_name': f'`{target_column_name}`'},
+                completed_column_key: {'groupby_name': f'`{completed_column_name}`'}
             })
         return 'SELECT `%s`, `%s`, `%s` FROM %s %s GROUP BY `%s`, `%s`, `%s` LIMIT 0, 5000' % (group_by_column_name, target_column_name, completed_column_name, self.table_name, self.filter_sql, group_by_column_name, target_column_name, completed_column_name)
 
@@ -1553,15 +1554,16 @@ class StatisticSQLGenerator(object):
             column_groupby_column_name = self._statistic_column_name_to_sql(column_groupby_column, { 'date_granularity': date_granularity, 'geolocation_granularity': geolocation_granularity })
             if self.detail_filter_conditions:
                 return self._get_detail_sql({
-                    x_axis_column_key: {'groupby_name': x_axis_column_name},
+                    x_axis_column_key: {'groupby_name': f'`{x_axis_column_name}`'},
+                    y_axis_column_key: {'groupby_name': f'`{y_axis_column_name}`'},
                     column_groupby_column_key: {'groupby_name': column_groupby_column_name, 'group_by': { 'date_granularity': date_granularity, 'geolocation_granularity': geolocation_granularity }}
                 })
             return 'SELECT `%s`, `%s`, %s FROM %s %s GROUP BY `%s`, `%s`, %s LIMIT 0, 5000' % (x_axis_column_name, y_axis_column_name, column_groupby_column_name, self.table_name, self.filter_sql, x_axis_column_name, y_axis_column_name, column_groupby_column_name)
 
         if self.detail_filter_conditions:
             return self._get_detail_sql({
-                x_axis_column_key: {'groupby_name': x_axis_column_name},
-                y_axis_column_key: {'groupby_name': y_axis_column_name}
+                x_axis_column_key: {'groupby_name': f'`{x_axis_column_name}`'},
+                y_axis_column_key: {'groupby_name': f'`{y_axis_column_name}`'}
             })
         return 'SELECT `%s`, `%s` FROM %s %s GROUP BY `%s`, `%s` LIMIT 0, 5000' % (x_axis_column_name, y_axis_column_name, self.table_name, self.filter_sql, x_axis_column_name, y_axis_column_name)
 
