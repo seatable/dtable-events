@@ -288,7 +288,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM `Table1` WHERE `modifyTime` > '2021-12-20' LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `modifyTime` >= '2021-12-21' and `modifyTime` is not null LIMIT 0, 100",
         "by_group": False,
     },
 
@@ -561,7 +561,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql":"SELECT * FROM `Table1` WHERE `名称` = 'LINK' And `AutoNo` ilike '%NO%' And `rate` > 6 And `Mul` in ('aa', 'bb', 'cc', 'dd') And `modifyTime` > '2021-12-20' And `Sing` not in ('a', 'b', 'c') LIMIT 0, 100",
+        "expected_sql":"SELECT * FROM `Table1` WHERE `名称` = 'LINK' And `AutoNo` ilike '%NO%' And `rate` > 6 And `Mul` in ('aa', 'bb', 'cc', 'dd') And `modifyTime` >= '2021-12-21' and `modifyTime` is not null And `Sing` not in ('a', 'b', 'c') LIMIT 0, 100",
         "by_group": False,
     },
 
@@ -594,7 +594,7 @@ TEST_CONDITIONS = [
             "limit": 500
         },
         "by_group": True,
-        "expected_sql":"SELECT * FROM `Table1` WHERE (`名称` = 'LINK' And `AutoNo` ilike '%NO%') Or (`rate` > 6 Or `Mul` in ('aa', 'bb', 'cc', 'dd') Or `modifyTime` > '2021-12-20') ORDER BY `名称` DESC, `AutoNo` ASC LIMIT 0, 500"
+        "expected_sql":"SELECT * FROM `Table1` WHERE (`名称` = 'LINK' And `AutoNo` ilike '%NO%') Or (`rate` > 6 Or `Mul` in ('aa', 'bb', 'cc', 'dd') Or `modifyTime` >= '2021-12-21' and `modifyTime` is not null) ORDER BY `名称` DESC, `AutoNo` ASC LIMIT 0, 500"
     },
 
     # Not group, column not found raise Exception
