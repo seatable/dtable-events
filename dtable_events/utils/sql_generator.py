@@ -425,7 +425,7 @@ class DepartmentMultipleSelectOperator(Operator):
 
     def __init__(self, column, filter_item):
         super(DepartmentMultipleSelectOperator, self).__init__(column, filter_item)
-    
+
     def op_has_any_of(self):
         if not self.filter_term:
             return ""
@@ -435,7 +435,7 @@ class DepartmentMultipleSelectOperator(Operator):
             "column_name": self.column_name,
             "filter_term_str": filter_term_str
         })
-    
+
     def op_has_none_of(self):
         if not self.filter_term:
             return ""
@@ -445,7 +445,7 @@ class DepartmentMultipleSelectOperator(Operator):
             "column_name": self.column_name,
             "filter_term_str": filter_term_str
         })
-    
+
     def op_has_all_of(self):
         if not self.filter_term:
             return ""
@@ -455,7 +455,7 @@ class DepartmentMultipleSelectOperator(Operator):
             "column_name": self.column_name,
             "filter_term_str": filter_term_str
         })
-    
+
     def op_is_exactly(self):
         if not self.filter_term:
             return ""
@@ -769,9 +769,10 @@ class DateOperator(Operator):
         target_date, _ = self._other_date()
         if not target_date:
             return ""
-        return "`%(column_name)s` > '%(target_date)s'" % ({
+        next_date = self._format_date(target_date + timedelta(days=1))
+        return "`%(column_name)s` >= '%(target_date)s' and `%(column_name)s` is not null" % ({
             "column_name": self.column_name,
-            "target_date": self._format_date(target_date)
+            "target_date": next_date,
         })
 
     def op_is_on_or_before(self):
@@ -1484,7 +1485,7 @@ class StatisticSQLGenerator(object):
         if not groupby_column:
             self.error = 'Group by column not found'
             return ''
-        
+
         x_axis_include_empty_cells = self.statistic.get('x_axis_include_empty_cells', False)
         self._update_filter_sql(x_axis_include_empty_cells, groupby_column)
         group_by_column_name = groupby_column.get('name', '')
@@ -1506,7 +1507,7 @@ class StatisticSQLGenerator(object):
             if not column_groupby_column:
                 self.error = 'Column group by column not found'
                 return ''
-            
+
             column_groupby_column_name = self._statistic_column_name_to_sql(column_groupby_column, { 'date_granularity': date_granularity, 'geolocation_granularity': geolocation_granularity })
             if self.detail_filter_conditions:
                 return self._get_detail_sql({
@@ -1540,7 +1541,7 @@ class StatisticSQLGenerator(object):
         if not y_axis_column:
             self.error = 'Y axis column not found'
             return ''
-        
+
         self._update_filter_sql(x_axis_include_empty_cells, x_axis_column)
         x_axis_column_name = x_axis_column.get('name', '')
         y_axis_column_name = y_axis_column.get('name', '')
@@ -1578,7 +1579,7 @@ class StatisticSQLGenerator(object):
         if not group_by_column:
             self.error = 'Group by column not found'
             return ''
-        
+
         if not y_axises or len(y_axises) == 0:
             self.error = 'Y axis column not found'
             return ''
@@ -1609,7 +1610,7 @@ class StatisticSQLGenerator(object):
                     })
                 sql = 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 5000' % (group_by_column_name, ', '.join(group_methods), self.table_name, self.filter_sql, group_by_column_name)
             SQL_list.append(sql)
-        
+
         if len(SQL_list) == 0:
             self.error = 'Y axis column not found'
             return ''
@@ -1781,7 +1782,7 @@ class StatisticSQLGenerator(object):
                 if summary_column_name.startswith('AVG'):
                     summary_column_names[index] = 'SUM' + summary_column_name[3:]
             summary_column_names.append('COUNT(*)')
-        
+
         for index in range(len(summary_column_names)):
             summary_column_name = summary_column_names[index]
             if summary_column_name.startswith('AVG'):
@@ -1990,25 +1991,25 @@ class StatisticSQLGenerator(object):
     def _get_geo_granularity_by_level(self, level):
         if level == MapLevel.PROVINCE:
             return GeolocationGranularity.CITY
-        
+
         if level == MapLevel.CITY:
             return GeolocationGranularity.DISTRICT
-        
+
         return GeolocationGranularity.PROVINCE
 
     def _fix_geoGranularity(self, level, location):
         if not level or level == MapLevel.COUNTRY or not location:
             return GeolocationGranularity.PROVINCE
-        
+
         # e.g. Beijing
         province_name = location.get('province', '')
         city_name = location.get('city', '')
         if province_name and province_name in MUNICIPALITIES:
             return GeolocationGranularity.DISTRICT
-        
+
         from dtable_events.utils.regions import REGIONS
 
-        try: 
+        try:
             province = [province for province in REGIONS if province['name'] == province_name][0]
         except Exception as e:
             return self._get_geo_granularity_by_level(level)
@@ -2019,13 +2020,13 @@ class StatisticSQLGenerator(object):
 
         if not city_name:
             return self._get_geo_granularity_by_level(level)
-        
+
         cities = province.get('cities', [])
-        try: 
+        try:
             city = [city for city in cities if city['name'] == city_name][0]
         except Exception as e:
             return self._get_geo_granularity_by_level(level)
-        
+
         if level == MapLevel.CITY and city.get('disable_drill_down', False):
             return GeolocationGranularity.CITY
 
@@ -2044,7 +2045,7 @@ class StatisticSQLGenerator(object):
         if not groupby_column:
             self.error = 'Geo column not found'
             return ''
-        
+
         self._update_filter_sql(True, groupby_column)
         geolocation_granularity = self._fix_geoGranularity(map_level, map_location)
 
@@ -2082,7 +2083,7 @@ class StatisticSQLGenerator(object):
         if not groupby_column:
             self.error = 'Geo column not found'
             return ''
-        
+
         self._update_filter_sql(False, groupby_column)
         groupby_column_name = self._statistic_column_name_to_sql(groupby_column, { 'date_granularity': '', 'geolocation_granularity': '' })
         summary_type = summary_type.upper()
@@ -2144,7 +2145,7 @@ class StatisticSQLGenerator(object):
         if not groupby_column:
             self.error = 'Group by column not found'
             return ''
-        
+
         column_groupby_column = self._get_column_by_key(group_column_key)
         if not column_groupby_column:
             self.error = 'Column group by column not found'
