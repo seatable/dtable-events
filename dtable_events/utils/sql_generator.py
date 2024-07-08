@@ -1820,7 +1820,7 @@ class StatisticSQLGenerator(object):
             return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, summary_column_name, self.table_name, self.filter_sql, groupby_column_name)
 
 
-        if summary_columns:
+        if summary_columns or summary_column_key:
             summary_column_names_str = self._summary_columns_2_sql(summary_columns, summary_column_key, groupby_column, summary_method)
             if summary_column_names_str:
                 summary_column_names_str = ', %s' % summary_column_names_str
