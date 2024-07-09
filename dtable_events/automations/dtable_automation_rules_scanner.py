@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime, timedelta
 from threading import Thread
 
 from sqlalchemy import text
@@ -60,14 +59,7 @@ def scan_dtable_automation_rules(db_session):
             WHERE (run_condition='per_day' OR run_condition='per_week' OR run_condition='per_month')
             AND dar.is_valid=1 AND d.deleted=0 AND is_pause=0
         '''
-    per_day_check_time = datetime.utcnow() - timedelta(hours=23)
-    per_week_check_time = datetime.utcnow() - timedelta(days=6)
-    per_month_check_time = datetime.utcnow() - timedelta(days=27)  # consider the least month-days 28 in February (the 2nd month) in common years
-    rules = db_session.execute(text(sql), {
-        'per_day_check_time': per_day_check_time,
-        'per_week_check_time': per_week_check_time,
-        'per_month_check_time': per_month_check_time
-    })
+    rules = db_session.execute(text(sql))
 
     # each base's metadata only requested once and recorded in memory
     # The reason why it doesn't cache metadata in redis is metadatas in interval rules need to be up-to-date
