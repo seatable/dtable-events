@@ -9,7 +9,7 @@ from dtable_events.app.config import IS_PRO_VERSION
 from dtable_events.app.metadata_cache_managers import RuleIntervalMetadataCacheManager
 from dtable_events.automations.auto_rules_utils import run_regular_execution_rule
 from dtable_events.db import init_db_session_class
-from dtable_events.utils import get_opt_from_conf_or_env, parse_bool
+from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, set_job_timeout
 
 
 __all__ = [
@@ -57,9 +57,7 @@ def scan_dtable_automation_rules(db_session):
     sql = '''
             SELECT `dar`.`id`, `run_condition`, `trigger`, `actions`, `last_trigger_time`, `dtable_uuid`, `trigger_count`, `org_id`, dar.`creator` FROM dtable_automation_rules dar
             JOIN dtables d ON dar.dtable_uuid=d.uuid
-            WHERE ((run_condition='per_day' AND (last_trigger_time<:per_day_check_time OR last_trigger_time IS NULL))
-            OR (run_condition='per_week' AND (last_trigger_time<:per_week_check_time OR last_trigger_time IS NULL))
-            OR (run_condition='per_month' AND (last_trigger_time<:per_month_check_time OR last_trigger_time IS NULL)))
+            WHERE (run_condition='per_day' OR run_condition='per_week' OR run_condition='per_month')
             AND dar.is_valid=1 AND d.deleted=0 AND is_pause=0
         '''
     per_day_check_time = datetime.utcnow() - timedelta(hours=23)
@@ -92,7 +90,8 @@ class DTableAutomationRulesScannerTimer(Thread):
     def run(self):
         sched = BlockingScheduler()
         # fire at every hour in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='*')
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', misfire_grace_time=300)
+        @set_job_timeout(timeout=3600)
         def timed_job():
             logging.info('Starts to scan automation rules...')
 

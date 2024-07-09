@@ -70,7 +70,7 @@ class BigDataStorageStatsTask(Thread):
     def run(self):
         schedule = BlockingScheduler()
         # run at 1 o'clock in every day of week
-        @schedule.scheduled_job('cron', day_of_week='*', hour='1')
+        @schedule.scheduled_job('cron', day_of_week='*', hour='1', misfire_grace_time=300)
         def timed_job():
             logging.info('Start big data storage stats task...')
 

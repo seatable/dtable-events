@@ -5,6 +5,8 @@ import logging
 import configparser
 import subprocess
 import uuid
+import functools
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
 import pytz
 import re
@@ -262,3 +264,26 @@ def gen_inner_file_upload_url(token, op, replace=False):
     if replace is True:
         url += '?replace=1'
     return url
+
+
+def set_job_timeout(timeout=3600):
+    """
+    decoration for apscheduler.BlockingScheduler.scheduled_job
+
+    :timeout: seconds to timeout
+    """
+
+    def _set_job_timeout(func):
+
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            with ThreadPoolExecutor() as executor:
+                future = executor.submit(func, *args, **kwargs)
+                try:
+                    future.result(timeout=timeout)
+                except TimeoutError:
+                    logger.error('cron job: %s run timeout %s', func.__qualname__, timeout)
+
+        return wrapper
+
+    return _set_job_timeout
