@@ -52,7 +52,7 @@ IMAGE_REG_1 = r'^<img src="(\S+)" .+\/>'
 IMAGE_REG_2 = r'^!\[\]\((\S+)\)'
 
 UPDATE_TYPE_LIST = ['number', 'single-select', 'url', 'email', 'text', 'date', 'duration', 'rate', 'checkbox',
-                    'multiple-select', 'collaborator']
+                    'multiple-select', 'collaborator', 'long-text']
 
 TEMP_EXPORT_VIEW_DIR = '/tmp/dtable-io/export-view-to-excel/'
 
@@ -531,10 +531,10 @@ def parse_and_update_file_to_table(file_name, username, dtable_uuid, table_name,
         # file_type is xlsx or csv
         if file_type == 'xlsx':
             tmp_file_path = os.path.join(EXCEL_IMPORT_DIR, dtable_uuid, file_name + '.xlsx')
-            file_rows = parse_dtable_excel_file(tmp_file_path, table_name, columns, name_to_email)
+            file_rows = parse_dtable_excel_file(tmp_file_path, table_name, columns, name_to_email, supported_columns=UPDATE_TYPE_LIST)
         else:
             tmp_file_path = os.path.join(EXCEL_IMPORT_DIR, dtable_uuid, file_name + '.csv')
-            file_rows = parse_csv_file(tmp_file_path, file_name, table_name, columns, name_to_email)
+            file_rows = parse_csv_file(tmp_file_path, file_name, table_name, columns, name_to_email, supported_columns=UPDATE_TYPE_LIST)
     finally:
         clear_tmp_file(tmp_file_path)
 
@@ -852,7 +852,7 @@ def get_insert_update_rows(dtable_col_name_to_column, excel_rows, dtable_rows, k
     return insert_rows, update_rows, excel_select_column_options
 
 
-def parse_dtable_excel_file(file_path, table_name, columns, name_to_email):
+def parse_dtable_excel_file(file_path, table_name, columns, name_to_email, supported_columns=None):
     from dtable_events.dtable_io import dtable_io_logger
 
     tables = []
@@ -895,7 +895,10 @@ def parse_dtable_excel_file(file_path, table_name, columns, name_to_email):
     sheet_head = sheet_rows[0]
     head_dict = {sheet_head[index].value: index for index in range(len(sheet_head))}
 
-    columns = [column for column in columns if column.get('name') in head_dict]
+    if supported_columns:
+        columns = [column for column in columns if (column.get('name') in head_dict and column.get('type') in supported_columns)]
+    else:
+        columns = [column for column in columns if column.get('name') in head_dict]
     rows = parse_dtable_excel_rows(sheet_rows, columns, name_to_email)
 
     dtable_io_logger.info(
@@ -923,7 +926,7 @@ def parse_update_excel_upload_excel_to_json(file_name, username, dtable_uuid, ta
     columns = dtable_server_api.list_columns(table_name)
 
     tmp_file_path = os.path.join(EXCEL_IMPORT_DIR, dtable_uuid, file_name + '.xlsx')
-    content = parse_dtable_excel_file(tmp_file_path, table_name, columns, name_to_email)
+    content = parse_dtable_excel_file(tmp_file_path, table_name, columns, name_to_email, supported_columns=UPDATE_TYPE_LIST)
 
     clear_tmp_file(tmp_file_path)
 
@@ -968,7 +971,7 @@ def parse_dtable_excel_rows(sheet_rows, columns, name_to_email):
     return rows
 
 
-def parse_csv_file(file_path, file_name, table_name, columns, name_to_email):
+def parse_csv_file(file_path, file_name, table_name, columns, name_to_email, supported_columns=None):
     from dtable_events.dtable_io import dtable_io_logger
 
     csv_file = get_csv_file(file_path)
@@ -992,7 +995,10 @@ def parse_csv_file(file_path, file_name, table_name, columns, name_to_email):
         return tables
     csv_head = csv_rows[0]
 
-    columns = [column for column in columns if column.get('name') in csv_head]
+    if supported_columns:
+        columns = [column for column in columns if (column.get('name') in csv_head and column.get('type') in supported_columns)]
+    else:
+        columns = [column for column in columns if column.get('name') in csv_head]
     rows, max_column, csv_row_num, csv_column_num = parse_csv_rows(csv_rows, columns, max_column, name_to_email)
     dtable_io_logger.info(
         'parse csv: %s, rows: %d, columns: %d' % (file_name, csv_row_num, csv_column_num))
@@ -1025,7 +1031,7 @@ def parse_update_csv_upload_csv_to_json(file_name, username, dtable_uuid, table_
     columns = dtable_server_api.list_columns(table_name)
 
     tmp_file_path = os.path.join(EXCEL_IMPORT_DIR, dtable_uuid, file_name + '.csv')
-    content = parse_csv_file(tmp_file_path, file_name, table_name, columns, name_to_email)
+    content = parse_csv_file(tmp_file_path, file_name, table_name, columns, name_to_email, supported_columns=UPDATE_TYPE_LIST)
 
     clear_tmp_file(tmp_file_path)
 
