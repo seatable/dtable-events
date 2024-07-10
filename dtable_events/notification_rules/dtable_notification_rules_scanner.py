@@ -10,7 +10,7 @@ from dtable_events.app.config import TIME_ZONE
 from dtable_events.app.metadata_cache_managers import RuleIntervalMetadataCacheManager
 from dtable_events.db import init_db_session_class
 from dtable_events.notification_rules.notification_rules_utils import trigger_near_deadline_notification_rule
-from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, set_job_timeout
+from dtable_events.utils import get_opt_from_conf_or_env, parse_bool
 
 
 timezone = TIME_ZONE
@@ -102,8 +102,7 @@ class DTableNofiticationRulesScannerTimer(Thread):
     def run(self):
         sched = BlockingScheduler()
         # fire at every hour in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='*', misfire_grace_time=300)
-        @set_job_timeout(timeout=3600)
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', misfire_grace_time=600)
         def timed_job():
             logging.info('Starts to scan notification rules...')
 
@@ -126,7 +125,7 @@ class DTableNotificationRulesCleaner(Thread):
     def run(self):
         sched = BlockingScheduler()
         # fire at 0 o'clock in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='0', misfire_grace_time=300)
+        @sched.scheduled_job('cron', day_of_week='*', hour='0', misfire_grace_time=600)
         def timed_job():
             logging.info('Starts to clean inactive notification rules...')
 

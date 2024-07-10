@@ -8,7 +8,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL
 from dtable_events.db import init_db_session_class
-from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, set_job_timeout
+from dtable_events.utils import get_opt_from_conf_or_env, parse_bool
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 
 
@@ -98,7 +98,6 @@ class WorkflowSchedulesScannerTimer(Thread):
         sched = BlockingScheduler()
         # fire per 15 mins
         @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='0,15,30,45', misfire_grace_time=300)
-        @set_job_timeout(timeout=900)
         def timed_job():
             logging.info('Starts to scan workflow schedules...')
 

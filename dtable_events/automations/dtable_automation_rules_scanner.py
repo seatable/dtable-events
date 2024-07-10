@@ -9,7 +9,7 @@ from dtable_events.app.config import IS_PRO_VERSION
 from dtable_events.app.metadata_cache_managers import RuleIntervalMetadataCacheManager
 from dtable_events.automations.auto_rules_utils import run_regular_execution_rule
 from dtable_events.db import init_db_session_class
-from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, set_job_timeout
+from dtable_events.utils import get_opt_from_conf_or_env, parse_bool
 
 
 __all__ = [
@@ -92,8 +92,7 @@ class DTableAutomationRulesScannerTimer(Thread):
     def run(self):
         sched = BlockingScheduler()
         # fire at every hour in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='*', misfire_grace_time=300)
-        @set_job_timeout(timeout=3600)
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', misfire_grace_time=600)
         def timed_job():
             logging.info('Starts to scan automation rules...')
 

@@ -11,7 +11,7 @@ from sqlalchemy import text
 from dtable_events import init_db_session_class
 from dtable_events.app.config import DTABLE_PRIVATE_KEY
 from dtable_events.common_dataset.common_dataset_sync_utils import batch_sync_common_dataset
-from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, set_job_timeout
+from dtable_events.utils import get_opt_from_conf_or_env, parse_bool
 
 class CommonDatasetSyncer(object):
 
@@ -98,8 +98,7 @@ class CommonDatasetSyncerTimer(Thread):
     def run(self):
         sched = BlockingScheduler()
         # fire at every hour in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='*', misfire_grace_time=300)
-        @set_job_timeout(timeout=3600)
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', misfire_grace_time=600)
         def timed_job():
             logging.info('Starts to scan common dataset syncs...')
             try:
