@@ -8,8 +8,8 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from sqlalchemy import text
 
 from dtable_events import init_db_session_class
-from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars
 from dtable_events.data_sync.data_sync_utils import run_sync_emails
+from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars
 
 
 class DataSyncer(object):
@@ -109,7 +109,7 @@ class DataSyncerTimer(Thread):
     def run(self):
         sched = BlockingScheduler()
         # fire at the 30th minute of every hour in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='30')
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='30', misfire_grace_time=600)
         def timed_job():
             logging.info('Starts to scan data syncs...')
             db_session = self.db_session_class()

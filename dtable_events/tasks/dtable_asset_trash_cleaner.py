@@ -5,9 +5,9 @@ from threading import Thread
 from sqlalchemy import text
 from apscheduler.schedulers.blocking import BlockingScheduler
 
+from dtable_events.app.config import TIME_ZONE
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import utc_to_tz
-from dtable_events.app.config import TIME_ZONE
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ class DTableAssetTrashCleanerTimer(Thread):
     def run(self):
         sched = BlockingScheduler()
         # fire at 0 o'clock in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='0')
+        @sched.scheduled_job('cron', day_of_week='*', hour='0', misfire_grace_time=600)
         def timed_job():
             logging.info('Starts to clean dtable asset trash...')
 
