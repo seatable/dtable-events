@@ -630,58 +630,23 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
         if (start + offset) > total_row_count:
             offset = total_row_count - start
 
-        filter_conditions['start'] = start
-        filter_conditions['limit'] = offset
+        filter_condition_groups = {
+            "filter_groups": [
+                conditions
+                for conditions in (filter_conditions, local_filter_conditions)
+                if conditions['filters'] and conditions['filter_conjunction']
+            ],
+            "group_conjunction": 'And',
+            "sorts": (
+                local_filter_conditions['sorts'] + filter_conditions['sorts']) if local_filter_conditions['sorts'] and filter_conditions['sorts'] 
+                else local_filter_conditions['sorts'] if local_filter_conditions['sorts']
+                else filter_conditions['sorts'],
+            'start': start,
+            'offset': offset
+        }
 
-        sql1_gen = BaseSQLGenerator(table_name, cols, filter_conditions=filter_conditions)
-        sql1_filter = sql1_gen._filter2sql().replace('WHERE ', '')
-        sql1_sort_key = []
-        sql1_sort_type = []
-        for sort in sql1_gen._sort2sql().replace('ORDER BY ', '').split(', '):
-            #sort: key sort_type, i.e, `name` DESC
-            sort_dep = sort.rsplit(' ', 1)
-            if len(sort_dep) != 2:
-                continue
-            sort_key, sort_type = sort_dep
-            sql1_sort_key.append(sort_key)
-            sql1_sort_type.append(sort_type)
-
-        sql2_gen = BaseSQLGenerator(table_name, cols, filter_conditions=local_filter_conditions)
-        sql2_filter = sql2_gen._filter2sql().replace('WHERE ', '')
-        sql2_sort = sql2_gen._sort2sql().replace('ORDER BY ', '').split(', ')
-        sql2_sort_key = []
-        for sort in sql2_sort:
-            sort_dep = sort.rsplit(' ', 1)
-            if len(sort_dep) != 2:
-                continue
-            sql2_sort_key.append(sort_dep[0])
-            
-        #sql_sorts combine
-        sql1_sort = [
-            f'{sql1_sort_key[i]} {sql1_sort_type[i]}' 
-            for i in range(len(sql1_sort_key)) 
-            if sql1_sort_key[i] not in sql2_sort_key
-        ]
-        sql_sort = ', '.join(sql2_sort + sql1_sort)
-
-        sql = f'SELECT * FROM `{table_name}`'
-        if sql1_filter:
-            sql += f' WHERE ({sql1_filter})'
-            if sql2_filter:
-                sql += f' AND ({sql2_filter})'
+        sql = filter2sql(table_name, cols, filter_condition_groups, by_group=True)
         
-        elif sql2_filter:
-            sql += f' WHERE {sql1_filter}'
-
-        if sql_sort:
-            sql += f' ORDER BY {sql_sort}'
-
-        sql_limit = sql1_gen._limit2sql()
-        if sql_limit:
-            sql += f' {sql_limit}'
-
-        sql += ';'
-
         response_rows, db_metadata = dtable_db_api.query(sql, convert=True, server_only=False)
         
         row_num = start
