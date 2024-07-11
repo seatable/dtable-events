@@ -1356,11 +1356,12 @@ def convert_app_table_page_to_excel():
     repo_id = data.get('repo_id')
     page_name = data.get('page_name')
     filter_conditions = json.loads(data.get('filter_conditions'))
+    local_filter_conditions = json.loads(data.get('local_filter_conditions'))
     shown_column_keys = json.loads(data.get('shown_column_keys'))
     is_support_image = to_python_boolean(data.get('is_support_image', 'false'))
 
     try:
-        task_id = big_data_task_manager.add_convert_app_table_page_to_execl_task(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_conditions, shown_column_keys, is_support_image)
+        task_id = big_data_task_manager.add_convert_app_table_page_to_execl_task(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_conditions, local_filter_conditions, shown_column_keys, is_support_image)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))

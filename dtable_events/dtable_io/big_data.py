@@ -13,7 +13,7 @@ from dtable_events.app.config import INNER_DTABLE_DB_URL, BIG_DATA_ROW_IMPORT_LI
     ARCHIVE_VIEW_EXPORT_ROW_LIMIT
 from dtable_events.utils.dtable_db_api import DTableDBAPI, convert_db_rows
 from dtable_events.utils.dtable_server_api import DTableServerAPI
-from dtable_events.utils.sql_generator import filter2sql
+from dtable_events.utils.sql_generator import filter2sql, BaseSQLGenerator
 
 AUTO_GENERATED_COLUMNS = [
     ColumnTypes.AUTO_NUMBER,
@@ -544,7 +544,7 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
         pass
 
 
-def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_conditions, shown_column_keys, task_id, tasks_status_map, is_support_image=False):
+def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_conditions, local_filter_conditions, shown_column_keys, task_id, tasks_status_map, is_support_image=False):
     from dtable_events.dtable_io import dtable_io_logger
 
     tasks_status_map[task_id] = {
@@ -619,6 +619,10 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
     filter_conditions['filters'] = filter_conditions.get('filters')
     filter_conditions['filter_conjunction'] = filter_conditions.get('filter_conjunction')
 
+    local_filter_conditions['sorts'] = local_filter_conditions.get('sorts')
+    local_filter_conditions['filters'] = local_filter_conditions.get('filters')
+    local_filter_conditions['filter_conjunction'] = local_filter_conditions.get('filter_conjunction')
+
     offset = 10000
     start = 0
     while True:
@@ -628,9 +632,58 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
 
         filter_conditions['start'] = start
         filter_conditions['limit'] = offset
-        sql = filter2sql(table_name, cols, filter_conditions, by_group=False)
-        response_rows, db_metadata = dtable_db_api.query(sql, convert=True, server_only=False)
 
+        sql1_gen = BaseSQLGenerator(table_name, cols, filter_conditions=filter_conditions)
+        sql1_filter = sql1_gen._filter2sql().replace('WHERE ', '')
+        sql1_sort_key = []
+        sql1_sort_type = []
+        for sort in sql1_gen._sort2sql().replace('ORDER BY ', '').split(', '):
+            #sort: key sort_type, i.e, `name` DESC
+            sort_dep = sort.rsplit(' ', 1)
+            if len(sort_dep) != 2:
+                continue
+            sort_key, sort_type = sort_dep
+            sql1_sort_key.append(sort_key)
+            sql1_sort_type.append(sort_type)
+
+        sql2_gen = BaseSQLGenerator(table_name, cols, filter_conditions=local_filter_conditions)
+        sql2_filter = sql2_gen._filter2sql().replace('WHERE ', '')
+        sql2_sort = sql2_gen._sort2sql().replace('ORDER BY ', '').split(', ')
+        sql2_sort_key = []
+        for sort in sql2_sort:
+            sort_dep = sort.rsplit(' ', 1)
+            if len(sort_dep) != 2:
+                continue
+            sql2_sort_key.append(sort_dep[0])
+            
+        #sql_sorts combine
+        sql1_sort = [
+            f'{sql1_sort_key[i]} {sql1_sort_type[i]}' 
+            for i in range(len(sql1_sort_key)) 
+            if sql1_sort_key[i] not in sql2_sort_key
+        ]
+        sql_sort = ', '.join(sql2_sort + sql1_sort)
+
+        sql = f'SELECT * FROM `{table_name}`'
+        if sql1_filter:
+            sql += f' WHERE ({sql1_filter})'
+            if sql2_filter:
+                sql += f' AND ({sql2_filter})'
+        
+        elif sql2_filter:
+            sql += f' WHERE {sql1_filter}'
+
+        if sql_sort:
+            sql += f' ORDER BY {sql_sort}'
+
+        sql_limit = sql1_gen._limit2sql()
+        if sql_limit:
+            sql += f' {sql_limit}'
+
+        sql += ';'
+
+        response_rows, db_metadata = dtable_db_api.query(sql, convert=True, server_only=False)
+        
         row_num = start
         try:
             write_xls_with_type(response_rows, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, is_big_data_view=True)
