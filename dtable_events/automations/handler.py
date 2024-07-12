@@ -3,7 +3,6 @@ import logging
 import time
 from threading import Thread, Event
 
-from dtable_events.app.config import IS_PRO_VERSION
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.automations.auto_rules_utils import scan_triggered_automation_rules
 from dtable_events.db import init_db_session_class
@@ -41,7 +40,7 @@ class AutomationRuleHandler(Thread):
         self.per_minute_trigger_limit = per_minute_trigger_limit
 
     def is_enabled(self):
-        return self._enabled and IS_PRO_VERSION
+        return self._enabled
 
     def run(self):
         logger.info('Starting handle automation rules...')
