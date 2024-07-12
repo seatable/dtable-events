@@ -638,7 +638,8 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
             ],
             "group_conjunction": 'And',
             "sorts": (
-                local_filter_conditions['sorts'] + filter_conditions['sorts'])if local_filter_conditions.get('sorts') and filter_conditions.get('sorts')  
+                local_filter_conditions['sorts'] + filter_conditions['sorts'])
+                if local_filter_conditions.get('sorts') and filter_conditions.get('sorts')  
                 else local_filter_conditions.get('sorts') or filter_conditions.get('sorts'),
             'start': start,
             'offset': offset
