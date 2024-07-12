@@ -13,7 +13,7 @@ from dtable_events.app.config import INNER_DTABLE_DB_URL, BIG_DATA_ROW_IMPORT_LI
     ARCHIVE_VIEW_EXPORT_ROW_LIMIT
 from dtable_events.utils.dtable_db_api import DTableDBAPI, convert_db_rows
 from dtable_events.utils.dtable_server_api import DTableServerAPI
-from dtable_events.utils.sql_generator import filter2sql, BaseSQLGenerator
+from dtable_events.utils.sql_generator import filter2sql
 
 AUTO_GENERATED_COLUMNS = [
     ColumnTypes.AUTO_NUMBER,
