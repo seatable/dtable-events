@@ -634,13 +634,12 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
             "filter_groups": [
                 conditions
                 for conditions in (filter_conditions, local_filter_conditions)
-                if conditions['filters'] and conditions['filter_conjunction']
+                if all(key in conditions and conditions[key] for key in ('filters', 'filter_conjunction'))
             ],
             "group_conjunction": 'And',
             "sorts": (
-                local_filter_conditions['sorts'] + filter_conditions['sorts']) if local_filter_conditions['sorts'] and filter_conditions['sorts'] 
-                else local_filter_conditions['sorts'] if local_filter_conditions['sorts']
-                else filter_conditions['sorts'],
+                local_filter_conditions['sorts'] + filter_conditions['sorts'])if local_filter_conditions.get('sorts') and filter_conditions.get('sorts')  
+                else local_filter_conditions.get('sorts') or filter_conditions.get('sorts'),
             'start': start,
             'offset': offset
         }
