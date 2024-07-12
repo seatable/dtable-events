@@ -1301,43 +1301,26 @@ def parse_formula_number(cell_data, column_data, is_big_data_view=False):
     :param column_data: info of formula column
     """
     src_format = column_data.get('format')
-    value = str(cell_data)
-    if src_format in ['euro', 'dollar', 'yuan']:
-        value = is_big_data_view and value or value[1:]
-    elif src_format == 'percent':
-        value = is_big_data_view and value or value[:-1]
-    elif src_format == 'custom_currency':
-        currency_symbol = column_data.get('currency_symbol')
-        currency_symbol_position = column_data.get('currency_symbol_position', 'before')
-        if not is_big_data_view:
+    value = cell_data
+    if not is_big_data_view:
+        value = str(cell_data)
+        if src_format in ['euro', 'dollar', 'yuan']:
+            value = value[1:]
+        elif src_format == 'percent':
+            value = value[:-1]
+        elif src_format == 'custom_currency':
+            currency_symbol = column_data.get('currency_symbol')
+            currency_symbol_position = column_data.get('currency_symbol_position', 'before')
             if currency_symbol_position == 'before':
                 value = value[len(currency_symbol):]
             else:
                 value = value[:-len(currency_symbol)]
-    value = convert_formula_number(value, column_data)
-    number_format = '0'
-    # src_format is None, if column format does not be changed
-    if src_format == 'number' or not src_format:
-        number_format = gen_decimal_format(value)
-    elif src_format == 'percent' and isinstance(value, str):
-        number_format = gen_decimal_format(value) + '%'
-        try:
-            value = float(value) / 100
-        except Exception as e:
-            pass
-    elif src_format == 'euro':
-        number_format = '"€"#,##' + gen_decimal_format(value)+'_-'
-    elif src_format == 'dollar':
-        number_format = '"$"#,##' + gen_decimal_format(value)+'_-'
-    elif src_format == 'yuan':
-        number_format = '"¥"#,##' + gen_decimal_format(value)+'_-'
-    elif src_format == 'custom_currency':
-        currency_symbol = column_data.get('currency_symbol')
-        currency_symbol_position = column_data.get('currency_symbol_position', 'before')
-        if currency_symbol_position == 'before':
-            number_format = '"%s"#,##' % currency_symbol + gen_decimal_format(value) + '_-'
-        else:
-            number_format = gen_decimal_format(value) + currency_symbol
+        value = convert_formula_number(value, column_data)
+        if src_format == 'percent' and isinstance(value, str):
+            try:
+                value = float(value) / 100
+            except Exception as e:
+                pass
     try:
         if is_int_str(value):
             value = int(value)
@@ -1345,7 +1328,50 @@ def parse_formula_number(cell_data, column_data, is_big_data_view=False):
             value = float(value)
     except Exception as e:
         pass
+    number_format = parse_number_format(column_data, value)
     return value, number_format
+
+
+def parse_number_format(column_data, cell_value):
+    """
+    parse number to regular format
+    :param column_data: info of number column
+    :param cell_value: value of int or float
+    """
+    if not column_data:
+        return gen_decimal_format(cell_value)
+    # src_format is None, if column format does not be changed
+    src_format = column_data.get('format')
+    enable_precision = column_data.get('enable_precision', False)
+    precision = column_data.get('precision', 0)
+
+    if not precision or not enable_precision:
+        # 'number' and 'percent' precision default 0, the other format precision default 2
+        number_format = '0.00'
+        if src_format in ['number', 'percent']:
+            if src_format == 'percent':
+                cell_value *= 100
+            number_format = gen_decimal_format(cell_value)
+    else:
+        number_format = '0.' + precision * '0'
+    if src_format == 'number':
+        number_format = number_format
+    elif src_format == 'percent':
+        number_format = number_format + '%'
+    elif src_format == 'euro':
+        number_format = '"€"#,##' + number_format+'_-'
+    elif src_format == 'dollar':
+        number_format = '"$"#,##' + number_format+'_-'
+    elif src_format == 'yuan':
+        number_format = '"¥"#,##' + number_format+'_-'
+    elif src_format == 'custom_currency':
+        currency_symbol = column_data.get('currency_symbol')
+        currency_symbol_position = column_data.get('currency_symbol_position', 'before')
+        if currency_symbol_position == 'before':
+            number_format = '"%s"#,##' % currency_symbol + number_format + '_-'
+        else:
+            number_format = number_format + currency_symbol
+    return number_format
 
 
 def convert_time_to_utc_str(time_str):
@@ -1387,7 +1413,8 @@ def is_int_str(num):
 
 
 def gen_decimal_format(num):
-    if is_int_str(num):
+    # when the precision is not set, the precision is determined based on the value itself
+    if float(num) == int(float(num)):
         return '0'
 
     decimal_cnt = len(str(num).split('.')[1])
@@ -1621,13 +1648,7 @@ def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_
             except Exception as e:
                 c = WriteOnlyCell(ws, value=None)
             else:
-                column_data = column.get('data')
-                if column_data:
-                    formula_value, number_format = parse_formula_number(cell_value, column.get('data'), is_big_data_view)
-                    c.number_format = number_format
-                else:
-                    c.number_format = gen_decimal_format(cell_value)
-
+                c.number_format = parse_number_format(column.get('data'), cell_value)
         elif col_type == ColumnTypes.DATE:
             c = WriteOnlyCell(ws, value=format_time(cell_value))
             if column.get('data'):
