@@ -40,7 +40,7 @@ try:
     USE_INNER_DTABLE_SERVER = getattr(seahub_settings, 'USE_INNER_DTABLE_SERVER', True)
     INNER_DTABLE_SERVER_URL = getattr(seahub_settings, 'INNER_DTABLE_SERVER_URL', 'http://127.0.0.1:5000/')
     ARCHIVE_VIEW_EXPORT_ROW_LIMIT = getattr(seahub_settings, 'ARCHIVE_VIEW_EXPORT_ROW_LIMIT', 250000)
-    APP_TABLE_EXPORT_EXCEL_ROW_LIMIT = getattr(seahub_settings, 'APP_TABLE_EXPORT_EXCEL_ROW_LIMIT', 100000)
+    APP_TABLE_EXPORT_EXCEL_ROW_LIMIT = getattr(seahub_settings, 'APP_TABLE_EXPORT_EXCEL_ROW_LIMIT', 10000)
     BIG_DATA_ROW_IMPORT_LIMIT = getattr(seahub_settings, 'BIG_DATA_ROW_IMPORT_LIMIT', 500000)
     BIG_DATA_ROW_UPDATE_LIMIT = getattr(seahub_settings, 'BIG_DATA_ROW_UPDATE_LIMIT', 500000)
     TRASH_CLEAN_AFTER_DAYS = getattr(seahub_settings, 'TRASH_CLEAN_AFTER_DAYS', 30)
