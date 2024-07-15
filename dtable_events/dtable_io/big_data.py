@@ -13,7 +13,7 @@ from dtable_events.app.config import INNER_DTABLE_DB_URL, BIG_DATA_ROW_IMPORT_LI
     ARCHIVE_VIEW_EXPORT_ROW_LIMIT
 from dtable_events.utils.dtable_db_api import DTableDBAPI, convert_db_rows
 from dtable_events.utils.dtable_server_api import DTableServerAPI
-from dtable_events.utils.sql_generator import filter2sql
+from dtable_events.utils.sql_generator import filter2sql, BaseSQLGenerator
 
 AUTO_GENERATED_COLUMNS = [
     ColumnTypes.AUTO_NUMBER,
@@ -599,9 +599,31 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
     wb = openpyxl.Workbook(write_only=True)
     ws = wb.create_sheet(sheet_name)
 
+    filter_conditions['sorts'] = filter_conditions.get('sorts')
+    filter_conditions['filters'] = filter_conditions.get('filters')
+    filter_conditions['filter_conjunction'] = filter_conditions.get('filter_conjunction')
+
+    local_filter_conditions['sorts'] = local_filter_conditions.get('sorts')
+    local_filter_conditions['filters'] = local_filter_conditions.get('filters')
+    local_filter_conditions['filter_conjunction'] = local_filter_conditions.get('filter_conjunction')
+
+    filter_condition_groups = {
+        "filter_groups": [
+            conditions
+            for conditions in (filter_conditions, local_filter_conditions)
+            if all(key in conditions and conditions[key] for key in ('filters', 'filter_conjunction'))
+        ],
+        "group_conjunction": 'And',
+        "sorts": (
+            local_filter_conditions['sorts'] + filter_conditions['sorts'])
+            if local_filter_conditions.get('sorts') and filter_conditions.get('sorts')  
+            else local_filter_conditions.get('sorts') or filter_conditions.get('sorts')
+    }
+
     dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
     try:
-        row_count_sql = 'select count(*) as total_count from `%s`' % table_name
+        sql_gen = BaseSQLGenerator(table_name, cols, filter_condition_groups=filter_condition_groups)
+        row_count_sql = f'select count(*) as total_count from `{table_name}` {sql_gen._groupfilter2sql()}'
         result, _ = dtable_db_api.query(row_count_sql, server_only=False)
         total_row_count = result[0].get('total_count', 0)
     except Exception as e:
@@ -615,13 +637,6 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
         total_row_count = int(ARCHIVE_VIEW_EXPORT_ROW_LIMIT)
 
     tasks_status_map[task_id]['total_row_count'] = total_row_count
-    filter_conditions['sorts'] = filter_conditions.get('sorts')
-    filter_conditions['filters'] = filter_conditions.get('filters')
-    filter_conditions['filter_conjunction'] = filter_conditions.get('filter_conjunction')
-
-    local_filter_conditions['sorts'] = local_filter_conditions.get('sorts')
-    local_filter_conditions['filters'] = local_filter_conditions.get('filters')
-    local_filter_conditions['filter_conjunction'] = local_filter_conditions.get('filter_conjunction')
 
     offset = 10000
     start = 0
@@ -630,24 +645,15 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
         if (start + offset) > total_row_count:
             offset = total_row_count - start
 
-        filter_condition_groups = {
-            "filter_groups": [
-                conditions
-                for conditions in (filter_conditions, local_filter_conditions)
-                if all(key in conditions and conditions[key] for key in ('filters', 'filter_conjunction'))
-            ],
-            "group_conjunction": 'And',
-            "sorts": (
-                local_filter_conditions['sorts'] + filter_conditions['sorts'])
-                if local_filter_conditions.get('sorts') and filter_conditions.get('sorts')  
-                else local_filter_conditions.get('sorts') or filter_conditions.get('sorts'),
-            'start': start,
-            'offset': offset
-        }
+        
+        filter_condition_groups.update({
+            'offset': offset,
+            'start': start
+        })
 
         sql = filter2sql(table_name, cols, filter_condition_groups, by_group=True)
         
-        response_rows, db_metadata = dtable_db_api.query(sql, convert=True, server_only=False)
+        response_rows, _ = dtable_db_api.query(sql, convert=True, server_only=False)
         
         row_num = start
         try:
