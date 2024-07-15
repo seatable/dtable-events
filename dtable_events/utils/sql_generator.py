@@ -1790,18 +1790,14 @@ class StatisticSQLGenerator(object):
                 column_name = self._summary_column_2_sql(method, column)
                 summary_column_names.append(column_name)
         groupby_column_type = groupby_column.get('type', '')
-        if groupby_column_type == ColumnTypes.COLLABORATOR:
+
+        # groupby_column is COLLABORATOR or MULTIPLE_SELECT, replace AVG with SUM, and add 'COUNT(*)'
+        if groupby_column_type == ColumnTypes.COLLABORATOR or groupby_column_type == ColumnTypes.MULTIPLE_SELECT:
             for index in range(len(summary_column_names)):
                 summary_column_name = summary_column_names[index]
                 if summary_column_name.startswith('AVG'):
                     summary_column_names[index] = 'SUM' + summary_column_name[3:]
             summary_column_names.append('COUNT(*)')
-
-        for index in range(len(summary_column_names)):
-            summary_column_name = summary_column_names[index]
-            if summary_column_name.startswith('AVG'):
-                group_column_name = self._summary_column_2_sql('ROW_COUNT', groupby_column)
-                summary_column_names[index] = summary_column_name + ', SUM' + summary_column_name[3:] + ', ' + group_column_name
 
         summary_column_names_str = ', '.join(summary_column_names)
         return summary_column_names_str
@@ -1834,7 +1830,7 @@ class StatisticSQLGenerator(object):
             return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, summary_column_name, self.table_name, self.filter_sql, groupby_column_name)
 
 
-        if summary_columns:
+        if summary_columns or summary_column_key:
             summary_column_names_str = self._summary_columns_2_sql(summary_columns, summary_column_key, groupby_column, summary_method)
             if summary_column_names_str:
                 summary_column_names_str = ', %s' % summary_column_names_str
