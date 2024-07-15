@@ -638,16 +638,16 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
 
     tasks_status_map[task_id]['total_row_count'] = total_row_count
 
-    offset = 10000
+    limit = 10000
     start = 0
     while True:
         # exported row number should less than ARCHIVE_VIEW_EXPORT_ROW_LIMIT
-        if (start + offset) > total_row_count:
-            offset = total_row_count - start
+        if (start + limit) > total_row_count:
+            limit = total_row_count - start
 
         
         filter_condition_groups.update({
-            'offset': offset,
+            'limit': limit,
             'start': start
         })
 
@@ -665,11 +665,11 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
             tasks_status_map[task_id]['err_msg'] = 'write xls error'
             return
 
-        start += offset
+        start += limit
         tasks_status_map[task_id]['handled_row_count'] = start
         tasks_status_map[task_id]['status'] = 'running'
 
-        if start >= total_row_count or len(response_rows) < offset:
+        if start >= total_row_count or len(response_rows) < limit:
             break
 
     tasks_status_map[task_id]['status'] = 'success'
