@@ -1018,7 +1018,7 @@ def convert_view_to_excel():
     is_support_image = to_python_boolean(context.get('is_support_image', 'false'))
 
     try:
-        task_id = task_manager.add_convert_view_to_execl_task(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image)
+        task_id = task_manager.add_convert_view_to_excel_task(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -1047,7 +1047,7 @@ def convert_table_to_excel():
     is_support_image = to_python_boolean(request.args.get('is_support_image', 'false'))
 
     try:
-        task_id = task_manager.add_convert_table_to_execl_task(dtable_uuid, table_id, username, name, repo_id, is_support_image)
+        task_id = task_manager.add_convert_table_to_excel_task(dtable_uuid, table_id, username, name, repo_id, is_support_image)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -1128,7 +1128,7 @@ def convert_big_data_view_to_excel():
     is_support_image = to_python_boolean(data.get('is_support_image', 'false'))
 
     try:
-        task_id = big_data_task_manager.add_convert_big_data_view_to_execl_task(dtable_uuid, table_id, view_id, username, name, repo_id, is_support_image)
+        task_id = big_data_task_manager.add_convert_big_data_view_to_excel_task(dtable_uuid, table_id, view_id, username, name, repo_id, is_support_image)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
@@ -1359,7 +1359,7 @@ def convert_app_table_page_to_excel():
     is_support_image = to_python_boolean(data.get('is_support_image', 'false'))
 
     try:
-        task_id = big_data_task_manager.add_convert_app_table_page_to_execl_task(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_condition_groups, shown_column_keys, is_support_image)
+        task_id = big_data_task_manager.add_convert_app_table_page_to_excel_task(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_condition_groups, shown_column_keys, is_support_image)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))

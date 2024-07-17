@@ -2409,7 +2409,7 @@ class CalculateAction(BaseAction):
         self.is_group_view = True if self.auto_rule.view_info.get('groupbys') else False
 
         if self.is_group_view:
-            view_rows = self.auto_rule.dtable_server_api.view_rows(table_name, view_name, True)
+            view_rows = self.auto_rule.dtable_server_api.list_view_rows(table_name, view_name, True)
         else:
             filter_conditions = {
                 'sorts': self.auto_rule.view_info.get('sorts'),

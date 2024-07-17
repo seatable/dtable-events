@@ -93,22 +93,22 @@ class BigDataTaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
-    def add_convert_big_data_view_to_execl_task(self, dtable_uuid, table_id, view_id, username, name, repo_id, is_support_image):
-        from dtable_events.dtable_io import convert_big_data_view_to_execl
+    def add_convert_big_data_view_to_excel_task(self, dtable_uuid, table_id, view_id, username, name, repo_id, is_support_image):
+        from dtable_events.dtable_io import convert_big_data_view_to_excel
 
         task_id = str(uuid.uuid4())
-        task = (convert_big_data_view_to_execl,
+        task = (convert_big_data_view_to_excel,
                 (dtable_uuid, table_id, view_id, username, name, task_id, self.tasks_status_map, repo_id, is_support_image))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
 
         return task_id
 
-    def add_convert_app_table_page_to_execl_task(self, dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_condition_groups, shown_column_keys, is_support_image):
-        from dtable_events.dtable_io import convert_app_table_page_to_execl
+    def add_convert_app_table_page_to_excel_task(self, dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_condition_groups, shown_column_keys, is_support_image):
+        from dtable_events.dtable_io import convert_app_table_page_to_excel
 
         task_id = str(uuid.uuid4())
-        task = (convert_app_table_page_to_execl,
+        task = (convert_app_table_page_to_excel,
                 (dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_condition_groups, shown_column_keys, task_id, self.tasks_status_map, is_support_image))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task

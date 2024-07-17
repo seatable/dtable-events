@@ -12,7 +12,7 @@ from dtable_events.utils import uuid_str_to_36_chars
 logger = logging.getLogger(__name__)
 
 
-def get_dtable_server_token(username, dtable_uuid, timeout=300, is_internal=False):
+def get_access_token(username, dtable_uuid, timeout=300, is_internal=False):
     payload = {
         'exp': int(time.time()) + timeout,
         'dtable_uuid': dtable_uuid,
@@ -51,7 +51,7 @@ class DTableWebAPI:
             'server_url': self.dtable_web_service_url,
             'dtable_uuid': dtable_uuid
         }
-        access_token = get_dtable_server_token(username, dtable_uuid)
+        access_token = get_access_token(username, dtable_uuid)
         headers = {'Authorization': 'Token ' + access_token}
         response = requests.get(url, headers=headers)
         return parse_response(response)
@@ -133,7 +133,7 @@ class DTableWebAPI:
             return 0
         return scripts_running_limit
 
-    def get_temp_api_token(self, dtable_uuid, username=None, app_name=None):
+    def get_script_api_token(self, dtable_uuid, username=None, app_name=None):
         payload = {
             'dtable_uuid': uuid_str_to_36_chars(dtable_uuid),
             'exp': int(time.time()) + 60 * 60,
@@ -154,7 +154,7 @@ class DTableWebAPI:
             'context_data': context_data,
             'owner': owner,
             'org_id': org_id,
-            'temp_api_token': self.get_temp_api_token(dtable_uuid, app_name=script_name),
+            'temp_api_token': self.get_script_api_token(dtable_uuid, app_name=script_name),
             'scripts_running_limit': scripts_running_limit,
             'operate_from': operate_from,
             'operator': operator

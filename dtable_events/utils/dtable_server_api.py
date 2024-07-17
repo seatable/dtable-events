@@ -238,7 +238,7 @@ class DTableServerAPI(object):
         data = parse_response(response)
         return data.get('columns')
 
-    def view_rows(self, table_name, view_name, convert_link_id=None):
+    def list_view_rows(self, table_name, view_name, convert_link_id=None):
         url = self.dtable_server_url + '/api/v1/internal/dtables/' + self.dtable_uuid + '/view-rows/?from=dtable_events'
         params = {
             'table_name': table_name,
@@ -250,7 +250,7 @@ class DTableServerAPI(object):
         data = parse_response(response)
         return data.get('rows')
 
-    def table_rows(self, table_name, convert_link_id=False):
+    def list_table_rows(self, table_name, convert_link_id=False):
         url = self.dtable_server_url + '/api/v1/internal/dtables/' + self.dtable_uuid + '/table-rows/?from=dtable_events'
         params = {
             'table_name': table_name
