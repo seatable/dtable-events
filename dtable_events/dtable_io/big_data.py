@@ -10,10 +10,10 @@ from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, get
 from dtable_events.utils import get_inner_dtable_server_url, get_location_tree_json, gen_random_option
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.app.config import INNER_DTABLE_DB_URL, BIG_DATA_ROW_IMPORT_LIMIT, BIG_DATA_ROW_UPDATE_LIMIT, \
-    ARCHIVE_VIEW_EXPORT_ROW_LIMIT
+    ARCHIVE_VIEW_EXPORT_ROW_LIMIT, APP_TABLE_EXPORT_EXCEL_ROW_LIMIT
 from dtable_events.utils.dtable_db_api import DTableDBAPI, convert_db_rows
 from dtable_events.utils.dtable_server_api import DTableServerAPI
-from dtable_events.utils.sql_generator import filter2sql
+from dtable_events.utils.sql_generator import filter2sql, BaseSQLGenerator
 
 AUTO_GENERATED_COLUMNS = [
     ColumnTypes.AUTO_NUMBER,
@@ -544,7 +544,7 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
         pass
 
 
-def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_conditions, shown_column_keys, task_id, tasks_status_map, is_support_image=False):
+def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_condition_groups, shown_column_keys, task_id, tasks_status_map, is_support_image=False):
     from dtable_events.dtable_io import dtable_io_logger
 
     tasks_status_map[task_id] = {
@@ -601,7 +601,8 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
 
     dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
     try:
-        row_count_sql = 'select count(*) as total_count from `%s`' % table_name
+        sql_gen = BaseSQLGenerator(table_name, cols, filter_condition_groups=filter_condition_groups)
+        row_count_sql = f'select count(*) as total_count from `{table_name}` {sql_gen._groupfilter2sql()}'
         result, _ = dtable_db_api.query(row_count_sql, server_only=False)
         total_row_count = result[0].get('total_count', 0)
     except Exception as e:
@@ -610,27 +611,29 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
         tasks_status_map[task_id]['err_msg'] = 'get big data rows count failed'
         return
 
-    # exported row number should less than ARCHIVE_VIEW_EXPORT_ROW_LIMIT
-    if total_row_count > int(ARCHIVE_VIEW_EXPORT_ROW_LIMIT):
-        total_row_count = int(ARCHIVE_VIEW_EXPORT_ROW_LIMIT)
+    # exported row number should less than APP_TABLE_EXPORT_EXCEL_ROW_LIMIT
+    if total_row_count > int(APP_TABLE_EXPORT_EXCEL_ROW_LIMIT):
+        total_row_count = int(APP_TABLE_EXPORT_EXCEL_ROW_LIMIT)
 
     tasks_status_map[task_id]['total_row_count'] = total_row_count
-    filter_conditions['sorts'] = filter_conditions.get('sorts')
-    filter_conditions['filters'] = filter_conditions.get('filters')
-    filter_conditions['filter_conjunction'] = filter_conditions.get('filter_conjunction')
 
-    offset = 10000
+    limit = 10000
     start = 0
     while True:
-        # exported row number should less than ARCHIVE_VIEW_EXPORT_ROW_LIMIT
-        if (start + offset) > total_row_count:
-            offset = total_row_count - start
+        # exported row number should less than APP_TABLE_EXPORT_EXCEL_ROW_LIMIT
+        if (start + limit) > total_row_count:
+            limit = total_row_count - start
 
-        filter_conditions['start'] = start
-        filter_conditions['limit'] = offset
-        sql = filter2sql(table_name, cols, filter_conditions, by_group=False)
-        response_rows, db_metadata = dtable_db_api.query(sql, convert=True, server_only=False)
+        
+        filter_condition_groups.update({
+            'limit': limit,
+            'start': start
+        })
 
+        sql = filter2sql(table_name, cols, filter_condition_groups, by_group=True)
+        
+        response_rows, _ = dtable_db_api.query(sql, convert=True, server_only=False)
+        
         row_num = start
         try:
             write_xls_with_type(response_rows, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, is_big_data_view=True)
@@ -641,11 +644,11 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
             tasks_status_map[task_id]['err_msg'] = 'write xls error'
             return
 
-        start += offset
+        start += limit
         tasks_status_map[task_id]['handled_row_count'] = start
         tasks_status_map[task_id]['status'] = 'running'
 
-        if start >= total_row_count or len(response_rows) < offset:
+        if start >= total_row_count or len(response_rows) < limit:
             break
 
     tasks_status_map[task_id]['status'] = 'success'

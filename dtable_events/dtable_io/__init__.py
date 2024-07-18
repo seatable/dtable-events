@@ -1211,10 +1211,10 @@ def import_page_design(repo_id, workspace_id, dtable_uuid, page_id, is_dir, user
             clear_tmp_file(tmp_page_path)
 
 
-def convert_app_table_page_to_execl(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_conditions, shown_column_keys, task_id, tasks_status_map, is_support_image):
+def convert_app_table_page_to_execl(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_condition_groups, shown_column_keys, task_id, tasks_status_map, is_support_image):
     dtable_io_logger.info('Start export app table to excel: {}.'.format(dtable_uuid))
     try:
-        export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_conditions, shown_column_keys, task_id, tasks_status_map, is_support_image)
+        export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_condition_groups, shown_column_keys, task_id, tasks_status_map, is_support_image)
     except Exception as e:
         dtable_io_logger.exception('export app table failed. ERROR: {}'.format(e))
     else:
