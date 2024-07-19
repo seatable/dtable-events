@@ -12,6 +12,7 @@ from sqlalchemy import text
 
 from dtable_events.app.config import INNER_DTABLE_DB_URL, DTABLE_PRIVATE_KEY
 from dtable_events.db import init_db_session_class
+from dtable_events.utils.dtable_db_api import DTableDBAPI
 
 __all__ = [
     'BigDataStorageStatsWorker',
@@ -77,13 +78,9 @@ class BigDataStorageStatsTask(Thread):
             offset = 0
             limit = 1000
             while 1:
-                api_url = INNER_DTABLE_DB_URL.rstrip('/') + '/api/v1/bases/?offset=%s&limit=%s&from=dtable_events' % (offset, limit)
-                headers = {'Authorization': 'Token ' + jwt.encode({
-                    'is_db_admin': True, 'exp': int(time.time()) + 60, 'permission': 'rw'
-                }, DTABLE_PRIVATE_KEY, 'HS256')}
+                dtable_db_api = DTableDBAPI('', None, INNER_DTABLE_DB_URL)
                 try:
-                    resp = requests.get(api_url, headers=headers).json()
-                    bases = resp.get('bases', []) if resp else []
+                    bases = dtable_db_api.list_bases(offset, limit)['bases']
                     if bases and len(bases) > 0:
                         db_session = self.db_session_class()
                         try:

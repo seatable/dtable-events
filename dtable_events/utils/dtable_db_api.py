@@ -133,7 +133,7 @@ class DTableDBAPI(object):
 
     def __init__(self, username, dtable_uuid, dtable_db_url):
         self.username = username
-        self.dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
+        self.dtable_uuid = uuid_str_to_36_chars(dtable_uuid) if dtable_uuid else None
         self.headers = None
         self.dtable_db_url = dtable_db_url.rstrip('/') if dtable_db_url else None
         self._init()
@@ -141,15 +141,20 @@ class DTableDBAPI(object):
     def _init(self):
         access_token = self.get_dtable_db_token()
         self.headers = {'Authorization': 'Token ' + access_token}
+        admin_access_token = self.get_dtable_db_token(is_db_admin=True)
+        self.admin_headers = {'Authorization': 'Token ' + admin_access_token}
 
-    def get_dtable_db_token(self):
+    def get_dtable_db_token(self, is_db_admin=None):
+        payload={
+            'exp': int(time.time()) + 3600 * 12 * 24,
+            'dtable_uuid': self.dtable_uuid,
+            'username': self.username,
+            'permission': 'rw',
+        }
+        if is_db_admin:
+            payload['is_db_admin'] = True
         token = jwt.encode(
-            payload={
-                'exp': int(time.time()) + 3600 * 12 * 24,
-                'dtable_uuid': self.dtable_uuid,
-                'username': self.username,
-                'permission': 'rw',
-            },
+            payload=payload,
             key=DTABLE_PRIVATE_KEY
         )
         if isinstance(token, bytes):
@@ -241,4 +246,15 @@ class DTableDBAPI(object):
             'columns': column_names
         }
         resp = requests.post(url, json=json_data, headers=self.headers, timeout=TIMEOUT)
+        return parse_response(resp)
+    
+    def list_bases(self, offset=None, limit=None):
+        url = '%s/api/v1/bases/' % self.dtable_db_url
+        params = {}
+        if offset is not None:
+            params['offset'] = offset
+        if limit is not None:
+            params['limit'] = limit
+        params['from'] = 'dtable_events'
+        resp = requests.get(url, params=params, headers=self.admin_headers)
         return parse_response(resp)

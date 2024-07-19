@@ -29,10 +29,10 @@ from dtable_events.dtable_io.external_app import APP_USERS_COUMNS_TYPE_MAP, matc
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.utils import get_inner_dtable_server_url, uuid_str_to_36_chars
 
-# this two prefix used in exported zip file
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.exception import BaseSizeExceedsLimitError
 
+# this two prefix used in exported zip file
 FILE_URL_PREFIX = 'file://dtable-bundle/asset/files/'
 IMG_URL_PREFIX = 'file://dtable-bundle/asset/images/'
 DTABLE_IO_DIR = '/tmp/dtable-io/'
@@ -69,35 +69,6 @@ def gen_inner_file_upload_url(token, op, replace=False):
     if replace is True:
         url += '?replace=1'
     return url
-
-
-def get_dtable_server_token(username, dtable_uuid, timeout=300, is_internal=False):
-    payload = {
-        'exp': int(time.time()) + timeout,
-        'dtable_uuid': dtable_uuid,
-        'username': username,
-        'permission': 'rw',
-    }
-    if is_internal:
-        payload['is_internal'] = True
-    access_token = jwt.encode(
-        payload, DTABLE_PRIVATE_KEY, algorithm='HS256'
-    )
-
-    return access_token
-
-def get_app_access_token(username, app_uuid):
-    payload = {
-        'exp': int(time.time()) + 300,
-        'app_uuid': app_uuid,
-        'username': username,
-        'permission': 'rw',
-    }
-    access_token = jwt.encode(
-        payload, DTABLE_PRIVATE_KEY, algorithm='HS256'
-    )
-
-    return access_token
 
 
 def gen_dir_zip_download_url(token):
@@ -159,19 +130,11 @@ def prepare_dtable_json_from_memory(workspace_id, dtable_uuid, username):
     :param username:
     :return:
     """
-    dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
-    headers = {'Authorization': 'Token ' + dtable_server_access_token}
-    api_url = get_inner_dtable_server_url()
-    json_url = api_url.rstrip('/') + '/dtables/' + dtable_uuid + '/?from=dtable_events'
-    content_json = requests.get(json_url, headers=headers, timeout=180).content
-    if content_json:
-        try:
-            json_content = json.loads(content_json)
-        except Exception as e:
-            raise Exception('decode json error: %s' % content_json.decode()[0:200])
-        dtable_content = convert_dtable_export_file_and_image_url(workspace_id, dtable_uuid, json_content)
-    else:
-        dtable_content = ''
+    from dtable_events.utils.dtable_server_api import DTableServerAPI
+
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, get_inner_dtable_server_url())
+    json_content = dtable_server_api.get_base()
+    dtable_content = convert_dtable_export_file_and_image_url(workspace_id, dtable_uuid, json_content)
     content_json = json.dumps(dtable_content).encode('utf-8')
     path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_asset', 'content.json')
 
@@ -1042,43 +1005,16 @@ def download_files_to_path(username, repo_id, dtable_uuid, files, path, db_sessi
 
 
 def upload_excel_json_to_dtable_server(username, dtable_uuid, json_file, lang='en'):
-    api_url = get_inner_dtable_server_url()
-    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/import-excel/?from=dtable_events&lang=' + lang
-    dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
-    headers = {'Authorization': 'Token ' + dtable_server_access_token}
+    from dtable_events.utils.dtable_server_api import DTableServerAPI
 
-    files = {
-        'excel_json': json_file
-    }
-
-    res = requests.post(url, headers=headers, files=files, timeout=180)
-    if res.status_code != 200:
-        try:
-            res_json = res.json()
-        except:
-            res_json = {}
-        if res_json.get('error_type') == 'base_exceeds_limit':
-            raise BaseSizeExceedsLimitError
-        raise ConnectionError('failed to import excel json %s %s' % (dtable_uuid, res.text))
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, get_inner_dtable_server_url())
+    dtable_server_api.import_excel(json_file, lang=lang)
 
 def upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, json_file, lang='en'):
-    api_url = get_inner_dtable_server_url()
-    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/import-excel-add-table/?from=dtable_events&lang=' + lang
-    dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
-    headers = {'Authorization': 'Token ' + dtable_server_access_token}
+    from dtable_events.utils.dtable_server_api import DTableServerAPI
 
-    files = {
-        'excel_json': json_file
-    }
-    res = requests.post(url, headers=headers, files=files, timeout=180)
-    if res.status_code != 200:
-        try:
-            res_json = res.json()
-        except:
-            res_json = {}
-        if res_json.get('error_type') == 'base_exceeds_limit':
-            raise BaseSizeExceedsLimitError
-        raise ConnectionError('failed to import excel json %s %s' % (dtable_uuid, res.text))
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, get_inner_dtable_server_url())
+    dtable_server_api.import_excel_add_table(json_file, lang=lang)
 
 
 def append_rows_by_dtable_server(dtable_server_api, rows_data, table_name):
@@ -1107,121 +1043,55 @@ def get_csv_file(file_path):
 
 
 def get_rows_from_dtable_server(username, dtable_uuid, table_name):
-    api_url = get_inner_dtable_server_url()
-    url = api_url.rstrip('/') + '/api/v1/internal/dtables/' + dtable_uuid + '/table-rows/?table_name=' + urlquote(table_name) + \
-          '&convert_link_id=true&from=dtable_events'
-    dtable_server_access_token = get_dtable_server_token(username, dtable_uuid, is_internal=True)
-    headers = {'Authorization': 'Token ' + dtable_server_access_token}
+    from dtable_events.utils.dtable_server_api import DTableServerAPI
 
-    res = requests.get(url, headers=headers, timeout=180)
-    if res.status_code != 200:
-        raise ConnectionError('failed to get rows %s %s' % (dtable_uuid, res.text))
-    return json.loads(res.content.decode()).get('rows', [])
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, get_inner_dtable_server_url())
+    rows = dtable_server_api.list_table_rows(table_name)
+    return rows
 
 
 def update_rows_by_dtable_server(username, dtable_uuid, update_rows, table_name):
-    api_url = get_inner_dtable_server_url()
-    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/batch-update-rows/?from=dtable_events'
-    dtable_server_access_token = get_dtable_server_token(username, dtable_uuid)
-    headers = {'Authorization': 'Token ' + dtable_server_access_token}
-    offset = 0
+    from dtable_events.utils.dtable_server_api import DTableServerAPI
+
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, get_inner_dtable_server_url())
+    offset, limit = 0, 1000
     while True:
-        rows = update_rows[offset: offset + 1000]
-        offset = offset + 1000
+        rows = update_rows[offset: offset + limit]
+        offset += limit
         if not rows:
             break
-        json_data = {
-            'table_name': table_name,
-            'updates': rows,
-        }
-        res = requests.put(url, headers=headers, json=json_data, timeout=180)
-        if res.status_code != 200:
-            raise ConnectionError('failed to update excel json %s %s' % (dtable_uuid, res.text))
+        dtable_server_api.batch_update_rows(table_name, rows)
         time.sleep(0.5)
 
 
 def get_metadata_from_dtable_server(dtable_uuid, username):
-    # generate json web token
-    # internal usage exp 60 seconds, username = request.user.username
+    from dtable_events.utils.dtable_server_api import DTableServerAPI
 
-    api_url = get_inner_dtable_server_url()
-    url = api_url.rstrip('/') + '/api/v1/dtables/' + dtable_uuid + '/metadata/?from=dtable_events'
-
-    payload = {
-        'exp': int(time.time()) + 60,
-        'dtable_uuid': dtable_uuid,
-        'username': username,
-        'permission': 'r',
-    }
-    access_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
-
-    # 1. get cols from dtable-server
-    headers = {'Authorization': 'Token ' + access_token}
-    res = requests.get(url, headers=headers, timeout=180)
-
-    if res.status_code != 200:
-        raise ConnectionError('failed to get metadata %s %s' % (dtable_uuid, res.text))
-    return json.loads(res.content)['metadata']
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, get_inner_dtable_server_url())
+    metadata = dtable_server_api.get_metadata()
+    return metadata
 
 
-def get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, table_name, view_name, start=None, limit=None):
-    api_url = get_inner_dtable_server_url()
-    url = api_url.rstrip('/') + '/api/v1/internal/dtables/' + dtable_uuid + '/view-rows/?from=dtable_events'
+def get_view_rows_from_dtable_server(dtable_uuid, table_name, view_name, username, id_in_org, user_department_ids_map, permission):
+    from dtable_events.utils.dtable_server_api import DTableServerAPI
 
-    payload = {
-        'exp': int(time.time()) + 60,
-        'dtable_uuid': dtable_uuid,
-        'username': username,
+    kwargs = {
         'id_in_org': id_in_org,
-        'user_department_ids_map': user_department_ids_map,
-        'permission': permission,
-        'is_internal': True
+        'user_department_ids_map': user_department_ids_map
     }
-    access_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
-
-    # 1. get cols from dtable-server
-    headers = {'Authorization': 'Token ' + access_token}
-
-    query_param = {
-        'table_name': table_name,
-        'view_name': view_name,
-        'convert_link_id': True,
-        'view_id': view_id,
-    }
-
-    if start is not None:
-        query_param['start'] = start
-    if  limit is not None:
-        query_param['limit'] = limit
-
-    res = requests.get(url, headers=headers, params=query_param, timeout=180)
-
-    if res.status_code != 200:
-        raise Exception(res.json().get('error_msg'))
-    return res.json()
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, get_inner_dtable_server_url(), permission=permission, kwargs=kwargs)
+    rows = dtable_server_api.list_view_rows(table_name, view_name, convert_link_id=True)
+    return rows
 
 
-def get_related_nicknames_from_dtable(dtable_uuid, username, permission):
-    url = DTABLE_WEB_SERVICE_URL.strip('/') + '/api/v2.1/dtables/%s/related-users/' % dtable_uuid
+def get_related_nicknames_from_dtable(dtable_uuid):
+    from dtable_events.utils.dtable_web_api import DTableWebAPI
 
-    payload = {
-        'exp': int(time.time()) + 60,
-        'dtable_uuid': dtable_uuid,
-        'username': username,
-        'permission': permission,
-    }
-    access_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
-    headers = {'Authorization': 'Token ' + access_token}
-
-    res = requests.get(url, headers=headers)
-
-    if res.status_code != 200:
-        raise ConnectionError('failed to get related users %s %s' % (dtable_uuid, res.text))
-    res_json = res.json()
+    dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+    related_users = dtable_web_api.get_related_users(dtable_uuid)
+    user_list = related_users['user_list']
+    app_user_list = related_users['app_user_list']
     results = []
-
-    user_list = res_json.get('user_list', [])
-    app_user_list = res_json.get('app_user_list', [])
     if app_user_list:
         user_list.extend(app_user_list)
 
@@ -1232,23 +1102,11 @@ def get_related_nicknames_from_dtable(dtable_uuid, username, permission):
     return results
 
 def get_nicknames_from_dtable(user_id_list):
-    url = DTABLE_WEB_SERVICE_URL.strip('/') + '/api/v2.1/users-common-info/'
+    from dtable_events.utils.dtable_web_api import DTableWebAPI
 
-    payload = {
-        'exp': int(time.time()) + 60
-    }
-    access_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
-    headers = {'Authorization': 'Token ' + access_token}
-
-    json_data = {
-                'user_id_list': user_id_list,
-            }
-    res = requests.post(url, headers=headers, json=json_data)
-
-    if res.status_code != 200:
-        raise ConnectionError('failed to get users %s' % res.text)
-
-    return res.json().get('user_list')
+    dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+    user_list = dtable_web_api.get_users_common_info(user_id_list)['user_list']
+    return user_list
 
 def sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username, db_session):
     from dtable_events.utils.dtable_server_api import DTableServerAPI

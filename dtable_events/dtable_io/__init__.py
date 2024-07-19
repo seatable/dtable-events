@@ -838,7 +838,7 @@ def convert_page_to_pdf(dtable_uuid, page_id, row_id):
         driver.quit()
 
 
-def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image=False):
+def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image=False):
     from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_view_rows_from_dtable_server
     from dtable_events.dtable_io.excel import write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR
     from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, escape_sheet_name
@@ -849,7 +849,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, u
         os.makedirs(target_dir)
 
     try:
-        nicknames = get_related_nicknames_from_dtable(dtable_uuid, username, permission)
+        nicknames = get_related_nicknames_from_dtable(dtable_uuid)
     except Exception as e:
         dtable_io_logger.error('get nicknames. ERROR: {}'.format(e))
         return
@@ -909,8 +909,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, u
     wb = openpyxl.Workbook(write_only=True)
     ws = wb.create_sheet(sheet_name)
 
-    res_json = get_view_rows_from_dtable_server(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, table_name, view_name)
-    dtable_rows = res_json.get('rows', [])
+    dtable_rows = get_view_rows_from_dtable_server(dtable_uuid, table_name, view_name, username, id_in_org, user_department_ids_map, permission)
 
     column_name_to_column = {col.get('name'): col for col in cols}
     is_group_view = bool(target_view.get('groupbys'))
@@ -932,7 +931,7 @@ def convert_view_to_execl(dtable_uuid, table_id, view_id, username, id_in_org, u
         pass
 
 
-def convert_table_to_execl(dtable_uuid, table_id, username, permission, name, repo_id, is_support_image=False):
+def convert_table_to_excel(dtable_uuid, table_id, username, name, repo_id, is_support_image=False):
     from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_rows_from_dtable_server
     from dtable_events.dtable_io.excel import write_xls_with_type, IMAGE_TMP_DIR
     from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, escape_sheet_name
@@ -943,7 +942,7 @@ def convert_table_to_execl(dtable_uuid, table_id, username, permission, name, re
         os.makedirs(target_dir)
 
     try:
-        nicknames = get_related_nicknames_from_dtable(dtable_uuid, username, permission)
+        nicknames = get_related_nicknames_from_dtable(dtable_uuid)
     except Exception as e:
         dtable_io_logger.error('get nicknames. ERROR: {}'.format(e))
         return
@@ -1131,7 +1130,7 @@ def update_big_excel(username, dtable_uuid, table_name, file_path, ref_columns, 
         dtable_io_logger.info('update big excel %s.xlsx success!' % table_name)
 
 
-def convert_big_data_view_to_execl(dtable_uuid, table_id, view_id, username, name, task_id, tasks_status_map, repo_id, is_support_image):
+def convert_big_data_view_to_excel(dtable_uuid, table_id, view_id, username, name, task_id, tasks_status_map, repo_id, is_support_image):
     dtable_io_logger.info('Start export big data view to excel: {}.'.format(dtable_uuid))
     try:
         export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, task_id, tasks_status_map, repo_id, is_support_image)
@@ -1211,7 +1210,7 @@ def import_page_design(repo_id, workspace_id, dtable_uuid, page_id, is_dir, user
             clear_tmp_file(tmp_page_path)
 
 
-def convert_app_table_page_to_execl(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_condition_groups, shown_column_keys, task_id, tasks_status_map, is_support_image):
+def convert_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_condition_groups, shown_column_keys, task_id, tasks_status_map, is_support_image):
     dtable_io_logger.info('Start export app table to excel: {}.'.format(dtable_uuid))
     try:
         export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_condition_groups, shown_column_keys, task_id, tasks_status_map, is_support_image)

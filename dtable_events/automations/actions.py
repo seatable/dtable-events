@@ -231,7 +231,7 @@ class BaseAction:
                 'msg_type': 'selected_collaborator',
                 'detail': detail,
             })
-        send_notification(self.auto_rule.dtable_uuid, user_msg_list, self.auto_rule.access_token)
+        send_notification(self.auto_rule.dtable_uuid, user_msg_list, self.auto_rule.username)
 
     def parse_column_value(self, column, value):
         if column.get('type') == ColumnTypes.SINGLE_SELECT:
@@ -757,7 +757,7 @@ class NotifyAction(BaseAction):
                 'detail': detail,
                 })
         try:
-            send_notification(dtable_uuid, user_msg_list, self.auto_rule.access_token)
+            send_notification(dtable_uuid, user_msg_list, self.auto_rule.username)
         except Exception as e:
             logger.error('send users: %s notifications error: %s', e)
 
@@ -781,7 +781,7 @@ class NotifyAction(BaseAction):
                 'detail': detail,
             })
         try:
-            send_notification(dtable_uuid, user_msg_list, self.auto_rule.access_token)
+            send_notification(dtable_uuid, user_msg_list, self.auto_rule.username)
         except Exception as e:
             logger.error('send users: %s notifications error: %s', e)
 
@@ -829,7 +829,7 @@ class NotifyAction(BaseAction):
                     'detail': detail,
                     })
         try:
-            send_notification(dtable_uuid, user_msg_list, self.auto_rule.access_token)
+            send_notification(dtable_uuid, user_msg_list, self.auto_rule.username)
         except Exception as e:
             logger.error('send users: %s notifications error: %s', e)
 
@@ -1498,33 +1498,17 @@ class RunPythonScriptAction(BaseAction):
         if self.auto_rule.can_run_python is not None:
             return self.auto_rule.can_run_python
 
-        permission_url = DTABLE_WEB_SERVICE_URL.strip('/') + '/api/v2.1/script-permissions/'
-        headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
-        if self.org_id != -1:
-            json_data = {'org_ids': [self.org_id]}
-        elif self.org_id == -1 and '@seafile_group' not in self.owner:
-            json_data = {'users': [self.owner]}
-        else:
-            return True
+        dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
         try:
-            resp = requests.get(permission_url, headers=headers, json=json_data, timeout=30)
-            if resp.status_code != 200:
-                logger.error('check run script permission error response: %s', resp.status_code)
-                return False
-            permission_dict = resp.json()
+            if self.org_id != -1:
+                can_run_python = dtable_web_api.can_org_run_python(self.org_id)
+            elif self.org_id == -1 and '@seafile_group' not in self.owner:
+                can_run_python = dtable_web_api.can_user_run_python(self.owner)
+            else:
+                return True
         except Exception as e:
-            logger.error('check run script permission error: %s', e)
+            logger.exception('can run python org_id: %s owner: %s error: %s', self.org_id, self.owner, e)
             return False
-
-        # response dict like
-        # {
-        #   'user_script_permissions': {username1: {'can_run_python_script': True/False}}
-        #   'can_schedule_run_script': {org1: {'can_run_python_script': True/False}}
-        # }
-        if self.org_id != -1:
-            can_run_python = permission_dict['org_script_permissions'][str(self.org_id)]['can_run_python_script']
-        else:
-            can_run_python = permission_dict['user_script_permissions'][self.owner]['can_run_python_script']
 
         self.auto_rule.can_run_python = can_run_python
         return can_run_python
@@ -1532,23 +1516,16 @@ class RunPythonScriptAction(BaseAction):
     def get_scripts_running_limit(self):
         if self.auto_rule.scripts_running_limit is not None:
             return self.auto_rule.scripts_running_limit
-        if self.org_id != -1:
-            params = {'org_id': self.org_id}
-        elif self.org_id == -1 and '@seafile_group' not in self.owner:
-            params = {'username': self.owner}
-        else:
-            return -1
-        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/api/v2.1/scripts-running-limit/'
-        headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
+        dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
         try:
-            resp = requests.get(url, headers=headers, params=params, timeout=30)
-            if resp.status_code != 200:
-                logger.error('get scripts running limit error response: %s', resp.status_code)
-                return 0
-            scripts_running_limit = resp.json()['scripts_running_limit']
+            if self.org_id != -1:
+                scripts_running_limit = dtable_web_api.get_org_scripts_running_limit(self.org_id)
+            elif self.org_id == -1 and '@seafile_group' not in self.owner:
+                scripts_running_limit = dtable_web_api.get_user_scripts_running_limit(self.owner)
+            else:
+                return -1
         except Exception as e:
-            logger.error('get script running limit error: %s', e)
-            return 0
+            logger.exception('get script running limit error: %s', e)
         self.auto_rule.scripts_running_limit = scripts_running_limit
         return scripts_running_limit
 
@@ -1562,27 +1539,22 @@ class RunPythonScriptAction(BaseAction):
         scripts_running_limit = self.get_scripts_running_limit()
 
         # request faas url
-        headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
-        url = SEATABLE_FAAS_URL.strip('/') + '/run-script/'
+        dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
         try:
-            response = requests.post(url, json={
-                'dtable_uuid': str(UUID(self.auto_rule.dtable_uuid)),
-                'script_name': self.script_name,
-                'context_data': context_data,
-                'owner': self.owner,
-                'org_id': self.org_id,
-                'temp_api_token': self.auto_rule.get_temp_api_token(app_name=self.script_name),
-                'scripts_running_limit': scripts_running_limit,
-                'operate_from': 'automation-rule',
-                'operator': self.auto_rule.rule_id
-            }, headers=headers, timeout=10)
+            dtable_web_api.run_script(
+                uuid_str_to_36_chars(self.auto_rule.dtable_uuid),
+                self.script_name,
+                context_data,
+                self.owner,
+                self.org_id,
+                scripts_running_limit,
+                'automation-rule',
+                self.auto_rule.rule_id
+            )
+        except ConnectionError as e:
+            logger.warning('dtable: %s rule: %s run script: %s context: %s error: %s', self.auto_rule.dtable_uuid, self.auto_rule.rule_id, self.script_name, context_data, e)
         except Exception as e:
-            logger.exception(e)
-            logger.error(e)
-            return
-
-        if response.status_code != 200:
-            logger.warning('run script error status code: %s', response.status_code)
+            logger.exception('dtable: %s rule: %s run script: %s context: %s error: %s', self.auto_rule.dtable_uuid, self.auto_rule.rule_id, self.script_name, context_data, e)
         else:
             self.auto_rule.set_done_actions()
 
@@ -2280,22 +2252,13 @@ class TriggerWorkflowAction(BaseAction):
             logger.error('rule: %s submit workflow: %s append row dtable: %s, error: %s', self.auto_rule.rule_id, self.token, self.auto_rule.dtable_uuid, e)
             return
 
-        internal_submit_workflow_url = DTABLE_WEB_SERVICE_URL.strip('/') + '/api/v2.1/workflows/%s/internal-task-submit/' % self.token
-        data = {
-            'row_id': row_id,
-            'replace': 'true',
-            'submit_from': 'Automation Rule',
-            'automation_rule_id': self.auto_rule.rule_id
-        }
-        logger.debug('trigger workflow data: %s', data)
+        dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
         try:
-            header_token = 'Token ' + jwt.encode({'token': self.token}, DTABLE_PRIVATE_KEY, 'HS256')
-            resp = requests.post(internal_submit_workflow_url, data=data, headers={'Authorization': header_token}, timeout=30)
-            if resp.status_code != 200:
-                logger.error('rule: %s row_id: %s new workflow: %s task error status code: %s content: %s', self.auto_rule.rule_id, row_id, self.token, resp.status_code, resp.content)
-            self.auto_rule.set_done_actions()
+            dtable_web_api.internal_submit_row_workflow(self.token, row_id, self.auto_rule.rule_id)
         except Exception as e:
-            logger.error('submit workflow: %s row_id: %s error: %s', self.token, row_id, e)
+            logger.exception('auto rule: %s submit workflow: %s row: %s error: %s', self.auto_rule.rule_id, self.token, row_id, e)
+        else:
+            self.auto_rule.set_done_actions()
 
 
 class CalculateAction(BaseAction):
@@ -2446,7 +2409,7 @@ class CalculateAction(BaseAction):
         self.is_group_view = True if self.auto_rule.view_info.get('groupbys') else False
 
         if self.is_group_view:
-            view_rows = self.auto_rule.dtable_server_api.view_rows(table_name, view_name, True)
+            view_rows = self.auto_rule.dtable_server_api.list_view_rows(table_name, view_name, True)
         else:
             filter_conditions = {
                 'sorts': self.auto_rule.view_info.get('sorts'),
@@ -2922,8 +2885,10 @@ class AutomationRule:
         self.data = data
         self.db_session = db_session
 
-        self.dtable_server_api = DTableServerAPI('Automation Rule', str(UUID(self.dtable_uuid)), get_inner_dtable_server_url())
-        self.dtable_db_api = DTableDBAPI('Automation Rule', str(UUID(self.dtable_uuid)), INNER_DTABLE_DB_URL)
+        self.username = 'Automation Rule'
+
+        self.dtable_server_api = DTableServerAPI(self.username, str(UUID(self.dtable_uuid)), get_inner_dtable_server_url())
+        self.dtable_db_api = DTableDBAPI(self.username, str(UUID(self.dtable_uuid)), INNER_DTABLE_DB_URL)
         self.dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
 
         self.table_id = None
@@ -2966,21 +2931,6 @@ class AutomationRule:
 
         self.rule_name = self.trigger.get('rule_name', '')
         self.action_infos = json.loads(raw_actions)
-
-    @property
-    def access_token(self):
-
-        if not self._access_token:
-            self._access_token = jwt.encode(
-                payload={
-                    'exp': int(time.time()) + 300,
-                    'dtable_uuid': uuid_str_to_36_chars(self.dtable_uuid),
-                    'username': 'Automation Rule',
-                    'permission': 'rw',
-                },
-                key=DTABLE_PRIVATE_KEY
-            )
-        return self._access_token
 
     @property
     def headers(self):
@@ -3047,7 +2997,7 @@ class AutomationRule:
     def related_users(self):
         if not self._related_users:
             try:
-                self._related_users = self.dtable_web_api.get_related_users(self.dtable_uuid)
+                self._related_users = self.dtable_web_api.get_related_users(self.dtable_uuid)['user_list']
             except Exception as e:
                 logger.error('rule: %s uuid: %srequest related users error: %s', self.rule_id, self.dtable_uuid, e)
                 raise RuleInvalidException('rule: %s uuid: %srequest related users error: %s' % (self.rule_id, self.dtable_uuid, e))
@@ -3073,18 +3023,6 @@ class AutomationRule:
             return None
         self._sql_row = sql_rows[0]
         return self._sql_row
-
-    def get_temp_api_token(self, username=None, app_name=None):
-        payload = {
-            'dtable_uuid': self.dtable_uuid,
-            'exp': int(time.time()) + 60 * 60,
-        }
-        if username:
-            payload['username'] = username
-        if app_name:
-            payload['app_name'] = app_name
-        temp_api_token = jwt.encode(payload, SEATABLE_FAAS_AUTH_TOKEN, algorithm='HS256')
-        return temp_api_token
 
     def get_trigger_conditions_rows(self, action: BaseAction, warning_rows=50):
         if self._trigger_conditions_rows is not None:

@@ -1,15 +1,31 @@
 import json
 import logging
+import time
 
 import jwt
 import requests
 
-from dtable_events.app.config import SEATABLE_FAAS_AUTH_TOKEN, DTABLE_PRIVATE_KEY
-from dtable_events.dtable_io.utils import get_dtable_server_token
+from dtable_events.app.config import SEATABLE_FAAS_URL, SEATABLE_FAAS_AUTH_TOKEN, DTABLE_PRIVATE_KEY
 from dtable_events.utils import uuid_str_to_36_chars
 
 
 logger = logging.getLogger(__name__)
+
+
+def get_access_token(username, dtable_uuid, timeout=300, is_internal=False):
+    payload = {
+        'exp': int(time.time()) + timeout,
+        'dtable_uuid': dtable_uuid,
+        'username': username,
+        'permission': 'rw',
+    }
+    if is_internal:
+        payload['is_internal'] = True
+    access_token = jwt.encode(
+        payload, DTABLE_PRIVATE_KEY, algorithm='HS256'
+    )
+
+    return access_token
 
 
 def parse_response(response):
@@ -35,10 +51,10 @@ class DTableWebAPI:
             'server_url': self.dtable_web_service_url,
             'dtable_uuid': dtable_uuid
         }
-        access_token = get_dtable_server_token(username, dtable_uuid)
+        access_token = get_access_token(username, dtable_uuid)
         headers = {'Authorization': 'Token ' + access_token}
         response = requests.get(url, headers=headers)
-        return parse_response(response)['user_list']
+        return parse_response(response)
 
     def can_user_run_python(self, user):
         logger.debug('can user run python user: %s', user)
@@ -117,6 +133,47 @@ class DTableWebAPI:
             return 0
         return scripts_running_limit
 
+    def get_script_api_token(self, dtable_uuid, username=None, app_name=None):
+        payload = {
+            'dtable_uuid': uuid_str_to_36_chars(dtable_uuid),
+            'exp': int(time.time()) + 60 * 60,
+        }
+        if username:
+            payload['username'] = username
+        if app_name:
+            payload['app_name'] = app_name
+        temp_api_token = jwt.encode(payload, SEATABLE_FAAS_AUTH_TOKEN, algorithm='HS256')
+        return temp_api_token
+
+    def run_script(self, dtable_uuid, script_name, context_data, owner, org_id, scripts_running_limit, operate_from, operator):
+        headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
+        url = SEATABLE_FAAS_URL.strip('/') + '/run-script/'
+        response = requests.post(url, json={
+            'dtable_uuid': uuid_str_to_36_chars(dtable_uuid),
+            'script_name': script_name,
+            'context_data': context_data,
+            'owner': owner,
+            'org_id': org_id,
+            'temp_api_token': self.get_script_api_token(dtable_uuid, app_name=script_name),
+            'scripts_running_limit': scripts_running_limit,
+            'operate_from': operate_from,
+            'operator': operator
+        }, headers=headers, timeout=10)
+        return parse_response(response)
+    
+    def get_users_common_info(self, user_id_list):
+        url = self.dtable_web_service_url + '/api/v2.1/users-common-info/'
+        json_data = {
+                'user_id_list': user_id_list,
+            }
+        payload = {
+            'exp': int(time.time()) + 60
+        }
+        access_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
+        headers = {'Authorization': 'Token ' + access_token}
+        res = requests.post(url, headers=headers, json=json_data)
+        return parse_response(res)
+
     def internal_add_notification(self, to_users, msg_type, detail):
         logger.debug('internal add notification to users: %s detail: %s', to_users, detail)
         url = '%(server_url)s/api/v2.1/internal-notifications/?from=dtable_events' % {
@@ -129,4 +186,21 @@ class DTableWebAPI:
             'to_users': to_users,
             'type': msg_type
         }, headers=headers)
+        return parse_response(resp)
+    
+    def internal_submit_row_workflow(self, workflow_token, row_id, rule_id=None):
+        logger.debug('internal submit row workflow token: %s row_id: %s rule_id: %s', workflow_token, row_id, rule_id)
+        url = '%(server_url)s/api/v2.1/workflows/%(workflow_token)s/internal-task-submit/' % {
+            'server_url': self.dtable_web_service_url,
+            'workflow_token': workflow_token
+        }
+        data = {
+            'row_id': row_id,
+            'replace': 'true',
+            'submit_from': 'Automation Rule'
+        }
+        if rule_id:
+            data['automation_rule_id'] = rule_id
+        header_token = 'Token ' + jwt.encode({'token': workflow_token}, DTABLE_PRIVATE_KEY, 'HS256')
+        resp = requests.post(url, data=data, headers={'Authorization': header_token}, timeout=30)
         return parse_response(resp)

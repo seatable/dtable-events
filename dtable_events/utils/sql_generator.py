@@ -2549,37 +2549,6 @@ def filter2sql(table_name, columns, filter_conditions, by_group=False):
     return sql_generator.to_sql(by_group=by_group)
 
 
-def db_query(dtable_uuid, sql):
-    dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
-    token = jwt.encode(
-        payload={
-            'exp': int(time.time()) + 300,
-            'dtable_uuid': dtable_uuid,
-            'username': 'Automation Rule',
-            'permission': 'rw',
-        },
-        key=DTABLE_PRIVATE_KEY
-    )
-    if isinstance(token, bytes):
-        token = token.decode()
-
-    headers = {'Authorization': 'Token ' + token}
-    api_url = INNER_DTABLE_DB_URL.rstrip('/') + '/api/v1/query/' + dtable_uuid + '/?from=dtable_events'
-    params = {
-        'sql':sql
-    }
-    response = requests.post(api_url, json=params, headers=headers)
-    try:
-        resp_data = response.json()
-        success = resp_data.get('success', False)
-        if success:
-            return resp_data.get('results')
-        return []
-    except Exception as e:
-        logger.error(e)
-        return []
-
-
 def statistic2sql(table, statistic_type, statistic, username='', id_in_org='', current_user_department_ids=[], current_user_department_and_sub_ids=[], detail_filter_conditions=None):
     sql_generator = StatisticSQLGenerator(table, statistic_type, statistic, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids, detail_filter_conditions=detail_filter_conditions)
     return sql_generator.to_sql()
