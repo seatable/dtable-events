@@ -130,15 +130,15 @@ class APICallsCounter:
         logger.info('Starting schedule clean api calls...')
         sched = BlockingScheduler()
         # fire at 0 o'clock in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='0')
+        @sched.scheduled_job('cron', day_of_week='*', hour='0', misfire_grace_time=600)
         def timed_job():
             session = self._db_session_class()
             clean_month = (datetime.now() - relativedelta.relativedelta(months=self.keep_months)).strftime('%Y-%m-01')
             try:
                 # clean stats-api-gateway records
-                session.execute(f"DELETE FROM `stats_api_gateway_by_base` WHERE `month` <= '{clean_month}'")
-                session.execute(f"DELETE FROM `stats_api_gateway_by_owner` WHERE `month` <= '{clean_month}'")
-                session.execute(f"DELETE FROM `stats_api_gateway_by_team` WHERE `month` <= '{clean_month}'")
+                session.execute(text(f"DELETE FROM `stats_api_gateway_by_base` WHERE `month` <= '{clean_month}'"))
+                session.execute(text(f"DELETE FROM `stats_api_gateway_by_owner` WHERE `month` <= '{clean_month}'"))
+                session.execute(text(f"DELETE FROM `stats_api_gateway_by_team` WHERE `month` <= '{clean_month}'"))
                 session.commit()
             except Exception as e:
                 logger.exception('clean api calls counter error: %s', e)
