@@ -590,7 +590,8 @@ def add_email_sending_task():
         'email_port': data.get('email_port'),
         'host_user': data.get('host_user'),
         'password': data.get('password'),
-        'sender_name': data.get('sender_name')
+        'sender_name': data.get('sender_name'),
+        'sender_email': data.get('sender_email')
     }
 
     send_info = {

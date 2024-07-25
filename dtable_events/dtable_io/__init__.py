@@ -624,6 +624,7 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
     host_user = auth_info.get('host_user')
     password = auth_info.get('password')
     sender_name = auth_info.get('sender_name', '')
+    sender_email = auth_info.get('sender_email', '')
 
     # send info
     msg = send_info.get('message', '')
@@ -650,7 +651,7 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
 
     msg_obj = MIMEMultipart()
     msg_obj['Subject'] = subject
-    msg_obj['From'] = source or formataddr((sender_name, host_user))
+    msg_obj['From'] = source or formataddr((sender_name, sender_email if sender_email else host_user))
     msg_obj['To'] = ",".join(send_to)
     msg_obj['Cc'] = ",".join(copy_to)
     msg_obj['Reply-to'] = reply_to
@@ -698,7 +699,7 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
         smtp.starttls()
         smtp.login(host_user, password)
         recevers = copy_to and send_to + copy_to or send_to
-        smtp.sendmail(host_user, recevers, msg_obj.as_string())
+        smtp.sendmail(sender_email if sender_email else host_user, recevers, msg_obj.as_string())
         success = True
     except Exception as e:
         dtable_message_logger.warning(
