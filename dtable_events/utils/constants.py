@@ -187,6 +187,8 @@ class StatisticType:
 
     TABLE = 'table'
 
+    FUNNEL = 'funnel'
+
 class GeolocationGranularity:
     PROVINCE = 'province'
     CITY = 'city'

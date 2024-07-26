@@ -1,14 +1,9 @@
-import jwt
-import time
 import logging
-import requests
 import re
 from datetime import datetime, timedelta
 
 from dateutil.relativedelta import relativedelta
 
-from dtable_events.app.config import DTABLE_PRIVATE_KEY, INNER_DTABLE_DB_URL
-from dtable_events.utils import uuid_str_to_36_chars
 from dtable_events.utils.constants import FilterPredicateTypes, FormulaResultType, FilterTermModifier, ColumnTypes, \
     DurationFormatsType, StatisticType, MapLevel, GeolocationGranularity, MUNICIPALITIES
 from dtable_events.utils.dtable_column_utils import is_numeric_column, is_date_column
@@ -216,7 +211,7 @@ class NumberOperator(Operator):
             return ''
 
         duration_format = column_data.get('duration_format')
-        if not duration_format in [
+        if duration_format not in [
             DurationFormatsType.H_MM,
             DurationFormatsType.H_MM_SS,
             DurationFormatsType.H_MM_SS_S,
@@ -1050,7 +1045,7 @@ def _filter2sqlslice(operator):
     # only operator need modifier, date and no filter_term_modifier, ignore
     if isinstance(operator, DateOperator) and not operator.filter_term_modifier:
         return ''
-    if not operator.filter_predicate in support_filter_predicates:
+    if operator.filter_predicate not in support_filter_predicates:
         raise ColumnFilterInvalidError(
             operator.column_name,
             operator.column_type,
@@ -1651,7 +1646,7 @@ class StatisticSQLGenerator(object):
         else:
             summary_column = self._get_column_by_key(y_axis_summary_column_key)
             if not summary_column:
-                self.error = 'Summary column not found';
+                self.error = 'Summary column not found'
                 return ''
             summary_method = y_axis_summary_method.upper()
             summary_column_name = self._summary_column_2_sql(summary_method, summary_column)
@@ -1901,7 +1896,7 @@ class StatisticSQLGenerator(object):
                 if not summary_method:
                     self.error = 'Summary method is not valid'
                     return ''
-                summary_column_names_str = self._summary_columns_2_sql(summary_columns, summary_column_key, groupby_column, summary_method);
+                summary_column_names_str = self._summary_columns_2_sql(summary_columns, summary_column_key, groupby_column, summary_method)
 
         if self.detail_filter_conditions:
             return self._get_detail_sql({
@@ -1952,7 +1947,7 @@ class StatisticSQLGenerator(object):
         return 'SELECT %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, self.table_name, self.filter_sql, groupby_column_name)
 
     def _basic_number_card_chart_statistic_2_sql(self):
-        summary_type = self.statistic.get('summary_type', '');
+        summary_type = self.statistic.get('summary_type', '')
         if summary_type == 'count':
             self._update_filter_sql(True, None)
             return 'SELECT COUNT(*) FROM %s %s LIMIT 0, 5000' % (self.table_name, self.filter_sql)
@@ -2021,7 +2016,7 @@ class StatisticSQLGenerator(object):
 
         try:
             province = [province for province in REGIONS if province['name'] == province_name][0]
-        except Exception as e:
+        except Exception:
             return self._get_geo_granularity_by_level(level)
 
         # e.g. HongKong
@@ -2034,7 +2029,7 @@ class StatisticSQLGenerator(object):
         cities = province.get('cities', [])
         try:
             city = [city for city in cities if city['name'] == city_name][0]
-        except Exception as e:
+        except Exception:
             return self._get_geo_granularity_by_level(level)
 
         if level == MapLevel.CITY and city.get('disable_drill_down', False):
@@ -2218,7 +2213,7 @@ class StatisticSQLGenerator(object):
         if self.error:
             return '', self.error
 
-        if self.statistic_type in [StatisticType.BAR, StatisticType.LINE, StatisticType.HORIZONTAL_BAR, StatisticType.AREA]:
+        if self.statistic_type in [StatisticType.BAR, StatisticType.LINE, StatisticType.HORIZONTAL_BAR, StatisticType.AREA, StatisticType.FUNNEL]:
             sql = self._basic_statistic_2_sql()
             return sql, self.error
 
@@ -2237,11 +2232,11 @@ class StatisticSQLGenerator(object):
             return sql, self.error
 
         if self.statistic_type == StatisticType.SCATTER:
-            sql = self._scatter_statistic_2_sql();
+            sql = self._scatter_statistic_2_sql()
             return sql, self.error
 
         if self.statistic_type == StatisticType.BAR_CUSTOM:
-            sql = self._custom_statistic_2_sql();
+            sql = self._custom_statistic_2_sql()
             return sql, self.error
 
         if self.statistic_type == StatisticType.COMPARE_BAR:
