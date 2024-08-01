@@ -731,6 +731,7 @@ def batch_send_email_msg(auth_info, send_info_list, username, config=None, db_se
     host_user = auth_info.get('host_user')
     password = auth_info.get('password')
     sender_name = auth_info.get('sender_name', '')
+    sender_email = auth_info.get('sender_email', '')
 
     try:
         smtp = smtplib.SMTP(email_host, int(email_port), timeout=30)
@@ -769,7 +770,7 @@ def batch_send_email_msg(auth_info, send_info_list, username, config=None, db_se
 
         msg_obj = MIMEMultipart()
         msg_obj['Subject'] = subject
-        msg_obj['From'] = source or formataddr((sender_name, host_user))
+        msg_obj['From'] = source or formataddr((sender_name, sender_email if sender_email else host_user))
         msg_obj['To'] = ",".join(send_to)
         msg_obj['Cc'] = copy_to and ",".join(copy_to) or ""
         msg_obj['Reply-to'] = reply_to
@@ -800,7 +801,7 @@ def batch_send_email_msg(auth_info, send_info_list, username, config=None, db_se
 
         try:
             recevers = copy_to and send_to + copy_to or send_to
-            smtp.sendmail(host_user, recevers, msg_obj.as_string())
+            smtp.sendmail(sender_email if sender_email else host_user, recevers, msg_obj.as_string())
             success = True
         except Exception as e:
             dtable_message_logger.warning('Email sending failed. email: %s, error: %s' % (host_user, e))
