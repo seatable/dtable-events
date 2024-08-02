@@ -645,7 +645,7 @@ def create_dst_table_or_update_columns(dst_dtable_uuid, dst_table_id, dst_table_
             'column_key': col.get('key'),
             'column_name': col.get('name'),
             'column_type': col.get('type'),
-            'column_data': col.get('data')
+            'column_data': col.get('data') or None
         } for col in to_be_appended_columns] if to_be_appended_columns else []
         try:
             resp_json = dst_dtable_server_api.add_table(dst_table_name, lang, columns=columns)
