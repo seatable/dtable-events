@@ -660,7 +660,6 @@ def create_dst_table_or_update_columns(dst_dtable_uuid, dst_table_id, dst_table_
         except Exception as e:
             logger.error(e)  # TODO: table exists shoud return 400
             return None, {
-                'detail': repr(e),
                 'dst_table_id': None,
                 'error_msg': 'create table error',
                 'task_status_code': 500
