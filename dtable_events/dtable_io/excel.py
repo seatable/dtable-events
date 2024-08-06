@@ -744,10 +744,10 @@ def get_update_row_data(excel_row, dtable_row, excel_col_name_to_type):
         return {'row_id': dtable_row.get('_id'), 'row': update_excel_row}
 
 
-def get_dtable_row_data(dtable_rows, key_columns, excel_col_name_to_type):
+def get_dtable_row_data(dtable_rows, key_columns, excel_col_name_to_type, excel_col_name_to_data):
     dtable_row_data = {}
     for row in dtable_rows:
-        key = str(hash('-'.join([str(get_cell_value(row, col, excel_col_name_to_type)) for col in key_columns])))
+        key = str(hash('-'.join([str(get_cell_value(row, col, excel_col_name_to_type, excel_col_name_to_data)) for col in key_columns])))
         if dtable_row_data.get(key):
             # only deal first row
             continue
@@ -795,14 +795,44 @@ def update_parsed_file_by_dtable_server(username, dtable_uuid, file_name, table_
     update_rows_by_dtable_db(dtable_db_api, update_rows, table_name)
     append_rows_by_dtable_server(dtable_server_api, insert_rows, table_name)
 
+def format_date(timestamp, format):
+    datetime_obj = datetime.fromtimestamp(timestamp)
+    if format == 'D/M/YYYY':
+        value = datetime_obj.strftime('%-d/%-m/%Y')
+    elif format == 'DD/MM/YYYY':
+        value = datetime_obj.strftime('%d/%m/%Y')
+    elif format == 'D/M/YYYY HH:mm':
+        value = datetime_obj.strftime('%-d/%-m/%Y %H:%M')
+    elif format == 'DD/MM/YYYY HH:mm':
+        value = datetime_obj.strftime('%d/%m/%Y %H:%M')
+    elif format == 'M/D/YYYY':
+        value = datetime_obj.strftime('%-m/%-d/%Y')
+    elif format == 'M/D/YYYY HH:mm':
+        value = datetime_obj.strftime('%-m/%-d/%Y %H:%M')
+    elif format == 'YYYY-MM-DD':
+        value = datetime_obj.strftime('%Y-%m-%d')
+    elif format == 'YYYY-MM-DD HH:mm':
+        value = datetime_obj.strftime('%Y-%m-%d %H:%M')
+    elif format == 'DD.MM.YYYY':
+        value = datetime_obj.strftime('%d.%m.%Y')
+    elif format == 'DD.MM.YYYY HH:mm':
+        value = datetime_obj.strftime('%d.%m.%Y %H:%M')
+    else:
+        value = datetime_obj.strftime('%Y-%m-%d')
+    return value
 
-def get_cell_value(row, col, excel_col_name_to_type):
+def get_cell_value(row, col, excel_col_name_to_type, excel_col_name_to_data):
     cell_value = row.get(col)
     col_type = excel_col_name_to_type.get(col)
+    col_data = excel_col_name_to_data.get(col)
     if col_type == 'number':
         if isinstance(cell_value, float):
             cell_value = str(cell_value).rstrip('0')
             cell_value = int(cell_value.rstrip('.')) if cell_value.endswith('.') else float(cell_value)
+    elif col_type == 'date':
+        timestamp = parser.isoparse(cell_value.strip()).timestamp()
+        timestamp = round(timestamp, 0)
+        cell_value = format_date(timestamp, col_data.get('format'))
 
     cell_value = '' if cell_value is None else cell_value
     return cell_value
@@ -814,14 +844,17 @@ def get_insert_update_rows(dtable_col_name_to_column, excel_rows, dtable_rows, k
     update_rows = []
     insert_rows = []
     excel_select_column_options = {}
-    excel_col_name_to_type = {col_name: dtable_col_name_to_column.get(col_name).get('type') for col_name in excel_rows[0].keys()
-                              if dtable_col_name_to_column.get(col_name, {}).get('type') in UPDATE_TYPE_LIST}
-
-    dtable_row_data = get_dtable_row_data(dtable_rows, key_columns, excel_col_name_to_type)
+    excel_col_name_to_type = {}
+    excel_col_name_to_data = {}
+    for col_name in excel_rows[0].keys():
+        if dtable_col_name_to_column.get(col_name, {}).get('type') in UPDATE_TYPE_LIST:
+            excel_col_name_to_type[col_name] = dtable_col_name_to_column.get(col_name).get('type')
+            excel_col_name_to_data[col_name] = dtable_col_name_to_column.get(col_name).get('data')
+    dtable_row_data = get_dtable_row_data(dtable_rows, key_columns, excel_col_name_to_type, excel_col_name_to_data)
     keys_of_excel_rows = {}
     for excel_row in excel_rows:
         excel_row = {col_name: excel_row.get(col_name) for col_name in excel_row if excel_col_name_to_type.get(col_name)}
-        key = str(hash('-'.join([str(get_cell_value(excel_row, col, excel_col_name_to_type)) for col in key_columns])))
+        key = str(hash('-'.join([str(get_cell_value(excel_row, col, excel_col_name_to_type, excel_col_name_to_data)) for col in key_columns])))
         if keys_of_excel_rows.get(key):
             continue
         keys_of_excel_rows[key] = True
