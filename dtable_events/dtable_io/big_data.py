@@ -167,7 +167,7 @@ def import_excel_to_db(
                 matched_columns.append(cell.value)
 
         if not matched_columns:
-            tasks_status_map[task_id]['err_msg'] = 'No matching columns in excel'
+            tasks_status_map[task_id]['err_msg'] = 'There is no match between the column names in the source table and this view. Make sure your XSLX file has at least one column name matches the view.'
             tasks_status_map[task_id]['status'] = 'terminated'
             tasks_status_map[task_id]['err_code'] = COLUMN_MATCH_ERROR_CODE
             os.remove(file_path)
