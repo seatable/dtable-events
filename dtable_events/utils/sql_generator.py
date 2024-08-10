@@ -1301,6 +1301,10 @@ class StatisticSQLGenerator(object):
 
     def _get_detail_sql(self, groupby_columns_dict):
         detail_filters = self.detail_filter_conditions.get('filters') or []
+        if self.detail_filter_conditions.get('filter_conjunction') and self.detail_filter_conditions.get('filter_conjunction').upper() == 'OR':
+            detail_filter_conjunction = 'OR'
+        else:
+            detail_filter_conjunction = 'AND'
         filter_sqls = []
         groupby_column_names = [groupby_column['groupby_name'] for groupby_column in groupby_columns_dict.values()]
         for detail_filter in detail_filters:
@@ -1337,10 +1341,10 @@ class StatisticSQLGenerator(object):
 
         if filter_sqls:
             if self.filter_sql:
-                filter_sqls_str = ' AND '.join(filter_sqls)
+                filter_sqls_str = (f' {detail_filter_conjunction} ').join(filter_sqls)
                 filter_sql = f"WHERE ({self.filter_sql[len('WHERE '):]}) AND ({filter_sqls_str})"
             else:
-                filter_sql = 'WHERE ' + (' AND '.join(filter_sqls))
+                filter_sql = 'WHERE ' + ((f' {detail_filter_conjunction} ').join(filter_sqls))
         else:
             filter_sql = self.filter_sql
         return 'SELECT * FROM %s %s LIMIT 0, 5000' % (self.table_name, filter_sql)
