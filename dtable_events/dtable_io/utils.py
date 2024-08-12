@@ -368,7 +368,7 @@ def update_custom_assets(content, dst_dtable_uuid, db_session):
     for i in range(0, len(olds), step):
         old_uuids = [get_uuid_from_custom_path(old).replace('-', '') for old in olds[i: i+step]]
         sql = "SELECT `uuid`, `parent_path`, `file_name` FROM `custom_asset_uuid` WHERE `uuid` IN :uuids"
-        old_custom_uuids = db_session.execute(sql, {'uuids': old_uuids})
+        old_custom_uuids = db_session.execute(text(sql), {'uuids': old_uuids})
         custom_uuid_infos = []
         for uuid_obj in old_custom_uuids:
             file_uuid = uuid_obj.uuid
@@ -387,7 +387,7 @@ def update_custom_assets(content, dst_dtable_uuid, db_session):
             })
         values_str = ', '.join(map(lambda info: "('%(dtable_uuid)s', '%(uuid)s', '%(parent_path)s', '%(dtable_uuid_parent_path_md5)s', '%(file_name)s')" % info, custom_uuid_infos))
         sql = "INSERT INTO `custom_asset_uuid` (`dtable_uuid`, `uuid`, `parent_path`, `dtable_uuid_parent_path_md5`, `file_name`) VALUES %s" % values_str
-        db_session.execute(sql)
+        db_session.execute(text(sql))
         db_session.commit()
 
     # update content
@@ -962,7 +962,7 @@ def download_files_to_path(username, repo_id, dtable_uuid, files, path, db_sessi
         # query custom files
         sql = "SELECT uuid, parent_path, file_name FROM custom_asset_uuid WHERE uuid IN :uuids AND dtable_uuid=:dtable_uuid"
         try:
-            results = db_session.execute(sql, {'uuids': custom_uuids, 'dtable_uuid': uuid_str_to_36_chars(dtable_uuid)})
+            results = db_session.execute(text(sql), {'uuids': custom_uuids, 'dtable_uuid': uuid_str_to_36_chars(dtable_uuid)})
             for row in results:
                 full_path = os.path.join(base_path, 'custom', row.parent_path, row.file_name)
                 obj_id = seafile_api.get_file_id_by_path(repo_id, full_path)
