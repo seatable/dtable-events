@@ -1420,7 +1420,10 @@ def is_int_str(num):
 
 def gen_decimal_format(num):
     # when the precision is not set, the precision is determined based on the value itself
-    if float(num) == int(float(num)):
+    try:
+        if float(num) == int(float(num)):
+            return '0'
+    except:
         return '0'
 
     decimal_cnt = len(str(num).split('.')[1])
