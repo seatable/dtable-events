@@ -1046,7 +1046,7 @@ def get_rows_from_dtable_server(username, dtable_uuid, table_name):
     from dtable_events.utils.dtable_server_api import DTableServerAPI
 
     dtable_server_api = DTableServerAPI(username, dtable_uuid, get_inner_dtable_server_url())
-    rows = dtable_server_api.list_table_rows(table_name)
+    rows = dtable_server_api.list_table_rows(table_name, convert_link_id=True)
     return rows
 
 
