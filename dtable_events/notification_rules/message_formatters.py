@@ -131,11 +131,18 @@ class LinkMessageFormatter(BaseMessageFormatter):
         if result_type != FormulaResultType.ARRAY:
             return self.format_empty_message()
         real_values = []
+        array_type = self.get_column_data().get('array_type')
+        array_data = self.get_column_data().get('array_data') or {}
+        array_options = array_data.get('options') or []
         for v in value:
             if not isinstance(v, dict):
                 real_values.append(str(v))
                 continue
-            real_values.append(str(v.get('display_value') or ''))
+            if array_type == ColumnTypes.SINGLE_SELECT:
+                v_option = next(filter(lambda option: option['id'] == v.get('display_value'), array_options), None)
+                real_values.append(v_option['name'] if v_option else (v.get('display_value') or ''))
+            else:
+                real_values.append(str(v.get('display_value') or ''))
         return ', '.join(real_values)
 
 
