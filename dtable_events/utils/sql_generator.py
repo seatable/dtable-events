@@ -1186,14 +1186,33 @@ class StatisticSQLGenerator(object):
         self.statistic = statistic
 
         columns = table.get('columns', [])
+        column_keys = [column.get('key') for column in columns]
+        if statistic_type == StatisticType.TABLE_ELEMENT:
+            shown_column_keys = statistic.get('shown_column_keys', column_keys)
+            shown_colums = list(filter(lambda x: x['key'] in shown_column_keys, columns))
+            shown_column_names = ['`' + column.get('name', '') + '`' for column in shown_colums]
+            shown_column_names.append('`_id`')
+            shown_column_names.append('`_archived`')
+            shown_column_names.append('`_locked`')
+            self.shown_column_names = shown_column_names
+            if not shown_colums:
+                self.error = 'No column is selected'
+        else:
+            shown_colums = columns
+            shown_column_keys = column_keys
+
         self.column_key_map = {}
-        for column in columns:
+        for column in shown_colums:
             self.column_key_map[column['key']] = column
 
+        # filters
         filters = statistic.get('filters', [])
         if filters:
             for item in filters:
                 filter_term = item.get('filter_term')
+                column_key = item.get('column_key')
+                if column_key not in shown_column_keys:
+                    continue
                 if item.get('filter_predicate') == 'include_me':
                     item['filter_term'].append(username)
                 if item.get('filter_predicate') == 'is_current_user_ID':
@@ -1215,7 +1234,18 @@ class StatisticSQLGenerator(object):
 
         filter_conjunction = statistic.get('filter_conjunction', 'and')
         self.filter_conjunction = filter_conjunction.upper()
+
+        # sorts
+        # currently, sorts only support TABLE_ELEMENT
+        if statistic_type == StatisticType.TABLE_ELEMENT:
+            self.sorts = statistic.get('sorts')
+        else:
+            self.sorts = []
+
         self.filter_sql = self._filter_2_sql()
+        self.sorts_sql = self._sort_2_sql()
+
+        # statistic detail filter
         self.detail_filter_conditions = detail_filter_conditions
 
     def _get_column_by_key(self, column_key):
@@ -1242,6 +1272,24 @@ class StatisticSQLGenerator(object):
             filter_sql = filter_conjunction.join(filter_string_list)
 
         return filter_sql
+
+    def _sort_2_sql(self):
+        if not self.sorts:
+            return ''
+
+        order_header = 'ORDER BY'
+        sort_sql = []
+        for sort in self.sorts:
+            column_key = sort.get('column_key')
+            # find column from shown columns map
+            column = self._get_column_by_key(column_key)
+            if column:
+                column_name = column.get('name')
+                sort_type = 'ASC' if sort.get('sort_type', 'DESC') == 'up' else 'DESC'
+                sort_sql.append(f'`{column_name}` {sort_type.upper()}')
+        if not sort_sql:
+            return ''
+        return f"{order_header} {', '.join(sort_sql)}"
 
     def _update_filter_sql(self, x_axis_include_empty, x_axis_column):
         if x_axis_include_empty:
@@ -2213,6 +2261,20 @@ class StatisticSQLGenerator(object):
             })
         return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, summary_column_name, self.table_name, self.filter_sql, groupby_column_name)
 
+    def _table_element_statistic_2_sql(self):
+        if self.filter_sql:
+            filter_condition = f"WHERE {self.filter_sql}"
+        else:
+            filter_condition = ''
+
+        if self.sorts_sql:
+            sorts_condition = f"{self.sorts_sql}"
+        else:
+            sorts_condition = ''
+
+        sql = f"SELECT {', '.join(self.shown_column_names)} FROM {self.table_name} {filter_condition} {sorts_condition} LIMIT 0, 5000"
+        return sql
+
     def to_sql(self):
         if self.error:
             return '', self.error
@@ -2293,6 +2355,9 @@ class StatisticSQLGenerator(object):
 
         if self.statistic_type == StatisticType.TREND:
             sql = self._trend_map_statistic_2_sql()
+            return sql, self.error
+        if self.statistic_type == StatisticType.TABLE_ELEMENT:
+            sql = self._table_element_statistic_2_sql()
             return sql, self.error
 
         return '', ''
@@ -2538,7 +2603,6 @@ class LinkRecordsSQLGenerator(object):
         )
         sorts_sql = self._generator_sorts_SQL()
         return '%s %s' % (base_sql, sorts_sql) if sorts_sql else base_sql
-
 
 def filter2sql(table_name, columns, filter_conditions, by_group=False):
     if by_group:
