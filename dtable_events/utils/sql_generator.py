@@ -2272,7 +2272,8 @@ class StatisticSQLGenerator(object):
         else:
             sorts_condition = ''
 
-        sql = f"SELECT {', '.join(self.shown_column_names)} FROM {self.table_name} {filter_condition} {sorts_condition} LIMIT 0, 5000"
+        # table element was used to display some vital information, so only search 1000 rows here to reduces rendering pressure in frontend
+        sql = f"SELECT {', '.join(self.shown_column_names)} FROM {self.table_name} {filter_condition} {sorts_condition} LIMIT 0, 1000"
         return sql
 
     def to_sql(self):
