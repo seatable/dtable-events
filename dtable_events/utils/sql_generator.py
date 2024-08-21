@@ -1285,7 +1285,7 @@ class StatisticSQLGenerator(object):
             column = self._get_column_by_key(column_key)
             if column:
                 column_name = column.get('name')
-                sort_type = 'ASC' if sort.get('sort_type', 'DESC') == 'up' else 'DESC'
+                sort_type = 'ASC' if sort.get('sort_type', 'up') == 'up' else 'DESC'
                 sort_sql.append(f'`{column_name}` {sort_type.upper()}')
         if not sort_sql:
             return ''
