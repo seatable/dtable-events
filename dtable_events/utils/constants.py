@@ -189,6 +189,10 @@ class StatisticType:
 
     FUNNEL = 'funnel'
 
+    # Table Element is a simple version of Table page, 
+    # currently using 'table_element' as type name to avoid conflict with 'pivot table'
+    TABLE_ELEMENT = 'table_element'
+
 class GeolocationGranularity:
     PROVINCE = 'province'
     CITY = 'city'
