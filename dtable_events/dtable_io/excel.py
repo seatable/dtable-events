@@ -717,12 +717,13 @@ def parse_append_excel_csv_upload_file_to_json(file_name, username, dtable_uuid,
     save_file_by_path(temp_json_path, json.dumps(tables))
 
 
-def get_update_row_data(excel_row, dtable_row, excel_col_name_to_type):
+def get_update_row_data(excel_row, dtable_row, excel_col_name_to_type, excel_col_name_to_data):
     update_excel_row = {}
     for col_name in excel_col_name_to_type:
         excel_cell_val = excel_row.get(col_name, '')
         dtable_cell_val = dtable_row.get(col_name, '')
         column_type = excel_col_name_to_type.get(col_name)
+        column_data = excel_col_name_to_data.get(col_name)
         if column_type == 'multiple-select' or column_type == 'collaborator':
             if not dtable_cell_val:
                 dtable_cell_val = []
@@ -732,12 +733,16 @@ def get_update_row_data(excel_row, dtable_row, excel_col_name_to_type):
             dtable_cell_val.sort()
         elif column_type == 'date' and excel_cell_val and dtable_cell_val:
             # dtable row value like 2021-12-03 00:00 or 2021-12-03, excel row like 2021-12-03 00:00:00
-            excel_cell_val = excel_cell_val[0:len(dtable_cell_val)]
+            try:
+                excel_cell_val = format_date(excel_cell_val, column_data.get('format'))
+                dtable_cell_val = format_date(dtable_cell_val, column_data.get('format'))
+            except:
+                excel_cell_val = excel_cell_val[0:len(dtable_cell_val)]
         elif column_type == 'checkbox' and not excel_cell_val:
             excel_cell_val = False
         dtable_cell_val = '' if dtable_cell_val is None else dtable_cell_val
         excel_cell_val = '' if excel_cell_val is None else excel_cell_val
-
+        
         if excel_cell_val != dtable_cell_val:
             update_excel_row[col_name] = excel_cell_val
     if update_excel_row:
@@ -795,7 +800,9 @@ def update_parsed_file_by_dtable_server(username, dtable_uuid, file_name, table_
     update_rows_by_dtable_db(dtable_db_api, update_rows, table_name)
     append_rows_by_dtable_server(dtable_server_api, insert_rows, table_name)
 
-def format_date(timestamp, format):
+def format_date(date, format):
+    timestamp = parser.isoparse(date.strip()).timestamp()
+    timestamp = round(timestamp, 0)
     datetime_obj = datetime.fromtimestamp(timestamp)
     if format == 'D/M/YYYY':
         value = datetime_obj.strftime('%-d/%-m/%Y')
@@ -830,9 +837,10 @@ def get_cell_value(row, col, excel_col_name_to_type, excel_col_name_to_data):
             cell_value = str(cell_value).rstrip('0')
             cell_value = int(cell_value.rstrip('.')) if cell_value.endswith('.') else float(cell_value)
     elif col_type == 'date':
-        timestamp = parser.isoparse(cell_value.strip()).timestamp()
-        timestamp = round(timestamp, 0)
-        cell_value = format_date(timestamp, col_data.get('format'))
+        try:
+            cell_value = format_date(cell_value, col_data.get('format'))
+        except:
+            pass
 
     cell_value = '' if cell_value is None else cell_value
     return cell_value
@@ -879,7 +887,7 @@ def get_insert_update_rows(dtable_col_name_to_column, excel_rows, dtable_rows, k
         if not dtable_row:
             insert_rows.append(excel_row)
         else:
-            update_row = get_update_row_data(excel_row, dtable_row, excel_col_name_to_type)
+            update_row = get_update_row_data(excel_row, dtable_row, excel_col_name_to_type, excel_col_name_to_data)
             if update_row:
                 update_rows.append(update_row)
     return insert_rows, update_rows, excel_select_column_options
