@@ -691,6 +691,22 @@ def append_parsed_file_by_dtable_server(username, dtable_uuid, file_name, table_
             options = [gen_random_option(option) for option in to_be_added_options]
             dtable_server_api.add_column_options(table_name, col_name, options)
 
+    date_columns_map = {} # column_name: date_format
+    for row in rows:
+        for col_name in row:
+            if col_name in dtable_col_name_to_column:
+                column = dtable_col_name_to_column.get(col_name)
+                if column.get('type') == ColumnTypes.DATE and column.get('data') and column.get('data').get('format'):
+                    date_columns_map[col_name] = column.get('data').get('format')
+        break
+
+    for row in rows:
+        for date_col_name, date_format in date_columns_map.items():
+            try:
+                row[date_col_name] = format_date(row[date_col_name], date_format)
+            except:
+                pass
+
     append_rows_by_dtable_server(dtable_server_api, rows, table_name)
 
 
@@ -731,7 +747,7 @@ def get_update_row_data(excel_row, dtable_row, excel_col_name_to_type, excel_col
                 excel_cell_val = []
             excel_cell_val.sort()
             dtable_cell_val.sort()
-        elif column_type == 'date' and excel_cell_val and dtable_cell_val:
+        elif column_type == ColumnTypes.DATE and excel_cell_val and dtable_cell_val:
             # dtable row value like 2021-12-03 00:00 or 2021-12-03, excel row like 2021-12-03 00:00:00
             try:
                 excel_cell_val = format_date(excel_cell_val, column_data.get('format'))
@@ -836,7 +852,7 @@ def get_cell_value(row, col, excel_col_name_to_type, excel_col_name_to_data):
         if isinstance(cell_value, float):
             cell_value = str(cell_value).rstrip('0')
             cell_value = int(cell_value.rstrip('.')) if cell_value.endswith('.') else float(cell_value)
-    elif col_type == 'date':
+    elif col_type == ColumnTypes.DATE:
         try:
             cell_value = format_date(cell_value, col_data.get('format'))
         except:

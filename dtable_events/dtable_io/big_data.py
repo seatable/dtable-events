@@ -2,6 +2,8 @@ import openpyxl
 import os
 import shutil
 import uuid
+from datetime import datetime
+from dateutil import parser
 from copy import deepcopy
 
 from dtable_events.dtable_io.excel import parse_row, write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR
@@ -33,33 +35,46 @@ ROW_INSERT_ERROR_CODE = 4
 INTERNAL_ERROR_CODE = 5
 
 
-def _parse_excel_row(excel_row_data, column_name_type_map, name_to_email, location_tree, excel_select_column_options):
+def _parse_excel_row(excel_row_data, column_name_type_map, column_name_data_map, name_to_email, location_tree, excel_select_column_options):
     parsed_row_data = {}
     for col_name, value in excel_row_data.items():
         col_type = column_name_type_map.get(col_name)
+        col_data = column_name_data_map.get(col_name)
         if not value:
             continue
         excel_value = parse_row(col_type, value, name_to_email, location_tree=location_tree)
-        parsed_row_data[col_name] = excel_value
 
-        if excel_value and col_type in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
-            col_options = excel_select_column_options.get(col_name, set())
-            if not col_options:
-                excel_select_column_options[col_name] = col_options
-            if col_type == ColumnTypes.MULTIPLE_SELECT:
-                col_options.update(set(excel_value))
-            else:
-                col_options.add(excel_value)
+        if excel_value:
+            if col_type in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
+                col_options = excel_select_column_options.get(col_name, set())
+                if not col_options:
+                    excel_select_column_options[col_name] = col_options
+                if col_type == ColumnTypes.MULTIPLE_SELECT:
+                    col_options.update(set(excel_value))
+                else:
+                    col_options.add(excel_value)
+            elif col_type == ColumnTypes.DATE:
+                try:
+                    excel_value = format_date(excel_value, col_data.get('format'))
+                except:
+                    pass
+
+        parsed_row_data[col_name] = excel_value
     return parsed_row_data, excel_select_column_options
 
 
-def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column_name_type_map, name_to_email, location_tree, insert_new_row=False):
+def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column_name_type_map, column_name_data_map, name_to_email, location_tree, insert_new_row=False):
     where_clauses = []
     for ref_col in ref_cols:
         value_list = []
         none_in_list = False
         for row_data in excel_row_datas:
             value = row_data.get(ref_col)
+            if column_name_type_map.get(ref_col) and column_name_type_map.get(ref_col) == ColumnTypes.DATE:
+                try:
+                    value = format_date(str(value), column_name_data_map.get(ref_col).get('format'))
+                except:
+                    pass
             if not value:
                 none_in_list = True
             if value and value not in value_list:
@@ -91,12 +106,30 @@ def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column
     query_rows_from_base = convert_db_rows(db_metadata, query_rows_from_base)
     excel_select_column_options = {}
     for excel_row in excel_row_datas:
-        excel_ref_data = {col: excel_row.get(col) for col in ref_cols if excel_row.get(col)}
-        parsed_row, excel_select_column_options = _parse_excel_row(excel_row, column_name_type_map, name_to_email, location_tree, excel_select_column_options)
+        excel_ref_data = {}
+        for col in ref_cols:
+            if excel_row.get(col):
+                excel_ref_data[col] = excel_row.get(col)
+                if column_name_type_map.get(col) and column_name_type_map.get(col) == ColumnTypes.DATE:  
+                    try:
+                        excel_ref_data[col] = format_date(str(excel_row.get(col)), column_name_data_map.get(col).get('format'))
+                    except:
+                        pass
+        parsed_row, excel_select_column_options = _parse_excel_row(excel_row, column_name_type_map, column_name_data_map, name_to_email, location_tree, excel_select_column_options)
 
         find_tag = False
         for base_row in query_rows_from_base:
-            base_ref_data = {col: base_row.get(col) for col in ref_cols if base_row.get(col)}
+            base_ref_data = {}
+            for col in ref_cols:
+                if base_row.get(col):
+                    base_ref_data[col] = base_row.get(col)
+                    if column_name_type_map.get(col) and column_name_type_map.get(col) == ColumnTypes.DATE:
+                        try:
+                            pre_format_date_str = base_row.get(col).replace('T', ' ')
+                            pre_format_date_str = pre_format_date_str.split('+' if '+' in pre_format_date_str else '-')[0]
+                            base_ref_data[col] = format_date(pre_format_date_str, column_name_data_map.get(col).get('format'))
+                        except:
+                            pass
             if base_ref_data and excel_ref_data and base_ref_data == excel_ref_data:
                 rows_for_update.append({
                     "row_id": base_row.get('_id'),
@@ -121,6 +154,34 @@ def add_column_options(dtable_server_api, table_name, excel_select_column_option
             dtable_server_api.add_column_options(table_name, col_name, options)
             is_added_options = True
     return is_added_options
+
+def format_date(date, format):
+    timestamp = parser.isoparse(date.strip()).timestamp()
+    timestamp = round(timestamp, 0)
+    datetime_obj = datetime.fromtimestamp(timestamp)
+    if format == 'D/M/YYYY':
+        value = datetime_obj.strftime('%-d/%-m/%Y')
+    elif format == 'DD/MM/YYYY':
+        value = datetime_obj.strftime('%d/%m/%Y')
+    elif format == 'D/M/YYYY HH:mm':
+        value = datetime_obj.strftime('%-d/%-m/%Y %H:%M')
+    elif format == 'DD/MM/YYYY HH:mm':
+        value = datetime_obj.strftime('%d/%m/%Y %H:%M')
+    elif format == 'M/D/YYYY':
+        value = datetime_obj.strftime('%-m/%-d/%Y')
+    elif format == 'M/D/YYYY HH:mm':
+        value = datetime_obj.strftime('%-m/%-d/%Y %H:%M')
+    elif format == 'YYYY-MM-DD':
+        value = datetime_obj.strftime('%Y-%m-%d')
+    elif format == 'YYYY-MM-DD HH:mm':
+        value = datetime_obj.strftime('%Y-%m-%d %H:%M')
+    elif format == 'DD.MM.YYYY':
+        value = datetime_obj.strftime('%d.%m.%Y')
+    elif format == 'DD.MM.YYYY HH:mm':
+        value = datetime_obj.strftime('%d.%m.%Y %H:%M')
+    else:
+        value = datetime_obj.strftime('%Y-%m-%d')
+    return value
 
 
 def import_excel_to_db(
@@ -157,7 +218,11 @@ def import_excel_to_db(
 
         base = DTableServerAPI(username, dtable_uuid, dtable_server_url)
         base_columns = base.list_columns(table_name)
-        column_name_type_map = {col.get('name'): col.get('type') for col in base_columns}
+        column_name_type_map = {}
+        column_name_data_map = {}
+        for col in base_columns:
+            column_name_type_map[col.get('name')] = col.get('type')
+            column_name_data_map[col.get('name')] = col.get('data')
         matched_columns = []
         excel_columns = []
         for cell in ws[1]:
@@ -209,18 +274,25 @@ def import_excel_to_db(
                 parsed_row_data = {}
                 for col_name, value in row_data.items():
                     col_type = column_name_type_map.get(col_name)
+                    col_data = column_name_data_map.get(col_name)
                     if not col_type or col_type in AUTO_GENERATED_COLUMNS:
                         continue
 
                     excel_value = value and parse_row(col_type, value, name_to_email, location_tree=location_tree) or ''
-                    if excel_value and col_type in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
-                        col_options = excel_select_column_options.get(col_name, set())
-                        if not col_options:
-                            excel_select_column_options[col_name] = col_options
-                        if col_type == ColumnTypes.MULTIPLE_SELECT:
-                            col_options.update(set(excel_value))
-                        else:
-                            col_options.add(excel_value)
+                    if excel_value:
+                        if col_type in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
+                            col_options = excel_select_column_options.get(col_name, set())
+                            if not col_options:
+                                excel_select_column_options[col_name] = col_options
+                            if col_type == ColumnTypes.MULTIPLE_SELECT:
+                                col_options.update(set(excel_value))
+                            else:
+                                col_options.add(excel_value)
+                        if col_type == ColumnTypes.DATE:
+                            try:
+                                excel_value = format_date(excel_value, col_data.get('format'))
+                            except:
+                                pass
                     parsed_row_data[col_name] = excel_value
 
                 slice_data.append(parsed_row_data)
@@ -309,7 +381,11 @@ def update_excel_to_db(
         db_handler = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
         base = DTableServerAPI(username, dtable_uuid, dtable_server_url)
         base_columns = base.list_columns(table_name)
-        column_name_type_map = {col.get('name'): col.get('type') for col in base_columns}
+        column_name_type_map = {}
+        column_name_data_map = {}
+        for col in base_columns:
+            column_name_type_map[col.get('name')] = col.get('type')
+            column_name_data_map[col.get('name')] = col.get('data')
     except Exception as err:
         tasks_status_map[task_id]['err_msg'] = str(err)
         tasks_status_map[task_id]['status'] = 'terminated'
@@ -352,7 +428,7 @@ def update_excel_to_db(
                     rows_for_import, rows_for_update, excel_select_column_options = handle_excel_row_datas(
                         db_handler, table_name,
                         excel_row_datas, ref_columns,
-                        column_name_type_map, name_to_email, location_tree,
+                        column_name_type_map, column_name_data_map, name_to_email, location_tree,
                         is_insert_new_data
                     )
                     is_added_options = add_column_options(base, table_name, excel_select_column_options, dtable_col_name_to_column)
@@ -381,7 +457,7 @@ def update_excel_to_db(
         rows_for_import, rows_for_update, excel_select_column_options = handle_excel_row_datas(
             db_handler, table_name,
             excel_row_datas, ref_columns,
-            column_name_type_map, name_to_email, location_tree,
+            column_name_type_map, column_name_data_map, name_to_email, location_tree,
             is_insert_new_data
         )
         add_column_options(base, table_name, excel_select_column_options, dtable_col_name_to_column)
