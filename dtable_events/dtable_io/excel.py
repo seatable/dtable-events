@@ -9,7 +9,7 @@ from openpyxl import load_workbook
 from copy import deepcopy
 from datetime import datetime, time
 from dtable_events.app.config import EXPORT2EXCEL_DEFAULT_STRING, TIME_ZONE, INNER_DTABLE_DB_URL
-from dtable_events.utils import utc_to_tz, get_inner_dtable_server_url, gen_random_option
+from dtable_events.utils import utc_to_tz, get_inner_dtable_server_url, gen_random_option, format_date
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.geo_location_parser import parse_geolocation_from_tree
 from dtable_events.utils.dtable_db_api import DTableDBAPI
@@ -705,7 +705,7 @@ def append_parsed_file_by_dtable_server(username, dtable_uuid, file_name, table_
             try:
                 row[date_col_name] = format_date(row[date_col_name], date_format)
             except:
-                pass
+                row[date_col_name] = ''
 
     append_rows_by_dtable_server(dtable_server_api, rows, table_name)
 
@@ -816,33 +816,6 @@ def update_parsed_file_by_dtable_server(username, dtable_uuid, file_name, table_
     update_rows_by_dtable_db(dtable_db_api, update_rows, table_name)
     append_rows_by_dtable_server(dtable_server_api, insert_rows, table_name)
 
-def format_date(date, format):
-    timestamp = parser.isoparse(date.strip()).timestamp()
-    timestamp = round(timestamp, 0)
-    datetime_obj = datetime.fromtimestamp(timestamp)
-    if format == 'D/M/YYYY':
-        value = datetime_obj.strftime('%-d/%-m/%Y')
-    elif format == 'DD/MM/YYYY':
-        value = datetime_obj.strftime('%d/%m/%Y')
-    elif format == 'D/M/YYYY HH:mm':
-        value = datetime_obj.strftime('%-d/%-m/%Y %H:%M')
-    elif format == 'DD/MM/YYYY HH:mm':
-        value = datetime_obj.strftime('%d/%m/%Y %H:%M')
-    elif format == 'M/D/YYYY':
-        value = datetime_obj.strftime('%-m/%-d/%Y')
-    elif format == 'M/D/YYYY HH:mm':
-        value = datetime_obj.strftime('%-m/%-d/%Y %H:%M')
-    elif format == 'YYYY-MM-DD':
-        value = datetime_obj.strftime('%Y-%m-%d')
-    elif format == 'YYYY-MM-DD HH:mm':
-        value = datetime_obj.strftime('%Y-%m-%d %H:%M')
-    elif format == 'DD.MM.YYYY':
-        value = datetime_obj.strftime('%d.%m.%Y')
-    elif format == 'DD.MM.YYYY HH:mm':
-        value = datetime_obj.strftime('%d.%m.%Y %H:%M')
-    else:
-        value = datetime_obj.strftime('%Y-%m-%d')
-    return value
 
 def get_cell_value(row, col, excel_col_name_to_type, excel_col_name_to_data):
     cell_value = row.get(col)
@@ -856,7 +829,7 @@ def get_cell_value(row, col, excel_col_name_to_type, excel_col_name_to_data):
         try:
             cell_value = format_date(cell_value, col_data.get('format'))
         except:
-            pass
+            cell_value = ''
 
     cell_value = '' if cell_value is None else cell_value
     return cell_value

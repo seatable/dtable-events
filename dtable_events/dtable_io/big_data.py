@@ -2,14 +2,12 @@ import openpyxl
 import os
 import shutil
 import uuid
-from datetime import datetime
-from dateutil import parser
 from copy import deepcopy
 
 from dtable_events.dtable_io.excel import parse_row, write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR
 from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, get_metadata_from_dtable_server, \
     escape_sheet_name
-from dtable_events.utils import get_inner_dtable_server_url, get_location_tree_json, gen_random_option
+from dtable_events.utils import get_inner_dtable_server_url, get_location_tree_json, gen_random_option, format_date
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.app.config import INNER_DTABLE_DB_URL, BIG_DATA_ROW_IMPORT_LIMIT, BIG_DATA_ROW_UPDATE_LIMIT, \
     ARCHIVE_VIEW_EXPORT_ROW_LIMIT, APP_TABLE_EXPORT_EXCEL_ROW_LIMIT
@@ -57,7 +55,7 @@ def _parse_excel_row(excel_row_data, column_name_type_map, column_name_data_map,
                 try:
                     excel_value = format_date(excel_value, col_data.get('format'))
                 except:
-                    pass
+                    excel_value = ''
 
         parsed_row_data[col_name] = excel_value
     return parsed_row_data, excel_select_column_options
@@ -74,7 +72,7 @@ def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column
                 try:
                     value = format_date(str(value), column_name_data_map.get(ref_col).get('format'))
                 except:
-                    pass
+                    value = ''
             if not value:
                 none_in_list = True
             if value and value not in value_list:
@@ -114,7 +112,7 @@ def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column
                     try:
                         excel_ref_data[col] = format_date(str(excel_row.get(col)), column_name_data_map.get(col).get('format'))
                     except:
-                        pass
+                        excel_ref_data[col] = ''
         parsed_row, excel_select_column_options = _parse_excel_row(excel_row, column_name_type_map, column_name_data_map, name_to_email, location_tree, excel_select_column_options)
 
         find_tag = False
@@ -124,12 +122,12 @@ def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column
                 if base_row.get(col):
                     base_ref_data[col] = base_row.get(col)
                     if column_name_type_map.get(col) and column_name_type_map.get(col) == ColumnTypes.DATE:
+                        pre_format_date_str = base_row.get(col).replace('T', ' ')
+                        pre_format_date_str = pre_format_date_str.split('+' if '+' in pre_format_date_str else '-')[0]
                         try:
-                            pre_format_date_str = base_row.get(col).replace('T', ' ')
-                            pre_format_date_str = pre_format_date_str.split('+' if '+' in pre_format_date_str else '-')[0]
                             base_ref_data[col] = format_date(pre_format_date_str, column_name_data_map.get(col).get('format'))
                         except:
-                            pass
+                            base_ref_data[col] = ''
             if base_ref_data and excel_ref_data and base_ref_data == excel_ref_data:
                 rows_for_update.append({
                     "row_id": base_row.get('_id'),
@@ -154,35 +152,6 @@ def add_column_options(dtable_server_api, table_name, excel_select_column_option
             dtable_server_api.add_column_options(table_name, col_name, options)
             is_added_options = True
     return is_added_options
-
-def format_date(date, format):
-    timestamp = parser.isoparse(date.strip()).timestamp()
-    timestamp = round(timestamp, 0)
-    datetime_obj = datetime.fromtimestamp(timestamp)
-    if format == 'D/M/YYYY':
-        value = datetime_obj.strftime('%-d/%-m/%Y')
-    elif format == 'DD/MM/YYYY':
-        value = datetime_obj.strftime('%d/%m/%Y')
-    elif format == 'D/M/YYYY HH:mm':
-        value = datetime_obj.strftime('%-d/%-m/%Y %H:%M')
-    elif format == 'DD/MM/YYYY HH:mm':
-        value = datetime_obj.strftime('%d/%m/%Y %H:%M')
-    elif format == 'M/D/YYYY':
-        value = datetime_obj.strftime('%-m/%-d/%Y')
-    elif format == 'M/D/YYYY HH:mm':
-        value = datetime_obj.strftime('%-m/%-d/%Y %H:%M')
-    elif format == 'YYYY-MM-DD':
-        value = datetime_obj.strftime('%Y-%m-%d')
-    elif format == 'YYYY-MM-DD HH:mm':
-        value = datetime_obj.strftime('%Y-%m-%d %H:%M')
-    elif format == 'DD.MM.YYYY':
-        value = datetime_obj.strftime('%d.%m.%Y')
-    elif format == 'DD.MM.YYYY HH:mm':
-        value = datetime_obj.strftime('%d.%m.%Y %H:%M')
-    else:
-        value = datetime_obj.strftime('%Y-%m-%d')
-    return value
-
 
 def import_excel_to_db(
         username,
@@ -292,7 +261,7 @@ def import_excel_to_db(
                             try:
                                 excel_value = format_date(excel_value, col_data.get('format'))
                             except:
-                                pass
+                                excel_value = ''
                     parsed_row_data[col_name] = excel_value
 
                 slice_data.append(parsed_row_data)
@@ -304,7 +273,6 @@ def import_excel_to_db(
                         base_columns = base.list_columns(table_name)
                         dtable_col_name_to_column = {col['name']: col for col in base_columns}
                         excel_select_column_options = {}
-
                     db_handler.insert_rows(table_name, slice_data)
                     insert_count += len(slice_data)
                     slice_data = []
@@ -424,7 +392,7 @@ def update_excel_to_db(
                         continue
 
                 excel_row_datas.append(row_data1)
-                if len(excel_row_datas) >= 2:
+                if len(excel_row_datas) >= 100:
                     rows_for_import, rows_for_update, excel_select_column_options = handle_excel_row_datas(
                         db_handler, table_name,
                         excel_row_datas, ref_columns,
