@@ -6,6 +6,7 @@ from urllib.parse import quote_plus
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.automap import automap_base
 
 logger = logging.getLogger(__name__)
 
@@ -14,23 +15,36 @@ class Base(DeclarativeBase):
     pass
 
 
-def create_engine_from_conf(config):
-    backend = config.get('DATABASE', 'type')
+SeafBase = automap_base()
+
+
+def create_engine_from_conf(config, db='dtable_db'):
+
+    db_sec = 'DATABASE'
+    user = 'username'
+    db_name = 'db_name'
+
+    if db == 'seafile':
+        db_sec = 'database'
+        user = 'user'
+        db_name = 'db_name'
+
+    backend = config.get(db_sec, 'type')
 
     if backend == 'mysql':
-        if config.has_option('DATABASE', 'host'):
-            host = config.get('DATABASE', 'host').lower()
+        if config.has_option(db_sec, 'host'):
+            host = config.get(db_sec, 'host').lower()
         else:
             host = 'localhost'
 
-        if config.has_option('DATABASE', 'port'):
-            port = config.getint('DATABASE', 'port')
+        if config.has_option(db_sec, 'port'):
+            port = config.getint(db_sec, 'port')
         else:
             port = 3306
 
-        username = config.get('DATABASE', 'username')
-        password = config.get('DATABASE', 'password')
-        db_name = config.get('DATABASE', 'db_name')
+        username = config.get(db_sec, user)
+        password = config.get(db_sec, 'password')
+        db_name = config.get(db_sec, db_name)
 
         db_url = "mysql+mysqldb://%s:%s@%s:%s/%s?charset=utf8" % \
                  (username, quote_plus(password), host, port, db_name)
@@ -73,3 +87,14 @@ def create_db_tables(config):
         raise RuntimeError("Create tables error: %s" % e)
 
     Base.metadata.create_all(engine)
+
+
+def prepare_db_tables(seafile_config):
+    # reflect the seafile_db tables
+    try:
+        engine = create_engine_from_conf(seafile_config, db='seafile')
+    except Exception as e:
+        logger.error(e)
+        raise RuntimeError("create db engine error: %s" % e)
+
+    SeafBase.prepare(autoload_with=engine)
