@@ -44,7 +44,7 @@ def main():
 
     task_mode = get_task_mode(args.taskmode)
 
-    app = App(config, task_mode)
+    app = App(config, seafile_config, task_mode)
     app.serve_forever()
 
 
