@@ -103,6 +103,7 @@ def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column
     query_rows_from_base, db_metadata = db_api.query(sql, convert=True, server_only=False)
     query_rows_from_base = convert_db_rows(db_metadata, query_rows_from_base)
     excel_select_column_options = {}
+    tp = []
     for excel_row in excel_row_datas:
         excel_ref_data = {}
         for col in ref_cols:
@@ -112,7 +113,7 @@ def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column
                     try:
                         excel_ref_data[col] = format_date(str(excel_row.get(col)), column_name_data_map.get(col).get('format'))
                     except:
-                        excel_ref_data[col] = ''
+                        del excel_ref_data[col]
         parsed_row, excel_select_column_options = _parse_excel_row(excel_row, column_name_type_map, column_name_data_map, name_to_email, location_tree, excel_select_column_options)
 
         find_tag = False
@@ -128,6 +129,7 @@ def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column
                             base_ref_data[col] = format_date(pre_format_date_str, column_name_data_map.get(col).get('format'))
                         except:
                             base_ref_data[col] = ''
+            tp.append((excel_ref_data, base_ref_data))
             if base_ref_data and excel_ref_data and base_ref_data == excel_ref_data:
                 rows_for_update.append({
                     "row_id": base_row.get('_id'),
