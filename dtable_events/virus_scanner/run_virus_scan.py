@@ -25,8 +25,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config-file',
-                        default=os.path.join(os.path.abspath('..'), 'events.conf'),
-                        help='seafevents config file')
+                        default=os.path.join(os.path.abspath('..'), 'dtable-events.conf'),
+                        help='dtable-events config file')
     args = parser.parse_args()
 
     config = get_config(args.config_file)

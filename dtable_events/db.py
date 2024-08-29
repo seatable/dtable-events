@@ -66,10 +66,10 @@ def create_engine_from_conf(config, db='dtable_db'):
     return engine
 
 
-def init_db_session_class(config):
+def init_db_session_class(config, db='dtable_db'):
     """Configure session class for mysql according to the config file."""
     try:
-        engine = create_engine_from_conf(config)
+        engine = create_engine_from_conf(config, db=db)
     except (configparser.NoOptionError, configparser.NoSectionError) as e:
         logger.error("Init db session class error: %s" % e)
         raise RuntimeError("Init db session class error: %s" % e)
