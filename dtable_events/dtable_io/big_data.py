@@ -41,15 +41,14 @@ def _parse_excel_row(excel_row_data, column_name_type_map, name_to_email, locati
             continue
         excel_value = parse_row(col_type, value, name_to_email, location_tree=location_tree)
 
-        if excel_value:
-            if col_type in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
-                col_options = excel_select_column_options.get(col_name, set())
-                if not col_options:
-                    excel_select_column_options[col_name] = col_options
-                if col_type == ColumnTypes.MULTIPLE_SELECT:
-                    col_options.update(set(excel_value))
-                else:
-                    col_options.add(excel_value)
+        if excel_value and col_type in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
+            col_options = excel_select_column_options.get(col_name, set())
+            if not col_options:
+                excel_select_column_options[col_name] = col_options
+            if col_type == ColumnTypes.MULTIPLE_SELECT:
+                col_options.update(set(excel_value))
+            else:
+                col_options.add(excel_value)
 
         parsed_row_data[col_name] = excel_value
     return parsed_row_data, excel_select_column_options
