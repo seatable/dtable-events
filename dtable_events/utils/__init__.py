@@ -169,7 +169,10 @@ def utc_to_tz(dt, tz_str):
     return value.replace(tzinfo=None)
 
 def format_date(date, format):
-    timestamp = parser.isoparse(date.strip()).timestamp()
+    try:
+        timestamp = parser.isoparse(date.strip()).timestamp()
+    except:
+        return ''
     timestamp = round(timestamp, 0)
     datetime_obj = datetime.fromtimestamp(timestamp)
     if format == 'D/M/YYYY':

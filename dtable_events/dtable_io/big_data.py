@@ -33,11 +33,10 @@ ROW_INSERT_ERROR_CODE = 4
 INTERNAL_ERROR_CODE = 5
 
 
-def _parse_excel_row(excel_row_data, column_name_type_map, column_name_data_map, name_to_email, location_tree, excel_select_column_options):
+def _parse_excel_row(excel_row_data, column_name_type_map, name_to_email, location_tree, excel_select_column_options):
     parsed_row_data = {}
     for col_name, value in excel_row_data.items():
         col_type = column_name_type_map.get(col_name)
-        col_data = column_name_data_map.get(col_name)
         if not value:
             continue
         excel_value = parse_row(col_type, value, name_to_email, location_tree=location_tree)
@@ -51,11 +50,6 @@ def _parse_excel_row(excel_row_data, column_name_type_map, column_name_data_map,
                     col_options.update(set(excel_value))
                 else:
                     col_options.add(excel_value)
-            elif col_type == ColumnTypes.DATE:
-                try:
-                    excel_value = format_date(excel_value, col_data.get('format'))
-                except:
-                    excel_value = ''
 
         parsed_row_data[col_name] = excel_value
     return parsed_row_data, excel_select_column_options
@@ -68,11 +62,6 @@ def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column
         none_in_list = False
         for row_data in excel_row_datas:
             value = row_data.get(ref_col)
-            if column_name_type_map.get(ref_col) and column_name_type_map.get(ref_col) == ColumnTypes.DATE:
-                try:
-                    value = format_date(str(value), column_name_data_map.get(ref_col).get('format'))
-                except:
-                    value = ''
             if not value:
                 none_in_list = True
             if value and value not in value_list:
@@ -103,18 +92,9 @@ def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column
     query_rows_from_base, db_metadata = db_api.query(sql, convert=True, server_only=False)
     query_rows_from_base = convert_db_rows(db_metadata, query_rows_from_base)
     excel_select_column_options = {}
-    tp = []
     for excel_row in excel_row_datas:
-        excel_ref_data = {}
-        for col in ref_cols:
-            if excel_row.get(col):
-                excel_ref_data[col] = excel_row.get(col)
-                if column_name_type_map.get(col) and column_name_type_map.get(col) == ColumnTypes.DATE:  
-                    try:
-                        excel_ref_data[col] = format_date(str(excel_row.get(col)), column_name_data_map.get(col).get('format'))
-                    except:
-                        del excel_ref_data[col]
-        parsed_row, excel_select_column_options = _parse_excel_row(excel_row, column_name_type_map, column_name_data_map, name_to_email, location_tree, excel_select_column_options)
+        excel_ref_data = {col: excel_row.get(col) for col in ref_cols if excel_row.get(col)}
+        parsed_row, excel_select_column_options = _parse_excel_row(excel_row, column_name_type_map, name_to_email, location_tree, excel_select_column_options)
 
         find_tag = False
         for base_row in query_rows_from_base:
@@ -125,11 +105,7 @@ def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column
                     if column_name_type_map.get(col) and column_name_type_map.get(col) == ColumnTypes.DATE:
                         pre_format_date_str = base_row.get(col).replace('T', ' ')
                         pre_format_date_str = pre_format_date_str.split('+' if '+' in pre_format_date_str else '-')[0]
-                        try:
-                            base_ref_data[col] = format_date(pre_format_date_str, column_name_data_map.get(col).get('format'))
-                        except:
-                            base_ref_data[col] = ''
-            tp.append((excel_ref_data, base_ref_data))
+                        base_ref_data[col] = format_date(pre_format_date_str, column_name_data_map.get(col).get('format'))
             if base_ref_data and excel_ref_data and base_ref_data == excel_ref_data:
                 rows_for_update.append({
                     "row_id": base_row.get('_id'),
@@ -249,7 +225,7 @@ def import_excel_to_db(
                     if not col_type or col_type in AUTO_GENERATED_COLUMNS:
                         continue
 
-                    excel_value = value and parse_row(col_type, value, name_to_email, location_tree=location_tree) or ''
+                    excel_value = value and parse_row(col_type, value, name_to_email, location_tree=location_tree, column_data=col_data) or ''
                     if excel_value:
                         if col_type in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
                             col_options = excel_select_column_options.get(col_name, set())
@@ -259,11 +235,6 @@ def import_excel_to_db(
                                 col_options.update(set(excel_value))
                             else:
                                 col_options.add(excel_value)
-                        if col_type == ColumnTypes.DATE:
-                            try:
-                                excel_value = format_date(excel_value, col_data.get('format'))
-                            except:
-                                excel_value = ''
                     parsed_row_data[col_name] = excel_value
 
                 slice_data.append(parsed_row_data)
@@ -385,13 +356,19 @@ def update_excel_to_db(
             if index > 0:  # skip header row
                 row_list = [r.value for r in row]
                 row_data = dict(zip(excel_columns, row_list))
-
-                row_data1 = deepcopy(row_data)
+                pop_col_lists = []
                 for col_name, value in row_data.items():
                     col_type = column_name_type_map.get(col_name)
+                    col_data = column_name_data_map.get(col_name)
                     if not col_type or col_type in AUTO_GENERATED_COLUMNS:
-                        row_data1.pop(col_name, None)
+                        pop_col_lists.append(col_name)
                         continue
+                    elif col_type == ColumnTypes.DATE and col_data:
+                        row_data[col_name] = format_date(str(value), col_data.get('format'))
+
+                row_data1 = deepcopy(row_data)
+                for col_name in pop_col_lists:
+                    row_data1.pop(col_name, None)
 
                 excel_row_datas.append(row_data1)
                 if len(excel_row_datas) >= 100:

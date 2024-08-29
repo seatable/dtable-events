@@ -691,22 +691,6 @@ def append_parsed_file_by_dtable_server(username, dtable_uuid, file_name, table_
             options = [gen_random_option(option) for option in to_be_added_options]
             dtable_server_api.add_column_options(table_name, col_name, options)
 
-    date_columns_map = {} # column_name: date_format
-    for row in rows:
-        for col_name in row:
-            if col_name in dtable_col_name_to_column:
-                column = dtable_col_name_to_column.get(col_name)
-                if column.get('type') == ColumnTypes.DATE and column.get('data') and column.get('data').get('format'):
-                    date_columns_map[col_name] = column.get('data').get('format')
-        break
-
-    for row in rows:
-        for date_col_name, date_format in date_columns_map.items():
-            try:
-                row[date_col_name] = format_date(row[date_col_name], date_format)
-            except:
-                row[date_col_name] = ''
-
     append_rows_by_dtable_server(dtable_server_api, rows, table_name)
 
 
@@ -733,13 +717,12 @@ def parse_append_excel_csv_upload_file_to_json(file_name, username, dtable_uuid,
     save_file_by_path(temp_json_path, json.dumps(tables))
 
 
-def get_update_row_data(excel_row, dtable_row, excel_col_name_to_type, excel_col_name_to_data):
+def get_update_row_data(excel_row, dtable_row, excel_col_name_to_type):
     update_excel_row = {}
     for col_name in excel_col_name_to_type:
         excel_cell_val = excel_row.get(col_name, '')
         dtable_cell_val = dtable_row.get(col_name, '')
         column_type = excel_col_name_to_type.get(col_name)
-        column_data = excel_col_name_to_data.get(col_name)
         if column_type == 'multiple-select' or column_type == 'collaborator':
             if not dtable_cell_val:
                 dtable_cell_val = []
@@ -747,18 +730,6 @@ def get_update_row_data(excel_row, dtable_row, excel_col_name_to_type, excel_col
                 excel_cell_val = []
             excel_cell_val.sort()
             dtable_cell_val.sort()
-        elif column_type == ColumnTypes.DATE:
-            # dtable row value like 2021-12-03 00:00 or 2021-12-03, excel row like 2021-12-03 00:00:00
-            if excel_cell_val:
-                try:
-                    excel_cell_val = format_date(excel_cell_val, column_data.get('format'))
-                except:
-                    excel_cell_val = ''
-            if dtable_cell_val:
-                try:
-                    dtable_cell_val = format_date(dtable_cell_val, column_data.get('format'))
-                except:
-                    dtable_cell_val = ''
         elif column_type == 'checkbox' and not excel_cell_val:
             excel_cell_val = False
         dtable_cell_val = '' if dtable_cell_val is None else dtable_cell_val
@@ -773,7 +744,12 @@ def get_update_row_data(excel_row, dtable_row, excel_col_name_to_type, excel_col
 def get_dtable_row_data(dtable_rows, key_columns, excel_col_name_to_type, excel_col_name_to_data):
     dtable_row_data = {}
     for row in dtable_rows:
-        key = str(hash('-'.join([str(get_cell_value(row, col, excel_col_name_to_type, excel_col_name_to_data)) for col in key_columns])))
+        key_cols_value = []
+        for col in key_columns:
+            if col in row and excel_col_name_to_type.get(col) and excel_col_name_to_type.get(col) == ColumnTypes.DATE:
+                row[col] = format_date(row[col], excel_col_name_to_data.get(col).get('format'))
+            key_cols_value.append(str(get_cell_value(row, col, excel_col_name_to_type)))
+        key = str(hash('-'.join(key_cols_value)))
         if dtable_row_data.get(key):
             # only deal first row
             continue
@@ -822,20 +798,13 @@ def update_parsed_file_by_dtable_server(username, dtable_uuid, file_name, table_
     append_rows_by_dtable_server(dtable_server_api, insert_rows, table_name)
 
 
-def get_cell_value(row, col, excel_col_name_to_type, excel_col_name_to_data):
+def get_cell_value(row, col, excel_col_name_to_type):
     cell_value = row.get(col)
     col_type = excel_col_name_to_type.get(col)
-    col_data = excel_col_name_to_data.get(col)
-    if col_type == 'number':
+    if col_type == ColumnTypes.NUMBER:
         if isinstance(cell_value, float):
             cell_value = str(cell_value).rstrip('0')
             cell_value = int(cell_value.rstrip('.')) if cell_value.endswith('.') else float(cell_value)
-    elif col_type == ColumnTypes.DATE:
-        try:
-            cell_value = format_date(cell_value, col_data.get('format'))
-        except:
-            cell_value = ''
-
     cell_value = '' if cell_value is None else cell_value
     return cell_value
 
@@ -856,7 +825,7 @@ def get_insert_update_rows(dtable_col_name_to_column, excel_rows, dtable_rows, k
     keys_of_excel_rows = {}
     for excel_row in excel_rows:
         excel_row = {col_name: excel_row.get(col_name) for col_name in excel_row if excel_col_name_to_type.get(col_name)}
-        key = str(hash('-'.join([str(get_cell_value(excel_row, col, excel_col_name_to_type, excel_col_name_to_data)) for col in key_columns])))
+        key = str(hash('-'.join([str(get_cell_value(excel_row, col, excel_col_name_to_type)) for col in key_columns])))
         if keys_of_excel_rows.get(key):
             continue
         keys_of_excel_rows[key] = True
@@ -881,7 +850,7 @@ def get_insert_update_rows(dtable_col_name_to_column, excel_rows, dtable_rows, k
         if not dtable_row:
             insert_rows.append(excel_row)
         else:
-            update_row = get_update_row_data(excel_row, dtable_row, excel_col_name_to_type, excel_col_name_to_data)
+            update_row = get_update_row_data(excel_row, dtable_row, excel_col_name_to_type)
             if update_row:
                 update_rows.append(update_row)
     return insert_rows, update_rows, excel_select_column_options
@@ -994,10 +963,11 @@ def parse_dtable_excel_rows(sheet_rows, columns, name_to_email):
             try:
                 cell_value = get_excel_cell_value(row, row_index)
                 column_type = columns[index]['type']
+                column_data = columns[index].get('data')
                 if cell_value is None:
                     row_data[column_name] = None
                     continue
-                row_data[column_name] = parse_row(column_type, cell_value, name_to_email, location_tree=location_tree)
+                row_data[column_name] = parse_row(column_type, cell_value, name_to_email, location_tree=location_tree, column_data=column_data)
             except Exception as e:
                 dtable_io_logger.exception(e)
                 row_data[column_name] = None
@@ -1118,10 +1088,11 @@ def parse_csv_rows(csv_rows, columns, max_column, name_to_email):
             try:
                 cell_value = get_csv_cell_value(csv_row, row_index)
                 column_type = columns[index]['type']
+                column_data = columns[index].get('data')
                 if cell_value is None:
                     row_data[column_name] = None
                     continue
-                parsed_value = parse_row(column_type, cell_value, name_to_email, location_tree=location_tree)
+                parsed_value = parse_row(column_type, cell_value, name_to_email, location_tree=location_tree, column_data=column_data)
                 row_data[column_name] = parsed_value
             except Exception as e:
                 dtable_io_logger.exception(e)
@@ -1131,7 +1102,7 @@ def parse_csv_rows(csv_rows, columns, max_column, name_to_email):
     return rows, max_column, csv_row_num, csv_column_num
 
 
-def parse_row(column_type, cell_value, name_to_email, location_tree=None):
+def parse_row(column_type, cell_value, name_to_email, location_tree=None, column_data=None):
     if isinstance(cell_value, datetime):  # JSON serializable
         cell_value = str(cell_value)
     if isinstance(cell_value, str):
@@ -1141,6 +1112,8 @@ def parse_row(column_type, cell_value, name_to_email, location_tree=None):
     elif column_type == 'duration':
         return parse_duration(cell_value)
     elif column_type == 'date':
+        if column_data:
+            return format_date(str(cell_value), column_data.get('format'))
         return str(cell_value)
     elif column_type == 'long-text':
         return parse_long_text(cell_value)
