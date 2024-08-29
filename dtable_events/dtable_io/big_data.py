@@ -225,15 +225,14 @@ def import_excel_to_db(
                         continue
 
                     excel_value = value and parse_row(col_type, value, name_to_email, location_tree=location_tree, column_data=col_data) or ''
-                    if excel_value:
-                        if col_type in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
-                            col_options = excel_select_column_options.get(col_name, set())
-                            if not col_options:
-                                excel_select_column_options[col_name] = col_options
-                            if col_type == ColumnTypes.MULTIPLE_SELECT:
-                                col_options.update(set(excel_value))
-                            else:
-                                col_options.add(excel_value)
+                    if excel_value and col_type in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
+                        col_options = excel_select_column_options.get(col_name, set())
+                        if not col_options:
+                            excel_select_column_options[col_name] = col_options
+                        if col_type == ColumnTypes.MULTIPLE_SELECT:
+                            col_options.update(set(excel_value))
+                        else:
+                            col_options.add(excel_value)
                     parsed_row_data[col_name] = excel_value
 
                 slice_data.append(parsed_row_data)
