@@ -29,7 +29,7 @@ EVENTS_SRCDIR=$(dirname $(dirname "${EVENTS_TESTDIR}"))
 HOME_DIR=$(dirname "${EVENTS_SRCDIR}")
 
 export SEAHUB_LOG_DIR='/tmp/logs'
-export PYTHONPATH="/usr/local/lib/python3.8/site-packages:/usr/local/lib/python3.8/dist-packages:/usr/lib/python3.8/site-packages:/usr/lib/python3.8/dist-packages:${GITHUB_WORKSPACE}:${PYTHONPATH}"
+export PYTHONPATH="/usr/local/lib/python3.8/site-packages:/usr/local/lib/python3.8/dist-packages:/usr/lib/python3.8/site-packages:/usr/lib/python3.8/dist-packages:/tmp/seafobj/seafobj:${PYTHONPATH}"
 cd "$EVENTS_SRCDIR"
 set +x
 
