@@ -651,10 +651,16 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
             'start': start
         })
 
-        sql = filter2sql(table_name, cols, filter_condition_groups, by_group=True)
-        
-        response_rows, _ = dtable_db_api.query(sql, convert=True, server_only=False)
-        
+        try:
+            sql = filter2sql(table_name, cols, filter_condition_groups, by_group=True)
+            
+            response_rows, _ = dtable_db_api.query(sql, convert=True, server_only=False)
+        except ConnectionError as e:
+            dtable_io_logger.exception(e)
+            tasks_status_map[task_id]['status'] = 'terminated'
+            tasks_status_map[task_id]['err_msg'] = 'sql execution cost exceeded'
+            return
+
         row_num = start
         try:
             write_xls_with_type(response_rows, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, is_big_data_view=True)
