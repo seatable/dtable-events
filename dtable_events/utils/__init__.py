@@ -170,7 +170,7 @@ def utc_to_tz(dt, tz_str):
 
 def format_date(date, format):
     try:
-        timestamp = parser.isoparse(date.strip()).timestamp()
+        timestamp = parser.parse(date.strip()).timestamp()
     except:
         return ''
     timestamp = round(timestamp, 0)
