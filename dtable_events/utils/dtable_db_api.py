@@ -20,6 +20,9 @@ class RowUpdatedError(Exception):
 class RowsQueryError(Exception):
     pass
 
+class ExecutionCostExceededError(RowsQueryError):
+    pass
+
 class RowDeletedError(Exception):
     pass
 
@@ -30,6 +33,12 @@ def parse_response(response):
     if response.status_code >= 400:
         if response.status_code == 429:
             raise Request429Error()
+        try:
+            info = response.json()
+            if info.get('error_message') == 'execution cost exceeded':
+                raise ExecutionCostExceededError('sql execution cost exceeded')
+        except ExecutionCostExceededError as e:
+            raise e
         raise ConnectionError(response.status_code, response.text)
     else:
         try:

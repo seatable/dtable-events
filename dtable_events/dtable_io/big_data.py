@@ -11,7 +11,7 @@ from dtable_events.utils import get_inner_dtable_server_url, get_location_tree_j
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.app.config import INNER_DTABLE_DB_URL, BIG_DATA_ROW_IMPORT_LIMIT, BIG_DATA_ROW_UPDATE_LIMIT, \
     ARCHIVE_VIEW_EXPORT_ROW_LIMIT, APP_TABLE_EXPORT_EXCEL_ROW_LIMIT
-from dtable_events.utils.dtable_db_api import DTableDBAPI, convert_db_rows
+from dtable_events.utils.dtable_db_api import DTableDBAPI, ExecutionCostExceededError, convert_db_rows
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.sql_generator import filter2sql, BaseSQLGenerator
 
@@ -655,7 +655,7 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
             sql = filter2sql(table_name, cols, filter_condition_groups, by_group=True)
             
             response_rows, _ = dtable_db_api.query(sql, convert=True, server_only=False)
-        except ConnectionError as e:
+        except ExecutionCostExceededError as e:
             dtable_io_logger.exception(e)
             tasks_status_map[task_id]['status'] = 'terminated'
             tasks_status_map[task_id]['err_msg'] = 'sql execution cost exceeded'
