@@ -3,6 +3,7 @@ import io
 import json
 import logging
 import time
+import os
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -14,6 +15,12 @@ from dtable_events.utils import uuid_str_to_36_chars
 logger = logging.getLogger(__name__)
 
 CHROME_DATA_DIR = '/tmp/chrome-user-datas'
+
+
+def get_chrome_data_dir(dir_name='tmp'):
+    if not os.path.isdir(CHROME_DATA_DIR):
+        os.makedirs(CHROME_DATA_DIR)
+    return os.path.join(CHROME_DATA_DIR, dir_name)
 
 
 def get_driver(user_data_path):
@@ -29,10 +36,13 @@ def get_driver(user_data_path):
     return driver
 
 
-def open_page_view(driver: webdriver.Chrome, dtable_uuid, page_id, row_id, access_token):
-    url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id)
-    if row_id:
-        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/row/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id, row_id)
+def open_page_view(driver: webdriver.Chrome, dtable_uuid, plugin_type, page_id, row_id, access_token):
+    if plugin_type == 'page-design':
+        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id)
+        if row_id:
+            url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/row/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id, row_id)
+    elif plugin_type == 'document':
+        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/document/%s/row/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id, row_id)
 
     url += '?access-token=%s&need_convert=%s' % (access_token, 0)
     logger.debug('url: %s', url)
@@ -40,7 +50,7 @@ def open_page_view(driver: webdriver.Chrome, dtable_uuid, page_id, row_id, acces
     return driver.window_handles[-1]
 
 
-def wait_page_view(driver: webdriver.Chrome, session_id, row_id, output):
+def wait_page_view(driver: webdriver.Chrome, session_id, plugin_type, row_id, output):
     def check_images_and_networks(driver, frequency=0.5):
         """
         make sure all images complete
@@ -82,9 +92,15 @@ def wait_page_view(driver: webdriver.Chrome, session_id, row_id, output):
 
     driver.switch_to.window(session_id)
 
+    monitor_dom_id = ''
+    if plugin_type == 'page-design':
+        monitor_dom_id = 'page-design-render-complete'
+    elif plugin_type == 'document':
+        monitor_dom_id = 'document-render-complete'
+
     try:
         # make sure react is rendered, timeout await_react_render, rendering is not completed within 3 minutes, and rendering performance needs to be improved
-        WebDriverWait(driver, await_react_render).until(lambda driver: driver.find_element_by_id('page-design-render-complete') is not None, message='wait react timeout')
+        WebDriverWait(driver, await_react_render).until(lambda driver: driver.find_element_by_id(monitor_dom_id) is not None, message='wait react timeout')
         # make sure images from asset are rendered, timeout 120s
         WebDriverWait(driver, 120, poll_frequency=1).until(lambda driver: check_images_and_networks(driver), message='wait images and networks timeout')
         time.sleep(sleep_time) # wait for all rendering
@@ -125,6 +141,6 @@ def wait_page_view(driver: webdriver.Chrome, session_id, row_id, output):
         # logger.debug('network logs end')
 
 
-def convert_page_to_pdf(driver: webdriver.Chrome, dtable_uuid, page_id, row_id, access_token, output):
-    session_id = open_page_view(driver, dtable_uuid, page_id, row_id, access_token)
-    wait_page_view(driver, session_id, row_id, output)
+def convert_page_to_pdf(driver: webdriver.Chrome, dtable_uuid, plugin_type, page_id, row_id, access_token, output):
+    session_id = open_page_view(driver, dtable_uuid, plugin_type, page_id, row_id, access_token)
+    wait_page_view(driver, session_id, plugin_type, row_id, output)

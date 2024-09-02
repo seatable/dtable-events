@@ -410,12 +410,13 @@ def convert_page_to_pdf():
         return make_response(('dtable io server busy.', 400))
 
     dtable_uuid = request.args.get('dtable_uuid')
+    plugin_type = request.args.get('plugin_type')
     page_id = request.args.get('page_id')
     row_id = request.args.get('row_id')
 
     try:
         task_id = task_manager.convert_page_to_pdf(
-            dtable_uuid, page_id, row_id)
+            dtable_uuid, plugin_type, page_id, row_id)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
