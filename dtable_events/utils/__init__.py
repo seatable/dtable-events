@@ -5,6 +5,8 @@ import logging
 import configparser
 import subprocess
 import uuid
+from dateutil import parser
+from datetime import datetime
 
 import pytz
 import re
@@ -165,6 +167,38 @@ def utc_to_tz(dt, tz_str):
         # This method is available for pytz time zones.
         value = tz.normalize(value)
     return value.replace(tzinfo=None)
+
+def format_date(date, format):
+    try:
+        timestamp = parser.parse(date.strip()).timestamp()
+    except:
+        return ''
+    timestamp = round(timestamp, 0)
+    datetime_obj = datetime.fromtimestamp(timestamp)
+    if format == 'D/M/YYYY':
+        value = datetime_obj.strftime('%-d/%-m/%Y')
+    elif format == 'DD/MM/YYYY':
+        value = datetime_obj.strftime('%d/%m/%Y')
+    elif format == 'D/M/YYYY HH:mm':
+        value = datetime_obj.strftime('%-d/%-m/%Y %H:%M')
+    elif format == 'DD/MM/YYYY HH:mm':
+        value = datetime_obj.strftime('%d/%m/%Y %H:%M')
+    elif format == 'M/D/YYYY':
+        value = datetime_obj.strftime('%-m/%-d/%Y')
+    elif format == 'M/D/YYYY HH:mm':
+        value = datetime_obj.strftime('%-m/%-d/%Y %H:%M')
+    elif format == 'YYYY-MM-DD':
+        value = datetime_obj.strftime('%Y-%m-%d')
+    elif format == 'YYYY-MM-DD HH:mm':
+        value = datetime_obj.strftime('%Y-%m-%d %H:%M')
+    elif format == 'DD.MM.YYYY':
+        value = datetime_obj.strftime('%d.%m.%Y')
+    elif format == 'DD.MM.YYYY HH:mm':
+        value = datetime_obj.strftime('%d.%m.%Y %H:%M')
+    else:
+        value = datetime_obj.strftime('%Y-%m-%d')
+    return value
+
 
 def uuid_str_to_36_chars(dtable_uuid):
     if len(dtable_uuid) == 32:

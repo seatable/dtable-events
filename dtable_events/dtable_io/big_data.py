@@ -7,7 +7,7 @@ from copy import deepcopy
 from dtable_events.dtable_io.excel import parse_row, write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR
 from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, get_metadata_from_dtable_server, \
     escape_sheet_name
-from dtable_events.utils import get_inner_dtable_server_url, get_location_tree_json, gen_random_option
+from dtable_events.utils import get_inner_dtable_server_url, get_location_tree_json, gen_random_option, format_date
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.app.config import INNER_DTABLE_DB_URL, BIG_DATA_ROW_IMPORT_LIMIT, BIG_DATA_ROW_UPDATE_LIMIT, \
     ARCHIVE_VIEW_EXPORT_ROW_LIMIT, APP_TABLE_EXPORT_EXCEL_ROW_LIMIT
@@ -40,7 +40,6 @@ def _parse_excel_row(excel_row_data, column_name_type_map, name_to_email, locati
         if not value:
             continue
         excel_value = parse_row(col_type, value, name_to_email, location_tree=location_tree)
-        parsed_row_data[col_name] = excel_value
 
         if excel_value and col_type in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
             col_options = excel_select_column_options.get(col_name, set())
@@ -50,10 +49,12 @@ def _parse_excel_row(excel_row_data, column_name_type_map, name_to_email, locati
                 col_options.update(set(excel_value))
             else:
                 col_options.add(excel_value)
+
+        parsed_row_data[col_name] = excel_value
     return parsed_row_data, excel_select_column_options
 
 
-def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column_name_type_map, name_to_email, location_tree, insert_new_row=False):
+def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column_name_type_map, column_name_data_map, name_to_email, location_tree, insert_new_row=False):
     where_clauses = []
     for ref_col in ref_cols:
         value_list = []
@@ -96,7 +97,14 @@ def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column
 
         find_tag = False
         for base_row in query_rows_from_base:
-            base_ref_data = {col: base_row.get(col) for col in ref_cols if base_row.get(col)}
+            base_ref_data = {}
+            for col in ref_cols:
+                if base_row.get(col):
+                    base_ref_data[col] = base_row.get(col)
+                    if column_name_type_map.get(col) and column_name_type_map.get(col) == ColumnTypes.DATE:
+                        pre_format_date_str = base_row.get(col).replace('T', ' ')
+                        pre_format_date_str = pre_format_date_str.split('+' if '+' in pre_format_date_str else '-')[0]
+                        base_ref_data[col] = format_date(pre_format_date_str, column_name_data_map.get(col).get('format'))
             if base_ref_data and excel_ref_data and base_ref_data == excel_ref_data:
                 rows_for_update.append({
                     "row_id": base_row.get('_id'),
@@ -121,7 +129,6 @@ def add_column_options(dtable_server_api, table_name, excel_select_column_option
             dtable_server_api.add_column_options(table_name, col_name, options)
             is_added_options = True
     return is_added_options
-
 
 def import_excel_to_db(
         username,
@@ -157,7 +164,11 @@ def import_excel_to_db(
 
         base = DTableServerAPI(username, dtable_uuid, dtable_server_url)
         base_columns = base.list_columns(table_name)
-        column_name_type_map = {col.get('name'): col.get('type') for col in base_columns}
+        column_name_type_map = {}
+        column_name_data_map = {}
+        for col in base_columns:
+            column_name_type_map[col.get('name')] = col.get('type')
+            column_name_data_map[col.get('name')] = col.get('data')
         matched_columns = []
         excel_columns = []
         for cell in ws[1]:
@@ -209,10 +220,11 @@ def import_excel_to_db(
                 parsed_row_data = {}
                 for col_name, value in row_data.items():
                     col_type = column_name_type_map.get(col_name)
+                    col_data = column_name_data_map.get(col_name)
                     if not col_type or col_type in AUTO_GENERATED_COLUMNS:
                         continue
 
-                    excel_value = value and parse_row(col_type, value, name_to_email, location_tree=location_tree) or ''
+                    excel_value = value and parse_row(col_type, value, name_to_email, location_tree=location_tree, column_data=col_data) or ''
                     if excel_value and col_type in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
                         col_options = excel_select_column_options.get(col_name, set())
                         if not col_options:
@@ -232,7 +244,6 @@ def import_excel_to_db(
                         base_columns = base.list_columns(table_name)
                         dtable_col_name_to_column = {col['name']: col for col in base_columns}
                         excel_select_column_options = {}
-
                     db_handler.insert_rows(table_name, slice_data)
                     insert_count += len(slice_data)
                     slice_data = []
@@ -309,7 +320,11 @@ def update_excel_to_db(
         db_handler = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
         base = DTableServerAPI(username, dtable_uuid, dtable_server_url)
         base_columns = base.list_columns(table_name)
-        column_name_type_map = {col.get('name'): col.get('type') for col in base_columns}
+        column_name_type_map = {}
+        column_name_data_map = {}
+        for col in base_columns:
+            column_name_type_map[col.get('name')] = col.get('type')
+            column_name_data_map[col.get('name')] = col.get('data')
     except Exception as err:
         tasks_status_map[task_id]['err_msg'] = str(err)
         tasks_status_map[task_id]['status'] = 'terminated'
@@ -339,20 +354,26 @@ def update_excel_to_db(
             if index > 0:  # skip header row
                 row_list = [r.value for r in row]
                 row_data = dict(zip(excel_columns, row_list))
-
-                row_data1 = deepcopy(row_data)
+                pop_col_lists = []
                 for col_name, value in row_data.items():
                     col_type = column_name_type_map.get(col_name)
+                    col_data = column_name_data_map.get(col_name)
                     if not col_type or col_type in AUTO_GENERATED_COLUMNS:
-                        row_data1.pop(col_name, None)
+                        pop_col_lists.append(col_name)
                         continue
+                    elif col_type == ColumnTypes.DATE and col_data:
+                        row_data[col_name] = format_date(str(value), col_data.get('format'))
+
+                row_data1 = deepcopy(row_data)
+                for col_name in pop_col_lists:
+                    row_data1.pop(col_name, None)
 
                 excel_row_datas.append(row_data1)
-                if len(excel_row_datas) >= 2:
+                if len(excel_row_datas) >= 100:
                     rows_for_import, rows_for_update, excel_select_column_options = handle_excel_row_datas(
                         db_handler, table_name,
                         excel_row_datas, ref_columns,
-                        column_name_type_map, name_to_email, location_tree,
+                        column_name_type_map, column_name_data_map, name_to_email, location_tree,
                         is_insert_new_data
                     )
                     is_added_options = add_column_options(base, table_name, excel_select_column_options, dtable_col_name_to_column)
@@ -381,7 +402,7 @@ def update_excel_to_db(
         rows_for_import, rows_for_update, excel_select_column_options = handle_excel_row_datas(
             db_handler, table_name,
             excel_row_datas, ref_columns,
-            column_name_type_map, name_to_email, location_tree,
+            column_name_type_map, column_name_data_map, name_to_email, location_tree,
             is_insert_new_data
         )
         add_column_options(base, table_name, excel_select_column_options, dtable_col_name_to_column)
