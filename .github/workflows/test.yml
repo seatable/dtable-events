@@ -22,8 +22,8 @@ jobs:
 
     - name: apt install
       run: |
-        sudo echo 'deb [arch=amd64,arm64,ppc64el] https://example.com/repo/10.6/ubuntu focal main' | tee /etc/apt/sources.list.d/mariadb-10.6.list
         sudo curl -fsSL https://downloads.mariadb.com/MariaDB/mariadb_release_signing_key.pub | sudo apt-key add -
+        sudo echo 'deb [arch=amd64,arm64,ppc64el] https://example.com/repo/10.6/ubuntu focal main' | sudo tee /etc/apt/sources.list.d/mariadb-10.6.list
         sudo apt-get update --fix-missing || true
         sudo apt-get install -y libevent-dev libcurl4-openssl-dev libglib2.0-dev
         sudo apt-get install -y uuid-dev intltool libsqlite3-dev build-essential
