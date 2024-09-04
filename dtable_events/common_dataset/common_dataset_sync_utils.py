@@ -233,7 +233,6 @@ def is_column_need_update(col, dst_col):
         ColumnTypes.EMAIL,
         ColumnTypes.URL,
         ColumnTypes.CHECKBOX,
-        ColumnTypes.RATE,
         ColumnTypes.CREATOR,
         ColumnTypes.CTIME,
         ColumnTypes.LAST_MODIFIER,
@@ -242,6 +241,10 @@ def is_column_need_update(col, dst_col):
         ColumnTypes.DEPARTMENT_SINGLE_SELECT
     ]:
         return False
+
+    elif col['type'] == ColumnTypes.RATE:
+        keys = ['rate_max_number', 'rate_style_color', 'rate_style_type']
+        return not all([col_data.get(key) == dst_col_data.get(key) for key in keys])
 
     elif col['type'] == ColumnTypes.DATE:
         return col_data.get('format') != dst_col_data.get('format')
