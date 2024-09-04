@@ -24,6 +24,7 @@ class ColumnTypes:
     RATE = 'rate'
     GEOLOCATION = 'geolocation'
     BUTTON = 'button'
+    DIGITAL_SIGN = 'digital-sign'
 
 
 class FilterPredicateTypes(object):

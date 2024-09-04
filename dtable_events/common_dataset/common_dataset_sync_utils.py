@@ -217,6 +217,67 @@ def transfer_column(src_column):
     return column
 
 
+def is_column_need_update(col, dst_col):
+    if dst_col.get('type') != col.get('type'):
+        return True
+
+    col_data = col.get('data') or {}
+    dst_col_data = dst_col.get('data') or {}
+
+    if col['type'] in [
+        ColumnTypes.TEXT,
+        ColumnTypes.LONG_TEXT,
+        ColumnTypes.COLLABORATOR,
+        ColumnTypes.IMAGE,
+        ColumnTypes.FILE,
+        ColumnTypes.EMAIL,
+        ColumnTypes.URL,
+        ColumnTypes.CHECKBOX,
+        ColumnTypes.RATE,
+        ColumnTypes.CREATOR,
+        ColumnTypes.CTIME,
+        ColumnTypes.LAST_MODIFIER,
+        ColumnTypes.MTIME,
+        ColumnTypes.DIGITAL_SIGN,
+        ColumnTypes.DEPARTMENT_SINGLE_SELECT
+    ]:
+        return False
+
+    elif col['type'] == ColumnTypes.DATE:
+        return col_data.get('format') != dst_col_data.get('format')
+
+    elif col['type'] == ColumnTypes.NUMBER:
+        keys = ['format', 'decimal', 'thousands']
+        return not all([col_data.get(key) == dst_col_data.get(key) for key in keys])
+
+    elif col['type'] == ColumnTypes.GEOLOCATION:
+        keys = ['geo_format']
+        return not all([col_data.get(key) == dst_col_data.get(key) for key in keys])
+
+    elif col['type'] == ColumnTypes.DURATION:
+        keys = ['duration_format', 'format']
+        return not all([col_data.get(key) == dst_col_data.get(key) for key in keys])
+
+    elif col['type'] in [
+        ColumnTypes.SINGLE_SELECT,
+        ColumnTypes.MULTIPLE_SELECT
+    ]:
+        col_data_options = col_data.get('options') or []
+        dst_col_data_options = dst_col_data.get('options') or []
+        if len(col_data_options) != len(dst_col_data_options):
+            return True
+        col_data_options = sorted(col_data_options, key=lambda option: option['id'])
+        dst_col_data_options = sorted(dst_col_data_options, key=lambda option: option['id'])
+        option_keys = ['id', 'name', 'color']
+        for col_option, dst_col_option in zip(col_data_options, dst_col_data_options):
+            if all([col_option.get(key) == dst_col_option.get(key) for key in option_keys]):
+                continue
+            return True
+        return False
+
+    return True
+
+
 def generate_synced_columns(src_columns, dst_columns=None):
     """
     generate synced columns
@@ -228,24 +289,27 @@ def generate_synced_columns(src_columns, dst_columns=None):
         if new_col:
             transfered_columns.append(new_col)
     if not dst_columns:
-        return None, transfered_columns, None
-    to_be_updated_columns, to_be_appended_columns = [], []
+        return None, transfered_columns, None, None
+    to_be_updated_columns, to_be_appended_columns, to_be_kept_columns = [], [], []
     dst_column_name_dict = {col.get('name'): True for col in dst_columns}
     dst_column_key_dict = {col.get('key'): col for col in dst_columns}
 
     for col in transfered_columns:
         dst_col = dst_column_key_dict.get(col.get('key'))
         if dst_col:
-            dst_col['type'] = col.get('type')
-            dst_col['data'] = col.get('data')
-            to_be_updated_columns.append(dst_col)
+            if is_column_need_update(col, dst_col):
+                dst_col['type'] = col.get('type')
+                dst_col['data'] = col.get('data')
+                to_be_updated_columns.append(dst_col)
+            else:
+                to_be_kept_columns.append(dst_col)
         else:
             if dst_column_name_dict.get(col.get('name')):
                 column_name = col.get('name')
                 err_msg = f"column {column_name} exists"
-                return None, None, err_msg
+                return None, None, None, err_msg
             to_be_appended_columns.append(col)
-    return to_be_updated_columns, to_be_appended_columns, None
+    return to_be_updated_columns, to_be_appended_columns, to_be_kept_columns, None
 
 
 def append_rows_invalid_infos(rows_invalid_infos: list, row_invalid_info):
@@ -896,7 +960,7 @@ def _import_sync_CDS(context):
     hidden_column_keys = src_view.get('hidden_columns', [])
     src_columns = [col for col in src_table['columns'] if col['key'] not in hidden_column_keys]
 
-    to_be_updated_columns, to_be_appended_columns, error = generate_synced_columns(src_columns, dst_columns=dst_columns)
+    to_be_updated_columns, to_be_appended_columns, to_be_kept_columns, error = generate_synced_columns(src_columns, dst_columns=dst_columns)
     if error:
         return {
             'dst_table_id': None,
@@ -904,7 +968,7 @@ def _import_sync_CDS(context):
             'error_msg': str(error),  # generally, this error is caused by client
             'task_status_code': 400
         }
-    final_columns = (to_be_updated_columns or []) + (to_be_appended_columns or [])
+    final_columns = (to_be_updated_columns or []) + (to_be_appended_columns or []) + (to_be_kept_columns or [])
     stats_info['columns_count'] = len(final_columns)
     stats_info['link_formula_columns_count'] = len([col for col in src_table['columns'] if col['key'] not in hidden_column_keys and col['type'] == ColumnTypes.LINK_FORMULA])
     ### create or update dst columns
