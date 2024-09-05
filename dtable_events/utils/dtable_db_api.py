@@ -35,11 +35,15 @@ def parse_response(response):
             raise Request429Error()
         try:
             info = response.json()
-            if info.get('error_message') == 'execution cost exceeded':
-                raise ExecutionCostExceededError('sql execution cost exceeded')
-        except ExecutionCostExceededError as e:
-            raise e
-        raise ConnectionError(response.status_code, response.text)
+        except:
+            error_msg = response.text
+        else:
+            error_msg = info.get('error_message')
+
+        if error_msg == 'execution cost exceeded':
+            raise ExecutionCostExceededError('sql execution cost exceeded')
+
+        raise ConnectionError(response.status_code, error_msg)
     else:
         try:
             data = json.loads(response.text)
