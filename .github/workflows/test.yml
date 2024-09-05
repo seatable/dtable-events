@@ -30,9 +30,10 @@ jobs:
         sudo apt-get install -y libssl-dev libldap2-dev libonig-dev
         sudo apt-get install -y libxml2 libxml2-dev
         sudo apt-get install -y python-dev libsasl2-dev gcc libjwt-dev
-        sudo curl -fsSL https://downloads.mariadb.com/MariaDB/mariadb_release_signing_key.pub | sudo apt-key add -
-        sudo echo 'deb [arch=amd64,arm64,ppc64el] https://mirrors.ustc.edu.cn/mariadb/mariadb-10.6.19/repo/ubuntu/ focal main' | sudo tee /etc/apt/sources.list.d/mariadb-10.6.list
-        sudo apt-get update
+        sudo wget https://downloads.mariadb.com/MariaDB/mariadb_repo_setup
+        sudo curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version="mariadb-10.6"
+        sudo chmod +x mariadb_repo_setup
+        sudo ./mariadb_repo_setup --mariadb-server-version="mariadb-10.6.19"
         sudo apt-get install -y mariadb-server-10.6
 
     - name: clone and build
