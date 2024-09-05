@@ -145,6 +145,7 @@ def import_excel_to_db(
         'status': 'initializing',
         'err_msg': '',
         'rows_imported': 0,
+        'total_row_count': 0,
         'err_code': 0,
     }
     try:
@@ -164,6 +165,7 @@ def import_excel_to_db(
 
         base = DTableServerAPI(username, dtable_uuid, dtable_server_url)
         base_columns = base.list_columns(table_name)
+        total_row_count = ws.max_row
         column_name_type_map = {}
         column_name_data_map = {}
         for col in base_columns:
@@ -183,6 +185,11 @@ def import_excel_to_db(
             tasks_status_map[task_id]['err_code'] = COLUMN_MATCH_ERROR_CODE
             os.remove(file_path)
             return
+
+        # imported row number should less than BIG_DATA_ROW_IMPORT_LIMIT
+        if total_row_count > int(BIG_DATA_ROW_IMPORT_LIMIT):
+            total_row_count = int(BIG_DATA_ROW_IMPORT_LIMIT)
+        tasks_status_map[task_id]['total_row_count'] = total_row_count
 
         db_handler = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
     except Exception as err:
