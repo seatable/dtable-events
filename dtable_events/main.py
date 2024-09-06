@@ -10,7 +10,7 @@ from dtable_events.app.app import App
 from dtable_events.app.log import LogConfigurator
 from dtable_events.app.config import get_config, is_syslog_enabled, get_task_mode
 from dtable_events.app.event_redis import redis_cache
-from dtable_events.db import create_db_tables, prepare_db_tables
+from dtable_events.db import create_db_tables, prepare_seafile_tables
 
 
 def main():
@@ -37,7 +37,7 @@ def main():
 
     try:
         create_db_tables(config)
-        prepare_db_tables(seafile_config)
+        prepare_seafile_tables(seafile_config)
     except Exception as e:
         logging.error('Failed create or prepare tables, error: %s' % e)
         raise RuntimeError('Failed create or prepare tables, error: %s' % e)

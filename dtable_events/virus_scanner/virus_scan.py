@@ -112,7 +112,7 @@ class VirusScan(object):
             for blk_id in seafile.blocks:
                 os.write(tfd, block_mgr.load_block(repo_id, 1, blk_id))
 
-            log_dir = os.path.join(os.environ.get('SEAFEVENTS_LOG_DIR', ''))
+            log_dir = os.path.join(os.environ.get('LOG_DIR', ''))
             logfile = os.path.join(log_dir, 'virus_scan.log')
             with open(logfile, 'a') as fp:
                 ret_code = subprocess.call([self.settings.scan_cmd, tpath], stdout=fp, stderr=fp)
@@ -132,8 +132,8 @@ class VirusScan(object):
         cmd = [
             get_python_executable(),
             os.path.join(dtable_web_dir, 'manage.py'),
-            'notify_admins_on_virus',
-        ] + args
+            'notify_admins_on_virus'
+        ]
         subprocess.Popen(cmd, cwd=dtable_web_dir)
 
     def parse_scan_result(self, ret_code):
