@@ -89,7 +89,7 @@ def create_db_tables(config):
     Base.metadata.create_all(engine)
 
 
-def prepare_db_tables(seafile_config):
+def prepare_seafile_tables(seafile_config):
     # reflect the seafile_db tables
     try:
         engine = create_engine_from_conf(seafile_config, db='seafile')
