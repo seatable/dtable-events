@@ -20,9 +20,6 @@ class RowUpdatedError(Exception):
 class RowsQueryError(Exception):
     pass
 
-class ExecutionCostExceededError(RowsQueryError):
-    pass
-
 class RowDeletedError(Exception):
     pass
 
@@ -39,9 +36,6 @@ def parse_response(response):
             error_msg = response.text
         else:
             error_msg = info.get('error_message')
-
-        if error_msg == 'execution cost exceeded':
-            raise ExecutionCostExceededError('sql execution cost exceeded')
 
         raise ConnectionError(response.status_code, error_msg)
     else:
