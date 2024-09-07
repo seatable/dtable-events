@@ -37,8 +37,8 @@ from dtable_events.page_design.utils import CHROME_DATA_DIR, convert_page_to_pdf
 from dtable_events.statistics.db import save_email_sending_records, batch_save_email_sending_records
 from dtable_events.data_sync.data_sync_utils import run_sync_emails
 from dtable_events.utils import get_inner_dtable_server_url, is_valid_email, uuid_str_to_36_chars
-from dtable_events.utils.dtable_server_api import DTableServerAPI
-from dtable_events.utils.exception import BaseSizeExceedsLimitError, ExcelFormatError
+from dtable_events.utils.dtable_server_api import DTableServerAPI, BaseExceedsException
+from dtable_events.utils.exception import ExcelFormatError
 from dtable_events.dtable_io.utils import clear_tmp_dir, clear_tmp_file, clear_tmp_files_and_dirs
 
 dtable_io_logger = setup_logger('dtable_events_io.log')
@@ -321,8 +321,8 @@ def import_excel_csv(username, repo_id, dtable_uuid, dtable_name, included_table
     dtable_io_logger.info('Start import excel or csv: {}.'.format(dtable_uuid))
     try:
         import_excel_csv_by_dtable_server(username, repo_id, dtable_uuid, dtable_name, included_tables, lang)
-    except BaseSizeExceedsLimitError:
-        raise Exception('Base size exceeds limit')
+    except BaseExceedsException as e:
+        raise Exception(e.error_msg)
     except Exception as e:
         dtable_io_logger.error('import excel or csv failed. ERROR: {}'.format(e))
     else:
@@ -335,8 +335,9 @@ def import_excel_csv_add_table(username, dtable_uuid, dtable_name, included_tabl
     dtable_io_logger.info('Start import excel or csv add table: {}.'.format(dtable_uuid))
     try:
         import_excel_csv_add_table_by_dtable_server(username, dtable_uuid, dtable_name, included_tables, lang)
-    except BaseSizeExceedsLimitError:
-        raise Exception('Base size exceeds limit')
+    except BaseExceedsException as e:
+        raise Exception(e.error_msg)
+
     except Exception as e:
         dtable_io_logger.error('import excel or csv add table failed. dtable_uuid: %s, dtable_name: %s ERROR: %s' % (dtable_uuid, dtable_name, e))
         raise Exception('Import excel or csv error')
@@ -420,8 +421,8 @@ def import_excel_csv_to_dtable(username, repo_id, dtable_name, dtable_uuid, file
     dtable_io_logger.info('Start import excel or csv: %s.%s to dtable.' % (dtable_name, file_type))
     try:
         parse_and_import_excel_csv_to_dtable(repo_id, dtable_name, dtable_uuid, username, file_type, lang)
-    except BaseSizeExceedsLimitError:
-        raise Exception('Base size exceeds limit')
+    except BaseExceedsException as e:
+        raise Exception(e.error_msg)
     except ExcelFormatError:
         raise Exception('Excel format error')
     except Exception as e:
@@ -438,8 +439,9 @@ def import_excel_csv_to_table(username, file_name, dtable_uuid, file_type, lang)
     dtable_io_logger.info('Start import excel or csv: %s.%s to table.' % (file_name, file_type))
     try:
         parse_and_import_excel_csv_to_table(file_name, dtable_uuid, username, file_type, lang)
-    except BaseSizeExceedsLimitError:
-        raise Exception('Base size exceeds limit')
+    except BaseExceedsException as e:
+        raise Exception(e.error_msg)
+
     except ExcelFormatError:
         raise Exception('Excel format error')
     except Exception as e:
@@ -571,9 +573,9 @@ def send_notification_msg(emails, user_col_key, msg, dtable_uuid, username, tabl
                 break
         if not table:
             return
-        
+
         target_row = dtable_server_api.get_row(table['name'], row_id)
-        
+
         sending_list = emails
         if user_col_key:
             column = None
@@ -911,7 +913,10 @@ def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, u
     wb = openpyxl.Workbook(write_only=True)
     ws = wb.create_sheet(sheet_name)
 
-    dtable_rows = get_view_rows_from_dtable_server(dtable_uuid, table_name, view_name, username, id_in_org, user_department_ids_map, permission)
+    try:
+        dtable_rows = get_view_rows_from_dtable_server(dtable_uuid, table_name, view_name, username, id_in_org, user_department_ids_map, permission)
+    except BaseExceedsException as e:
+        raise Exception(e.error_msg)
 
     column_name_to_column = {col.get('name'): col for col in cols}
     is_group_view = bool(target_view.get('groupbys'))
@@ -973,7 +978,10 @@ def convert_table_to_excel(dtable_uuid, table_id, username, name, repo_id, is_su
     if header_settings:
         header_height = header_settings.get('header_height', 'default')
 
-    result_rows = get_rows_from_dtable_server(username, dtable_uuid, table_name)
+    try:
+        result_rows = get_rows_from_dtable_server(username, dtable_uuid, table_name)
+    except BaseExceedsException as e:
+        raise Exception(e.error_msg)
     column_name_to_column = {col.get('name'): col for col in cols}
 
     images_target_dir = os.path.join(IMAGE_TMP_DIR, dtable_uuid, str(uuid.uuid4()))
