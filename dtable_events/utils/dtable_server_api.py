@@ -15,7 +15,6 @@ import requests
 
 from dtable_events.app.config import INNER_FILE_SERVER_ROOT, DTABLE_PRIVATE_KEY
 from dtable_events.utils import uuid_str_to_36_chars, is_valid_email
-from dtable_events.utils.exception import BaseSizeExceedsLimitError
 
 logger = logging.getLogger(__name__)
 
@@ -89,8 +88,9 @@ def parse_response(response):
             raise BaseExceedsException('base_exceeds_limit', 'The base size exceeds the limit of 200MB, the operation cannot be performed.')
         if error_type == 'exceed_tables_limit' or error_msg == 'Number of tables exceeds 200 limit':
             raise BaseExceedsException('exceed_tables_limit', 'Number of tables exceeds 200 limit')
-        if error_type == 'base_exceeds_limit':
-            raise BaseSizeExceedsLimitError
+
+        if error_msg == 'Number of cells returned exceeds the limit of 1 million':
+            raise BaseExceedsException('cell_returned_exceeds_limit', 'Number of cells returned exceeds the limit of 1 million')
 
         raise ConnectionError(response.status_code, response.text)
     else:

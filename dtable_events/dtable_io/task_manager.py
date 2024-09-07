@@ -75,7 +75,7 @@ class TaskManager(object):
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         return task_id
-    
+
     def add_export_dtable_big_data_screen_task(self, username, repo_id, dtable_uuid, page_id):
         from  dtable_events.dtable_io import get_dtable_export_big_data_screen
         task_id = str(uuid.uuid4())
@@ -84,7 +84,7 @@ class TaskManager(object):
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         return task_id
-    
+
     def add_import_dtable_big_data_screen_task(self, username, repo_id, dtable_uuid, page_id):
         from  dtable_events.dtable_io import import_big_data_screen
         task_id = str(uuid.uuid4())
@@ -365,7 +365,7 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
 
         return task_id
-    
+
     def add_import_page_design_task(self, repo_id, workspace_id, dtable_uuid, page_id, is_dir, username):
         from dtable_events.dtable_io import import_page_design
         task_id = str(uuid.uuid4())
@@ -413,9 +413,7 @@ class TaskManager(object):
                 self.current_task_info.pop(task_id, None)
             except Exception as e:
                 self.task_results_map[task_id] = 'error_' + str(e.args[0])
-                if str(e.args[0]) in ('the number of cells accessing the table exceeds the limit',
-                                      'Excel format error', 'Duplicated column names are not supported',
-                                      'Number of cells returned exceeds the limit of 1 million'):
+                if str(e.args[0]) in ('Excel format error', 'Number of cells returned exceeds the limit of 1 million', 'base_exceeds_limit'):
                     dtable_io_logger.warning('Failed to handle task %s, error: %s \n' % (task_info, e))
                 elif str(e.args[0]).startswith('import_sync_common_dataset:'):
                     # Errors in import/sync common dataset, those have been record in real task code, so no duplicated error logs here
