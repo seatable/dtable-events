@@ -823,9 +823,11 @@ def batch_send_email_msg(auth_info, send_info_list, username, config=None, db_se
         session.close()
 
 
-def convert_page_to_pdf(dtable_uuid, plugin_type, page_id, row_id):
+def convert_page_to_pdf(dtable_uuid, plugin_type, page_id, row_id, username=None):
     dtable_server_url = get_inner_dtable_server_url()
-    access_token = DTableServerAPI('dtable-events', dtable_uuid, dtable_server_url).internal_access_token
+    if not username:
+        username = 'dtable-events'
+    access_token = DTableServerAPI(username, dtable_uuid, dtable_server_url).internal_access_token
     target_dir = '/tmp/dtable-io/convert-page-to-pdf'
     if not os.path.isdir(target_dir):
         os.makedirs(target_dir)

@@ -413,10 +413,11 @@ def convert_page_to_pdf():
     plugin_type = request.args.get('plugin_type')
     page_id = request.args.get('page_id')
     row_id = request.args.get('row_id')
+    username = request.args.get('username')
 
     try:
         task_id = task_manager.convert_page_to_pdf(
-            dtable_uuid, plugin_type, page_id, row_id)
+            dtable_uuid, plugin_type, page_id, row_id, username)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))
