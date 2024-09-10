@@ -30,7 +30,14 @@ def parse_response(response):
     if response.status_code >= 400:
         if response.status_code == 429:
             raise Request429Error()
-        raise ConnectionError(response.status_code, response.text)
+        try:
+            info = response.json()
+        except:
+            error_msg = response.text
+        else:
+            error_msg = info.get('error_message')
+
+        raise ConnectionError(response.status_code, error_msg)
     else:
         try:
             data = json.loads(response.text)
