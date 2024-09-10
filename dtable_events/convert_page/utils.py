@@ -105,7 +105,7 @@ def wait_page_view(driver: webdriver.Chrome, session_id, plugin_type, row_id, ou
         WebDriverWait(driver, 120, poll_frequency=1).until(lambda driver: check_images_and_networks(driver), message='wait images and networks timeout')
         time.sleep(sleep_time) # wait for all rendering
     except Exception as e:
-        logger.warning('wait for page design error: %s', e)
+        logger.warning('wait for page error: %s', e)
     finally:
         calculated_print_options = {
             'landscape': False,
