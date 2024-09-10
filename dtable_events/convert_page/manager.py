@@ -7,7 +7,7 @@ from threading import Thread
 from seaserv import seafile_api
 
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL
-from dtable_events.page_design.utils import get_driver, CHROME_DATA_DIR, open_page_view, wait_page_view
+from dtable_events.convert_page.utils import get_chrome_data_dir, get_driver, open_page_view, wait_page_view
 from dtable_events.utils import get_inner_dtable_server_url, get_opt_from_conf_or_env
 from dtable_events.utils.dtable_server_api import DTableServerAPI, NotFoundException
 from dtable_events.utils.dtable_db_api import DTableDBAPI
@@ -45,11 +45,11 @@ class ConvertPageTOPDFManager:
     def get_driver(self, index):
         driver = self.drivers.get(index)
         if not driver:
-            driver = get_driver(os.path.join(CHROME_DATA_DIR, f'convert-manager-{index}'))
+            driver = get_driver(get_chrome_data_dir(f'convert-manager-{index}'))
             self.drivers[index] = driver
         return driver
 
-    def batch_convert_rows(self, driver, repo_id, workspace_id, dtable_uuid, page_id, table_name, target_column, step_row_ids, file_names_dict):
+    def batch_convert_rows(self, driver, repo_id, workspace_id, dtable_uuid, plugin_type, page_id, table_name, target_column, step_row_ids, file_names_dict):
         dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, dtable_server_url, DTABLE_WEB_SERVICE_URL, repo_id, workspace_id)
         dtable_db_api = DTableDBAPI('dtable-events', dtable_uuid, INNER_DTABLE_DB_URL)
         rows_files_dict = {}
@@ -57,14 +57,14 @@ class ConvertPageTOPDFManager:
 
         # open rows
         for row_id in step_row_ids:
-            session_id = open_page_view(driver, dtable_uuid, page_id, row_id, dtable_server_api.internal_access_token)
+            session_id = open_page_view(driver, dtable_uuid, plugin_type, page_id, row_id, dtable_server_api.internal_access_token)
             row_session_dict[row_id] = session_id
 
         # wait for chrome windows rendering
         for row_id in step_row_ids:
             output = io.BytesIO()  # receive pdf content
             session_id = row_session_dict[row_id]
-            wait_page_view(driver, session_id, row_id, output)
+            wait_page_view(driver, session_id, plugin_type, row_id, output)
             file_name = file_names_dict.get(row_id, f'{dtable_uuid}_{page_id}_{row_id}.pdf')
             if not file_name.endswith('.pdf'):
                 file_name += '.pdf'
@@ -92,7 +92,7 @@ class ConvertPageTOPDFManager:
             })
         dtable_server_api.batch_update_rows(table_name, updates)
 
-    def check_resources(self, dtable_uuid, page_id, table_id, target_column_key, row_ids):
+    def check_resources(self, dtable_uuid, plugin_type, page_id, table_id, target_column_key, row_ids):
         """
         :return: resources -> dict or None, error_msg -> str or None
         """
@@ -115,7 +115,7 @@ class ConvertPageTOPDFManager:
 
         # plugin
         plugin_settings = metadata.get('plugin_settings') or {}
-        plugin = plugin_settings.get('page-design') or []
+        plugin = plugin_settings.get(plugin_type) or []
         if not plugin:
             return None, 'plugin not found'
         page = next(filter(lambda page: page.get('page_id') == page_id, plugin), None)
@@ -150,6 +150,7 @@ class ConvertPageTOPDFManager:
             logger.debug('do_convert task_info: %s', task_info)
 
             dtable_uuid = task_info.get('dtable_uuid')
+            plugin_type = task_info.get('plugin_type')
             page_id = task_info.get('page_id')
             row_ids = task_info.get('row_ids')
             target_column_key = task_info.get('target_column_key')
@@ -164,7 +165,7 @@ class ConvertPageTOPDFManager:
             # resource check
             # Rather than wait one minute to render a wrong page, a resources check is more effective
             try:
-                resources, error_msg = self.check_resources(dtable_uuid, page_id, table_id, target_column_key, row_ids)
+                resources, error_msg = self.check_resources(dtable_uuid, plugin_type, page_id, table_id, target_column_key, row_ids)
                 if not resources:
                     logger.warning('page design dtable: %s page: %s table: %s column: %s error: %s', dtable_uuid, page_id, table_id, target_column_key, error_msg)
                     continue
@@ -186,7 +187,7 @@ class ConvertPageTOPDFManager:
                     except Exception as e:
                         logger.exception('get driver: %s error: %s', index, e)
                     try:
-                        self.batch_convert_rows(driver, repo_id, workspace_id, dtable_uuid, page_id, table['name'], target_column, step_row_ids, file_names_dict)
+                        self.batch_convert_rows(driver, repo_id, workspace_id, dtable_uuid, plugin_type, page_id, table['name'], target_column, step_row_ids, file_names_dict)
                     except Exception as e:
                         logger.exception('convert task: %s error: %s', task_info, e)
                     finally:
