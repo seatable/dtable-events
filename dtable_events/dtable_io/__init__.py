@@ -7,6 +7,7 @@ import uuid
 
 import requests
 import smtplib
+import msal
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr, parseaddr
@@ -772,6 +773,137 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
     finally:
         if not db_session:
             session.close()
+    return result
+
+def _get_oauth_smtp_headers(client_id, client_secret, authority, scopes):
+    app = msal.ConfidentialClientApplication(
+        client_id,
+        authority=authority,
+        client_credential=client_secret,
+    )
+    result = app.acquire_token_for_client(scopes=scopes.replace(' ','').split(','))
+    if "access_token" in result:
+        headers = {
+            'Authorization': f'Bearer {result["access_token"]}',
+            'Content-Type': 'application/json'
+        }
+        return headers
+
+    else:
+        raise Exception('Failed to acquire token', result.get('error'), result.get('error_description'))
+
+def send_email_msg_by_oauth_auth(auth_info, send_info, username, config=None, db_session=None):
+    # auth info
+    host_user = auth_info.get('host_user')
+    client_id = auth_info.get('client_id', '')
+    client_secret = auth_info.get('client_secret', '')
+    authority = auth_info.get('authority', '')
+    scopes = auth_info.get('scopes', '')
+    endpoint = auth_info.get('endpoint', '')
+    sender_name = auth_info.get('sender_name', '')
+    sender_email = auth_info.get('sender_email', '')
+
+    # send info
+    msg = send_info.get('message', '')
+    html_msg = send_info.get('html_message', '')
+    send_to = send_info.get('send_to', [])
+    subject = send_info.get('subject', '')
+    copy_to = send_info.get('copy_to', [])
+    reply_to = send_info.get('reply_to', '')
+    file_download_urls = send_info.get('file_download_urls', None)
+    message_id = send_info.get('message_id', '')
+
+    result = {}
+    if not msg and not html_msg:
+        result['err_msg'] = 'Email message invalid'
+        return result
+    
+    try:
+        headers = _get_oauth_smtp_headers(client_id, client_secret, authority, scopes)
+    except Exception as e:
+        dtable_message_logger.warning(f'SMTP auth failure: {e}')
+        result['err_msg'] = 'SMTP auth failure'
+        return result
+    
+    email_data = {
+        'message':{
+            'subject': subject,
+        },
+        'body': {
+            'contentType': 'html' if html_msg else 'text',
+            'content': html_msg if html_msg else msg
+        },
+        'from':{
+            'emailAddress': {
+                'address': sender_email if sender_name else host_user
+            }
+        },
+        'toRecipients': [
+            {
+                'emailAddress':{
+                    'address': to
+                }
+            }
+            for to in send_to
+        ],
+        'ccRecipients': [
+            {
+                'emailAddress':{
+                    'address': to
+                }
+            }
+            for to in copy_to
+        ],
+        'replyTo':[
+            {
+                'emailAddress':{
+                    'address': to
+                }
+            }
+            for to in reply_to
+        ]
+    }
+
+    if sender_name:
+        email_data['from']['emailAddress']['name'] = sender_name
+
+    if message_id:
+        email_data.update({'internetMessageId': message_id})
+
+    if file_download_urls:
+        email_data.update({'attachments':[
+            {
+                '@odata.type': '#microsoft.graph.fileAttachment',
+                'name': 'UTF-8\'\'' + parse.quote(file_name),
+                'contentType': 'application/octet-stream',
+                'contentBytes': requests.get(file_url).content
+            }
+            for file_name, file_url in file_download_urls.items()
+        ]})
+
+    try:
+        response = requests.post(
+            endpoint,
+            headers=headers,
+            data=json.dumps(email_data)
+        )
+        if response.status_code != 202:
+            raise Exception(f'Error sending email: {response.status_code} - {response.text}')
+        success = True
+    except Exception as e:
+        dtable_message_logger.warning(e)
+        result['err_msg'] = e
+    else:
+        dtable_message_logger.info('Email sending success!')
+
+    session = db_session or init_db_session_class(config)()
+    try:
+        save_email_sending_records(session, username, endpoint, success)
+    except Exception as e:
+        dtable_message_logger.error(
+            'Email sending log record error: %s' % e)
+    finally:
+        session.close()
     return result
 
 
