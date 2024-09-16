@@ -80,8 +80,12 @@ class LDAPSyncerTimer(Thread):
                         manage_py,
                         'ldap_group_sync'
                     ]
-                    with open(self._logfile, 'a') as fp:
-                        run_and_wait(cmd, cwd=dtable_web_dir, output=fp)
+
+                    if os.environ.get('SEATABLE_LOG_TO_STDOUT', 'false').lower() == 'true':
+                        run_and_wait(cmd, cwd=dtable_web_dir)
+                    else:
+                        with open(self._logfile, 'a') as fp:
+                            run_and_wait(cmd, cwd=dtable_web_dir, output=fp)
                 except Exception as e:
                     logging.exception('error when sync ldap group: %s', e)
 
