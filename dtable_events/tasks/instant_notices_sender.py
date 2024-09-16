@@ -85,8 +85,11 @@ class InstantNoticeSenderTimer(Thread):
                         'send_instant_notices',
                     ]
 
-                    with open(self._logfile, 'a') as fp:
-                        run(cmd, cwd=dtable_web_dir, output=fp)
+                    if os.environ.get('SEATABLE_LOG_TO_STDOUT', 'false').lower() == 'true':
+                        run(cmd, cwd=dtable_web_dir)
+                    else:
+                        with open(self._logfile, 'a') as fp:
+                            run(cmd, cwd=dtable_web_dir, output=fp)
                 except Exception as e:
                     logging.exception('send instant notices error: %s', e)
 

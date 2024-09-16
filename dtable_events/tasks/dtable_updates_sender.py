@@ -72,8 +72,12 @@ class DTableUpdatesSenderTimer(Thread):
                         manage_py,
                         'send_dtable_updates',
                     ]
-                    with open(self._logfile, 'a') as fp:
-                        run_and_wait(cmd, cwd=dtable_web_dir, output=fp)
+
+                    if os.environ.get('SEATABLE_LOG_TO_STDOUT', 'false').lower() == 'true':
+                        run_and_wait(cmd, cwd=dtable_web_dir)
+                    else:
+                        with open(self._logfile, 'a') as fp:
+                            run_and_wait(cmd, cwd=dtable_web_dir, output=fp)
                 except Exception as e:
                     logging.exception('send dtable updates email error: %s', e)
 
