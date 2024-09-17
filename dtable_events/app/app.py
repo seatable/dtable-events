@@ -11,6 +11,7 @@ from dtable_events.tasks.dtable_real_time_rows_counter import DTableRealTimeRows
 from dtable_events.tasks.ldap_syncer import LDAPSyncer
 from dtable_events.tasks.dtable_asset_trash_cleaner import DTableAssetTrashCleaner
 from dtable_events.tasks.license_expiring_notices_sender import LicenseExpiringNoticesSender
+from dtable_events.tasks.dtable_upload_link_handler import DTableUploadLinkHandler
 from dtable_events.notification_rules.handler import NotificationRuleHandler
 from dtable_events.notification_rules.dtable_notification_rules_scanner import DTableNofiticationRulesScanner
 from dtable_events.automations.handler import AutomationRuleHandler
@@ -59,6 +60,7 @@ class App(object):
             self._workflow_schedule_scanner = WorkflowSchedulesScanner(config)
             self._dtable_asset_trash_cleaner = DTableAssetTrashCleaner(config)
             self._license_expiring_notices_sender = LicenseExpiringNoticesSender()
+            self._dtable_upload_link_handler = DTableUploadLinkHandler(config)
             # convert pdf manager
             conver_page_to_pdf_manager.init(config)
 
@@ -91,5 +93,6 @@ class App(object):
             self._workflow_schedule_scanner.start()          # default True
             self._dtable_asset_trash_cleaner.start()         # always True
             self._license_expiring_notices_sender.start()    # always True
+            self._dtable_upload_link_handler.start()         # always True
             # convert pdf manager
             conver_page_to_pdf_manager.start()               # always True
