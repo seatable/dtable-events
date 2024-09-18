@@ -101,11 +101,11 @@ class ConvertPageTOPDFManager:
 
         # metdata with plugin
         try:
-            metadata = dtable_server_api.get_metadata_plugin('page-design')
+            metadata = dtable_server_api.get_metadata_plugin(plugin_type)
         except NotFoundException:
             return None, 'base not found'
         except Exception as e:
-            logger.error('page design dtable: %s get metadata error: %s', dtable_uuid, e)
+            logger.error('plugin: %s dtable: %s get metadata error: %s', plugin_type, dtable_uuid, e)
             return None, 'get metadata error %s' % e
 
         # table
@@ -133,7 +133,7 @@ class ConvertPageTOPDFManager:
         try:
             rows, _ = dtable_db_api.query(sql)
         except Exception as e:
-            logger.error('page design dtable: %s query rows error: %s', dtable_uuid, e)
+            logger.error('plugin: %s dtable: %s query rows error: %s', plugin_type, dtable_uuid, e)
             return None, 'query rows error'
         row_ids = [row['_id'] for row in rows]
 
@@ -167,13 +167,13 @@ class ConvertPageTOPDFManager:
             try:
                 resources, error_msg = self.check_resources(dtable_uuid, plugin_type, page_id, table_id, target_column_key, row_ids)
                 if not resources:
-                    logger.warning('page design dtable: %s page: %s table: %s column: %s error: %s', dtable_uuid, page_id, table_id, target_column_key, error_msg)
+                    logger.warning('plugin: %s dtable: %s page: %s table: %s column: %s error: %s', plugin_type, dtable_uuid, page_id, table_id, target_column_key, error_msg)
                     continue
                 row_ids = resources['row_ids']
                 table = resources['table']
                 target_column = resources['target_column']
             except Exception as e:
-                logger.exception('page design dtable: %s page: %s table: %s column: %s resource check error: %s', dtable_uuid, page_id, table_id, target_column_key, e)
+                logger.exception('plugin: %s dtable: %s page: %s table: %s column: %s resource check error: %s', plugin_type, dtable_uuid, page_id, table_id, target_column_key, e)
                 continue
 
             try:

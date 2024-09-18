@@ -2840,20 +2840,21 @@ class ConvertPageToPDFAction(BaseAction):
         for row in rows:
             file_name = self.fill_msg_blanks_with_sql(column_blanks, col_name_dict, row)
             file_names_dict[row['_id']] = file_name
+        task_info = {
+            'dtable_uuid': self.auto_rule.dtable_uuid,
+            'page_id': self.page_id,
+            'row_ids': [row['_id'] for row in rows],
+            'repo_id': self.repo_id,
+            'workspace_id': self.workspace_id,
+            'file_names_dict': file_names_dict,
+            'target_column_key': self.target_column_key,
+            'table_id': self.auto_rule.table_id,
+            'plugin_type': 'page-design'
+        }
         try:
             # put resources check to the place before convert page,
-            # because there is a distance between put task to queue and convert page
-            conver_page_to_pdf_manager.add_task({
-                'dtable_uuid': self.auto_rule.dtable_uuid,
-                'page_id': self.page_id,
-                'row_ids': [row['_id'] for row in rows],
-                'repo_id': self.repo_id,
-                'workspace_id': self.workspace_id,
-                'file_names_dict': file_names_dict,
-                'target_column_key': self.target_column_key,
-                'table_id': self.auto_rule.table_id,
-                'plugin_type': 'page-design'
-            })
+            # because there is a distance between putting task to queue and converting page
+            conver_page_to_pdf_manager.add_task(task_info)
         except Full:
             self.auto_rule.append_warning({
                 'type': 'convert_page_to_pdf_server_busy',
