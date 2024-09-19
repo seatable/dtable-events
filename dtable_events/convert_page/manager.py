@@ -144,69 +144,77 @@ class ConvertPageTOPDFManager:
             'row_ids': row_ids
         }, None
 
+    def handle_convert_page_to_pdf(self, task_info, index):
+        dtable_uuid = task_info.get('dtable_uuid')
+        plugin_type = task_info.get('plugin_type')
+        page_id = task_info.get('page_id')
+        row_ids = task_info.get('row_ids')
+        target_column_key = task_info.get('target_column_key')
+        repo_id = task_info.get('repo_id')
+        workspace_id = task_info.get('workspace_id')
+        file_names_dict = task_info.get('file_names_dict')
+        table_id = task_info.get('table_id')
+
+        if not row_ids:
+            return
+
+        # resource check
+        # Rather than wait one minute to render a wrong page, a resources check is more effective
+        try:
+            resources, error_msg = self.check_resources(dtable_uuid, plugin_type, page_id, table_id, target_column_key, row_ids)
+            if not resources:
+                logger.warning('plugin: %s dtable: %s page: %s table: %s column: %s error: %s', plugin_type, dtable_uuid, page_id, table_id, target_column_key, error_msg)
+                return
+            row_ids = resources['row_ids']
+            table = resources['table']
+            target_column = resources['target_column']
+        except Exception as e:
+            logger.exception('plugin: %s dtable: %s page: %s table: %s column: %s resource check error: %s', plugin_type, dtable_uuid, page_id, table_id, target_column_key, e)
+            return
+
+        try:
+            # open all tabs of rows step by step
+            # wait render and convert to pdf one by one
+            step = 10
+            for i in range(0, len(row_ids), step):
+                step_row_ids = row_ids[i: i+step]
+                try:
+                    driver = self.get_driver(index)
+                except Exception as e:
+                    logger.exception('get driver: %s error: %s', index, e)
+                try:
+                    self.batch_convert_rows(driver, repo_id, workspace_id, dtable_uuid, plugin_type, page_id, table['name'], target_column, step_row_ids, file_names_dict)
+                except Exception as e:
+                    logger.exception('convert task: %s error: %s', task_info, e)
+                finally:
+                    try:  # delete all tab window except first blank
+                        logger.debug('i: %s driver.window_handles[1:]: %s', i, driver.window_handles[1:])
+                        for window in driver.window_handles[1:]:
+                            driver.switch_to.window(window)
+                            driver.close()
+                        # switch to the first tab window or error will occur when open new window
+                        driver.switch_to.window(driver.window_handles[0])
+                    except Exception as e:
+                        logger.exception('close driver: %s error: %s', index, e)
+                        try:
+                            driver.quit()
+                        except Exception as e:
+                            logger.exception('quit driver: %s error: %s', index, e)
+                        self.drivers.pop(index, None)
+        except Exception as e:
+            logger.exception(e)
+
+    def handle_convert_page_to_pdf_and_send(self, task_info, index):
+        pass
+
     def do_convert(self, index):
         while True:
             task_info = self.queue.get()
             logger.debug('do_convert task_info: %s', task_info)
-
-            dtable_uuid = task_info.get('dtable_uuid')
-            plugin_type = task_info.get('plugin_type')
-            page_id = task_info.get('page_id')
-            row_ids = task_info.get('row_ids')
-            target_column_key = task_info.get('target_column_key')
-            repo_id = task_info.get('repo_id')
-            workspace_id = task_info.get('workspace_id')
-            file_names_dict = task_info.get('file_names_dict')
-            table_id = task_info.get('table_id')
-
-            if not row_ids:
-                continue
-
-            # resource check
-            # Rather than wait one minute to render a wrong page, a resources check is more effective
-            try:
-                resources, error_msg = self.check_resources(dtable_uuid, plugin_type, page_id, table_id, target_column_key, row_ids)
-                if not resources:
-                    logger.warning('plugin: %s dtable: %s page: %s table: %s column: %s error: %s', plugin_type, dtable_uuid, page_id, table_id, target_column_key, error_msg)
-                    continue
-                row_ids = resources['row_ids']
-                table = resources['table']
-                target_column = resources['target_column']
-            except Exception as e:
-                logger.exception('plugin: %s dtable: %s page: %s table: %s column: %s resource check error: %s', plugin_type, dtable_uuid, page_id, table_id, target_column_key, e)
-                continue
-
-            try:
-                # open all tabs of rows step by step
-                # wait render and convert to pdf one by one
-                step = 10
-                for i in range(0, len(row_ids), step):
-                    step_row_ids = row_ids[i: i+step]
-                    try:
-                        driver = self.get_driver(index)
-                    except Exception as e:
-                        logger.exception('get driver: %s error: %s', index, e)
-                    try:
-                        self.batch_convert_rows(driver, repo_id, workspace_id, dtable_uuid, plugin_type, page_id, table['name'], target_column, step_row_ids, file_names_dict)
-                    except Exception as e:
-                        logger.exception('convert task: %s error: %s', task_info, e)
-                    finally:
-                        try:  # delete all tab window except first blank
-                            logger.debug('i: %s driver.window_handles[1:]: %s', i, driver.window_handles[1:])
-                            for window in driver.window_handles[1:]:
-                                driver.switch_to.window(window)
-                                driver.close()
-                            # switch to the first tab window or error will occur when open new window
-                            driver.switch_to.window(driver.window_handles[0])
-                        except Exception as e:
-                            logger.exception('close driver: %s error: %s', index, e)
-                            try:
-                                driver.quit()
-                            except Exception as e:
-                                logger.exception('quit driver: %s error: %s', index, e)
-                            self.drivers.pop(index, None)
-            except Exception as e:
-                logger.exception(e)
+            if task_info.get('action_type') == 'convert_page_to_pdf':
+                self.handle_convert_page_to_pdf(task_info, index)
+            elif task_info.get('action_type') == 'convert_page_to_pdf_and_send':
+                self.handle_convert_page_to_pdf_and_send(task_info, index)
 
     def start(self):
         logger.debug('convert page to pdf max workers: %s max queue: %s', self.max_workers, self.max_queue)

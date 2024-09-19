@@ -106,7 +106,7 @@ def wait_page_view(driver: webdriver.Chrome, session_id, plugin_type, row_id, ou
         # make sure images from asset are rendered, timeout 120s
         WebDriverWait(driver, 120, poll_frequency=1).until(lambda driver: check_images_and_networks(driver), message='wait images and networks timeout')
         logger.debug('check to sleep')
-        time.sleep(sleep_time) # wait for all rendering
+        # time.sleep(sleep_time) # test how non-sleep effects renderring
     except Exception as e:
         logger.warning('wait for page error: %s', e)
     finally:
