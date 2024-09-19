@@ -2849,7 +2849,43 @@ class ConvertPageToPDFAction(BaseAction):
             'file_names_dict': file_names_dict,
             'target_column_key': self.target_column_key,
             'table_id': self.auto_rule.table_id,
-            'plugin_type': 'page-design'
+            'plugin_type': 'page-design',
+            'action_type': self.action_type
+        }
+        try:
+            # put resources check to the place before convert page,
+            # because there is a distance between putting task to queue and converting page
+            conver_page_to_pdf_manager.add_task(task_info)
+        except Full:
+            self.auto_rule.append_warning({
+                'type': 'convert_page_to_pdf_server_busy',
+                'page_id': self.page_id,
+                'page_name': self.page['page_name']
+            })
+        self.auto_rule.set_done_actions()
+
+
+class ConvertPageToPDFAndSendAction(BaseAction):
+
+    def __init__(self, auto_rule, action_type, plugin_type, page_id):
+        super().__init__(auto_rule, action_type)
+        self.plugin_type = plugin_type
+        self.page_id = page_id
+        self.page = None
+
+    def can_do_action(self):
+        if not self.auto_rule.current_valid:
+            return False
+        return True
+
+    def do_action(self):
+        if not self.can_do_action():
+            return
+        task_info = {
+            'dtable_uuid': self.auto_rule.dtable_uuid,
+            'page_id': self.page_id,
+            'plugin_type': self.plugin_type,
+            'action_type': self.action_type
         }
         try:
             # put resources check to the place before convert page,
