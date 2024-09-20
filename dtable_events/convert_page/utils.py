@@ -85,10 +85,10 @@ def wait_page_view(driver: webdriver.Chrome, session_id, plugin_type, row_id, ou
         return False
 
     await_react_render = 60
-    sleep_time = 2
-    if not row_id:
-        await_react_render = 180
-        sleep_time = 6
+    # sleep_time = 2
+    # if not row_id:
+    #     await_react_render = 180
+    #     sleep_time = 6
 
     driver.switch_to.window(session_id)
 
@@ -142,7 +142,8 @@ def wait_page_view(driver: webdriver.Chrome, session_id, plugin_type, row_id, ou
         network_logs = driver.execute_script("var performance = window.performance || window.mozPerformance || window.msPerformance || window.webkitPerformance || {}; var network = performance.getEntriesByType('resource') || {}; return network;")
         logger.debug('network logs start')
         for item in network_logs:
-            logger.debug('check name: %s start: %s duration: %s start+duration: %s', item['name'], item['startTime'], item['duration'], item['startTime'] + item['duration'])
+            logger.debug('check name: %s start: %s duration: %s end: %s', item.get('name'), item.get('startTime'), item.get('duration'), item.get('responseEnd'))
+            logger.debug(item)
         logger.debug('network logs end')
 
 
