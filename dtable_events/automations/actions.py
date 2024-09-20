@@ -1039,7 +1039,7 @@ class SendWechatAction(BaseAction):
 
     def init_notify(self, msg):
         account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id)
-        if not account_dict:
+        if not account_dict or uuid_str_to_36_chars(account_dict.get('dtable_uuid')) != uuid_str_to_36_chars(self.auto_rule.dtable_uuid):
             raise RuleInvalidException('Send wechat no account')
         blanks = set(re.findall(r'\{([^{]*?)\}', msg))
         self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
@@ -1110,7 +1110,7 @@ class SendDingtalkAction(BaseAction):
 
     def init_notify(self, msg):
         account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id)
-        if not account_dict:
+        if not account_dict or uuid_str_to_36_chars(account_dict.get('dtable_uuid')) != uuid_str_to_36_chars(self.auto_rule.dtable_uuid):
             raise RuleInvalidException('Send dingtalk no account')
         blanks = set(re.findall(r'\{([^{]*?)\}', msg))
         self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
@@ -1253,7 +1253,7 @@ class SendEmailAction(BaseAction):
 
     def init_notify(self):
         account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id)
-        if not account_dict:
+        if not account_dict or uuid_str_to_36_chars(account_dict.get('dtable_uuid')) != uuid_str_to_36_chars(self.auto_rule.dtable_uuid):
             raise RuleInvalidException('Send email no account')
         self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
         self.init_notify_msg()
@@ -2867,14 +2867,27 @@ class ConvertPageToPDFAction(BaseAction):
 
 class ConvertPageToPDFAndSendAction(BaseAction):
 
-    def __init__(self, auto_rule, action_type, plugin_type, page_id):
+    def __init__(self, auto_rule, action_type, plugin_type, page_id, send_type, account_id, send_info):
         super().__init__(auto_rule, action_type)
         self.plugin_type = plugin_type
         self.page_id = page_id
+        self.send_type = send_type
+        self.account_id = account_id
+        self.send_info = send_info
+
         self.page = None
+        self.account_info = None
 
     def can_do_action(self):
         if not self.auto_rule.current_valid:
+            return False
+        account_info = get_third_party_account(self.auto_rule.db_session, self.account_id)
+        if not account_info or uuid_str_to_36_chars(account_info.get('dtable_uuid')) != uuid_str_to_36_chars(self.auto_rule.dtable_uuid):
+            return False
+        self.account_info = account_info
+        if self.send_type == 'email' and self.account_info.get('account_type') != 'email':
+            return False
+        if self.send_type == 'wechat_robot' and self.account_info.get('account_type') != 'wechat_robot':
             return False
         return True
 
@@ -2885,6 +2898,9 @@ class ConvertPageToPDFAndSendAction(BaseAction):
             'dtable_uuid': self.auto_rule.dtable_uuid,
             'page_id': self.page_id,
             'plugin_type': self.plugin_type,
+            'send_type': self.send_type,
+            'send_info': self.send_info,
+            'account_info': self.account_info,
             'action_type': self.action_type
         }
         try:
@@ -3251,6 +3267,10 @@ class AutomationRule:
             if run_condition in CRON_CONDITIONS and trigger_condition == CONDITION_PERIODICALLY_BY_CONDITION:
                 return True
             return False
+        elif action_type == 'convert_page_to_pdf_and_send':
+            if run_condition in CRON_CONDITIONS and trigger_condition == CONDITION_PERIODICALLY:
+                return True
+            return False
         return False
 
     def do_actions(self, with_test=False):
@@ -3375,6 +3395,15 @@ class AutomationRule:
                     repo_id = action_info.get('repo_id')
                     workspace_id = action_info.get('workspace_id')
                     ConvertPageToPDFAction(self, action_info.get('type'), self.data, page_id, file_name, target_column_key, repo_id, workspace_id).do_action()
+
+                elif action_info.get('type') == 'convert_page_to_pdf_and_send':
+                    page_id = action_info.get('page_id')
+                    plugin_type = action_info.get('plugin_type')
+                    page_id = action_info.get('page_id')
+                    send_type = action_info.get('send_type')
+                    send_info = action_info.get('send_info')
+                    account_id = action_info.get('account_id')
+                    ConvertPageToPDFAndSendAction(self, action_info.get('type'), plugin_type, page_id, send_type, account_id, send_info).do_action()
 
             except RuleInvalidException as e:
                 logger.warning('auto rule: %s, invalid error: %s', self.rule_id, e)

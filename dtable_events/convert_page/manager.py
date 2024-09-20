@@ -3,10 +3,14 @@ import logging
 import os
 from queue import Queue, Full
 from threading import Thread
+from urllib.parse import urlparse, parse_qs
+
+import requests
 
 from seaserv import seafile_api
 
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL
+from dtable_events.automations.models import get_third_party_account
 from dtable_events.convert_page.utils import get_chrome_data_dir, get_driver, open_page_view, wait_page_view
 from dtable_events.utils import get_inner_dtable_server_url, get_opt_from_conf_or_env
 from dtable_events.utils.dtable_server_api import DTableServerAPI, NotFoundException
@@ -15,39 +19,13 @@ from dtable_events.utils.dtable_db_api import DTableDBAPI
 logger = logging.getLogger(__name__)
 dtable_server_url = get_inner_dtable_server_url()
 
-class ConvertPageTOPDFManager:
 
-    def __init__(self):
-        self.max_workers = 2
-        self.max_queue = 1000
-        self.drivers = {}
+class ConvertPageToPDFWorker:
 
-    def init(self, config):
-        section_name = 'CONERT-PAGE-TO-PDF'
-        key_max_workers = 'max_workers'
-        key_max_queue = 'max_queue'
-
-        if config.has_section('CONERT-PAGE-TO-PDF'):
-            try:
-                self.max_workers = int(get_opt_from_conf_or_env(config, section_name, key_max_workers, default=self.max_workers))
-            except:
-                pass
-            try:
-                self.max_queue = int(get_opt_from_conf_or_env(config, section_name, key_max_queue, default=self.max_queue))
-            except:
-                pass
-        self.queue = Queue(self.max_queue)  # element in queue is a dict about task
-        try:  # kill all existing chrome processes
-            os.system("ps aux | grep chrome | grep -v grep | awk ' { print $2 } ' | xargs kill -9 > /dev/null 2>&1")
-        except:
-            pass
-
-    def get_driver(self, index):
-        driver = self.drivers.get(index)
-        if not driver:
-            driver = get_driver(get_chrome_data_dir(f'convert-manager-{index}'))
-            self.drivers[index] = driver
-        return driver
+    def __init__(self, task_info, index, manager):
+        self.task_info = task_info
+        self.index = index
+        self.manager = manager
 
     def batch_convert_rows(self, driver, repo_id, workspace_id, dtable_uuid, plugin_type, page_id, table_name, target_column, step_row_ids, file_names_dict):
         dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, dtable_server_url, DTABLE_WEB_SERVICE_URL, repo_id, workspace_id)
@@ -144,16 +122,16 @@ class ConvertPageTOPDFManager:
             'row_ids': row_ids
         }, None
 
-    def handle_convert_page_to_pdf(self, task_info, index):
-        dtable_uuid = task_info.get('dtable_uuid')
-        plugin_type = task_info.get('plugin_type')
-        page_id = task_info.get('page_id')
-        row_ids = task_info.get('row_ids')
-        target_column_key = task_info.get('target_column_key')
-        repo_id = task_info.get('repo_id')
-        workspace_id = task_info.get('workspace_id')
-        file_names_dict = task_info.get('file_names_dict')
-        table_id = task_info.get('table_id')
+    def work(self):
+        dtable_uuid = self.task_info.get('dtable_uuid')
+        plugin_type = self.task_info.get('plugin_type')
+        page_id = self.task_info.get('page_id')
+        row_ids = self.task_info.get('row_ids')
+        target_column_key = self.task_info.get('target_column_key')
+        repo_id = self.task_info.get('repo_id')
+        workspace_id = self.task_info.get('workspace_id')
+        file_names_dict = self.task_info.get('file_names_dict')
+        table_id = self.task_info.get('table_id')
 
         if not row_ids:
             return
@@ -163,13 +141,13 @@ class ConvertPageTOPDFManager:
         try:
             resources, error_msg = self.check_resources(dtable_uuid, plugin_type, page_id, table_id, target_column_key, row_ids)
             if not resources:
-                logger.warning('plugin: %s dtable: %s page: %s table: %s column: %s error: %s', plugin_type, dtable_uuid, page_id, table_id, target_column_key, error_msg)
+                logger.warning('plugin: %s dtable: %s page: %s task_info: %s error: %s', plugin_type, dtable_uuid, page_id, self.task_info, error_msg)
                 return
             row_ids = resources['row_ids']
             table = resources['table']
             target_column = resources['target_column']
         except Exception as e:
-            logger.exception('plugin: %s dtable: %s page: %s table: %s column: %s resource check error: %s', plugin_type, dtable_uuid, page_id, table_id, target_column_key, e)
+            logger.exception('plugin: %s dtable: %s page: %s task_info: %s resource check error: %s', plugin_type, dtable_uuid, page_id, self.task_info, e)
             return
 
         try:
@@ -179,13 +157,13 @@ class ConvertPageTOPDFManager:
             for i in range(0, len(row_ids), step):
                 step_row_ids = row_ids[i: i+step]
                 try:
-                    driver = self.get_driver(index)
+                    driver = self.manager.get_driver(self.index)
                 except Exception as e:
-                    logger.exception('get driver: %s error: %s', index, e)
+                    logger.exception('get driver: %s error: %s', self.index, e)
                 try:
                     self.batch_convert_rows(driver, repo_id, workspace_id, dtable_uuid, plugin_type, page_id, table['name'], target_column, step_row_ids, file_names_dict)
                 except Exception as e:
-                    logger.exception('convert task: %s error: %s', task_info, e)
+                    logger.exception('convert task: %s error: %s', self.task_info, e)
                 finally:
                     try:  # delete all tab window except first blank
                         logger.debug('i: %s driver.window_handles[1:]: %s', i, driver.window_handles[1:])
@@ -195,26 +173,180 @@ class ConvertPageTOPDFManager:
                         # switch to the first tab window or error will occur when open new window
                         driver.switch_to.window(driver.window_handles[0])
                     except Exception as e:
-                        logger.exception('close driver: %s error: %s', index, e)
+                        logger.exception('close driver: %s error: %s', self.index, e)
                         try:
                             driver.quit()
                         except Exception as e:
-                            logger.exception('quit driver: %s error: %s', index, e)
-                        self.drivers.pop(index, None)
+                            logger.exception('quit driver: %s error: %s', self.index, e)
+                        self.manager.drivers.pop(self.index, None)
         except Exception as e:
             logger.exception(e)
 
-    def handle_convert_page_to_pdf_and_send(self, task_info, index):
-        pass
+
+class ConvertPageToPDFAndSendWorker:
+
+    WECHAT_FILE_LIMIT = 20 << 20
+
+    def __init__(self, task_info, index, manager):
+        self.task_info = task_info
+        self.index = index
+        self.manager = manager
+
+    def check_resources(self, dtable_uuid, plugin_type, page_id):
+        """
+        :return: resources -> dict or None, error_msg -> str or None
+        """
+        dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, get_inner_dtable_server_url())
+        try:
+            metadata = dtable_server_api.get_metadata_plugin(plugin_type)
+        except NotFoundException:
+            return None, 'base not found'
+        except Exception as e:
+            logger.error('plugin: %s dtable: %s get metadata error: %s', plugin_type, dtable_uuid, e)
+            return None, 'get metadata error %s' % e
+
+        # plugin
+        plugin_settings = metadata.get('plugin_settings') or {}
+        plugin = plugin_settings.get(plugin_type) or []
+        if not plugin:
+            return None, 'plugin not found'
+        page = next(filter(lambda page: page.get('page_id') == page_id, plugin), None)
+        if not page:
+            return None, 'page %s not found' % page_id
+
+        return {
+            'page': page
+        }, None
+
+    def send_wechat_robot(self, file_name, output):
+        account_info = self.task_info.get('account_info')
+        detail = account_info.get('detail') or {}
+        webhook_url = detail.get('webhook_url')
+        if not webhook_url:
+            return
+        parsed_url = urlparse(webhook_url)
+        query_params = parse_qs(parsed_url.query)
+        key = query_params.get('key')[0]
+        upload_url = f'{parsed_url.scheme}://{parsed_url.netloc}/cgi-bin/webhook/upload_media?key={key}&type=file'
+        output.seek(0)
+        resp = requests.post(upload_url, files={'file': (file_name, output)})
+        if not resp.ok:
+            logger.error('task: %s upload file error status code: %s', self.task_info, resp.status_code)
+            return
+        media_id = resp.json().get('media_id')
+        msg_resp = requests.post(webhook_url, json={
+            'msgtype': 'file',
+            'file': {
+                'media_id': media_id
+            }
+        })
+        if not msg_resp.ok:
+            logger.error('task: %s send file error status code: %s', self.task_info, resp.status_code)
+
+    def work(self):
+        dtable_uuid = self.task_info.get('dtable_uuid')
+        page_id = self.task_info.get('page_id')
+        plugin_type = self.task_info.get('plugin_type')
+        send_type = self.task_info.get('send_type')
+        send_info = self.task_info.get('send_info') or {}
+
+        # check resources
+        try:
+            resources, error = self.check_resources(dtable_uuid, plugin_type, page_id)
+            if not resources:
+                logger.warning('plugin: %s dtable: %s page: %s task_info: %s error: %s', plugin_type, dtable_uuid, page_id, self.task_info, error)
+                return
+        except Exception as e:
+            logger.exception('plugin: %s dtable: %s page: %s task_info: %s check resources error: %s', plugin_type, dtable_uuid, page_id, self.task_info, error)
+            return
+
+        # do convert
+        try:
+            driver = self.manager.get_driver(self.index)
+        except Exception as e:
+            logger.exception('task: %s get driver error: %s', self.task_info, e)
+            return
+        dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, get_inner_dtable_server_url())
+        output = io.BytesIO()  # receive pdf content
+        try:
+            session_id = open_page_view(driver, dtable_uuid, plugin_type, page_id, None, dtable_server_api.internal_access_token)
+            wait_page_view(driver, session_id, plugin_type, None, output)
+        except Exception as e:
+            logger.exception('convert task: %s error: %s', self.task_info, e)
+        finally:
+            try:  # delete all tab window except first blank
+                logger.debug('i: %s driver.window_handles[1:]: %s', self.index, driver.window_handles[1:])
+                for window in driver.window_handles[1:]:
+                    driver.switch_to.window(window)
+                    driver.close()
+                # switch to the first tab window or error will occur when open new window
+                driver.switch_to.window(driver.window_handles[0])
+            except Exception as e:
+                logger.exception('close driver: %s error: %s', self.index, e)
+                try:
+                    driver.quit()
+                except Exception as e:
+                    logger.exception('quit driver: %s error: %s', self.index, e)
+                self.manager.drivers.pop(self.index, None)
+
+        # send
+        if output.tell() >= self.WECHAT_FILE_LIMIT:
+            logger.warning('convert task: %s generate pdf size exceeds', self.task_info)
+            return
+        file_name = send_info.get('file_name')
+        if not file_name:
+            file_name = resources['page'].get('page_name') or 'document'
+        file_name = file_name.strip()
+        if not file_name.endswith('.pdf'):
+            file_name = f'{file_name}.pdf'
+        if send_type == 'email':
+            pass
+        elif send_type == 'wechat_robot':
+            self.send_wechat_robot(file_name, output)
+
+
+class ConvertPageTOPDFManager:
+
+    def __init__(self):
+        self.max_workers = 2
+        self.max_queue = 1000
+        self.drivers = {}
+
+    def init(self, config):
+        section_name = 'CONERT-PAGE-TO-PDF'
+        key_max_workers = 'max_workers'
+        key_max_queue = 'max_queue'
+
+        if config.has_section('CONERT-PAGE-TO-PDF'):
+            try:
+                self.max_workers = int(get_opt_from_conf_or_env(config, section_name, key_max_workers, default=self.max_workers))
+            except:
+                pass
+            try:
+                self.max_queue = int(get_opt_from_conf_or_env(config, section_name, key_max_queue, default=self.max_queue))
+            except:
+                pass
+        self.queue = Queue(self.max_queue)  # element in queue is a dict about task
+        try:  # kill all existing chrome processes
+            os.system("ps aux | grep chrome | grep -v grep | awk ' { print $2 } ' | xargs kill -9 > /dev/null 2>&1")
+        except:
+            pass
+
+    def get_driver(self, index):
+        driver = self.drivers.get(index)
+        if not driver:
+            driver = get_driver(get_chrome_data_dir(f'convert-manager-{index}'))
+            self.drivers[index] = driver
+        return driver
 
     def do_convert(self, index):
         while True:
             task_info = self.queue.get()
             logger.debug('do_convert task_info: %s', task_info)
             if task_info.get('action_type') == 'convert_page_to_pdf':
-                self.handle_convert_page_to_pdf(task_info, index)
+                ConvertPageToPDFWorker(task_info, index, self).work()
             elif task_info.get('action_type') == 'convert_page_to_pdf_and_send':
-                self.handle_convert_page_to_pdf_and_send(task_info, index)
+                ConvertPageToPDFAndSendWorker(task_info, index, self).work()
 
     def start(self):
         logger.debug('convert page to pdf max workers: %s max queue: %s', self.max_workers, self.max_queue)

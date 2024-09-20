@@ -51,6 +51,7 @@ class BoundThirdPartyAccounts(Base):
         detail_dict = json.loads(self.detail)
         res = {
             'id': self.id,
+            'dtable_uuid': self.dtable_uuid,
             'account_name': self.account_name,
             'account_type': self.account_type,
             'detail': _decrypt_detail(detail_dict)
