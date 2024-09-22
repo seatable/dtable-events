@@ -2867,13 +2867,14 @@ class ConvertPageToPDFAction(BaseAction):
 
 class ConvertPageToPDFAndSendAction(BaseAction):
 
-    def __init__(self, auto_rule, action_type, plugin_type, page_id, send_type, account_id, send_info):
+    def __init__(self, auto_rule, action_type, plugin_type, page_id, send_type, account_id, file_name, email_send_info):
         super().__init__(auto_rule, action_type)
         self.plugin_type = plugin_type
         self.page_id = page_id
         self.send_type = send_type
         self.account_id = account_id
-        self.send_info = send_info
+        self.file_name = file_name
+        self.email_send_info = email_send_info
 
         self.page = None
         self.account_info = None
@@ -2899,10 +2900,15 @@ class ConvertPageToPDFAndSendAction(BaseAction):
             'page_id': self.page_id,
             'plugin_type': self.plugin_type,
             'send_type': self.send_type,
-            'send_info': self.send_info,
             'account_info': self.account_info,
-            'action_type': self.action_type
+            'action_type': self.action_type,
+            'file_name': self.file_name
         }
+        if self.send_type == 'email':
+            task_info['subject'] = self.email_send_info.get('subject') or ''
+            task_info['send_to_list'] = [is_valid_email(send_to) for send_to in self.email_send_info.get('send_to_list')]
+            task_info['copy_to_list'] = [is_valid_email(copy_to) for copy_to in self.email_send_info.get('copy_to_list')]
+            task_info['reply_to'] = self.email_send_info.get('reply_to') or ''
         try:
             # put resources check to the place before convert page,
             # because there is a distance between putting task to queue and converting page
@@ -3401,9 +3407,22 @@ class AutomationRule:
                     plugin_type = action_info.get('plugin_type')
                     page_id = action_info.get('page_id')
                     send_type = action_info.get('send_type')
-                    send_info = action_info.get('send_info')
                     account_id = action_info.get('account_id')
-                    ConvertPageToPDFAndSendAction(self, action_info.get('type'), plugin_type, page_id, send_type, account_id, send_info).do_action()
+                    file_name = action_info.get('file_name')
+                    send_to_list = email2list(action_info.get('send_to', ''))
+                    copy_to_list = email2list(action_info.get('copy_to', ''))
+                    reply_to = action_info.get('reply_to', '')
+
+                    email_send_info = {
+                        'message': '',
+                        'is_plain_text': True,
+                        'send_to': send_to_list,
+                        'copy_to': copy_to_list,
+                        'reply_to': reply_to,
+                        'subject': subject
+                    }
+
+                    ConvertPageToPDFAndSendAction(self, action_info.get('type'), plugin_type, page_id, send_type, account_id, file_name, email_send_info).do_action()
 
             except RuleInvalidException as e:
                 logger.warning('auto rule: %s, invalid error: %s', self.rule_id, e)

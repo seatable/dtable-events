@@ -10,8 +10,8 @@ import requests
 from seaserv import seafile_api
 
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL
-from dtable_events.automations.models import get_third_party_account
 from dtable_events.convert_page.utils import get_chrome_data_dir, get_driver, open_page_view, wait_page_view
+from dtable_events.dtable_io import batch_send_email_msg
 from dtable_events.utils import get_inner_dtable_server_url, get_opt_from_conf_or_env
 from dtable_events.utils.dtable_server_api import DTableServerAPI, NotFoundException
 from dtable_events.utils.dtable_db_api import DTableDBAPI
@@ -20,9 +20,71 @@ logger = logging.getLogger(__name__)
 dtable_server_url = get_inner_dtable_server_url()
 
 
+class ConvertPageTOPDFManager:
+
+    def __init__(self):
+        self.max_workers = 2
+        self.max_queue = 1000
+        self.drivers = {}
+
+    def init(self, config):
+        section_name = 'CONERT-PAGE-TO-PDF'
+        key_max_workers = 'max_workers'
+        key_max_queue = 'max_queue'
+
+        if config.has_section('CONERT-PAGE-TO-PDF'):
+            try:
+                self.max_workers = int(get_opt_from_conf_or_env(config, section_name, key_max_workers, default=self.max_workers))
+            except:
+                pass
+            try:
+                self.max_queue = int(get_opt_from_conf_or_env(config, section_name, key_max_queue, default=self.max_queue))
+            except:
+                pass
+        self.queue = Queue(self.max_queue)  # element in queue is a dict about task
+        try:  # kill all existing chrome processes
+            os.system("ps aux | grep chrome | grep -v grep | awk ' { print $2 } ' | xargs kill -9 > /dev/null 2>&1")
+        except:
+            pass
+
+    def get_driver(self, index):
+        driver = self.drivers.get(index)
+        if not driver:
+            driver = get_driver(get_chrome_data_dir(f'convert-manager-{index}'))
+            self.drivers[index] = driver
+        return driver
+
+    def do_convert(self, index):
+        while True:
+            try:
+                task_info = self.queue.get()
+                logger.debug('do_convert task_info: %s', task_info)
+                if task_info.get('action_type') == 'convert_page_to_pdf':
+                    ConvertPageToPDFWorker(task_info, index, self).work()
+                elif task_info.get('action_type') == 'convert_page_to_pdf_and_send':
+                    ConvertPageToPDFAndSendWorker(task_info, index, self).work()
+            except Exception as e:
+                logger.exception('do task: %s error: %s', task_info, e)
+
+    def start(self):
+        logger.debug('convert page to pdf max workers: %s max queue: %s', self.max_workers, self.max_queue)
+        for i in range(self.max_workers):
+            t_name = f'driver-{i}'
+            t = Thread(target=self.do_convert, args=(i,), name=t_name, daemon=True)
+            t.start()
+
+    def add_task(self, task_info):
+        try:
+            logger.debug('add task_info: %s', task_info)
+            self.queue.put(task_info, block=False)
+        except Full as e:
+            logger.warning('convert queue full task: %s will be ignored', task_info)
+            raise e
+
+
 class ConvertPageToPDFWorker:
 
-    def __init__(self, task_info, index, manager):
+    def __init__(self, task_info, index, manager: ConvertPageTOPDFManager):
         self.task_info = task_info
         self.index = index
         self.manager = manager
@@ -160,6 +222,7 @@ class ConvertPageToPDFWorker:
                     driver = self.manager.get_driver(self.index)
                 except Exception as e:
                     logger.exception('get driver: %s error: %s', self.index, e)
+                    continue
                 try:
                     self.batch_convert_rows(driver, repo_id, workspace_id, dtable_uuid, plugin_type, page_id, table['name'], target_column, step_row_ids, file_names_dict)
                 except Exception as e:
@@ -187,7 +250,7 @@ class ConvertPageToPDFAndSendWorker:
 
     WECHAT_FILE_LIMIT = 20 << 20
 
-    def __init__(self, task_info, index, manager):
+    def __init__(self, task_info, index, manager: ConvertPageTOPDFManager):
         self.task_info = task_info
         self.index = index
         self.manager = manager
@@ -219,6 +282,10 @@ class ConvertPageToPDFAndSendWorker:
         }, None
 
     def send_wechat_robot(self, file_name, output):
+        if output.tell() >= self.WECHAT_FILE_LIMIT:
+            logger.warning('convert task: %s generate pdf size exceeds', self.task_info)
+            return
+
         account_info = self.task_info.get('account_info')
         detail = account_info.get('detail') or {}
         webhook_url = detail.get('webhook_url')
@@ -243,12 +310,40 @@ class ConvertPageToPDFAndSendWorker:
         if not msg_resp.ok:
             logger.error('task: %s send file error status code: %s', self.task_info, resp.status_code)
 
+    def send_email(self, file_name, output):
+        account_info = self.task_info.get('account_info')
+        detail = account_info.get('detail') or {}
+
+        subject = self.task_info.get('subject')
+        send_to_list = self.task_info.get('send_to_list')
+        copy_to_list = self.task_info.get('copy_to_list')
+        reply_to = self.task_info.get('reply_to')
+
+        if not send_to_list:
+            return
+
+        send_info = {
+            'subject': subject,
+            'send_to': send_to_list,
+            'copy_to': copy_to_list,
+            'reply_to': reply_to if reply_to else '',
+            'file_contents': {file_name: output.getvalue()}
+        }
+        try:
+            batch_send_email_msg(
+                detail,
+                [send_info],
+                'automation-rules'
+            )
+        except Exception as e:
+            logger.error('task: %s send file email error: %s', self.task_info, e)
+
     def work(self):
         dtable_uuid = self.task_info.get('dtable_uuid')
         page_id = self.task_info.get('page_id')
         plugin_type = self.task_info.get('plugin_type')
         send_type = self.task_info.get('send_type')
-        send_info = self.task_info.get('send_info') or {}
+        file_name = self.task_info.get('file_name')
 
         # check resources
         try:
@@ -273,6 +368,7 @@ class ConvertPageToPDFAndSendWorker:
             wait_page_view(driver, session_id, plugin_type, None, output)
         except Exception as e:
             logger.exception('convert task: %s error: %s', self.task_info, e)
+            return
         finally:
             try:  # delete all tab window except first blank
                 logger.debug('i: %s driver.window_handles[1:]: %s', self.index, driver.window_handles[1:])
@@ -290,78 +386,15 @@ class ConvertPageToPDFAndSendWorker:
                 self.manager.drivers.pop(self.index, None)
 
         # send
-        if output.tell() >= self.WECHAT_FILE_LIMIT:
-            logger.warning('convert task: %s generate pdf size exceeds', self.task_info)
-            return
-        file_name = send_info.get('file_name')
         if not file_name:
             file_name = resources['page'].get('page_name') or 'document'
-        file_name = file_name.strip()
+        file_name = str(file_name).strip()
         if not file_name.endswith('.pdf'):
             file_name = f'{file_name}.pdf'
         if send_type == 'email':
-            pass
+            self.send_email(file_name, output)
         elif send_type == 'wechat_robot':
             self.send_wechat_robot(file_name, output)
-
-
-class ConvertPageTOPDFManager:
-
-    def __init__(self):
-        self.max_workers = 2
-        self.max_queue = 1000
-        self.drivers = {}
-
-    def init(self, config):
-        section_name = 'CONERT-PAGE-TO-PDF'
-        key_max_workers = 'max_workers'
-        key_max_queue = 'max_queue'
-
-        if config.has_section('CONERT-PAGE-TO-PDF'):
-            try:
-                self.max_workers = int(get_opt_from_conf_or_env(config, section_name, key_max_workers, default=self.max_workers))
-            except:
-                pass
-            try:
-                self.max_queue = int(get_opt_from_conf_or_env(config, section_name, key_max_queue, default=self.max_queue))
-            except:
-                pass
-        self.queue = Queue(self.max_queue)  # element in queue is a dict about task
-        try:  # kill all existing chrome processes
-            os.system("ps aux | grep chrome | grep -v grep | awk ' { print $2 } ' | xargs kill -9 > /dev/null 2>&1")
-        except:
-            pass
-
-    def get_driver(self, index):
-        driver = self.drivers.get(index)
-        if not driver:
-            driver = get_driver(get_chrome_data_dir(f'convert-manager-{index}'))
-            self.drivers[index] = driver
-        return driver
-
-    def do_convert(self, index):
-        while True:
-            task_info = self.queue.get()
-            logger.debug('do_convert task_info: %s', task_info)
-            if task_info.get('action_type') == 'convert_page_to_pdf':
-                ConvertPageToPDFWorker(task_info, index, self).work()
-            elif task_info.get('action_type') == 'convert_page_to_pdf_and_send':
-                ConvertPageToPDFAndSendWorker(task_info, index, self).work()
-
-    def start(self):
-        logger.debug('convert page to pdf max workers: %s max queue: %s', self.max_workers, self.max_queue)
-        for i in range(self.max_workers):
-            t_name = f'driver-{i}'
-            t = Thread(target=self.do_convert, args=(i,), name=t_name, daemon=True)
-            t.start()
-
-    def add_task(self, task_info):
-        try:
-            logger.debug('add task_info: %s', task_info)
-            self.queue.put(task_info, block=False)
-        except Full as e:
-            logger.warning('convert queue full task: %s will be ignored', task_info)
-            raise e
 
 
 conver_page_to_pdf_manager = ConvertPageTOPDFManager()
