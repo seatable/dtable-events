@@ -679,6 +679,7 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
     copy_to = send_info.get('copy_to', [])
     reply_to = send_info.get('reply_to', '')
     file_download_urls = send_info.get('file_download_urls', None)
+    file_contents = send_info.get('file_contents', None)
     message_id = send_info.get('message_id', '')
     in_reply_to = send_info.get('in_reply_to', '')
     image_cid_url_map = send_info.get('image_cid_url_map', {})
@@ -726,6 +727,12 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
         for file_name, file_url in file_download_urls.items():
             response = requests.get(file_url)
             attach_file = MIMEText(response.content, 'base64', 'utf-8')
+            attach_file["Content-Type"] = 'application/octet-stream'
+            attach_file["Content-Disposition"] = 'attachment;filename*=UTF-8\'\'' + parse.quote(file_name)
+            msg_obj.attach(attach_file)
+    if file_contents:
+        for file_name, content in file_contents.items():
+            attach_file = MIMEText(content, 'base64', 'utf-8')
             attach_file["Content-Type"] = 'application/octet-stream'
             attach_file["Content-Disposition"] = 'attachment;filename*=UTF-8\'\'' + parse.quote(file_name)
             msg_obj.attach(attach_file)
