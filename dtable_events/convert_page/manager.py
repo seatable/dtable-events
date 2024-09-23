@@ -32,6 +32,8 @@ class ConvertPageTOPDFManager:
         key_max_workers = 'max_workers'
         key_max_queue = 'max_queue'
 
+        self.config = config
+
         if config.has_section('CONERT-PAGE-TO-PDF'):
             try:
                 self.max_workers = int(get_opt_from_conf_or_env(config, section_name, key_max_workers, default=self.max_workers))
@@ -80,6 +82,26 @@ class ConvertPageTOPDFManager:
         except Full as e:
             logger.warning('convert queue full task: %s will be ignored', task_info)
             raise e
+
+    def clear_chrome(self, index):
+        driver = self.drivers.get(index)
+        if not driver:
+            logger.debug('no index %s chrome', index)
+            return
+        try:  # delete all tab window except first blank
+            logger.debug('i: %s driver.window_handles[1:]: %s', index, driver.window_handles[1:])
+            for window in driver.window_handles[1:]:
+                driver.switch_to.window(window)
+                driver.close()
+            # switch to the first tab window or error will occur when open new window
+            driver.switch_to.window(driver.window_handles[0])
+        except Exception as e:
+            logger.exception('close driver: %s error: %s', index, e)
+            try:
+                driver.quit()
+            except Exception as e:
+                logger.exception('quit driver: %s error: %s', index, e)
+            self.manager.drivers.pop(index, None)
 
 
 class ConvertPageToPDFWorker:
@@ -228,20 +250,7 @@ class ConvertPageToPDFWorker:
                 except Exception as e:
                     logger.exception('convert task: %s error: %s', self.task_info, e)
                 finally:
-                    try:  # delete all tab window except first blank
-                        logger.debug('i: %s driver.window_handles[1:]: %s', i, driver.window_handles[1:])
-                        for window in driver.window_handles[1:]:
-                            driver.switch_to.window(window)
-                            driver.close()
-                        # switch to the first tab window or error will occur when open new window
-                        driver.switch_to.window(driver.window_handles[0])
-                    except Exception as e:
-                        logger.exception('close driver: %s error: %s', self.index, e)
-                        try:
-                            driver.quit()
-                        except Exception as e:
-                            logger.exception('quit driver: %s error: %s', self.index, e)
-                        self.manager.drivers.pop(self.index, None)
+                    self.manager.clear_chrome(self.index)
         except Exception as e:
             logger.exception(e)
 
@@ -315,6 +324,7 @@ class ConvertPageToPDFAndSendWorker:
         detail = account_info.get('detail') or {}
 
         subject = self.task_info.get('subject')
+        message = self.task_info.get('message')
         send_to_list = self.task_info.get('send_to_list')
         copy_to_list = self.task_info.get('copy_to_list')
         reply_to = self.task_info.get('reply_to')
@@ -324,6 +334,7 @@ class ConvertPageToPDFAndSendWorker:
 
         send_info = {
             'subject': subject,
+            'message': message,
             'send_to': send_to_list,
             'copy_to': copy_to_list,
             'reply_to': reply_to if reply_to else '',
@@ -333,10 +344,11 @@ class ConvertPageToPDFAndSendWorker:
             batch_send_email_msg(
                 detail,
                 [send_info],
-                'automation-rules'
+                'automation-rules',
+                config=self.manager.config
             )
         except Exception as e:
-            logger.error('task: %s send file email error: %s', self.task_info, e)
+            logger.exception('task: %s send file email error: %s', self.task_info, e)
 
     def work(self):
         dtable_uuid = self.task_info.get('dtable_uuid')
@@ -370,20 +382,7 @@ class ConvertPageToPDFAndSendWorker:
             logger.exception('convert task: %s error: %s', self.task_info, e)
             return
         finally:
-            try:  # delete all tab window except first blank
-                logger.debug('i: %s driver.window_handles[1:]: %s', self.index, driver.window_handles[1:])
-                for window in driver.window_handles[1:]:
-                    driver.switch_to.window(window)
-                    driver.close()
-                # switch to the first tab window or error will occur when open new window
-                driver.switch_to.window(driver.window_handles[0])
-            except Exception as e:
-                logger.exception('close driver: %s error: %s', self.index, e)
-                try:
-                    driver.quit()
-                except Exception as e:
-                    logger.exception('quit driver: %s error: %s', self.index, e)
-                self.manager.drivers.pop(self.index, None)
+            self.manager.clear_chrome(self.index)
 
         # send
         if not file_name:
@@ -391,10 +390,13 @@ class ConvertPageToPDFAndSendWorker:
         file_name = str(file_name).strip()
         if not file_name.endswith('.pdf'):
             file_name = f'{file_name}.pdf'
-        if send_type == 'email':
-            self.send_email(file_name, output)
-        elif send_type == 'wechat_robot':
-            self.send_wechat_robot(file_name, output)
+        try:
+            if send_type == 'email':
+                self.send_email(file_name, output)
+            elif send_type == 'wechat_robot':
+                self.send_wechat_robot(file_name, output)
+        except Exception as e:
+            logger.exception('handle task: %s error: %s', self.task_info, e)
 
 
 conver_page_to_pdf_manager = ConvertPageTOPDFManager()
