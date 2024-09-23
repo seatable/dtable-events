@@ -138,7 +138,10 @@ def wait_page_view(driver: webdriver.Chrome, session_id, plugin_type, row_id, ou
             logger.exception('execute printToPDF error: {}'.format(e))
 
         # debug page-design view in chrome, console log and network log, don't delete
-        logger.debug('browser console: %s', list(driver.get_log('browser')))
+        logger.debug('browser console start')
+        for log in list(driver.get_log('browser')):
+            logger.debug(log)
+        logger.debug('browser console end')
         network_logs = driver.execute_script("var performance = window.performance || window.mozPerformance || window.msPerformance || window.webkitPerformance || {}; var network = performance.getEntriesByType('resource') || {}; return network;")
         logger.debug('network logs start')
         for item in network_logs:

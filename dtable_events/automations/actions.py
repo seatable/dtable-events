@@ -2906,9 +2906,10 @@ class ConvertPageToPDFAndSendAction(BaseAction):
         }
         if self.send_type == 'email':
             task_info['subject'] = self.email_send_info.get('subject') or ''
-            task_info['send_to_list'] = [is_valid_email(send_to) for send_to in self.email_send_info.get('send_to_list')]
-            task_info['copy_to_list'] = [is_valid_email(copy_to) for copy_to in self.email_send_info.get('copy_to_list')]
-            task_info['reply_to'] = self.email_send_info.get('reply_to') or ''
+            task_info['message'] = self.email_send_info.get('message') or ''
+            task_info['send_to_list'] = [send_to for send_to in self.email_send_info.get('send_to') if is_valid_email(send_to)]
+            task_info['copy_to_list'] = [copy_to for copy_to in self.email_send_info.get('copy_to') if is_valid_email(copy_to)]
+            task_info['reply_to'] = self.email_send_info.get('reply_to') if is_valid_email(self.email_send_info.get('reply_to')) else ''
         try:
             # put resources check to the place before convert page,
             # because there is a distance between putting task to queue and converting page
@@ -3409,17 +3410,19 @@ class AutomationRule:
                     send_type = action_info.get('send_type')
                     account_id = action_info.get('account_id')
                     file_name = action_info.get('file_name')
+                    subject = action_info.get('subject')
+                    msg = action_info.get('default_msg', '')
                     send_to_list = email2list(action_info.get('send_to', ''))
                     copy_to_list = email2list(action_info.get('copy_to', ''))
                     reply_to = action_info.get('reply_to', '')
 
                     email_send_info = {
-                        'message': '',
                         'is_plain_text': True,
                         'send_to': send_to_list,
                         'copy_to': copy_to_list,
                         'reply_to': reply_to,
-                        'subject': subject
+                        'subject': subject,
+                        'message': msg
                     }
 
                     ConvertPageToPDFAndSendAction(self, action_info.get('type'), plugin_type, page_id, send_type, account_id, file_name, email_send_info).do_action()
