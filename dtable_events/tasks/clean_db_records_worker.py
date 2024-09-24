@@ -34,7 +34,7 @@ class CleanDBRecordsWorker(object):
         dtable_snapshot = config.getint(section_name, 'keep_dtable_snapshot_days', fallback=365)
         activities = config.getint(section_name, 'keep_activities_days', fallback=30)
         operation_log = config.getint(section_name, 'keep_operation_log_days', fallback=14)
-        delete_operation_log = config.getint(section_name, 'keep_delete_operation_days', fallback=30)
+        delete_operation_log = config.getint(section_name, 'keep_delete_operation_log_days', fallback=30)
         notifications_usernotification = config.getint(section_name, 'keep_notifications_usernotification_days', fallback=30)
         dtable_notifications = config.getint(section_name, 'keep_dtable_notifications_days', fallback=30)
         session_log = config.getint(section_name, 'keep_session_log_days', fallback=30)
