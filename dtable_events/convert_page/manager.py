@@ -101,7 +101,7 @@ class ConvertPageTOPDFManager:
                 driver.quit()
             except Exception as e:
                 logger.exception('quit driver: %s error: %s', index, e)
-            self.manager.drivers.pop(index, None)
+            self.drivers.pop(index, None)
 
 
 class ConvertPageToPDFWorker:
