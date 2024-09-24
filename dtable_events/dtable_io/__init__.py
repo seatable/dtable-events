@@ -806,7 +806,7 @@ def batch_send_email_msg(auth_info, send_info_list, username, config=None, db_se
         file_contents = send_info.get('file_contents', None)
         image_cid_url_map = send_info.get('image_cid_url_map', {})
 
-        if not msg and not html_msg:
+        if not msg and not html_msg and not file_download_urls and not file_contents:
             dtable_message_logger.warning('Email message invalid')
             continue
 
