@@ -26,9 +26,7 @@ class CleanDBRecordsWorker(object):
             self._retention_config = RetentionConfig()
 
     def _parse_config(self, config):
-        # TODO: Dashes are bad for conf generation through environment variables
-        # TODO: Rename to RETENTION_TIMES instead (?)
-        section_name = 'CLEAN_DB_RECORDS'
+        section_name = 'CLEAN DB'
 
         # Read retention times from config file
         dtable_snapshot = config.getint(section_name, 'keep_dtable_snapshot_days', fallback=365)
