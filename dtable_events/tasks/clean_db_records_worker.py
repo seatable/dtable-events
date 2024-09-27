@@ -36,6 +36,9 @@ class CleanDBRecordsWorker(object):
         notifications_usernotification = config.getint(section_name, 'keep_notifications_usernotification_days', fallback=30)
         dtable_notifications = config.getint(section_name, 'keep_dtable_notifications_days', fallback=30)
         session_log = config.getint(section_name, 'keep_session_log_days', fallback=30)
+        auto_rules_task_log = config.getint(section_name, 'keep_auto_rules_task_log_days', fallback=30)
+        # Disabled by default
+        user_activity_statistics = config.getint(section_name, 'keep_user_activity_statistics_days', fallback=0)
 
         self._retention_config = RetentionConfig(
             dtable_snapshot=dtable_snapshot,
@@ -45,6 +48,8 @@ class CleanDBRecordsWorker(object):
             notifications_usernotification=notifications_usernotification,
             dtable_notifications=dtable_notifications,
             session_log=session_log,
+            auto_rules_task_log=auto_rules_task_log,
+            user_activity_statistics=user_activity_statistics,
         )
 
     def start(self):
@@ -64,6 +69,9 @@ class RetentionConfig:
     notifications_usernotification: int = 30
     dtable_notifications: int = 30
     session_log: int = 30
+    auto_rules_task_log: int = 30
+    # Disabled by default
+    user_activity_statistics: int = 0
 
 
 class CleanDBRecordsTask(Thread):
@@ -89,6 +97,9 @@ class CleanDBRecordsTask(Thread):
                 clean_notifications(session, self.retention_config.dtable_notifications)
                 clean_user_notifications(session, self.retention_config.notifications_usernotification)
                 clean_sessions(session, self.retention_config.session_log)
+                clean_django_sessions(session)
+                clean_auto_rules_task_log(session, self.retention_config.auto_rules_task_log)
+                clean_user_activity_statistics(session, self.retention_config.user_activity_statistics)
             except:
                 logging.exception('Could not clean database')
             finally:
@@ -193,3 +204,38 @@ def clean_sessions(session, keep_days: int):
     session.commit()
 
     logging.info('Removed %d entries from "session_log"', result.rowcount)
+
+def clean_django_sessions(session):
+    logging.info('Cleaning expired entries from "django_session" table')
+
+    sql = 'DELETE FROM `django_session` WHERE `expire_date` < CURRENT_TIMESTAMP()'
+    result = session.execute(text(sql))
+    session.commit()
+
+    logging.info('Removed %d entries from "django_session"', result.rowcount)
+
+def clean_auto_rules_task_log(session, keep_days: int):
+    if keep_days <= 0:
+        logging.info('Skipping "auto_rules_task_log" since retention time is set to %d', keep_days)
+        return
+
+    logging.info('Cleaning "auto_rules_task_log" table (older than %d days)', keep_days)
+
+    sql = 'DELETE FROM `auto_rules_task_log` WHERE `trigger_time` < DATE_SUB(NOW(), INTERVAL :days DAY)'
+    result = session.execute(text(sql), {'days': keep_days})
+    session.commit()
+
+    logging.info('Removed %d entries from "auto_rules_task_log"', result.rowcount)
+
+def clean_user_activity_statistics(session, keep_days: int):
+    if keep_days <= 0:
+        logging.info('Skipping "user_activity_statistics" since retention time is set to %d', keep_days)
+        return
+
+    logging.info('Cleaning "user_activity_statistics" table (older than %d days)', keep_days)
+
+    sql = 'DELETE FROM `user_activity_statistics` WHERE `timestamp` < DATE_SUB(NOW(), INTERVAL :days DAY)'
+    result = session.execute(text(sql), {'days': keep_days})
+    session.commit()
+
+    logging.info('Removed %d entries from "user_activity_statistics"', result.rowcount)
