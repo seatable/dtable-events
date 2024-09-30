@@ -23,6 +23,7 @@ from dtable_events.workflow.workflow_actions import WorkflowActionsHandler
 from dtable_events.workflow.workflow_schedules_scanner import WorkflowSchedulesScanner
 from dtable_events.convert_page.manager import conver_page_to_pdf_manager
 from dtable_events.api_calls.api_calls_counter import APICallsCounter
+from dtable_events.app.mq_handler import EventsHandler, init_message_handlers
 
 
 class App(object):
@@ -62,6 +63,9 @@ class App(object):
             # convert pdf manager
             conver_page_to_pdf_manager.init(config)
 
+            init_message_handlers()
+            self._events_handler = EventsHandler(config)
+
     def serve_forever(self):
 
         if self._enable_foreground_tasks:
@@ -93,3 +97,5 @@ class App(object):
             self._license_expiring_notices_sender.start()    # always True
             # convert pdf manager
             conver_page_to_pdf_manager.start()               # always True
+
+            self._events_handler.start()
