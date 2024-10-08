@@ -93,7 +93,7 @@ class BigDataStorageStatsTask(Thread):
                     else:
                         break
                 except Exception as e:
-                    logging.error(e)
+                    logging.exception(e)
                     break
 
             session = self.db_session_class()
