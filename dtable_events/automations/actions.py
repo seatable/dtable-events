@@ -1711,9 +1711,8 @@ class LinkRecordsAction(BaseAction):
             if "_id" not in column_names:
                 column_names.append("_id")
             query_clause = ",".join(["`%s`" % n for n in column_names])
-        sql = ''
+        sql = sql.replace("*", query_clause, 1)
         try:
-            sql = sql.replace("*", query_clause, 1)
             rows_data, _ = self.auto_rule.dtable_db_api.query(sql, convert=False)
         except RowsQueryError:
             raise RuleInvalidException('wrong filter in filters in link-records')
