@@ -25,19 +25,25 @@ class LogConfigurator(object):
             self._rotating_config()
 
     def _rotating_config(self):
-        # Rotating log
-        handler = handlers.TimedRotatingFileHandler(self._logfile, when='W0', interval=1, backupCount=7)
-        handler.setLevel(self._level)
-        formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] %(filename)s[line:%(lineno)d] %(message)s')
-        handler.setFormatter(formatter)
-
         logging.root.setLevel(self._level)
-        logging.root.addHandler(handler)
+
+        # logs to file
+        file_formatter = logging.Formatter('[%(asctime)s] %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s')
+        file_handler = handlers.TimedRotatingFileHandler(self._logfile, when='W0', interval=1, backupCount=7)
+        file_handler.setLevel(self._level)
+        file_handler.setFormatter(file_formatter)
+        logging.root.addHandler(file_handler)
+
+        # logs to stdout
+        stdout_formatter = logging.Formatter('[dtable_events] [%(asctime)s] %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s')
+        stdout_handler = logging.StreamHandler()
+        stdout_handler.setFormatter(stdout_formatter)  
+        logging.root.addHandler(stdout_handler)
 
     def _basic_config(self):
         # Log to stdout. Mainly for development.
         kw = {
-            'format': '[%(asctime)s] [%(levelname)s] %(filename)s[line:%(lineno)d] %(message)s',
+            'format': '[dtable_events] [%(asctime)s] %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s',
             'datefmt': '%m/%d/%Y %H:%M:%S',
             'level': self._level,
             'stream': sys.stdout
