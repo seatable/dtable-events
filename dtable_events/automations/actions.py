@@ -1711,8 +1711,8 @@ class LinkRecordsAction(BaseAction):
             if "_id" not in column_names:
                 column_names.append("_id")
             query_clause = ",".join(["`%s`" % n for n in column_names])
+        sql = sql.replace("*", query_clause, 1)
         try:
-            sql = sql.replace("*", query_clause, 1)
             rows_data, _ = self.auto_rule.dtable_db_api.query(sql, convert=False)
         except RowsQueryError:
             raise RuleInvalidException('wrong filter in filters in link-records')
@@ -1721,7 +1721,7 @@ class LinkRecordsAction(BaseAction):
             return None
         except Exception as e:
             logger.exception(e)
-            logger.error('rule: %s request filter rows error: %s', self.auto_rule.rule_id, e)
+            logger.error('rule: %s request filter rows error: %s filter_conditions: %s sql: %s', self.auto_rule.rule_id, e, filter_conditions, sql)
             return None
 
         logger.debug('Number of linking dtable rows by auto-rule %s is: %s, dtable_uuid: %s, details: %s' % (

@@ -657,9 +657,9 @@ def is_equal(v1, v2, column_type):
             return v1 == v2
         elif column_type == ColumnTypes.MULTIPLE_SELECT:
             if v1 is not None and isinstance(v1, list):
-                v1 = sorted(v1)
+                v1 = sorted([item for item in v1 if item])
             if v2 is not None and isinstance(v2, list):
-                v2 = sorted(v2)
+                v2 = sorted([item for item in v2 if item])
             return v1 == v2
         else:
             return v1 == v2
