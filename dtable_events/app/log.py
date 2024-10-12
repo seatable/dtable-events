@@ -3,6 +3,7 @@ import os
 import sys
 import logging
 from logging import handlers
+from .config import ENABLE_SEATABLE_EVENTS_LOGS_TO_STDOUT
 
 
 def _get_log_level(level):
@@ -34,11 +35,12 @@ class LogConfigurator(object):
         file_handler.setFormatter(file_formatter)
         logging.root.addHandler(file_handler)
 
-        # logs to stdout
-        stdout_formatter = logging.Formatter('[dtable_events] [%(asctime)s] %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s')
-        stdout_handler = logging.StreamHandler()
-        stdout_handler.setFormatter(stdout_formatter)  
-        logging.root.addHandler(stdout_handler)
+        if ENABLE_SEATABLE_EVENTS_LOGS_TO_STDOUT:
+            # logs to stdout
+            stdout_formatter = logging.Formatter('[seatable_event] [%(asctime)s] %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s')
+            stdout_handler = logging.StreamHandler()
+            stdout_handler.setFormatter(stdout_formatter)  
+            logging.root.addHandler(stdout_handler)
 
     def _basic_config(self):
         # Log to stdout. Mainly for development.

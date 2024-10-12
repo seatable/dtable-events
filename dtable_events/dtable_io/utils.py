@@ -20,7 +20,7 @@ from urllib.parse import quote as urlquote
 from sqlalchemy import text
 from seaserv import seafile_api
 
-from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_FILE_SERVER_ROOT
+from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_FILE_SERVER_ROOT, ENABLE_SEATABLE_EVENTS_LOGS_TO_STDOUT
 from dtable_events.dtable_io.external_app import APP_USERS_COUMNS_TYPE_MAP, match_user_info, update_app_sync, \
     get_row_ids_for_delete, get_app_users
 from dtable_events.dtable_io.task_manager import task_manager
@@ -49,12 +49,13 @@ def setup_logger(logname):
     handler.addFilter(logging.Filter(logname))
     logger.addHandler(handler)
 
-    # logs to stdout
-    logger_component_name = logname.split('.')[0]
-    stdout_formatter = logging.Formatter(f'[{logger_component_name}]' + ' [%(asctime)s] [%(levelname)s] %(message)s')
-    stdout_handler = logging.StreamHandler()
-    stdout_handler.setFormatter(stdout_formatter)
-    logger.addHandler(stdout_handler)
+    if ENABLE_SEATABLE_EVENTS_LOGS_TO_STDOUT:
+        # logs to stdout
+        logger_component_name = logname.split('.')[0]
+        stdout_formatter = logging.Formatter(f'[{logger_component_name}]' + ' [%(asctime)s] [%(levelname)s] %(message)s')
+        stdout_handler = logging.StreamHandler()
+        stdout_handler.setFormatter(stdout_formatter)
+        logger.addHandler(stdout_handler)
 
     return logger
 
