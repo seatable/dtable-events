@@ -94,6 +94,15 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    def add_import_dtable_big_data_screen_app_task(self, username, repo_id, dtable_uuid, app_uuid, app_id):
+        from  dtable_events.dtable_io import import_big_data_screen_app
+        task_id = str(uuid.uuid4())
+        task = (import_big_data_screen_app,
+                (username, repo_id, dtable_uuid, app_uuid, app_id, self.config))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+        return task_id
+
 
     def add_transfer_dtable_asset_files_task(self, username, repo_id, dtable_uuid, files, files_map, parent_dir, relative_path, replace, repo_api_token, seafile_server_url):
         from dtable_events.dtable_io import get_dtable_transfer_asset_files

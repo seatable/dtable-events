@@ -18,7 +18,7 @@ from seaserv import seafile_api
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL
 from dtable_events.dtable_io.big_data import import_excel_to_db, update_excel_to_db, export_big_data_to_excel, \
     export_app_table_page_to_excel
-from dtable_events.dtable_io.utils import setup_logger, \
+from dtable_events.dtable_io.utils import post_big_data_screen_app_zip_file, setup_logger, \
     prepare_asset_file_folder, post_dtable_json, post_asset_files, \
     download_files_to_path, create_forms_from_src_dtable, copy_src_forms_to_json, \
     prepare_dtable_json_from_memory, update_page_design_static_image, \
@@ -295,6 +295,26 @@ def import_big_data_screen(username, repo_id, dtable_uuid, page_id):
         dtable_io_logger.error('import big data screen from dtable failed. ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('import big data screen to dtable: %s success!', dtable_uuid)
+    try:
+        shutil.rmtree(tmp_extracted_path)
+    except Exception as e:
+        dtable_io_logger.error('rm extracted tmp file failed. ERROR: {}'.format(e))
+
+
+def import_big_data_screen_app(username, repo_id, dtable_uuid, app_uuid, app_id, config):
+    """
+    parse the zip in tmp folders and upload it
+    """
+    tmp_extracted_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'big_data_screen_zip_extracted/')
+    db_session = init_db_session_class(config)()
+    try:
+        post_big_data_screen_app_zip_file(username, repo_id, dtable_uuid, app_uuid, app_id, tmp_extracted_path, db_session)
+    except Exception as e:
+        dtable_io_logger.exception('import big data screen from dtable failed. ERROR: {}'.format(e))
+    else:
+        dtable_io_logger.info('import big data screen to dtable: %s success!', dtable_uuid)
+    finally:
+        db_session.close()
     try:
         shutil.rmtree(tmp_extracted_path)
     except Exception as e:
