@@ -709,7 +709,10 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
             msg_obj.attach(attach_file)
 
     try:
-        smtp = smtplib.SMTP(email_host, int(email_port), timeout=30)
+        if 'smtp.163.com' in email_host:
+            smtp = smtplib.SMTP_SSL(email_host, int(email_port), timeout=30)
+        else:
+            smtp = smtplib.SMTP(email_host, int(email_port), timeout=30)
     except Exception as e:
         dtable_message_logger.warning(
             'Email server configured failed. host: %s, port: %s, error: %s' % (email_host, email_port, e))
@@ -718,7 +721,8 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
     success = False
 
     try:
-        smtp.starttls()
+        if 'smtp.163.com' not in email_host:
+            smtp.starttls()
         smtp.login(host_user, password)
         recevers = copy_to and send_to + copy_to or send_to
         smtp.sendmail(sender_email if sender_email else host_user, recevers, msg_obj.as_string())
