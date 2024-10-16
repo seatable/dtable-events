@@ -23,6 +23,7 @@ from dtable_events.workflow.workflow_actions import WorkflowActionsHandler
 from dtable_events.workflow.workflow_schedules_scanner import WorkflowSchedulesScanner
 from dtable_events.convert_page.manager import conver_page_to_pdf_manager
 from dtable_events.api_calls.api_calls_counter import APICallsCounter
+from dtable_events.tasks.dtable_file_access_log_cleaner import DTableFileAccessLogCleaner
 
 
 class App(object):
@@ -59,6 +60,7 @@ class App(object):
             self._workflow_schedule_scanner = WorkflowSchedulesScanner(config)
             self._dtable_asset_trash_cleaner = DTableAssetTrashCleaner(config)
             self._license_expiring_notices_sender = LicenseExpiringNoticesSender()
+            self._dtable_access_log_cleaner = DTableFileAccessLogCleaner(config)
             # convert pdf manager
             conver_page_to_pdf_manager.init(config)
 
@@ -91,5 +93,6 @@ class App(object):
             self._workflow_schedule_scanner.start()          # default True
             self._dtable_asset_trash_cleaner.start()         # always True
             self._license_expiring_notices_sender.start()    # always True
+            self._dtable_access_log_cleaner.start()          # always True
             # convert pdf manager
             conver_page_to_pdf_manager.start()               # always True
