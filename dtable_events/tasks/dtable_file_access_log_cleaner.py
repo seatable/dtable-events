@@ -28,9 +28,6 @@ class DTableFileAccessLogCleaner(object):
 
         DTableFileAccessLogCleanerTimer(self._db_session_class, self._expire_days).start()
 
-    def is_enabled(self):
-        return self._enabled
-
 
 class DTableFileAccessLogCleanerTimer(Thread):
 

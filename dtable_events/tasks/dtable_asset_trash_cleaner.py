@@ -21,25 +21,12 @@ class DTableAssetTrashCleaner(object):
     def __init__(self, config):
         self._enabled = True
         self._db_session_class = init_db_session_class(config)
-        self._enabled = False
-        self._expire_days = 60
-        self._parse_config()
-
-    def _parse_config(self):
-        self._enabled = True
         self._expire_days = 60
 
     def start(self):
-        if not self.is_enabled():
-            logging.warning('Can not start dtable asset trash cleaner: it is not enabled!')
-            return
-
         logging.info('Start dtable asset trash cleaner, expire days: %s', self._expire_days)
 
         DTableAssetTrashCleanerTimer(self._db_session_class, self._expire_days).start()
-
-    def is_enabled(self):
-        return self._enabled
 
 
 class DTableAssetTrashCleanerTimer(Thread):
@@ -51,8 +38,8 @@ class DTableAssetTrashCleanerTimer(Thread):
 
     def run(self):
         sched = BlockingScheduler()
-        # fire at 0 o'clock in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='2', misfire_grace_time=600)
+        # fire at 2 o'clock in every day of week
+        @sched.scheduled_job('cron', day_of_week='*', hour='0', misfire_grace_time=600)
         def timed_job():
             logging.info('Starts to clean dtable asset trash...')
 
