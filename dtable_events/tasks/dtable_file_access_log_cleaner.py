@@ -21,19 +21,9 @@ class DTableFileAccessLogCleaner(object):
     def __init__(self, config):
         self._enabled = True
         self._db_session_class = init_db_session_class(config)
-        self._enabled = False
-        self._expire_days = 60
-        self._parse_config()
-
-    def _parse_config(self):
-        self._enabled = True
         self._expire_days = 60
 
     def start(self):
-        if not self.is_enabled():
-            logging.warning('Can not start dtable file access log cleaner: it is not enabled!')
-            return
-
         logging.info('Start dtable file access log cleaner, expire days: %s', self._expire_days)
 
         DTableFileAccessLogCleanerTimer(self._db_session_class, self._expire_days).start()
