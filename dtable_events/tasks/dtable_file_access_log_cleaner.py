@@ -12,11 +12,11 @@ from dtable_events.utils import utc_to_tz
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    'DTableAssetTrashCleaner',
+    'DTableFileAccessLogCleaner',
 ]
 
 
-class DTableAssetTrashCleaner(object):
+class DTableFileAccessLogCleaner(object):
 
     def __init__(self, config):
         self._enabled = True
@@ -24,39 +24,36 @@ class DTableAssetTrashCleaner(object):
         self._expire_days = 60
 
     def start(self):
-        logging.info('Start dtable asset trash cleaner, expire days: %s', self._expire_days)
+        logging.info('Start dtable file access log cleaner, expire days: %s', self._expire_days)
 
-        DTableAssetTrashCleanerTimer(self._db_session_class, self._expire_days).start()
+        DTableFileAccessLogCleanerTimer(self._db_session_class, self._expire_days).start()
 
 
-class DTableAssetTrashCleanerTimer(Thread):
+class DTableFileAccessLogCleanerTimer(Thread):
 
     def __init__(self, db_session_class, expire_days):
-        super(DTableAssetTrashCleanerTimer, self).__init__()
+        super(DTableFileAccessLogCleanerTimer, self).__init__()
         self.db_session_class = db_session_class
         self.expire_days = expire_days
 
     def run(self):
         sched = BlockingScheduler()
-        # fire at 2 o'clock in every day of week
+        # fire at 0 o'clock in every day of week
         @sched.scheduled_job('cron', day_of_week='*', hour='0', misfire_grace_time=600)
         def timed_job():
-            logging.info('Starts to clean dtable asset trash...')
+            logging.info('Starts to clean dtable file access log...')
 
             db_session = self.db_session_class()
 
             inactive_time_limit = utc_to_tz(datetime.utcnow(), TIME_ZONE) - timedelta(days=self.expire_days)
 
-            sql = '''
-                DELETE FROM dtable_asset_trash
-                WHERE deleted_at <= :inactive_time_limit
-            '''
+            sql = "DELETE FROM `file_access_log` WHERE `timestamp` <= :inactive_time_limit"
 
             try:
                 db_session.execute(text(sql), {'inactive_time_limit': inactive_time_limit})
                 db_session.commit()
             except Exception as e:
-                logging.exception('error when cleaning dtable asset trash: %s', e)
+                logging.exception('error when cleaning dtable file access log: %s', e)
             finally:
                 db_session.close()
 
