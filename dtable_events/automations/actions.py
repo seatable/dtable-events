@@ -1039,7 +1039,7 @@ class SendWechatAction(BaseAction):
 
     def init_notify(self, msg):
         account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id)
-        if not account_dict:
+        if not account_dict or uuid_str_to_36_chars(account_dict.get('dtable_uuid')) != uuid_str_to_36_chars(self.auto_rule.dtable_uuid):
             raise RuleInvalidException('Send wechat no account')
         blanks = set(re.findall(r'\{([^{]*?)\}', msg))
         self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
@@ -1110,7 +1110,7 @@ class SendDingtalkAction(BaseAction):
 
     def init_notify(self, msg):
         account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id)
-        if not account_dict:
+        if not account_dict or uuid_str_to_36_chars(account_dict.get('dtable_uuid')) != uuid_str_to_36_chars(self.auto_rule.dtable_uuid):
             raise RuleInvalidException('Send dingtalk no account')
         blanks = set(re.findall(r'\{([^{]*?)\}', msg))
         self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
@@ -1253,7 +1253,7 @@ class SendEmailAction(BaseAction):
 
     def init_notify(self):
         account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id)
-        if not account_dict:
+        if not account_dict or uuid_str_to_36_chars(account_dict.get('dtable_uuid')) != uuid_str_to_36_chars(self.auto_rule.dtable_uuid):
             raise RuleInvalidException('Send email no account')
         self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
         self.init_notify_msg()
@@ -2840,27 +2840,104 @@ class ConvertPageToPDFAction(BaseAction):
         for row in rows:
             file_name = self.fill_msg_blanks_with_sql(column_blanks, col_name_dict, row)
             file_names_dict[row['_id']] = file_name
+        task_info = {
+            'dtable_uuid': self.auto_rule.dtable_uuid,
+            'page_id': self.page_id,
+            'row_ids': [row['_id'] for row in rows],
+            'repo_id': self.repo_id,
+            'workspace_id': self.workspace_id,
+            'file_names_dict': file_names_dict,
+            'target_column_key': self.target_column_key,
+            'table_id': self.auto_rule.table_id,
+            'plugin_type': 'page-design',
+            'action_type': self.action_type
+        }
         try:
             # put resources check to the place before convert page,
-            # because there is a distance between put task to queue and convert page
-            conver_page_to_pdf_manager.add_task({
-                'dtable_uuid': self.auto_rule.dtable_uuid,
-                'page_id': self.page_id,
-                'row_ids': [row['_id'] for row in rows],
-                'repo_id': self.repo_id,
-                'workspace_id': self.workspace_id,
-                'file_names_dict': file_names_dict,
-                'target_column_key': self.target_column_key,
-                'table_id': self.auto_rule.table_id,
-                'plugin_type': 'page-design'
-            })
+            # because there is a distance between putting task to queue and converting page
+            conver_page_to_pdf_manager.add_task(task_info)
         except Full:
             self.auto_rule.append_warning({
                 'type': 'convert_page_to_pdf_server_busy',
                 'page_id': self.page_id,
-                'page_name': self.page['page_name']
+                # 'page_name': self.page['page_name']
             })
         self.auto_rule.set_done_actions()
+
+
+class ConvertPageToPDFAndSendAction(BaseAction):
+
+    def __init__(self, auto_rule, action_type, plugin_type, page_id, file_name, save_config, send_wechat_robot_config, send_email_config):
+        super().__init__(auto_rule, action_type)
+        self.plugin_type = plugin_type
+        self.page_id = page_id
+        self.file_name = file_name
+        self.save_config = save_config
+        self.send_wechat_robot_config = send_wechat_robot_config
+        self.send_email_config = send_email_config
+
+        self.page = None
+
+    def can_do_action(self):
+        if not self.auto_rule.current_valid:
+            return False
+        can_do = False
+        if self.save_config.get('is_save_to_custom'):
+            can_do = True
+        if self.send_wechat_robot_config.get('is_send_wechat_robot'):
+            wechat_robot_account_id = self.send_wechat_robot_config.get('wechat_robot_account_id')
+            account_info = get_third_party_account(self.auto_rule.db_session, wechat_robot_account_id)
+            if account_info and account_info.get('account_type') == 'wechat_robot':
+                can_do = True
+        if self.send_email_config.get('is_send_email'):
+            email_account_id = self.send_wechat_robot_config.get('email_account_id')
+            account_info = get_third_party_account(self.auto_rule.db_session, email_account_id)
+            if account_info and account_info.get('account_type') == 'email':
+                can_do = True
+        return can_do
+
+    # def can_do_action(self):
+    #     if not self.auto_rule.current_valid:
+    #         return False
+    #     account_info = get_third_party_account(self.auto_rule.db_session, self.account_id)
+    #     if not account_info or uuid_str_to_36_chars(account_info.get('dtable_uuid')) != uuid_str_to_36_chars(self.auto_rule.dtable_uuid):
+    #         return False
+    #     self.account_info = account_info
+    #     if self.send_type == 'email' and self.account_info.get('account_type') != 'email':
+    #         return False
+    #     if self.send_type == 'wechat_robot' and self.account_info.get('account_type') != 'wechat_robot':
+    #         return False
+    #     return True
+
+    # def do_action(self):
+    #     if not self.can_do_action():
+    #         return
+    #     task_info = {
+    #         'dtable_uuid': self.auto_rule.dtable_uuid,
+    #         'page_id': self.page_id,
+    #         'plugin_type': self.plugin_type,
+    #         'send_type': self.send_type,
+    #         'account_info': self.account_info,
+    #         'action_type': self.action_type,
+    #         'file_name': self.file_name
+    #     }
+    #     if self.send_type == 'email':
+    #         task_info['subject'] = self.email_send_info.get('subject') or ''
+    #         task_info['message'] = self.email_send_info.get('message') or ''
+    #         task_info['send_to_list'] = [send_to for send_to in self.email_send_info.get('send_to') if is_valid_email(send_to)]
+    #         task_info['copy_to_list'] = [copy_to for copy_to in self.email_send_info.get('copy_to') if is_valid_email(copy_to)]
+    #         task_info['reply_to'] = self.email_send_info.get('reply_to') if is_valid_email(self.email_send_info.get('reply_to')) else ''
+    #     try:
+    #         # put resources check to the place before convert page,
+    #         # because there is a distance between putting task to queue and converting page
+    #         conver_page_to_pdf_manager.add_task(task_info)
+    #     except Full:
+    #         self.auto_rule.append_warning({
+    #             'type': 'convert_page_to_pdf_server_busy',
+    #             'page_id': self.page_id,
+    #             'page_name': self.page['page_name']
+    #         })
+    #     self.auto_rule.set_done_actions()
 
 
 class RuleInvalidException(Exception):
@@ -3214,6 +3291,10 @@ class AutomationRule:
             if run_condition in CRON_CONDITIONS and trigger_condition == CONDITION_PERIODICALLY_BY_CONDITION:
                 return True
             return False
+        elif action_type == 'convert_page_to_pdf_and_send':
+            if run_condition in CRON_CONDITIONS and trigger_condition == CONDITION_PERIODICALLY:
+                return True
+            return False
         return False
 
     def do_actions(self, with_test=False):
@@ -3338,6 +3419,34 @@ class AutomationRule:
                     repo_id = action_info.get('repo_id')
                     workspace_id = action_info.get('workspace_id')
                     ConvertPageToPDFAction(self, action_info.get('type'), self.data, page_id, file_name, target_column_key, repo_id, workspace_id).do_action()
+
+                elif action_info.get('type') == 'convert_page_to_pdf_and_send':
+                    plugin_type = action_info.get('plugin_type')
+                    page_id = action_info.get('page_id')
+                    file_name = action_info.get('file_name')
+                    # save to custom
+                    save_config = {
+                        'is_save_to_custom': action_info.get('is_save_to_path'),
+                        'save_path': action_info.get('save_path', '/')
+                    }
+                    # send wechat robot
+                    send_wechat_robot_config = {
+                        'is_send_wechat_robot': action_info.get('is_send_wechat_robot'),
+                        'wechat_robot_account_id': action_info.get('wechat_robot_account_id'),
+                        'message': action_info.get('wechat_robot_msg', '')
+                    }
+                    # send email
+                    send_email_config = {
+                        'is_send_email': action_info.get('is_send_email'),
+                        'email_account_id': action_info.get('email_account_id'),
+                        'subject': action_info.get('subject'),
+                        'message': action_info.get('email_msg', ''),
+                        'send_to_list': email2list(action_info.get('send_to', '')),
+                        'copy_to_list': email2list(action_info.get('copy_to', '')),
+                        'reply_to': action_info.get('reply_to', '')
+                    }
+
+                    ConvertPageToPDFAndSendAction(self, action_info.get('type'), plugin_type, page_id, file_name, save_config, send_wechat_robot_config, send_email_config).do_action()
 
             except RuleInvalidException as e:
                 logger.warning('auto rule: %s, invalid error: %s', self.rule_id, e)

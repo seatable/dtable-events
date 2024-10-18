@@ -45,7 +45,7 @@ def open_page_view(driver: webdriver.Chrome, dtable_uuid, plugin_type, page_id, 
         url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/document/%s/row/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id, row_id)
 
     url += '?access-token=%s&need_convert=%s' % (access_token, 0)
-    logger.debug('url: %s', url)
+    logger.debug('check url: %s', url)
     driver.execute_script(f"window.open('{url}')")
     return driver.window_handles[-1]
 
@@ -85,10 +85,10 @@ def wait_page_view(driver: webdriver.Chrome, session_id, plugin_type, row_id, ou
         return False
 
     await_react_render = 60
-    sleep_time = 2
-    if not row_id:
-        await_react_render = 180
-        sleep_time = 6
+    # sleep_time = 2
+    # if not row_id:
+    #     await_react_render = 180
+    #     sleep_time = 6
 
     driver.switch_to.window(session_id)
 
@@ -99,11 +99,14 @@ def wait_page_view(driver: webdriver.Chrome, session_id, plugin_type, row_id, ou
         monitor_dom_id = 'document-render-complete'
 
     try:
+        logger.debug('check to wait render')
         # make sure react is rendered, timeout await_react_render, rendering is not completed within 3 minutes, and rendering performance needs to be improved
         WebDriverWait(driver, await_react_render).until(lambda driver: driver.find_element_by_id(monitor_dom_id) is not None, message='wait react timeout')
+        logger.debug('check to wait images')
         # make sure images from asset are rendered, timeout 120s
         WebDriverWait(driver, 120, poll_frequency=1).until(lambda driver: check_images_and_networks(driver), message='wait images and networks timeout')
-        time.sleep(sleep_time) # wait for all rendering
+        logger.debug('check to sleep')
+        # time.sleep(sleep_time) # test how non-sleep effects renderring
     except Exception as e:
         logger.warning('wait for page error: %s', e)
     finally:
@@ -119,7 +122,9 @@ def wait_page_view(driver: webdriver.Chrome, session_id, plugin_type, row_id, ou
         body = json.dumps({'cmd': 'Page.printToPDF', 'params': calculated_print_options})
 
         try:
+            logger.debug('check to export pdf')
             response = driver.command_executor._request('POST', url, body)
+            logger.debug('check to output')
             if not response:
                 logger.error('execute printToPDF error no response')
             v = response.get('value')['data']
@@ -128,17 +133,21 @@ def wait_page_view(driver: webdriver.Chrome, session_id, plugin_type, row_id, ou
                     f.write(base64.b64decode(v))
             elif isinstance(output, io.BytesIO):
                 output.write(base64.b64decode(v))
-            logger.info('convert page to pdf success!')
+            logger.info('check to convert page to pdf success!')
         except Exception as e:
             logger.exception('execute printToPDF error: {}'.format(e))
 
         # debug page-design view in chrome, console log and network log, don't delete
-        # logger.debug('browser console: %s', list(driver.get_log('browser')))
-        # network_logs = driver.execute_script("var performance = window.performance || window.mozPerformance || window.msPerformance || window.webkitPerformance || {}; var network = performance.getEntries() || {}; return network;")
-        # logger.debug('network logs start')
-        # for item in network_logs:
-        #     logger.debug(str(item))
-        # logger.debug('network logs end')
+        logger.debug('browser console start')
+        for log in list(driver.get_log('browser')):
+            logger.debug(log)
+        logger.debug('browser console end')
+        network_logs = driver.execute_script("var performance = window.performance || window.mozPerformance || window.msPerformance || window.webkitPerformance || {}; var network = performance.getEntriesByType('resource') || {}; return network;")
+        logger.debug('network logs start')
+        for item in network_logs:
+            logger.debug('check name: %s start: %s duration: %s end: %s', item.get('name'), item.get('startTime'), item.get('duration'), item.get('responseEnd'))
+            logger.debug(item)
+        logger.debug('network logs end')
 
 
 def convert_page_to_pdf(driver: webdriver.Chrome, dtable_uuid, plugin_type, page_id, row_id, access_token, output):
