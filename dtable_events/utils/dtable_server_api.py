@@ -469,7 +469,6 @@ class DTableServerAPI(object):
             'server': self.server_url.strip('/'),
             'workspace_id': self.workspace_id,
             'dtable_uuid': str(UUID(self.dtable_uuid)),
-            'file_type': file_type,
             'relative_path': parse.quote(relative_path.strip('/')),
             'filename': parse.quote(d.get('name', name))
         }
