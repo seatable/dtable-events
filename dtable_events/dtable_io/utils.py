@@ -44,8 +44,13 @@ def setup_logger(logname):
     """
     logdir = os.path.join(os.environ.get('LOG_DIR', ''))
     log_file = os.path.join(logdir, logname)
-    handler = handlers.TimedRotatingFileHandler(log_file, when='MIDNIGHT', interval=1, backupCount=7)
-    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+
+    if os.environ.get('SEATABLE_LOG_TO_STDOUT', 'false').lower() == 'true':
+        handler = logging.StreamHandler(sys.stdout)
+    else:
+        handler = handlers.TimedRotatingFileHandler(log_file, when='MIDNIGHT', interval=1, backupCount=7)
+
+    formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
     handler.setFormatter(formatter)
     handler.addFilter(logging.Filter(logname))
 
