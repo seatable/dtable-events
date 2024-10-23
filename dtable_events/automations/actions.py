@@ -3546,6 +3546,8 @@ class AutomationRule:
                     plugin_type = action_info.get('plugin_type')
                     page_id = action_info.get('page_id')
                     file_name = action_info.get('file_name')
+                    repo_id = action_info.get('repo_id')
+                    workspace_id = action_info.get('workspace_id')
                     # save to custom
                     save_config = {
                         'is_save_to_custom': action_info.get('is_save_to_custom'),
@@ -3571,7 +3573,7 @@ class AutomationRule:
                         'reply_to': action_info.get('email_reply_to', '')
                     }
 
-                    ConvertPageToPDFAndSendAction(self, action_info.get('type'), plugin_type, page_id, file_name, save_config, send_wechat_robot_config, send_email_config).do_action()
+                    ConvertPageToPDFAndSendAction(self, action_info.get('type'), plugin_type, page_id, file_name, save_config, send_wechat_robot_config, send_email_config, repo_id, workspace_id).do_action()
 
             except RuleInvalidException as e:
                 logger.warning('auto rule: %s, invalid error: %s', self.rule_id, e)
