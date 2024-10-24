@@ -1438,6 +1438,111 @@ def post_big_data_screen_zip_file(username, repo_id, dtable_uuid, page_id, tmp_e
                 seafile_api.post_file(repo_id, tmp_image_path, current_image_path, image_name, username)
 
 
+def zip_big_data_screen_app(username, repo_id, dtable_uuid, app_uuid, app_id, tmp_file_path, db_session):
+    from dtable_events.utils import uuid_str_to_36_chars, normalize_file_path, gen_file_get_url
+
+    base_dir = '/asset/' + uuid_str_to_36_chars(dtable_uuid)
+    # big_data_file_path = 'files/plugins/big-data-screen/%(page_id)s/%(page_id)s.json' % ({
+    #         'page_id': page_id,
+    #     })
+    big_data_poster_path = 'external-apps/big-data-screen/%(app_id)s/%(app_id)s.png' % ({
+        'app_id': app_id
+    })
+
+    # asset_path = "%s/%s" % (base_dir, big_data_file_path)
+
+    poster_asset_path = "%s/%s" % (base_dir, big_data_poster_path)
+
+    # 1. get the json file and poster of big-data-screen page
+    #   a. json file
+    # asset_id = seafile_api.get_file_id_by_path(repo_id, asset_path)
+    # token = seafile_api.get_fileserver_access_token(
+    #     repo_id, asset_id, 'view', '', use_onetime=False
+    # )
+    # asset_name = os.path.basename(normalize_file_path(big_data_file_path))
+    # url = gen_file_get_url(token, asset_name)
+
+    # resp = requests.get(url)
+    # page_json = json.loads(resp.content)
+    sql = "SELECT app_config FROM dtable_external_apps WHERE id=:app_id"
+    app = db_session.execute(text(sql), {'app_id': app_id}).fetchone()
+    if not app:
+        raise Exception('app: %s not found', app_id)
+    try:
+        app_config = json.loads(app.app_config)
+    except Exception as e:
+        raise Exception('app: %s app_config invalid', app_id)
+    content = app_config.get('settings') or {}
+
+    #  b. poster
+
+    resp_poster = None
+    poster_asset_id = seafile_api.get_file_id_by_path(repo_id, poster_asset_path)
+    if poster_asset_id:
+        poster_token = seafile_api.get_fileserver_access_token(
+            repo_id, poster_asset_id, 'view', '', use_onetime=False
+        )
+        poster_name = os.path.basename(normalize_file_path(big_data_poster_path))
+        url = gen_file_get_url(poster_token, poster_name)
+        resp_poster = requests.get(url)
+
+    # 2. get the image infos in big-data-screen
+    page_bg_custom_image_list = content.get('page_bg_custom_image_list') or []
+    page_images = []
+    page_elements = content.get('page_elements') or {}
+    element_map = page_elements.get('element_map') or {}
+    for key, value in element_map.items():
+        if value.get('element_type') == 'image':
+            image_url = value.get('config',{}).get('imageUrl')
+            if "?" not in image_url:  # when is there a ?
+                page_images.append(image_url)
+
+    content_json = {
+        'page_content': content,
+        'page_images': page_images
+    }
+
+    # 3. write json file to tmp_file_path , write images to tmp_file_path/images
+    content_json_save_path = tmp_file_path.rstrip('/')
+    image_save_path = os.path.join(content_json_save_path, 'images')
+    with open("%s/content.json" % content_json_save_path, 'wb') as f:
+        f.write(json.dumps(content_json).encode('utf-8'))
+    if resp_poster:
+        with open("%s/content.png" % content_json_save_path, 'wb') as f:
+            f.write(resp_poster.content)
+
+    for image_url in page_bg_custom_image_list:
+        target_path = normalize_file_path(os.path.join(base_dir, f'external-apps/big-data-screen/{app_id}', image_url.strip('/')))
+        asset_id = seafile_api.get_file_id_by_path(repo_id, target_path)
+        if not asset_id:
+            continue
+        token = seafile_api.get_fileserver_access_token(
+            repo_id, asset_id, 'download', username, use_onetime=False
+        )
+        image_name = os.path.basename(normalize_file_path(image_url))
+        url = gen_file_get_url(token, image_name)
+
+        resp = requests.get(url)
+        with open('%s/%s' % (image_save_path, image_name), 'wb') as f:
+            f.write(resp.content)
+
+    for image_url in page_images:
+        target_path = normalize_file_path(os.path.join(base_dir, f'external-apps/big-data-screen/{app_id}', image_url.strip('/')))
+        asset_id = seafile_api.get_file_id_by_path(repo_id, target_path)
+        if not asset_id:
+            continue
+
+        token = seafile_api.get_fileserver_access_token(
+            repo_id, asset_id, 'download', username, use_onetime=False
+        )
+        image_name = os.path.basename(normalize_file_path(image_url))
+        url = gen_file_get_url(token, image_name)
+
+        resp = requests.get(url)
+        with open('%s/%s' % (image_save_path, image_name), 'wb') as f:
+            f.write(resp.content)
+
+
 def post_big_data_screen_app_zip_file(username, repo_id, dtable_uuid, app_uuid, app_id, tmp_extracted_path, db_session):
 
     content_json_file_path = os.path.join(tmp_extracted_path, 'content.json')
