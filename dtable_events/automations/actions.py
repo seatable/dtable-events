@@ -2949,7 +2949,7 @@ class ConvertPageToPDFAndSendAction(BaseAction):
             file_name += '.pdf'
         relative_path = os.path.join('custom', self.save_config.get('save_path').strip('/'))
         try:
-            dtable_server_api.upload_bytes_file(self.file_name, pdf_content, relative_path)
+            dtable_server_api.upload_bytes_file(file_name, pdf_content, relative_path)
         except Exception as e:
             logger.exception('rule: %s dtable: %s page: %s upload pdf to custom: %s error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.page_id, relative_path, e)
 
