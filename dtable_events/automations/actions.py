@@ -23,6 +23,7 @@ from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY,
     SEATABLE_FAAS_AUTH_TOKEN, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL
 from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg, batch_send_email_msg
 from dtable_events.convert_page.manager import conver_page_to_pdf_manager
+from dtable_events.app.log import setup_logger
 from dtable_events.notification_rules.notification_rules_utils import send_notification, fill_msg_blanks_with_sql_row
 from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url, \
     normalize_file_path, gen_file_get_url, gen_random_option
@@ -36,6 +37,7 @@ from dtable_events.utils.universal_app_api import UniversalAppAPI
 
 
 logger = logging.getLogger(__name__)
+auto_rule_logger = setup_logger('automation-rules.log')
 
 PER_DAY = 'per_day'
 PER_WEEK = 'per_week'

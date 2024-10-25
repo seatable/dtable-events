@@ -18,7 +18,7 @@ from seaserv import seafile_api
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL
 from dtable_events.dtable_io.big_data import import_excel_to_db, update_excel_to_db, export_big_data_to_excel, \
     export_app_table_page_to_excel
-from dtable_events.dtable_io.utils import post_big_data_screen_app_zip_file, setup_logger, \
+from dtable_events.dtable_io.utils import post_big_data_screen_app_zip_file, \
     prepare_asset_file_folder, post_dtable_json, post_asset_files, \
     download_files_to_path, create_forms_from_src_dtable, copy_src_forms_to_json, \
     prepare_dtable_json_from_memory, update_page_design_static_image, \
@@ -40,6 +40,7 @@ from dtable_events.utils import get_inner_dtable_server_url, is_valid_email, uui
 from dtable_events.utils.dtable_server_api import DTableServerAPI, BaseExceedsException
 from dtable_events.utils.exception import ExcelFormatError
 from dtable_events.dtable_io.utils import clear_tmp_dir, clear_tmp_file, clear_tmp_files_and_dirs
+from dtable_events.app.log import setup_logger
 
 dtable_io_logger = setup_logger('dtable_events_io.log')
 dtable_message_logger = setup_logger('dtable_events_message.log')

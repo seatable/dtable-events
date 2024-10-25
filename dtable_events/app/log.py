@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 import sys
 import logging
 from logging import handlers
@@ -50,3 +51,20 @@ class LogConfigurator(object):
         formatter = logging.Formatter('seafevents[%(process)d]: %(message)s')
         handler.setFormatter(formatter)
         logging.root.addHandler(handler)
+
+
+def setup_logger(logname):
+    """
+    setup logger for dtable io
+    """
+    logdir = os.path.join(os.environ.get('LOG_DIR', ''))
+    log_file = os.path.join(logdir, logname)
+    handler = handlers.TimedRotatingFileHandler(log_file, when='MIDNIGHT', interval=1, backupCount=7)
+    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+    handler.setFormatter(formatter)
+    handler.addFilter(logging.Filter(logname))
+
+    logger = logging.getLogger(logname)
+    logger.addHandler(handler)
+
+    return logger
