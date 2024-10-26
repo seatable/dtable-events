@@ -94,6 +94,15 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    def add_export_dtable_big_data_screen_app_task(self, username, repo_id, dtable_uuid, app_uuid, app_id):
+        from  dtable_events.dtable_io import get_dtable_export_big_data_screen_app
+        task_id = str(uuid.uuid4())
+        task = (get_dtable_export_big_data_screen_app,
+                (username, repo_id, dtable_uuid, app_uuid, app_id, task_id, self.config))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+        return task_id
+
     def add_import_dtable_big_data_screen_app_task(self, username, repo_id, dtable_uuid, app_uuid, app_id):
         from  dtable_events.dtable_io import import_big_data_screen_app
         task_id = str(uuid.uuid4())

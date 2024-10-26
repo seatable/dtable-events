@@ -26,7 +26,7 @@ from dtable_events.dtable_io.utils import post_big_data_screen_app_zip_file, set
     copy_src_workflows_to_json, create_workflows_from_src_dtable, copy_src_external_app_to_json,\
     create_external_apps_from_src_dtable, zip_big_data_screen, post_big_data_screen_zip_file, \
     export_page_design_dir_to_path, update_page_design_content_to_path, upload_page_design, \
-    download_page_design_file
+    download_page_design_file, zip_big_data_screen_app
 from dtable_events.db import init_db_session_class
 from dtable_events.dtable_io.excel import parse_excel_csv_to_json, import_excel_csv_by_dtable_server, \
     append_parsed_file_by_dtable_server, parse_append_excel_csv_upload_file_to_json, \
@@ -299,6 +299,28 @@ def import_big_data_screen(username, repo_id, dtable_uuid, page_id):
         shutil.rmtree(tmp_extracted_path)
     except Exception as e:
         dtable_io_logger.error('rm extracted tmp file failed. ERROR: {}'.format(e))
+
+
+def get_dtable_export_big_data_screen_app(username, repo_id, dtable_uuid, app_uuid, app_id, task_id, config):
+    """
+    parse json file in big data screen, and zip it for download
+    """
+    tmp_file_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'big-data-screen', str(task_id))
+    tmp_zip_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'big-data-screen', str(task_id) + '.zip')
+    clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path)
+    os.makedirs(tmp_file_path.rstrip('/') + '/images', exist_ok=True)
+
+    db_session = init_db_session_class(config)()
+
+    try:
+        zip_big_data_screen_app(username, repo_id, dtable_uuid, app_uuid, app_id, tmp_file_path, db_session)
+        shutil.make_archive(tmp_zip_path.split('.')[0], 'zip', root_dir=tmp_file_path)
+    except Exception as e:
+        dtable_io_logger.exception('export big data screen from dtable failed. ERROR: {}'.format(e))
+    else:
+        dtable_io_logger.info('export big data screen from dtable: %s success!', dtable_uuid)
+    finally:
+        db_session.close()
 
 
 def import_big_data_screen_app(username, repo_id, dtable_uuid, app_uuid, app_id, config):
