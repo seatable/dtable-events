@@ -62,7 +62,7 @@ def setup_logger(logname, level=None, propagate=None):
     handler = handlers.TimedRotatingFileHandler(log_file, when='MIDNIGHT', interval=1, backupCount=7)
     if level:
         handler.setLevel(level)
-    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+    formatter = logging.Formatter('[%(asctime)s] %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s')
     handler.setFormatter(formatter)
     handler.addFilter(logging.Filter(logname))
 
