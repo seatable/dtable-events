@@ -2946,7 +2946,7 @@ class ConvertPageToPDFAndSendAction(BaseAction):
         return self.save_config['can_do'] or self.send_wechat_robot_config['can_do'] or self.send_email_config['can_do']
 
     def save_to_custom_cb(self, pdf_content):
-        logger.debug('rule: %s convert-and-send start check save', self.auto_rule.rule_id)
+        logger.debug('rule: %s convert-and-send start check save can_do: %s', self.auto_rule.rule_id, self.save_config.get('can_do'))
         if not self.save_config.get('can_do'):
             return
         dtable_server_api = DTableServerAPI('dtable-events', self.auto_rule.dtable_uuid, get_inner_dtable_server_url(), DTABLE_WEB_SERVICE_URL, self.repo_id, self.workspace_id)
@@ -2960,7 +2960,7 @@ class ConvertPageToPDFAndSendAction(BaseAction):
             logger.exception('rule: %s dtable: %s page: %s upload pdf to custom: %s error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.page_id, relative_path, e)
 
     def send_email_cb(self, pdf_content):
-        logger.debug('rule: %s convert-and-send start check send email', self.auto_rule.rule_id)
+        logger.debug('rule: %s convert-and-send start check send email can_do: %s', self.auto_rule.rule_id, self.send_email_config.get('can_do'))
         if not self.send_email_config.get('can_do'):
             return
         auth_info = self.send_email_config['account_info'].get('detail') or {}
@@ -2988,7 +2988,7 @@ class ConvertPageToPDFAndSendAction(BaseAction):
             logger.exception('rule: %s dtable: %s page: %s send email: %s error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.page_id, send_info, e)
 
     def send_wechat_robot_cb(self, pdf_content):
-        logger.debug('rule: %s convert-and-send start check send wechat robot', self.auto_rule.rule_id)
+        logger.debug('rule: %s convert-and-send start check send wechat robot can_do: %s', self.auto_rule.rule_id, self.send_wechat_robot_config.get('can_do'))
         if not self.send_wechat_robot_config.get('can_do'):
             return
         if len(pdf_content) > self.WECHAT_FILE_SIZE_LIMIT:
@@ -3018,8 +3018,8 @@ class ConvertPageToPDFAndSendAction(BaseAction):
         if not msg_resp.ok:
             logger.error('rule: %s dtable: %s page: %s send wechat: %s error status: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.page_id, auth_info, msg_resp.status_code)
         # send msg
-        wechat_robot_msg = self.send_wechat_robot_config.get('wechat_robot_msg') or ''
-        wechat_robot_msg_type = self.send_wechat_robot_config.get('wechat_robot_msg_type') or 'text'
+        wechat_robot_msg = self.send_wechat_robot_config.get('message') or ''
+        wechat_robot_msg_type = self.send_wechat_robot_config.get('message_type') or 'text'
         if wechat_robot_msg:
             time.sleep(0.01)
             try:
