@@ -11,7 +11,7 @@ import requests
 
 from dtable_events.utils.sql_generator import filter2sql
 from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL
-from dtable_events.app.metadata_cache_managers import RuleIntentMetadataCacheManger, RuleIntervalMetadataCacheManager
+from dtable_events.app.metadata_cache_managers import RuleInstantMetadataCacheManger, RuleIntervalMetadataCacheManager
 from dtable_events.utils import is_valid_email, get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes, FormulaResultType
 from dtable_events.utils.dtable_server_api import DTableServerAPI
@@ -56,10 +56,10 @@ def scan_triggered_notification_rules(event_data, db_session):
           "AND dtable_uuid=:dtable_uuid AND is_valid=1 AND id=:rule_id"
     rules = db_session.execute(text(sql), {'dtable_uuid': message_dtable_uuid, 'rule_id': rule_id})
 
-    rule_intent_metadata_cache_manager = RuleIntentMetadataCacheManger()
+    rule_instant_metadata_cache_manager = RuleInstantMetadataCacheManger()
     for rule in rules:
         try:
-            trigger_notification_rule(rule, table_id, row, db_session, op_type, rule_intent_metadata_cache_manager)
+            trigger_notification_rule(rule, table_id, row, db_session, op_type, rule_instant_metadata_cache_manager)
         except Exception as e:
             logger.exception(e)
             logger.error(f'check rule failed. {rule}, error: {e}')
@@ -249,7 +249,7 @@ def get_column_by_key(dtable_metadata, table_id, column_key):
     return None
 
 
-def trigger_notification_rule(rule, message_table_id, row, db_session, op_type, rule_intent_metadata_cache_manager: RuleIntentMetadataCacheManger):
+def trigger_notification_rule(rule, message_table_id, row, db_session, op_type, rule_instant_metadata_cache_manager: RuleInstantMetadataCacheManger):
     rule_id = rule[0]
     trigger = rule[1]
     action = rule[2]
@@ -271,7 +271,7 @@ def trigger_notification_rule(rule, message_table_id, row, db_session, op_type, 
     dtable_server_api = DTableServerAPI('notification-rule', dtable_uuid, get_inner_dtable_server_url(), access_token_timeout=3600)
     dtable_db_api = DTableDBAPI('notification-rule', dtable_uuid, INNER_DTABLE_DB_URL)
     dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
-    dtable_metadata = rule_intent_metadata_cache_manager.get_metadata(dtable_uuid)
+    dtable_metadata = rule_instant_metadata_cache_manager.get_metadata(dtable_uuid)
     target_table, target_view = None, None
     for table in dtable_metadata['tables']:
         if table['_id'] == table_id:

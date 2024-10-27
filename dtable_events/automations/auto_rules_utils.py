@@ -3,7 +3,7 @@ import logging
 from sqlalchemy import text
 
 from dtable_events import init_db_session_class
-from dtable_events.app.metadata_cache_managers import RuleIntentMetadataCacheManger, RuleIntervalMetadataCacheManager
+from dtable_events.app.metadata_cache_managers import RuleInstantMetadataCacheManger, RuleIntervalMetadataCacheManager
 from dtable_events.automations.actions import AutomationRule, auto_rule_logger
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ def scan_triggered_automation_rules(event_data, db_session, per_minute_trigger_l
         logger.error('checkout auto rules error: %s', e)
         return
 
-    rule_intent_metadata_cache_manager = RuleIntentMetadataCacheManger()
+    rule_instant_metadata_cache_manager = RuleInstantMetadataCacheManger()
     for rule_id, run_condition, trigger, actions, last_trigger_time, dtable_uuid, trigger_count, org_id, creator in rules:
         options = {
             'rule_id': rule_id,
@@ -39,7 +39,7 @@ def scan_triggered_automation_rules(event_data, db_session, per_minute_trigger_l
         }
         try:
             auto_rule_logger.info('start to run auto rule: %s', rule_id)
-            auto_rule = AutomationRule(event_data, db_session, trigger, actions, options, rule_intent_metadata_cache_manager, per_minute_trigger_limit=per_minute_trigger_limit)
+            auto_rule = AutomationRule(event_data, db_session, trigger, actions, options, rule_instant_metadata_cache_manager, per_minute_trigger_limit=per_minute_trigger_limit)
             auto_rule.do_actions()
         except Exception as e:
             logger.exception('auto rule: %s do actions error: %s', rule_id, e)
