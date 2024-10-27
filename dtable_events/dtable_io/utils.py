@@ -765,6 +765,9 @@ def add_a_auto_rule_to_db(username, auto_rule, workspace_id, repo_id, owner, org
         elif action.get('type') == 'convert_page_to_pdf':
             action['repo_id'] = repo_id
             action['workspace_id'] = int(workspace_id)
+        elif action.get('type') == 'convert_document_to_pdf_and_send':
+            action['repo_id'] = repo_id
+            action['workspace_id'] = int(workspace_id)
 
     sql = """INSERT INTO dtable_automation_rules (`dtable_uuid`, `run_condition`, `trigger`, `actions`,
              `creator`, `ctime`, `org_id`, `last_trigger_time`) VALUES (:dtable_uuid, :run_condition,
