@@ -53,18 +53,23 @@ class LogConfigurator(object):
         logging.root.addHandler(handler)
 
 
-def setup_logger(logname):
+def setup_logger(logname, level=None, propagate=None):
     """
     setup logger for dtable io
     """
     logdir = os.path.join(os.environ.get('LOG_DIR', ''))
     log_file = os.path.join(logdir, logname)
     handler = handlers.TimedRotatingFileHandler(log_file, when='MIDNIGHT', interval=1, backupCount=7)
+    if level:
+        handler.setLevel(level)
     formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
     handler.setFormatter(formatter)
     handler.addFilter(logging.Filter(logname))
 
     logger = logging.getLogger(logname)
     logger.addHandler(handler)
+
+    if propagate is not None:
+        logger.propagate = propagate
 
     return logger
