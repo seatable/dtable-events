@@ -3592,11 +3592,9 @@ class AutomationRule:
                 self.set_invalid()
                 break
             except Exception as e:
-                auto_rule_logger.exception(e)
-                logger.exception(e)
                 self.task_run_success = False
-                auto_rule_logger.error('rule: %s, do action: %s error: %s', self.rule_id, action_info, e)
-                logger.error('rule: %s, do action: %s error: %s', self.rule_id, action_info, e)
+                auto_rule_logger.exception('rule: %s, do action: %s error: %s', self.rule_id, action_info, e)
+                logger.exception('rule: %s, do action: %s error: %s', self.rule_id, action_info, e)
             finally:
                 auto_rule_logger.info('rule: %s action: %s type: %s finished', self.rule_id, action_info.get('_id'), action_info['type'])
 
@@ -3699,5 +3697,6 @@ class AutomationRule:
             self.db_session.execute(text(set_invalid_sql), {'rule_id': self.rule_id})
             self.db_session.commit()
         except Exception as e:
+            auto_rule_logger.error('set rule: %s invalid error: %s', self.rule_id, e)
             logger.error('set rule: %s invalid error: %s', self.rule_id, e)
 
