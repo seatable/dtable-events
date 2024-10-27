@@ -177,7 +177,7 @@ class ConvertPageToPDFWorker:
         wait_page_view(driver, session_id, plugin_type, None, output)
         # per converted callback
         pdf_content = output.getvalue()
-        if action_type == 'convert_page_to_pdf_and_send':
+        if action_type == 'convert_document_to_pdf_and_send':
             for callback in per_converted_callbacks:
                 try:
                     callback(pdf_content)

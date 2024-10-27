@@ -2903,7 +2903,7 @@ class ConvertPageToPDFAction(BaseAction):
         self.auto_rule.set_done_actions()
 
 
-class ConvertPageToPDFAndSendAction(BaseAction):
+class ConvertDocumentToPDFAndSendAction(BaseAction):
 
     WECHAT_FILE_SIZE_LIMIT = 20 << 20
 
@@ -3400,7 +3400,7 @@ class AutomationRule:
             if run_condition in CRON_CONDITIONS and trigger_condition == CONDITION_PERIODICALLY_BY_CONDITION:
                 return True
             return False
-        elif action_type == 'convert_page_to_pdf_and_send':
+        elif action_type == 'convert_document_to_pdf_and_send':
             if run_condition in CRON_CONDITIONS and trigger_condition == CONDITION_PERIODICALLY:
                 return True
             return False
@@ -3529,7 +3529,7 @@ class AutomationRule:
                     workspace_id = action_info.get('workspace_id')
                     ConvertPageToPDFAction(self, action_info.get('type'), self.data, page_id, file_name, target_column_key, repo_id, workspace_id).do_action()
 
-                elif action_info.get('type') == 'convert_page_to_pdf_and_send':
+                elif action_info.get('type') == 'convert_document_to_pdf_and_send':
                     plugin_type = action_info.get('plugin_type')
                     page_id = action_info.get('page_id')
                     file_name = action_info.get('file_name')
@@ -3560,7 +3560,7 @@ class AutomationRule:
                         'reply_to': action_info.get('email_reply_to', '')
                     }
 
-                    ConvertPageToPDFAndSendAction(self, action_info.get('type'), plugin_type, page_id, file_name, save_config, send_wechat_robot_config, send_email_config, repo_id, workspace_id).do_action()
+                    ConvertDocumentToPDFAndSendAction(self, action_info.get('type'), plugin_type, page_id, file_name, save_config, send_wechat_robot_config, send_email_config, repo_id, workspace_id).do_action()
 
             except RuleInvalidException as e:
                 logger.warning('auto rule: %s, invalid error: %s', self.rule_id, e)
