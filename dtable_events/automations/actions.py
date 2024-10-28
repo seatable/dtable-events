@@ -266,6 +266,20 @@ class BaseAction:
         else:
             return value
 
+    def handle_file_path(self, dtable_uuid, repo_id, file_path):
+        asset_path = normalize_file_path(os.path.join('/asset', uuid_str_to_36_chars(dtable_uuid), file_path))
+        asset_id = seafile_api.get_file_id_by_path(repo_id, asset_path)
+        asset_name = os.path.basename(normalize_file_path(file_path))
+        if not asset_id:
+            return None, None
+
+        token = seafile_api.get_fileserver_access_token(
+            repo_id, asset_id, 'download', '', use_onetime=False
+        )
+
+        url = gen_file_get_url(token, asset_name)
+        return  asset_name, url
+
 
 class UpdateAction(BaseAction):
 
@@ -1229,20 +1243,6 @@ class SendEmailAction(BaseAction):
         subject = self.send_info.get('subject')
         blanks = set(re.findall(r'\{([^{]*?)\}', subject))
         self.column_blanks_subject = [blank for blank in blanks if blank in self.col_name_dict]
-
-    def handle_file_path(self, dtable_uuid, repo_id, file_path):
-        asset_path = normalize_file_path(os.path.join('/asset', uuid_str_to_36_chars(dtable_uuid), file_path))
-        asset_id = seafile_api.get_file_id_by_path(repo_id, asset_path)
-        asset_name = os.path.basename(normalize_file_path(file_path))
-        if not asset_id:
-            return None, None
-
-        token = seafile_api.get_fileserver_access_token(
-            repo_id, asset_id, 'download', '', use_onetime=False
-        )
-
-        url = gen_file_get_url(token, asset_name)
-        return  asset_name, url
 
     def init_notify_images(self):
         images_info = self.send_info.get('images_info', {})
@@ -2967,10 +2967,18 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
         file_name = self.file_name
         if not file_name.endswith('.pdf'):
             file_name += '.pdf'
+        image_cid_url_map = {}
+        images_info = self.send_email_config.get('images_info', {})
+        for cid, image_path in images_info.items():
+            image_name, image_url = self.handle_file_path(self.auto_rule.dtable_uuid, self.repo_id, image_path)
+            if not image_name or not image_url:
+                continue
+            image_cid_url_map[cid] = image_url
         send_info = {
             'message': self.send_email_config.get('message') or file_name,
             'is_plain_text': self.send_email_config.get('is_plain_text'),
             'html_message': self.send_email_config.get('html_message'),
+            'image_cid_url_map': image_cid_url_map,
             'send_to': [email for email in self.send_email_config.get('send_to_list') if is_valid_email(email)],
             'copy_to': [email for email in self.send_email_config.get('copy_to_list') if is_valid_email(email)],
             'reply_to': self.send_email_config.get('reply_to'),
@@ -3555,6 +3563,7 @@ class AutomationRule:
                         'message': action_info.get('email_msg', ''),
                         'is_plain_text': action_info.get('email_is_plain_text', True),
                         'html_message': action_info.get('email_html_message', ''),
+                        'images_info': action_info.get('email_images_info', {}),
                         'send_to_list': email2list(action_info.get('email_send_to', '')),
                         'copy_to_list': email2list(action_info.get('email_copy_to', '')),
                         'reply_to': action_info.get('email_reply_to', '')
