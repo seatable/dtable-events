@@ -150,8 +150,9 @@ def cell_data2str(cell_data):
 
 class BaseAction:
 
-    def __init__(self, auto_rule, action_type, data=None):
+    def __init__(self, auto_rule, _id, action_type, data=None):
         self.auto_rule = auto_rule
+        self._id = _id
         self.action_type = action_type or 'base'
         self.data = data
 
@@ -298,13 +299,13 @@ class UpdateAction(BaseAction):
         ColumnTypes.RATE,
     ]
 
-    def __init__(self, auto_rule, action_type, data, updates):
+    def __init__(self, auto_rule, _id, action_type, data, updates):
         """
         auto_rule: instance of AutomationRule
         data: if auto_rule.PER_UPDATE, data is event data from redis
         updates: {'col_1_name: ', value1, 'col_2_name': value2...}
         """
-        super().__init__(auto_rule, action_type, data)
+        super().__init__(auto_rule, _id, action_type, data)
         self.updates = updates or {}
         self.update_data = {
             'row': {},
@@ -539,13 +540,13 @@ class UpdateAction(BaseAction):
 class LockRowAction(BaseAction):
 
 
-    def __init__(self, auto_rule, action_type, data, trigger):
+    def __init__(self, auto_rule, _id, action_type, data, trigger):
         """
         auto_rule: instance of AutomationRule
         data: if auto_rule.PER_UPDATE, data is event data from redis
         updates: {'col_1_name: ', value1, 'col_2_name': value2...}
         """
-        super().__init__(auto_rule, action_type, data)
+        super().__init__(auto_rule, _id, action_type, data)
         self.update_data = {
             'table_name': self.auto_rule.table_info['name'],
             'row_ids':[],
@@ -599,13 +600,13 @@ class AddRowAction(BaseAction):
         ColumnTypes.RATE,
     ]
 
-    def __init__(self, auto_rule, action_type, row):
+    def __init__(self, auto_rule, _id, action_type, row):
         """
         auto_rule: instance of AutomationRule
         data: if auto_rule.PER_UPDATE, data is event data from redis
         row: {'col_1_name: ', value1, 'col_2_name': value2...}
         """
-        super().__init__(auto_rule, action_type)
+        super().__init__(auto_rule, _id, action_type)
         self.row = row or {}
         self.row_data = {
             'row': {},
@@ -675,17 +676,17 @@ class AddRowAction(BaseAction):
 
 class NotifyAction(BaseAction):
 
-    def __init__(self, auto_rule, action_type, data, msg, users, users_column_key):
+    def __init__(self, auto_rule, _id, action_type, data, msg, users, users_column_key):
         """
         auto_rule: instance of AutomationRule
         data: if auto_rule.PER_UPDATE, data is event data from redis
         msg: message set in action
         users: who will receive notification(s)
         """
-        super().__init__(auto_rule, action_type, data)
+        super().__init__(auto_rule, _id, action_type, data)
         self.msg = msg or ''
         temp_users = []
-        for user in users or []:
+        for user in (users or []):
             if user and user not in self.auto_rule.related_users_dict:
                 error_msg = 'rule: %s notify action has invalid user: %s' % (self.auto_rule.rule_id, user)
                 raise RuleInvalidException(error_msg)
@@ -860,14 +861,14 @@ class NotifyAction(BaseAction):
 
 class AppNotifyAction(BaseAction):
 
-    def __init__(self, auto_rule, action_type, data, msg, users, users_column_key, app_uuid):
+    def __init__(self, auto_rule, _id, action_type, data, msg, users, users_column_key, app_uuid):
         """
         auto_rule: instance of AutomationRule
         data: if auto_rule.PER_UPDATE, data is event data from redis
         msg: message set in action
         users: who will receive notification(s)
         """
-        super().__init__(auto_rule, action_type, data)
+        super().__init__(auto_rule, _id, action_type, data)
         self.msg = msg or ''
         self.users = users
         self.users_column_key = users_column_key or ''
@@ -1039,9 +1040,9 @@ class AppNotifyAction(BaseAction):
 
 class SendWechatAction(BaseAction):
 
-    def __init__(self, auto_rule, action_type, data, msg, account_id, msg_type):
+    def __init__(self, auto_rule, _id, action_type, data, msg, account_id, msg_type):
 
-        super().__init__(auto_rule, action_type, data)
+        super().__init__(auto_rule, _id, action_type, data)
         self.msg = msg or ''
         self.msg_type = msg_type or 'text'
         self.account_id = account_id or ''
@@ -1109,9 +1110,9 @@ class SendWechatAction(BaseAction):
 
 class SendDingtalkAction(BaseAction):
 
-    def __init__(self, auto_rule, action_type, data, msg, account_id, msg_type, msg_title):
+    def __init__(self, auto_rule, _id, action_type, data, msg, account_id, msg_type, msg_title):
 
-        super().__init__(auto_rule, action_type, data)
+        super().__init__(auto_rule, _id, action_type, data)
         self.msg = msg or ''
         self.msg_type = msg_type or 'text'
         self.account_id = account_id or ''
@@ -1185,9 +1186,9 @@ class SendEmailAction(BaseAction):
         """
         return is_valid_email(email)
 
-    def __init__(self, auto_rule, action_type, data, send_info, account_id, repo_id):
+    def __init__(self, auto_rule, _id, action_type, data, send_info, account_id, repo_id):
 
-        super().__init__(auto_rule, action_type, data)
+        super().__init__(auto_rule, _id, action_type, data)
         self.account_id = account_id
 
         # send info
@@ -1464,8 +1465,8 @@ class SendEmailAction(BaseAction):
 
 class RunPythonScriptAction(BaseAction):
 
-    def __init__(self, auto_rule, action_type, data, script_name, workspace_id, owner, org_id, repo_id):
-        super().__init__(auto_rule, action_type, data=data)
+    def __init__(self, auto_rule, _id, action_type, data, script_name, workspace_id, owner, org_id, repo_id):
+        super().__init__(auto_rule, _id, action_type, data=data)
         self.script_name = script_name
         self.workspace_id = workspace_id
         self.owner = owner
@@ -1594,8 +1595,8 @@ class LinkRecordsAction(BaseAction):
         ColumnTypes.DEPARTMENT_SINGLE_SELECT
     ]
 
-    def __init__(self, auto_rule, action_type, data, linked_table_id, link_id, match_conditions):
-        super().__init__(auto_rule, action_type, data=data)
+    def __init__(self, auto_rule, _id, action_type, data, linked_table_id, link_id, match_conditions):
+        super().__init__(auto_rule, _id, action_type, data=data)
         self.linked_table_id = linked_table_id
         self.link_id = link_id
         self.match_conditions = match_conditions or []
@@ -1952,14 +1953,14 @@ class AddRecordToOtherTableAction(BaseAction):
         ColumnTypes.RATE,
     ]
 
-    def __init__(self, auto_rule, action_type, data, row, dst_table_id):
+    def __init__(self, auto_rule, _id, action_type, data, row, dst_table_id):
         """
         auto_rule: instance of AutomationRule
         data: data is event data from redis
         row: {'col_1_name: ', value1, 'col_2_name': value2...}
         dst_table_id: id of table that record to be added
         """
-        super().__init__(auto_rule, action_type, data)
+        super().__init__(auto_rule, _id, action_type, data)
         self.row = row or {}
         self.col_name_dict = {}
         self.dst_table_id = dst_table_id
@@ -2176,8 +2177,8 @@ class TriggerWorkflowAction(BaseAction):
         ColumnTypes.RATE,
     ]
 
-    def __init__(self, auto_rule, action_type, row, token):
-        super().__init__(auto_rule, action_type, None)
+    def __init__(self, auto_rule, _id, action_type, row, token):
+        super().__init__(auto_rule, _id, action_type, None)
         self.row = row or {}
         self.row_data = {
             'row': {}
@@ -2279,8 +2280,8 @@ class CalculateAction(BaseAction):
     ]
     VALID_RESULT_COLUMN_TYPES = [ColumnTypes.NUMBER]
 
-    def __init__(self, auto_rule, action_type, data, calculate_column_key, result_column_key):
-        super().__init__(auto_rule, action_type, data)
+    def __init__(self, auto_rule, _id, action_type, data, calculate_column_key, result_column_key):
+        super().__init__(auto_rule, _id, action_type, data)
         # this action contains calculate_accumulated_value, calculate_delta, calculate_rank and calculate_percentage
         self.calculate_column_key = calculate_column_key
         self.result_column_key = result_column_key
@@ -2492,8 +2493,8 @@ class LookupAndCopyAction(BaseAction):
         ColumnTypes.AUTO_NUMBER,
     ]
 
-    def __init__(self, auto_rule, action_type, data, table_condition, equal_column_conditions, fill_column_conditions):
-        super().__init__(auto_rule, action_type, data=data)
+    def __init__(self, auto_rule, _id, action_type, data, table_condition, equal_column_conditions, fill_column_conditions):
+        super().__init__(auto_rule, _id, action_type, data=data)
 
         self.table_condition = table_condition
         self.equal_column_conditions = equal_column_conditions
@@ -2673,8 +2674,8 @@ class ExtractUserNameAction(BaseAction):
         ColumnTypes.TEXT
     ]
 
-    def __init__(self, auto_rule, action_type, data, extract_column_key, result_column_key):
-        super().__init__(auto_rule, action_type, data)
+    def __init__(self, auto_rule, _id, action_type, data, extract_column_key, result_column_key):
+        super().__init__(auto_rule, _id, action_type, data)
         self.extract_column_key = extract_column_key
         self.result_column_key = result_column_key
 
@@ -2810,8 +2811,8 @@ class ExtractUserNameAction(BaseAction):
 
 class ConvertPageToPDFAction(BaseAction):
 
-    def __init__(self, auto_rule, action_type, data, page_id, file_name, target_column_key, repo_id, workspace_id):
-        super().__init__(auto_rule, action_type, data)
+    def __init__(self, auto_rule, _id, action_type, data, page_id, file_name, target_column_key, repo_id, workspace_id):
+        super().__init__(auto_rule, _id, action_type, data)
         self.page_id = page_id
         self.file_name = file_name
         self.target_column_key = target_column_key
@@ -2907,8 +2908,8 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
 
     WECHAT_FILE_SIZE_LIMIT = 20 << 20
 
-    def __init__(self, auto_rule, action_type, plugin_type, page_id, file_name, save_config, send_wechat_robot_config, send_email_config, repo_id, workspace_id):
-        super().__init__(auto_rule, action_type)
+    def __init__(self, auto_rule, _id, action_type, plugin_type, page_id, file_name, save_config, send_wechat_robot_config, send_email_config, repo_id, workspace_id):
+        super().__init__(auto_rule, _id, action_type)
         self.plugin_type = plugin_type
         self.page_id = page_id
         self.file_name = file_name
@@ -3428,33 +3429,33 @@ class AutomationRule:
             try:
                 if action_info.get('type') == 'update_record':
                     updates = action_info.get('updates')
-                    UpdateAction(self, action_info.get('type'), self.data, updates).do_action()
+                    UpdateAction(self, action_info['_id'], action_info.get('type'), self.data, updates).do_action()
 
                 if action_info.get('type') == 'add_record':
                     row = action_info.get('row')
-                    AddRowAction(self, action_info.get('type'), row).do_action()
+                    AddRowAction(self, action_info['_id'], action_info.get('type'), row).do_action()
 
                 elif action_info.get('type') == 'notify':
                     default_msg = action_info.get('default_msg', '')
                     users = action_info.get('users', [])
                     users_column_key = action_info.get('users_column_key', '')
-                    NotifyAction(self, action_info.get('type'), self.data, default_msg, users, users_column_key).do_action()
+                    NotifyAction(self, action_info['_id'], action_info.get('type'), self.data, default_msg, users, users_column_key).do_action()
 
                 elif action_info.get('type') == 'lock_record':
-                    LockRowAction(self, action_info.get('type'), self.data, self.trigger).do_action()
+                    LockRowAction(self, action_info['_id'], action_info.get('type'), self.data, self.trigger).do_action()
 
                 elif action_info.get('type') == 'send_wechat':
                     account_id = int(action_info.get('account_id'))
                     default_msg = action_info.get('default_msg', '')
                     msg_type = action_info.get('msg_type', 'text')
-                    SendWechatAction(self, action_info.get('type'), self.data, default_msg, account_id, msg_type).do_action()
+                    SendWechatAction(self, action_info['_id'], action_info.get('type'), self.data, default_msg, account_id, msg_type).do_action()
 
                 elif action_info.get('type') == 'send_dingtalk':
                     account_id = int(action_info.get('account_id'))
                     default_msg = action_info.get('default_msg', '')
                     default_title = action_info.get('default_title', '')
                     msg_type = action_info.get('msg_type', 'text')
-                    SendDingtalkAction(self, action_info.get('type'), self.data, default_msg, account_id, msg_type, default_title).do_action()
+                    SendDingtalkAction(self, action_info['_id'], action_info.get('type'), self.data, default_msg, account_id, msg_type, default_title).do_action()
 
                 elif action_info.get('type') == 'send_email':
                     account_id = int(action_info.get('account_id'))
@@ -3480,7 +3481,7 @@ class AutomationRule:
                         'subject': subject,
                         'attachment_list': attachment_list,
                     }
-                    SendEmailAction(self, action_info.get('type'), self.data, send_info, account_id, repo_id).do_action()
+                    SendEmailAction(self, action_info['_id'], action_info.get('type'), self.data, send_info, account_id, repo_id).do_action()
 
                 elif action_info.get('type') == 'run_python_script':
                     script_name = action_info.get('script_name')
@@ -3488,46 +3489,46 @@ class AutomationRule:
                     owner = action_info.get('owner')
                     org_id = action_info.get('org_id')
                     repo_id = action_info.get('repo_id')
-                    RunPythonScriptAction(self, action_info.get('type'), self.data, script_name, workspace_id, owner, org_id, repo_id).do_action()
+                    RunPythonScriptAction(self, action_info['_id'], action_info.get('type'), self.data, script_name, workspace_id, owner, org_id, repo_id).do_action()
 
                 elif action_info.get('type') == 'link_records':
                     linked_table_id = action_info.get('linked_table_id')
                     link_id = action_info.get('link_id')
                     match_conditions = action_info.get('match_conditions')
-                    LinkRecordsAction(self, action_info.get('type'), self.data, linked_table_id, link_id, match_conditions).do_action()
+                    LinkRecordsAction(self, action_info['_id'], action_info.get('type'), self.data, linked_table_id, link_id, match_conditions).do_action()
 
                 elif action_info.get('type') == 'add_record_to_other_table':
                     row = action_info.get('row')
                     dst_table_id = action_info.get('dst_table_id')
-                    AddRecordToOtherTableAction(self, action_info.get('type'), self.data, row, dst_table_id).do_action()
+                    AddRecordToOtherTableAction(self, action_info['_id'], action_info.get('type'), self.data, row, dst_table_id).do_action()
 
                 elif action_info.get('type') == 'trigger_workflow':
                     token = action_info.get('token')
                     row = action_info.get('row')
-                    TriggerWorkflowAction(self, action_info.get('type'), row, token).do_action()
+                    TriggerWorkflowAction(self, action_info['_id'], action_info.get('type'), row, token).do_action()
 
                 elif action_info.get('type') in AUTO_RULE_CALCULATE_TYPES:
                     calculate_column_key = action_info.get('calculate_column')
                     result_column_key = action_info.get('result_column')
-                    CalculateAction(self, action_info.get('type'), self.data, calculate_column_key, result_column_key).do_action()
+                    CalculateAction(self, action_info['_id'], action_info.get('type'), self.data, calculate_column_key, result_column_key).do_action()
 
                 elif action_info.get('type') == 'lookup_and_copy':
                     table_condition = action_info.get('table_condition')
                     equal_column_conditions = action_info.get('equal_column_conditions')
                     fill_column_conditions = action_info.get('fill_column_conditions')
-                    LookupAndCopyAction(self, action_info.get('type'), self.data, table_condition, equal_column_conditions, fill_column_conditions).do_action()
+                    LookupAndCopyAction(self, action_info['_id'], action_info.get('type'), self.data, table_condition, equal_column_conditions, fill_column_conditions).do_action()
 
                 elif action_info.get('type') == 'extract_user_name':
                     extract_column_key = action_info.get('extract_column_key')
                     result_column_key = action_info.get('result_column_key')
-                    ExtractUserNameAction(self, action_info.get('type'), self.data, extract_column_key, result_column_key).do_action()
+                    ExtractUserNameAction(self, action_info['_id'], action_info.get('type'), self.data, extract_column_key, result_column_key).do_action()
 
                 elif action_info.get('type') == 'app_notify':
                     default_msg = action_info.get('default_msg', '')
                     users = action_info.get('users', [])
                     users_column_key = action_info.get('users_column_key', '')
                     app_uuid = action_info.get('app_token', None) or action_info.get('app_uuid', None)
-                    AppNotifyAction(self, action_info.get('type'), self.data, default_msg, users, users_column_key, app_uuid).do_action()
+                    AppNotifyAction(self, action_info['_id'], action_info.get('type'), self.data, default_msg, users, users_column_key, app_uuid).do_action()
 
                 elif action_info.get('type') == 'convert_page_to_pdf':
                     page_id = action_info.get('page_id')
@@ -3535,7 +3536,7 @@ class AutomationRule:
                     target_column_key = action_info.get('target_column_key')
                     repo_id = action_info.get('repo_id')
                     workspace_id = action_info.get('workspace_id')
-                    ConvertPageToPDFAction(self, action_info.get('type'), self.data, page_id, file_name, target_column_key, repo_id, workspace_id).do_action()
+                    ConvertPageToPDFAction(self, action_info['_id'], action_info.get('type'), self.data, page_id, file_name, target_column_key, repo_id, workspace_id).do_action()
 
                 elif action_info.get('type') == 'convert_document_to_pdf_and_send':
                     plugin_type = action_info.get('plugin_type')
@@ -3569,7 +3570,7 @@ class AutomationRule:
                         'reply_to': action_info.get('email_reply_to', '')
                     }
 
-                    ConvertDocumentToPDFAndSendAction(self, action_info.get('type'), plugin_type, page_id, file_name, save_config, send_wechat_robot_config, send_email_config, repo_id, workspace_id).do_action()
+                    ConvertDocumentToPDFAndSendAction(self, action_info['_id'], action_info.get('type'), plugin_type, page_id, file_name, save_config, send_wechat_robot_config, send_email_config, repo_id, workspace_id).do_action()
 
             except RuleInvalidException as e:
                 logger.warning('auto rule: %s, invalid error: %s', self.rule_id, e)
