@@ -56,19 +56,10 @@ def scan_dtable_automation_rules(db_session):
     sql = '''
             SELECT `dar`.`id`, `run_condition`, `trigger`, `actions`, `last_trigger_time`, `dtable_uuid`, `trigger_count`, `org_id`, dar.`creator` FROM dtable_automation_rules dar
             JOIN dtables d ON dar.dtable_uuid=d.uuid
-            WHERE ((run_condition='per_day' AND (last_trigger_time<:per_day_check_time OR last_trigger_time IS NULL))
-            OR (run_condition='per_week' AND (last_trigger_time<:per_week_check_time OR last_trigger_time IS NULL))
-            OR (run_condition='per_month' AND (last_trigger_time<:per_month_check_time OR last_trigger_time IS NULL)))
+            WHERE (run_condition='per_day' OR run_condition='per_week' OR run_condition='per_month')
             AND dar.is_valid=1 AND d.deleted=0 AND is_pause=0
         '''
-    per_day_check_time = datetime.utcnow() - timedelta(hours=23)
-    per_week_check_time = datetime.utcnow() - timedelta(days=6)
-    per_month_check_time = datetime.utcnow() - timedelta(days=27)  # consider the least month-days 28 in February (the 2nd month) in common years
-    rules = db_session.execute(text(sql), {
-        'per_day_check_time': per_day_check_time,
-        'per_week_check_time': per_week_check_time,
-        'per_month_check_time': per_month_check_time
-    })
+    rules = db_session.execute(text(sql))
 
     # each base's metadata only requested once and recorded in memory
     # The reason why it doesn't cache metadata in redis is metadatas in interval rules need to be up-to-date
