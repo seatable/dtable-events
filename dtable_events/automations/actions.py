@@ -2570,25 +2570,33 @@ class LookupAndCopyAction(BaseAction):
         fill_from_columns = []
         fill_copy_to_columns = []
         # check column valid
-        try:  # TODO: rule invalid warnings
-            for col in self.equal_column_conditions:
-                from_column = from_column_dict[col['from_column_key']]
-                copy_to_column = copy_to_column_dict[col['copy_to_column_key']]
-                if from_column.get('type') not in self.VALID_COLUMN_TYPES or copy_to_column.get('type') not in self.VALID_COLUMN_TYPES:
-                    raise RuleInvalidException('from_column or copy_to_column type invalid')
-                equal_from_columns.append(from_column.get('name'))
-                equal_copy_to_columns.append(copy_to_column.get('name'))
+        for col in self.equal_column_conditions:
+            from_column = from_column_dict.get(col['from_column_key'])
+            if not from_column:
+                raise RuleInvalidException('from_match_column not found', 'from_match_column_not_found')
+            copy_to_column = copy_to_column_dict.get(col['copy_to_column_key'])
+            if not copy_to_column:
+                raise RuleInvalidException('copy_to_match_column not found', 'copy_to_match_column_not_found')
+            if from_column.get('type') not in self.VALID_COLUMN_TYPES:
+                raise RuleInvalidException('from_column type invalid', 'from_match_column_type_invalid')
+            if copy_to_column.get('type') not in self.VALID_COLUMN_TYPES:
+                raise RuleInvalidException('copy_to_column type invalid', 'copy_to_match_column_type_invalid')
+            equal_from_columns.append(from_column.get('name'))
+            equal_copy_to_columns.append(copy_to_column.get('name'))
 
-            for col in self.fill_column_conditions:
-                from_column = from_column_dict[col['from_column_key']]
-                copy_to_column = copy_to_column_dict[col['copy_to_column_key']]
-                if from_column.get('type') not in self.VALID_COLUMN_TYPES or copy_to_column.get('type') not in self.VALID_COLUMN_TYPES:
-                    raise RuleInvalidException('from_column or copy_to_column type invalid')
-                fill_from_columns.append(from_column.get('name'))
-                fill_copy_to_columns.append(copy_to_column.get('name'))
-        except KeyError as e:
-            logger.error('dtable: %s, from_table: %s or copy_to_table:%s column key error: %s', self.auto_rule.dtable_uuid, self.from_table_name, self.copy_to_table_name, e)
-            raise RuleInvalidException('from_column or copy_to_column not found')
+        for col in self.fill_column_conditions:
+            from_column = from_column_dict.get(col['from_column_key'])
+            if not from_column:
+                raise RuleInvalidException('from_column not found', 'from_column_not_found')
+            copy_to_column = copy_to_column_dict.get(col['copy_to_column_key'])
+            if not copy_to_column:
+                raise RuleInvalidException('copy_to_column not found', 'copy_to_column_not_found')
+            if from_column.get('type') not in self.VALID_COLUMN_TYPES:
+                raise RuleInvalidException('from_column type invalid', 'from_column_type_invalid')
+            if copy_to_column.get('type') not in self.VALID_COLUMN_TYPES:
+                raise RuleInvalidException('copy_to_column type invalid', 'copy_to_column_type_invalid')
+            fill_from_columns.append(from_column.get('name'))
+            fill_copy_to_columns.append(copy_to_column.get('name'))
 
         from_columns = equal_from_columns + fill_from_columns
         copy_to_columns = equal_copy_to_columns + fill_copy_to_columns
@@ -3702,4 +3710,3 @@ class AutomationRule:
             self.db_session.commit()
         except Exception as e:
             logger.error('set rule: %s invalid error: %s', self.rule_id, e)
-
