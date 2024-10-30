@@ -3602,15 +3602,17 @@ class AutomationRule:
                 logger.warning('auto rule: %s, invalid error: %s', self.rule_id, e)
                 self.task_run_success = False
                 if not with_test:
-                    self.set_invalid()
+                    self.set_invalid(e)
                     if len(e.args) == 2:
                         invalid_type = e.args[1]
-                        self.append_warning({
-                            'action_id': action_info['_id'],
-                            'action_type': action_info.get('type'),
-                            'type': 'rule_invalid',
-                            'invalid_type': invalid_type
-                        })
+                    else:
+                        invalid_type = None
+                    self.append_warning({
+                        'action_id': action_info['_id'],
+                        'action_type': action_info.get('type'),
+                        'type': 'rule_invalid',
+                        'invalid_type': invalid_type
+                    })
                 break
             except Exception as e:
                 logger.exception(e)
@@ -3703,7 +3705,7 @@ class AutomationRule:
                 trigger_times = trigger_times[-self.per_minute_trigger_limit:]
                 redis_cache.set(self.cache_key, ','.join([t for t in trigger_times]), timeout=MINUTE_TIMEOUT)
 
-    def set_invalid(self):
+    def set_invalid(self, e: RuleInvalidException):
         try:
             self.current_valid = False
             set_invalid_sql = '''
@@ -3721,7 +3723,11 @@ class AutomationRule:
         except Exception as e:
             logger.exception('get dtable: %s admins error: %s', self.dtable_uuid, e)
         else:
-            # send notifications
+            ## send notifications
+            if len(e.args) == 2:
+                invalid_type = e.args[1]
+            else:
+                invalid_type = ''
             try:
                 send_notification(self.dtable_uuid, [{
                     'to_user': user,
@@ -3729,7 +3735,8 @@ class AutomationRule:
                     'detail': {
                         'author': 'Automation Rule',
                         'rule_id': self.rule_id,
-                        'rule_name': self.rule_name
+                        'rule_name': self.rule_name,
+                        'invalid_type': invalid_type
                     }
                 } for user in admins])
             except Exception as e:
