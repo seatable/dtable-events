@@ -25,7 +25,7 @@ from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingta
 from dtable_events.convert_page.manager import conver_page_to_pdf_manager
 from dtable_events.notification_rules.notification_rules_utils import send_notification, fill_msg_blanks_with_sql_row
 from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url, \
-    normalize_file_path, gen_file_get_url, gen_random_option
+    normalize_file_path, gen_file_get_url, gen_random_option, get_dtable_admins
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_web_api import DTableWebAPI
@@ -62,6 +62,8 @@ CONDITION_ROWS_UPDATE_LIMIT = 50
 WECHAT_CONDITION_ROWS_LIMIT = 20
 DINGTALK_CONDITION_ROWS_LIMIT = 20
 CONVERT_PAGE_TO_PDF_ROWS_LIMIT = 50
+
+AUTO_RULE_INVALID_MSG_TYPE = 'auto_rule_invalid'
 
 AUTO_RULE_CALCULATE_TYPES = ['calculate_accumulated_value', 'calculate_delta', 'calculate_rank', 'calculate_percentage']
 
@@ -3599,15 +3601,16 @@ class AutomationRule:
             except RuleInvalidException as e:
                 logger.warning('auto rule: %s, invalid error: %s', self.rule_id, e)
                 self.task_run_success = False
-                self.set_invalid()
-                if len(e.args) == 2:
-                    invalid_type = e.args[1]
-                    self.append_warning({
-                        'action_id': action_info['_id'],
-                        'action_type': action_info.get('type'),
-                        'type': 'rule_invalid',
-                        'invalid_type': invalid_type
-                    })
+                if not with_test:
+                    self.set_invalid()
+                    if len(e.args) == 2:
+                        invalid_type = e.args[1]
+                        self.append_warning({
+                            'action_id': action_info['_id'],
+                            'action_type': action_info.get('type'),
+                            'type': 'rule_invalid',
+                            'invalid_type': invalid_type
+                        })
                 break
             except Exception as e:
                 logger.exception(e)
@@ -3710,3 +3713,24 @@ class AutomationRule:
             self.db_session.commit()
         except Exception as e:
             logger.error('set rule: %s invalid error: %s', self.rule_id, e)
+
+        # send warning notifications
+        ## query admins
+        try:
+            admins = get_dtable_admins(self.dtable_uuid, self.db_session)
+        except Exception as e:
+            logger.exception('get dtable: %s admins error: %s', self.dtable_uuid, e)
+        else:
+            # send notifications
+            try:
+                send_notification(self.dtable_uuid, [{
+                    'to_user': user,
+                    'msg_type': AUTO_RULE_INVALID_MSG_TYPE,
+                    'detail': {
+                        'author': 'Automation Rule',
+                        'rule_id': self.rule_id,
+                        'rule_name': self.rule_name
+                    }
+                } for user in admins])
+            except Exception as e:
+                logger.exception('send auto-rule: %s invalid notifiaction to admins error: %s', self.rule_id, e)
