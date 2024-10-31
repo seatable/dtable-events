@@ -2930,7 +2930,11 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
         if self.send_wechat_robot_config.get('is_send_wechat_robot'):
             wechat_robot_account_id = self.send_wechat_robot_config.get('wechat_robot_account_id')
             account_info = get_third_party_account(self.auto_rule.db_session, wechat_robot_account_id)
-            if account_info and account_info.get('account_type') == 'wechat_robot':
+            if (
+                account_info
+                and account_info.get('account_type') == 'wechat_robot'
+                and uuid_str_to_36_chars(account_info.get('dtable_uuid')) == uuid_str_to_36_chars(self.auto_rule.dtable_uuid)
+            ):
                 self.send_wechat_robot_config['account_info'] = account_info
                 self.send_wechat_robot_config['can_do'] = True
         # send email
@@ -2938,7 +2942,11 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
         if self.send_email_config.get('is_send_email'):
             email_account_id = self.send_email_config.get('email_account_id')
             account_info = get_third_party_account(self.auto_rule.db_session, email_account_id)
-            if account_info and account_info.get('account_type') == 'email':
+            if (
+                account_info
+                and account_info.get('account_type') == 'email'
+                and uuid_str_to_36_chars(account_info.get('dtable_uuid')) == uuid_str_to_36_chars(self.auto_rule.dtable_uuid)
+            ):
                 self.send_email_config['account_info'] = account_info
                 self.send_email_config['can_do'] = True
         logger.debug('rule: %s convert-and-send save: %s send-wechat: %s send-email: %s',
