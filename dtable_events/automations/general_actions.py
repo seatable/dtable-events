@@ -24,7 +24,7 @@ from dtable_events.utils.dtable_server_api import DTableServerAPI, NotFoundExcep
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.utils.sql_generator import filter2sql
-from dtable_events.utils.email_sender import email_sender
+from dtable_events.utils.email_sender import EmailSender
 
 
 logger = logging.getLogger(__name__)
@@ -501,7 +501,7 @@ class SendEmailAction(BaseAction):
         }
         try:
             send_info['message'] = self.generate_real_msg(self.msg, sql_row)
-            sender = email_sender(self.account_id, db_session=self.context.db_session)
+            sender = EmailSender(self.account_id, db_session=self.context.db_session)
             sender.send(send_info, self.send_from)
         except Exception as e:
             logger.exception(e)

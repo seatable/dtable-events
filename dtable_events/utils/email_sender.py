@@ -20,13 +20,12 @@ class ThirdPartyAccountNotFound(BaseException):
 class ThirdPartyAccountInvalid(BaseException):
     pass
 
-class email_sender:
+class EmailSender:
     def __init__(self, account_id, config=None, db_session=None):
         self.account_id = account_id
         self.config = config
         self.db_session = db_session or init_db_session_class(self.config)()
         self._get_auth_info()
-        print(self.host_user)
 
     def send(self, send_info, username):
         return self._send_smtp_email(send_info, username) if self.account_type == 'LOGIN' else self._send_oauth_email(send_info, username)
@@ -460,7 +459,7 @@ class email_sender:
                     'Email sending log record error: %s' % e)
 
 def toggle_send_email(account_id, send_info, username, config):
-    sender = email_sender(account_id, config)
+    sender = EmailSender(account_id, config)
     result = sender.send(send_info, username)
     sender.close()
     return result    

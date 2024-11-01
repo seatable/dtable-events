@@ -31,7 +31,7 @@ from dtable_events.data_sync.data_sync_utils import run_sync_emails
 from dtable_events.utils import get_inner_dtable_server_url, is_valid_email, uuid_str_to_36_chars
 from dtable_events.utils.dtable_server_api import DTableServerAPI, BaseExceedsException
 from dtable_events.utils.exception import ExcelFormatError
-from dtable_events.utils.email_sender import email_sender
+from dtable_events.utils.email_sender import EmailSender
 from dtable_events.dtable_io.utils import clear_tmp_dir, clear_tmp_file, clear_tmp_files_and_dirs
 from dtable_events.app.log import setup_logger
 
@@ -887,7 +887,7 @@ def plugin_email_send_email(context, config=None):
     thread_table_name = table_info.get('thread_table_name')
 
     # send email
-    sender = email_sender(account_id, config)
+    sender = EmailSender(account_id, config)
     result = sender.send(email_info, username)
     sender.close()
 

@@ -34,7 +34,7 @@ from dtable_events.utils.dtable_db_api import DTableDBAPI, RowsQueryError, Reque
 from dtable_events.notification_rules.utils import get_nickname_by_usernames
 from dtable_events.utils.sql_generator import filter2sql, BaseSQLGenerator, ColumnFilterInvalidError
 from dtable_events.utils.universal_app_api import UniversalAppAPI
-from dtable_events.utils.email_sender import email_sender
+from dtable_events.utils.email_sender import EmailSender
 
 
 logger = logging.getLogger(__name__)
@@ -1359,7 +1359,7 @@ class SendEmailAction(BaseAction):
         })
         logger.debug('send_info: %s', send_info)
         try:
-            sender = email_sender(self.account_id, db_session=self.auto_rule.db_session)
+            sender = EmailSender(self.account_id, db_session=self.auto_rule.db_session)
             sender.send(send_info, 'automation-rules')
         except Exception as e:
             logger.error('send email error: %s', e)
@@ -1372,7 +1372,7 @@ class SendEmailAction(BaseAction):
             send_info['image_cid_url_map'] = self.image_cid_url_map
             send_info.pop('message', None)
         try:
-            sender = email_sender(self.account_id, db_session=self.auto_rule.db_session)
+            sender = EmailSender(self.account_id, db_session=self.auto_rule.db_session)
             sender.send(send_info, 'automation-rules')
         except Exception as e:
             logger.error('send email error: %s', e)
@@ -1434,7 +1434,7 @@ class SendEmailAction(BaseAction):
         step = 10
         for i in range(0, len(send_info_list), step):
             try:
-                sender = email_sender(self.account_id, db_session=self.auto_rule.db_session)
+                sender = EmailSender(self.account_id, db_session=self.auto_rule.db_session)
                 sender.batch_send(send_info_list[i: i+step], 'automation-rules')
             except Exception as e:
                 logger.error('batch send email error: %s', e)
@@ -3008,7 +3008,7 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
             'file_contents': {file_name: pdf_content}
         }
         try:
-            sender = email_sender(account_id, conver_page_to_pdf_manager.config)
+            sender = EmailSender(account_id, conver_page_to_pdf_manager.config)
             sender.send(send_info, 'automation-rules')
             sender.close()
         except Exception as e:
