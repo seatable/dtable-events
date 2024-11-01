@@ -26,7 +26,7 @@ from dtable_events.convert_page.manager import conver_page_to_pdf_manager
 from dtable_events.app.log import setup_logger
 from dtable_events.notification_rules.notification_rules_utils import send_notification, fill_msg_blanks_with_sql_row
 from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url, \
-    normalize_file_path, gen_file_get_url, gen_random_option
+    normalize_file_path, gen_file_get_url, gen_random_option, get_dtable_admins
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_web_api import DTableWebAPI
@@ -68,6 +68,8 @@ CONDITION_ROWS_UPDATE_LIMIT = 50
 WECHAT_CONDITION_ROWS_LIMIT = 20
 DINGTALK_CONDITION_ROWS_LIMIT = 20
 CONVERT_PAGE_TO_PDF_ROWS_LIMIT = 50
+
+AUTO_RULE_INVALID_MSG_TYPE = 'auto_rule_invalid'
 
 AUTO_RULE_CALCULATE_TYPES = ['calculate_accumulated_value', 'calculate_delta', 'calculate_rank', 'calculate_percentage']
 
@@ -691,10 +693,10 @@ class NotifyAction(BaseAction):
         super().__init__(auto_rule, action_type, data)
         self.msg = msg or ''
         temp_users = []
-        for user in users or []:
+        for user in (users or []):
             if user and user not in self.auto_rule.related_users_dict:
                 error_msg = 'rule: %s notify action has invalid user: %s' % (self.auto_rule.rule_id, user)
-                raise RuleInvalidException(error_msg)
+                raise RuleInvalidException(error_msg, 'notify_users_invalid')
             if user:
                 temp_users.append(user)
         self.users = temp_users
@@ -1061,7 +1063,7 @@ class SendWechatAction(BaseAction):
     def init_notify(self, msg):
         account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id)
         if not account_dict or uuid_str_to_36_chars(account_dict.get('dtable_uuid')) != uuid_str_to_36_chars(self.auto_rule.dtable_uuid):
-            raise RuleInvalidException('Send wechat no account')
+            raise RuleInvalidException('Send wechat no account', 'account_not_found')
         blanks = set(re.findall(r'\{([^{]*?)\}', msg))
         self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
         self.column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
@@ -1132,7 +1134,7 @@ class SendDingtalkAction(BaseAction):
     def init_notify(self, msg):
         account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id)
         if not account_dict or uuid_str_to_36_chars(account_dict.get('dtable_uuid')) != uuid_str_to_36_chars(self.auto_rule.dtable_uuid):
-            raise RuleInvalidException('Send dingtalk no account')
+            raise RuleInvalidException('Send dingtalk no account', 'account_not_found')
         blanks = set(re.findall(r'\{([^{]*?)\}', msg))
         self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
         self.column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
@@ -1261,7 +1263,7 @@ class SendEmailAction(BaseAction):
     def init_notify(self):
         account_dict = get_third_party_account(self.auto_rule.db_session, self.account_id)
         if not account_dict or uuid_str_to_36_chars(account_dict.get('dtable_uuid')) != uuid_str_to_36_chars(self.auto_rule.dtable_uuid):
-            raise RuleInvalidException('Send email no account')
+            raise RuleInvalidException('Send email no account', 'account_not_found')
         self.col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
         self.init_notify_msg()
         self.init_notify_send_to()
@@ -1489,13 +1491,13 @@ class RunPythonScriptAction(BaseAction):
             logger.debug('rule: %s repo: %s', self.auto_rule.rule_id, repo)
             if not repo:
                 logger.warning('rule: %s script: %s repo: %s not found', self.auto_rule.rule_id, self.script_name, self.repo_id)
-                raise RuleInvalidException('rule: %s script: %s repo: %s not found' % (self.auto_rule.rule_id, self.script_name, self.repo_id))
+                raise RuleInvalidException('rule: %s script: %s repo: %s not found' % (self.auto_rule.rule_id, self.script_name, self.repo_id), 'repo_not_found')
             logger.debug('rule: %s start to get file: %s', self.auto_rule.rule_id, script_file_path)
             script_file_id = seafile_api.get_file_id_by_path(self.repo_id, script_file_path)
             logger.debug('rule: %s file: %s id: %s', self.auto_rule.rule_id, script_file_path, script_file_id)
             if not script_file_id:
                 logger.warning('rule: %s script: %s repo: %s file: %s not found', self.auto_rule.rule_id, self.script_name, self.repo_id, script_file_path)
-                raise RuleInvalidException('rule: %s script: %s repo: %s file: %s not found' % (self.auto_rule.rule_id, self.script_name, self.repo_id, script_file_path))
+                raise RuleInvalidException('rule: %s script: %s repo: %s file: %s not found' % (self.auto_rule.rule_id, self.script_name, self.repo_id, script_file_path), 'file_not_found')
         except RuleInvalidException as e:
             raise e
         except Exception as e:
@@ -1637,18 +1639,18 @@ class LinkRecordsAction(BaseAction):
             column_key = match_condition.get("column_key")
             column = self.get_column(self.auto_rule.table_id, column_key)
             if not column:
-                raise RuleInvalidException('match column not found')
+                raise RuleInvalidException('match column not found', 'match_column_not_found')
             row_value = self.data['converted_row'].get(column.get('name'))
             if not row_value:
                 return [], []
             other_column_key = match_condition.get("other_column_key")
             other_column = self.get_column(self.linked_table_id, other_column_key)
             if not other_column:
-                raise RuleInvalidException('match other column not found')
+                raise RuleInvalidException('match other column not found', 'match_other_column_not_found')
             column_names.append(other_column['name'])
             parsed_row_value = self.parse_column_value(other_column, row_value)
             if not parsed_row_value and other_column['type'] in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
-                raise RuleInvalidException('match other single/multi-select column options: %s not found' % row_value)
+                raise RuleInvalidException('match other single/multi-select column options: %s not found' % row_value, 'match_column_option_not_found')
             filter_item = {
                 "column_key": other_column_key,
                 "filter_predicate": self.COLUMN_FILTER_PREDICATE_MAPPING.get(other_column.get('type', ''), 'is'),
@@ -1712,7 +1714,7 @@ class LinkRecordsAction(BaseAction):
             sql = filter2sql(table_name, columns, filter_conditions, by_group=True)
         except (ValueError, ColumnFilterInvalidError) as e:
             logger.warning('wrong filter in rule: %s linked-table filter_conditions: %s error: %s', self.auto_rule.rule_id, filter_conditions, e)
-            raise RuleInvalidException('wrong filter in rule: %s linked-table error: %s' % (self.auto_rule.rule_id, e))
+            raise RuleInvalidException('wrong filter in rule: %s linked-table error: %s' % (self.auto_rule.rule_id, e), 'linked_table_gen_sql_failed')
         query_clause = "*"
         if column_names:
             if "_id" not in column_names:
@@ -1722,7 +1724,7 @@ class LinkRecordsAction(BaseAction):
         try:
             rows_data, _ = self.auto_rule.dtable_db_api.query(sql, convert=False)
         except RowsQueryError:
-            raise RuleInvalidException('wrong filter in filters in link-records')
+            raise RuleInvalidException('wrong filter in filters in link-records', 'linked_table_sql_query_failed')
         except Request429Error:
             logger.warning('rule: %s query row too many', self.auto_rule.rule_id)
             return None
@@ -1750,7 +1752,7 @@ class LinkRecordsAction(BaseAction):
     def per_update_can_do_action(self):
         linked_table_name = self.get_table_name(self.linked_table_id)
         if not linked_table_name:
-            raise RuleInvalidException('link-records link_table_id table not found')
+            raise RuleInvalidException('link-records link_table_id table not found', 'linked_table_not_found')
 
         self.init_linked_row_ids()
 
@@ -1824,7 +1826,7 @@ class LinkRecordsAction(BaseAction):
         other_table_name = self.get_table_name(other_table_id)
 
         if not table_name or not other_table_name:
-            raise RuleInvalidException('table_name or other_table_name not found')
+            raise RuleInvalidException('table_name or other_table_name not found', 'table_not_found' if not table_name else 'linked_table_not_found')
 
         column_dict = self.get_columns_dict(table_id)
         other_column_dict = self.get_columns_dict(other_table_id)
@@ -1838,7 +1840,7 @@ class LinkRecordsAction(BaseAction):
             link_column = col
             break
         if not link_column:
-            raise RuleInvalidException('link column not found')
+            raise RuleInvalidException('link column not found', 'link_column_not_found')
 
         equal_columns = []
         equal_other_columns = []
@@ -1846,13 +1848,14 @@ class LinkRecordsAction(BaseAction):
         # check column valid
         for condition in self.match_conditions:
             if not condition.get('column_key') or not condition.get('other_column_key'):
-                raise RuleInvalidException('column or other_column invalid')
+                raise RuleInvalidException('column or other_column invalid', 'match_conditions_invalid')
             column = column_dict.get(condition['column_key'])
             other_column = other_column_dict.get(condition['other_column_key'])
             if not column or not other_column:
-                raise RuleInvalidException('column or other_column not found')
+                raise RuleInvalidException('column or other_column not found', 'match_column_not_found' if column else 'match_other_column_not_found')
             if column.get('type') not in self.VALID_COLUMN_TYPES or other_column.get('type') not in self.VALID_COLUMN_TYPES:
-                raise RuleInvalidException('column or other_column type invalid')
+                invalid_type = 'match_column_type_invalid' if column.get('type') not in self.VALID_COLUMN_TYPES else 'math_other_column_type_invalid'
+                raise RuleInvalidException('column or other_column type invalid', invalid_type)
             equal_columns.append(column.get('name'))
             equal_other_columns.append(other_column.get('name'))
 
@@ -1861,7 +1864,7 @@ class LinkRecordsAction(BaseAction):
             column_key = f.get('column_key')
             column = column_dict.get(column_key)
             if not column:
-                raise RuleInvalidException('column not found')
+                raise RuleInvalidException('column not found', 'rule_view_invalid')
             filter_columns.append(column.get('name'))
 
 
@@ -2145,7 +2148,7 @@ class AddRecordToOtherTableAction(BaseAction):
 
         table_name = self.get_table_name(self.dst_table_id)
         if not table_name:
-            raise RuleInvalidException('add-record dst_table_id table not found')
+            raise RuleInvalidException('add-record dst_table_id table not found', 'dst_table_not_found')
 
         self.init_append_rows()
         if not self.row_data.get('row'):
@@ -2398,13 +2401,19 @@ class CalculateAction(BaseAction):
         calculate_col = self.column_key_dict.get(self.calculate_column_key, {})
         result_col = self.column_key_dict.get(self.result_column_key, {})
         if not calculate_col or not result_col or result_col.get('type') not in self.VALID_RESULT_COLUMN_TYPES:
-            raise RuleInvalidException('calculate_col not found, result_col not found or result_col type invalid')
+            if not calculate_col:
+                invalid_type = 'calc_column_not_found'
+            elif not result_col:
+                invalid_type = 'result_column_not_found'
+            else:
+                invalid_type = 'result_column_type_invalid'
+            raise RuleInvalidException('calculate_col not found, result_col not found or result_col type invalid', invalid_type)
         if self.action_type == 'calculate_rank':
             if calculate_col.get('type') not in self.VALID_RANK_COLUMN_TYPES:
-                raise RuleInvalidException('calculate_rank calculate_col type invalid')
+                raise RuleInvalidException('calculate_rank calculate_col type invalid', 'result_rank_column_type_invalid')
         else:
             if calculate_col.get('type') not in self.VALID_CALCULATE_COLUMN_TYPES:
-                raise RuleInvalidException('calculate_col type invalid')
+                raise RuleInvalidException('calculate_col type invalid', 'calc_column_type_invalid')
 
         calculate_col_name = calculate_col.get('name')
         result_col_name = result_col.get('name')
@@ -2560,32 +2569,41 @@ class LookupAndCopyAction(BaseAction):
         self.copy_to_table_name = table_name_dict.get(copy_to_table_id)
 
         if not self.from_table_name or not self.copy_to_table_name:
-            raise RuleInvalidException('from_table_name or copy_to_table_name not found')
+            invalid_type = 'from_table_not_found' if not self.from_table_name else 'copy_to_table_not_found'
+            raise RuleInvalidException('from_table_name or copy_to_table_name not found', invalid_type)
 
         equal_from_columns = []
         equal_copy_to_columns = []
         fill_from_columns = []
         fill_copy_to_columns = []
         # check column valid
-        try:
-            for col in self.equal_column_conditions:
-                from_column = from_column_dict[col['from_column_key']]
-                copy_to_column = copy_to_column_dict[col['copy_to_column_key']]
-                if from_column.get('type') not in self.VALID_COLUMN_TYPES or copy_to_column.get('type') not in self.VALID_COLUMN_TYPES:
-                    raise RuleInvalidException('from_column or copy_to_column type invalid')
-                equal_from_columns.append(from_column.get('name'))
-                equal_copy_to_columns.append(copy_to_column.get('name'))
+        for col in self.equal_column_conditions:
+            from_column = from_column_dict.get(col['from_column_key'])
+            if not from_column:
+                raise RuleInvalidException('from_match_column not found', 'from_match_column_not_found')
+            copy_to_column = copy_to_column_dict.get(col['copy_to_column_key'])
+            if not copy_to_column:
+                raise RuleInvalidException('copy_to_match_column not found', 'copy_to_match_column_not_found')
+            if from_column.get('type') not in self.VALID_COLUMN_TYPES:
+                raise RuleInvalidException('from_column type invalid', 'from_match_column_type_invalid')
+            if copy_to_column.get('type') not in self.VALID_COLUMN_TYPES:
+                raise RuleInvalidException('copy_to_column type invalid', 'copy_to_match_column_type_invalid')
+            equal_from_columns.append(from_column.get('name'))
+            equal_copy_to_columns.append(copy_to_column.get('name'))
 
-            for col in self.fill_column_conditions:
-                from_column = from_column_dict[col['from_column_key']]
-                copy_to_column = copy_to_column_dict[col['copy_to_column_key']]
-                if from_column.get('type') not in self.VALID_COLUMN_TYPES or copy_to_column.get('type') not in self.VALID_COLUMN_TYPES:
-                    raise RuleInvalidException('from_column or copy_to_column type invalid')
-                fill_from_columns.append(from_column.get('name'))
-                fill_copy_to_columns.append(copy_to_column.get('name'))
-        except KeyError as e:
-            logger.error('dtable: %s, from_table: %s or copy_to_table:%s column key error: %s', self.auto_rule.dtable_uuid, self.from_table_name, self.copy_to_table_name, e)
-            raise RuleInvalidException('from_column or copy_to_column not found')
+        for col in self.fill_column_conditions:
+            from_column = from_column_dict.get(col['from_column_key'])
+            if not from_column:
+                raise RuleInvalidException('from_column not found', 'from_column_not_found')
+            copy_to_column = copy_to_column_dict.get(col['copy_to_column_key'])
+            if not copy_to_column:
+                raise RuleInvalidException('copy_to_column not found', 'copy_to_column_not_found')
+            if from_column.get('type') not in self.VALID_COLUMN_TYPES:
+                raise RuleInvalidException('from_column type invalid', 'from_column_type_invalid')
+            if copy_to_column.get('type') not in self.VALID_COLUMN_TYPES:
+                raise RuleInvalidException('copy_to_column type invalid', 'copy_to_column_type_invalid')
+            fill_from_columns.append(from_column.get('name'))
+            fill_copy_to_columns.append(copy_to_column.get('name'))
 
         from_columns = equal_from_columns + fill_from_columns
         copy_to_columns = equal_copy_to_columns + fill_copy_to_columns
@@ -2711,7 +2729,15 @@ class ExtractUserNameAction(BaseAction):
         extract_column_type = extract_column.get('type')
         if not extract_column or not result_column or result_column_type not in self.VALID_RESULT_COLUMN_TYPES \
                 or extract_column_type not in self.VALID_EXTRACT_COLUMN_TYPES:
-            raise RuleInvalidException('extract_column not found, result_column not found, result_column_type invalid or extract_column_type invalid')
+            if not extract_column:
+                invalid_type = 'extract_column_not_found'
+            elif not result_column:
+                invalid_type = 'dst_column_not_found'
+            elif result_column_type not in self.VALID_RESULT_COLUMN_TYPES:
+                invalid_type = 'extract_column_type_invalid'
+            else:
+                invalid_type = 'dst_column_type_invalid'
+            raise RuleInvalidException('extract_column not found, result_column not found, result_column_type invalid or extract_column_type invalid', invalid_type)
 
         extract_column_name = extract_column.get('name')
         result_column_name = result_column.get('name')
@@ -3185,7 +3211,7 @@ class AutomationRule:
                     self._table_info = table
                     break
             if not self._table_info:
-                raise RuleInvalidException('table not found')
+                raise RuleInvalidException('table not found', 'rule_table_not_found')
         return self._table_info
 
     @property
@@ -3199,7 +3225,7 @@ class AutomationRule:
                 self._view_info = view
                 break
         if not self._view_info:
-            raise RuleInvalidException('view not found')
+            raise RuleInvalidException('view not found', 'rule_view_not_found')
         return self._view_info
 
     @property
@@ -3209,7 +3235,7 @@ class AutomationRule:
                 self._related_users = self.dtable_web_api.get_related_users(self.dtable_uuid)['user_list']
             except Exception as e:
                 logger.error('rule: %s uuid: %srequest related users error: %s', self.rule_id, self.dtable_uuid, e)
-                raise RuleInvalidException('rule: %s uuid: %srequest related users error: %s' % (self.rule_id, self.dtable_uuid, e))
+                raise RuleInvalidException('rule: %s uuid: %srequest related users error: %s' % (self.rule_id, self.dtable_uuid, e), 'rule_related_users_failed')
         return self._related_users
 
     @property
@@ -3252,7 +3278,7 @@ class AutomationRule:
         if view_filters:
             for filter_item in view_filters:
                 if filter_item.get('filter_predicate') in ('include_me', 'is_current_user_ID'):
-                    raise RuleInvalidException('view filter has invalid filter')
+                    raise RuleInvalidException('view filter has invalid filter', 'rule_view_filters_invalid')
             filter_groups.append({'filters': view_filters, 'filter_conjunction': view_filter_conjunction})
 
         if filters:
@@ -3260,7 +3286,7 @@ class AutomationRule:
             trigger_filters = []
             for filter_item in filters:
                 if filter_item.get('filter_predicate') in ('include_me', 'is_current_user_ID'):
-                    raise RuleInvalidException('rule filter has invalid filter')
+                    raise RuleInvalidException('rule filter has invalid filter', 'rule_trigger_filters_invalid')
                 if filter_item not in view_filters:
                     trigger_filters.append(filter_item)
             if trigger_filters:
@@ -3279,7 +3305,7 @@ class AutomationRule:
             sql = filter2sql(table_name, columns, filter_conditions, by_group=True)
         except (ValueError, ColumnFilterInvalidError) as e:
             logger.warning('wrong filter in rule: %s trigger filters filter_conditions: %s error: %s', self.rule_id, filter_conditions, e)
-            raise RuleInvalidException('wrong filter in rule: %s trigger filters error: %s' % (self.rule_id, e))
+            raise RuleInvalidException('wrong filter in rule: %s trigger filters error: %s' % (self.rule_id, e), 'rule_trigger_gen_sql_failed')
         except Exception as e:
             logger.exception(e)
             logger.error('rule: %s filter_conditions: %s filter2sql error: %s', self.rule_id, filter_conditions, e)
@@ -3288,7 +3314,7 @@ class AutomationRule:
         try:
             rows_data, _ = self.dtable_db_api.query(sql, convert=False)
         except RowsQueryError:
-            raise RuleInvalidException('wrong filter in rule: %s trigger filters' % self.rule_id)
+            raise RuleInvalidException('wrong filter in rule: %s trigger filters' % self.rule_id, 'rule_trigger_sql_query_failed')
         except Exception as e:
             logger.error('request filter rows error: %s', e)
             self._trigger_conditions_rows = []
@@ -3593,7 +3619,18 @@ class AutomationRule:
                 auto_rule_logger.warning('auto rule: %s, invalid error: %s', self.rule_id, e)
                 logger.warning('auto rule: %s, invalid error: %s', self.rule_id, e)
                 self.task_run_success = False
-                self.set_invalid()
+                if not with_test:
+                    self.set_invalid(e)
+                    if len(e.args) == 2:
+                        invalid_type = e.args[1]
+                    else:
+                        invalid_type = None
+                    self.append_warning({
+                        'action_id': action_info['_id'],
+                        'action_type': action_info.get('type'),
+                        'type': 'rule_invalid',
+                        'invalid_type': invalid_type
+                    })
                 break
             except Exception as e:
                 self.task_run_success = False
@@ -3692,7 +3729,7 @@ class AutomationRule:
                 trigger_times = trigger_times[-self.per_minute_trigger_limit:]
                 redis_cache.set(self.cache_key, ','.join([t for t in trigger_times]), timeout=MINUTE_TIMEOUT)
 
-    def set_invalid(self):
+    def set_invalid(self, e: RuleInvalidException):
         try:
             self.current_valid = False
             set_invalid_sql = '''
@@ -3704,3 +3741,28 @@ class AutomationRule:
             auto_rule_logger.error('set rule: %s invalid error: %s', self.rule_id, e)
             logger.error('set rule: %s invalid error: %s', self.rule_id, e)
 
+        # send warning notifications
+        ## query admins
+        try:
+            admins = get_dtable_admins(self.dtable_uuid, self.db_session)
+        except Exception as e:
+            logger.exception('get dtable: %s admins error: %s', self.dtable_uuid, e)
+        else:
+            ## send notifications
+            if len(e.args) == 2:
+                invalid_type = e.args[1]
+            else:
+                invalid_type = ''
+            try:
+                send_notification(self.dtable_uuid, [{
+                    'to_user': user,
+                    'msg_type': AUTO_RULE_INVALID_MSG_TYPE,
+                    'detail': {
+                        'author': 'Automation Rule',
+                        'rule_id': self.rule_id,
+                        'rule_name': self.rule_name,
+                        'invalid_type': invalid_type
+                    }
+                } for user in admins])
+            except Exception as e:
+                logger.exception('send auto-rule: %s invalid notifiaction to admins error: %s', self.rule_id, e)

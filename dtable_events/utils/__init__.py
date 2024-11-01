@@ -11,6 +11,9 @@ from datetime import datetime
 import pytz
 import re
 
+from seaserv import ccnet_api
+from sqlalchemy import text
+
 from dtable_events.app.config import INNER_FILE_SERVER_ROOT
 
 logger = logging.getLogger(__name__)
@@ -296,3 +299,27 @@ def gen_inner_file_upload_url(token, op, replace=False):
     if replace is True:
         url += '?replace=1'
     return url
+
+
+def get_dtable_admins(dtable_uuid, db_session):
+    """
+    return a list of username
+    """
+    sql = "SELECT workspace_id FROM dtables WHERE uuid=:dtable_uuid"
+    dtable = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+    if not dtable:
+        return []
+    sql = "SELECT owner FROM workspaces WHERE id=:workspace_id"
+    workspace = db_session.execute(text(sql), {'workspace_id': dtable.workspace_id}).fetchone()
+    owner = workspace.owner
+    if '@seafile_group' not in owner:
+        return [owner]
+    group_id = int(owner.split('@')[0])
+    sql = "SELECT department_id FROM department_v2_groups WHERE group_id=:group_id"
+    department_group = db_session.execute(text(sql), {'group_id': group_id}).fetchone()
+    if department_group:
+        sql = "SELECT username FROM department_members_v2 WHERE department_id=:department_id AND is_staff=1"
+        return [member.username for member in db_session.execute(text(sql), {'department_id': department_group.department_id})]
+    else:
+        members = ccnet_api.get_group_members(group_id)
+        return [member.user_name for member in members if member.is_staff]
