@@ -37,7 +37,11 @@ from dtable_events.utils.universal_app_api import UniversalAppAPI
 
 
 logger = logging.getLogger(__name__)
-auto_rule_logger = setup_logger('automation-rules.log', level=logging.INFO, propagate=False)
+auto_rule_logger = setup_logger(
+    'automation-rules.log',
+    level=logging.INFO,
+    propagate=False
+)
 
 PER_DAY = 'per_day'
 PER_WEEK = 'per_week'
