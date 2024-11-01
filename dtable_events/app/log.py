@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 import sys
 import logging
 from logging import handlers
@@ -27,7 +28,7 @@ class LogConfigurator(object):
         # Rotating log
         handler = handlers.TimedRotatingFileHandler(self._logfile, when='W0', interval=1, backupCount=7)
         handler.setLevel(self._level)
-        formatter = logging.Formatter('[%(asctime)s] %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s')
+        formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] %(filename)s[line:%(lineno)d] %(message)s')
         handler.setFormatter(formatter)
 
         logging.root.setLevel(self._level)
@@ -36,7 +37,7 @@ class LogConfigurator(object):
     def _basic_config(self):
         # Log to stdout. Mainly for development.
         kw = {
-            'format': '[%(asctime)s] %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s',
+            'format': '[%(asctime)s] [%(levelname)s] %(filename)s[line:%(lineno)d] %(message)s',
             'datefmt': '%m/%d/%Y %H:%M:%S',
             'level': self._level,
             'stream': sys.stdout
@@ -50,3 +51,27 @@ class LogConfigurator(object):
         formatter = logging.Formatter('seafevents[%(process)d]: %(message)s')
         handler.setFormatter(formatter)
         logging.root.addHandler(handler)
+
+
+def setup_logger(logname, fmt=None, level=None, propagate=None):
+    """
+    setup logger for dtable io
+    """
+    logdir = os.path.join(os.environ.get('LOG_DIR', ''))
+    log_file = os.path.join(logdir, logname)
+    handler = handlers.TimedRotatingFileHandler(log_file, when='MIDNIGHT', interval=1, backupCount=7)
+    if level:
+        handler.setLevel(level)
+    if not fmt:
+        fmt = '[%(asctime)s] [%(levelname)s] %(filename)s[line:%(lineno)d] %(message)s'
+    formatter = logging.Formatter(fmt)
+    handler.setFormatter(formatter)
+    handler.addFilter(logging.Filter(logname))
+
+    logger = logging.getLogger(logname)
+    logger.addHandler(handler)
+
+    if propagate is not None:
+        logger.propagate = propagate
+
+    return logger

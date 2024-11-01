@@ -23,6 +23,7 @@ from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY,
     SEATABLE_FAAS_AUTH_TOKEN, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL
 from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg, batch_send_email_msg
 from dtable_events.convert_page.manager import conver_page_to_pdf_manager
+from dtable_events.app.log import setup_logger
 from dtable_events.notification_rules.notification_rules_utils import send_notification, fill_msg_blanks_with_sql_row
 from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url, \
     normalize_file_path, gen_file_get_url, gen_random_option
@@ -36,6 +37,11 @@ from dtable_events.utils.universal_app_api import UniversalAppAPI
 
 
 logger = logging.getLogger(__name__)
+auto_rule_logger = setup_logger(
+    'automation-rules.log',
+    level=logging.INFO,
+    propagate=False
+)
 
 PER_DAY = 'per_day'
 PER_WEEK = 'per_week'
@@ -3115,7 +3121,7 @@ class AutomationRule:
         self.cache_key = 'AUTOMATION_RULE:%s' % self.rule_id
         self.task_run_success = True
 
-        self.done_actions = False
+        self.done_actions = False  # indicate at least 1 action be done
         self.load_trigger_and_actions(raw_trigger, raw_actions)
 
         self.current_valid = True
@@ -3423,16 +3429,20 @@ class AutomationRule:
         return False
 
     def do_actions(self, with_test=False):
+        auto_rule_logger.info('rule: %s run_condition: %s trigger_condition: %s start, is a test run: %s', self.rule_id, self.run_condition, self.trigger.get('condition'), with_test)
         if (not self.can_do_actions()) and (not with_test):
+            auto_rule_logger.info('rule: %s can not do actions, with_test: %s', self.rule_id, with_test)
             return
 
         for action_info in self.action_infos:
-            logger.debug('rule: %s start action: %s type: %s', self.rule_id, action_info.get('_id'), action_info['type'])
-            if not self.can_condition_trigger_action(action_info):
-                logger.debug('rule: %s forbidden trigger action: %s type: %s when run_condition: %s trigger_condition: %s', self.rule_id, action_info.get('_id'), action_info['type'], self.run_condition, self.trigger.get('condition'))
-                continue
             if not self.current_valid:
                 break
+            auto_rule_logger.info('rule: %s start action: %s type: %s', self.rule_id, action_info.get('_id'), action_info['type'])
+            logger.debug('rule: %s start action: %s type: %s', self.rule_id, action_info.get('_id'), action_info['type'])
+            if not self.can_condition_trigger_action(action_info):
+                auto_rule_logger.info('rule: %s forbidden trigger action: %s type: %s when run_condition: %s trigger_condition: %s', self.rule_id, action_info.get('_id'), action_info['type'], self.run_condition, self.trigger.get('condition'))
+                logger.debug('rule: %s forbidden trigger action: %s type: %s when run_condition: %s trigger_condition: %s', self.rule_id, action_info.get('_id'), action_info['type'], self.run_condition, self.trigger.get('condition'))
+                continue
             try:
                 if action_info.get('type') == 'update_record':
                     updates = action_info.get('updates')
@@ -3580,14 +3590,19 @@ class AutomationRule:
                     ConvertDocumentToPDFAndSendAction(self, action_info.get('type'), plugin_type, page_id, file_name, save_config, send_wechat_robot_config, send_email_config, repo_id, workspace_id).do_action()
 
             except RuleInvalidException as e:
+                auto_rule_logger.warning('auto rule: %s, invalid error: %s', self.rule_id, e)
                 logger.warning('auto rule: %s, invalid error: %s', self.rule_id, e)
                 self.task_run_success = False
                 self.set_invalid()
                 break
             except Exception as e:
-                logger.exception(e)
                 self.task_run_success = False
-                logger.error('rule: %s, do action: %s error: %s', self.rule_id, action_info, e)
+                auto_rule_logger.exception('rule: %s, do action: %s error: %s', self.rule_id, action_info, e)
+                logger.exception('rule: %s, do action: %s error: %s', self.rule_id, action_info, e)
+            finally:
+                auto_rule_logger.info('rule: %s action: %s type: %s finished', self.rule_id, action_info.get('_id'), action_info['type'])
+
+        auto_rule_logger.info('rule: %s all actions finished done_actions: %s', self.rule_id, self.done_actions)
 
         if self.done_actions and not with_test:
             self.update_last_trigger_time()
@@ -3619,6 +3634,7 @@ class AutomationRule:
                 })
                 self.db_session.commit()
         except Exception as e:
+            auto_rule_logger.error('set rule task log: %s error: %s', self.rule_id, e)
             logger.error('set rule task log: %s error: %s', self.rule_id, e)
 
     def update_last_trigger_time(self):
@@ -3663,6 +3679,7 @@ class AutomationRule:
                 })
             self.db_session.commit()
         except Exception as e:
+            auto_rule_logger.exception('set rule: %s error: %s', self.rule_id, e)
             logger.exception('set rule: %s error: %s', self.rule_id, e)
 
         if self.run_condition == PER_UPDATE and self.per_minute_trigger_limit > 0:
@@ -3684,5 +3701,6 @@ class AutomationRule:
             self.db_session.execute(text(set_invalid_sql), {'rule_id': self.rule_id})
             self.db_session.commit()
         except Exception as e:
+            auto_rule_logger.error('set rule: %s invalid error: %s', self.rule_id, e)
             logger.error('set rule: %s invalid error: %s', self.rule_id, e)
 

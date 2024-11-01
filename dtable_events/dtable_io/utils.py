@@ -4,18 +4,15 @@ import requests
 import os
 import time
 import logging
-from logging import handlers
 import io
 import uuid
 import datetime
 import random
 import string
-import jwt
 import sys
 import re
 import hashlib
 import shutil
-from io import BytesIO
 from zipfile import ZipFile, is_zipfile
 from uuid import UUID, uuid4
 from urllib.parse import quote as urlquote
@@ -36,23 +33,6 @@ from dtable_events.utils.exception import BaseSizeExceedsLimitError
 FILE_URL_PREFIX = 'file://dtable-bundle/asset/files/'
 IMG_URL_PREFIX = 'file://dtable-bundle/asset/images/'
 DTABLE_IO_DIR = '/tmp/dtable-io/'
-
-
-def setup_logger(logname):
-    """
-    setup logger for dtable io
-    """
-    logdir = os.path.join(os.environ.get('LOG_DIR', ''))
-    log_file = os.path.join(logdir, logname)
-    handler = handlers.TimedRotatingFileHandler(log_file, when='MIDNIGHT', interval=1, backupCount=7)
-    formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
-    handler.setFormatter(formatter)
-    handler.addFilter(logging.Filter(logname))
-
-    logger = logging.getLogger(logname)
-    logger.addHandler(handler)
-
-    return logger
 
 
 def gen_inner_file_get_url(token, filename):

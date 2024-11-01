@@ -24,16 +24,16 @@ class BaseMetadataCacheManager:
         pass
 
 
-class RuleIntentMetadataCacheManger(BaseMetadataCacheManager):
+class RuleInstantMetadataCacheManger(BaseMetadataCacheManager):
 
     def get_key(self, dtable_uuid):
         dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
-        return f'dtable:{dtable_uuid}:intent-metadata'
+        return f'dtable:{dtable_uuid}:instant-metadata'
 
     def get_metadata(self, dtable_uuid):
         key = self.get_key(dtable_uuid)
         metadata_str = redis_cache.get(key)
-        logger.debug('intent metadata dtable_uuid: %s metadata: %s', dtable_uuid, bool(metadata_str))
+        logger.debug('instant metadata dtable_uuid: %s metadata: %s', dtable_uuid, bool(metadata_str))
         if metadata_str:
             try:
                 metadata = json.loads(metadata_str)
