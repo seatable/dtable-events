@@ -16,7 +16,7 @@ from seaserv import seafile_api
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, SEATABLE_FAAS_AUTH_TOKEN, \
     SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL
 from dtable_events.automations.models import BoundThirdPartyAccounts
-from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg
+from dtable_events.dtable_io import send_wechat_msg, send_dingtalk_msg
 from dtable_events.notification_rules.notification_rules_utils import fill_msg_blanks_with_sql_row, send_notification
 from dtable_events.utils import is_valid_email, get_inner_dtable_server_url, uuid_str_to_36_chars
 from dtable_events.utils.constants import ColumnTypes
@@ -24,6 +24,7 @@ from dtable_events.utils.dtable_server_api import DTableServerAPI, NotFoundExcep
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.utils.sql_generator import filter2sql
+from dtable_events.utils.email_sender import email_sender
 
 
 logger = logging.getLogger(__name__)
@@ -468,9 +469,7 @@ class SendEmailAction(BaseAction):
 
     def __init__(self, context: BaseContext, account_id, subject, msg, send_to, copy_to, send_from):
         super().__init__(context)
-        self.account_dict = get_third_party_account(self.context.db_session, account_id)
-        if not self.account_dict:
-            raise ActionInvalid('account_id: %s not found' % account_id)
+        self.account_id = account_id
         self.msg = msg
         self.send_to_list = email2list(send_to)
         self.copy_to_list = email2list(copy_to)
@@ -495,13 +494,6 @@ class SendEmailAction(BaseAction):
                 real_copy_to = self.generate_real_msg(copy_to, sql_row)
                 if is_valid_email(real_copy_to):
                     final_copy_to_list.append(real_copy_to)
-        account_detail = self.account_dict.get('detail', {})
-        auth_info = {
-            'email_host': account_detail.get('email_host', ''),
-            'email_port': int(account_detail.get('email_port', 0)),
-            'host_user': account_detail.get('host_user', ''),
-            'password': account_detail.get('password', '')
-        }
         send_info = {
             'send_to': final_send_to_list,
             'copy_to': final_copy_to_list,
@@ -509,15 +501,11 @@ class SendEmailAction(BaseAction):
         }
         try:
             send_info['message'] = self.generate_real_msg(self.msg, sql_row)
-            send_email_msg(
-                auth_info=auth_info,
-                send_info=send_info,
-                username=self.send_from,
-                db_session=self.context.db_session
-            )
+            sender = email_sender(self.account_id, db_session=self.context.db_session)
+            sender.send(send_info, self.send_from)
         except Exception as e:
             logger.exception(e)
-            logger.error('send email error: %s send_info: %s', e, self.send_info)
+            logger.error('send email error: %s send_info: %s', e, send_info)
 
 
 class SendWechatAction(BaseAction):

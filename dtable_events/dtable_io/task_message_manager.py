@@ -29,14 +29,11 @@ class TaskMessageManager(object):
 
     def is_valid_task_id(self, task_id):
         return task_id in self.tasks_map.keys()
-    
-    def add_email_sending_task(self, auth_type, auth_info, send_info, username):
-        from dtable_events.dtable_io import send_email_msg, send_email_msg_by_oauth_auth
+
+    def add_email_sending_task(self, account_id, send_info, username):
+        from dtable_events.utils.email_sender import toggle_send_email
         task_id = str(uuid.uuid4())
-        if auth_type == 'LOGIN':
-            task = (send_email_msg,(auth_info, send_info, username, self.config))
-        elif auth_type == 'OAUTH':
-            task = (send_email_msg_by_oauth_auth,(auth_info, send_info, username, self.config))
+        task = (toggle_send_email, (account_id, send_info, username, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         return task_id

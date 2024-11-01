@@ -1,17 +1,8 @@
-import base64
-import json
 import os
 import shutil
-import time
 import uuid
 
 import requests
-import smtplib
-import msal
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.utils import formataddr, parseaddr
-from urllib import parse
 from datetime import datetime
 
 from seaserv import seafile_api
@@ -34,12 +25,21 @@ from dtable_events.dtable_io.excel import parse_excel_csv_to_json, import_excel_
     import_excel_csv_add_table_by_dtable_server, update_parsed_file_by_dtable_server, \
     parse_update_excel_upload_excel_to_json, parse_update_csv_upload_csv_to_json, parse_and_import_excel_csv_to_dtable, \
     parse_and_import_excel_csv_to_table, parse_and_update_file_to_table, parse_and_append_excel_csv_to_table
+<<<<<<< HEAD
 from dtable_events.convert_page.utils import get_chrome_data_dir, convert_page_to_pdf as _convert_page_to_pdf, get_driver
 from dtable_events.statistics.db import save_email_sending_records, batch_save_email_sending_records
 from dtable_events.data_sync.data_sync_utils import run_sync_emails
 from dtable_events.utils import get_inner_dtable_server_url, is_valid_email, uuid_str_to_36_chars
 from dtable_events.utils.dtable_server_api import DTableServerAPI, BaseExceedsException
 from dtable_events.utils.exception import ExcelFormatError
+=======
+from dtable_events.page_design.utils import CHROME_DATA_DIR, convert_page_to_pdf as _convert_page_to_pdf, get_driver
+from dtable_events.data_sync.data_sync_utils import run_sync_emails
+from dtable_events.utils import get_inner_dtable_server_url, is_valid_email, uuid_str_to_36_chars
+from dtable_events.utils.dtable_server_api import DTableServerAPI
+from dtable_events.utils.exception import BaseSizeExceedsLimitError, ExcelFormatError
+from dtable_events.utils.email_sender import email_sender
+>>>>>>> c865b0e (feat: email sender)
 from dtable_events.dtable_io.utils import clear_tmp_dir, clear_tmp_file, clear_tmp_files_and_dirs
 from dtable_events.app.log import setup_logger
 
@@ -662,6 +662,7 @@ def send_notification_msg(emails, user_col_key, msg, dtable_uuid, username, tabl
         dtable_message_logger.info('Notification sending success!')
     return result
 
+<<<<<<< HEAD
 
 def send_email_msg(auth_info, send_info, username, config=None, db_session=None):
     # auth info
@@ -1016,6 +1017,9 @@ def batch_send_email_msg(auth_info, send_info_list, username, config=None, db_se
 
 
 def convert_page_to_pdf(dtable_uuid, plugin_type, page_id, row_id, username=None):
+=======
+def convert_page_to_pdf(dtable_uuid, page_id, row_id):
+>>>>>>> c865b0e (feat: email sender)
     dtable_server_url = get_inner_dtable_server_url()
     if not username:
         username = 'dtable-events'
@@ -1240,7 +1244,7 @@ def plugin_email_send_email(context, config=None):
 
     table_info = context.get('table_info')
     email_info = context.get('email_info')
-    auth_info = context.get('auth_info')
+    account_id = context.get('account_id')
 
     thread_row_id = table_info.get('thread_row_id')
     email_row_id = table_info.get('email_row_id')
@@ -1248,10 +1252,12 @@ def plugin_email_send_email(context, config=None):
     thread_table_name = table_info.get('thread_table_name')
 
     # send email
-    result = send_email_msg(auth_info, email_info, username, config)
+    sender = email_sender(account_id, config)
+    result = sender.send(email_info, username)
+    sender.close()
 
     if result.get('err_msg'):
-        dtable_plugin_email_logger.error('plugin email send failed, email account: %s, username: %s', auth_info.get('host_user'), username)
+        dtable_plugin_email_logger.error('plugin email send failed, email account id: %s, username: %s', account_id, username)
         return
 
     send_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
