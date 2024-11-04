@@ -37,6 +37,7 @@ from dtable_events.convert_page.utils import get_chrome_data_dir, convert_page_t
 from dtable_events.statistics.db import save_email_sending_records, batch_save_email_sending_records
 from dtable_events.data_sync.data_sync_utils import run_sync_emails
 from dtable_events.utils import get_inner_dtable_server_url, is_valid_email, uuid_str_to_36_chars
+from dtable_events.utils.constants import SSL_SMTP_SERVICES
 from dtable_events.utils.dtable_server_api import DTableServerAPI, BaseExceedsException
 from dtable_events.utils.exception import ExcelFormatError
 from dtable_events.dtable_io.utils import clear_tmp_dir, clear_tmp_file, clear_tmp_files_and_dirs
@@ -740,7 +741,10 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
             msg_obj.attach(attach_file)
 
     try:
-        smtp = smtplib.SMTP(email_host, int(email_port), timeout=30)
+        if email_host in SSL_SMTP_SERVICES:
+            smtp = smtplib.SMTP_SSL(email_host, int(email_port), timeout=30)
+        else:
+            smtp = smtplib.SMTP(email_host, int(email_port), timeout=30)
     except Exception as e:
         dtable_message_logger.warning(
             'Email server configured failed. host: %s, port: %s, error: %s' % (email_host, email_port, e))
@@ -749,7 +753,8 @@ def send_email_msg(auth_info, send_info, username, config=None, db_session=None)
     success = False
 
     try:
-        smtp.starttls()
+        if not isinstance(smtp, smtplib.SMTP_SSL):
+            smtp.starttls()
         smtp.login(host_user, password)
         recevers = copy_to and send_to + copy_to or send_to
         smtp.sendmail(sender_email if sender_email else host_user, recevers, msg_obj.as_string())

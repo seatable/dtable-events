@@ -241,3 +241,7 @@ VALID_OPTION_TAGS = [
     {'color': '#46A1FD', 'border_color': '#3C8FE4', 'text_color': '#FFFFFF'},
     {'color': '#C2C2C2', 'border_color': '#ADADAD', 'text_color': '#FFFFFF'},
 ]
+
+SSL_SMTP_SERVICES = [
+    'smtp.163.com'
+]
