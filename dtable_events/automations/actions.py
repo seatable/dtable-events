@@ -3010,7 +3010,6 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
         try:
             sender = EmailSender(account_id, conver_page_to_pdf_manager.config)
             sender.send(send_info, 'automation-rules')
-            sender.close()
         except Exception as e:
             logger.exception('rule: %s dtable: %s page: %s send email: %s error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.page_id, send_info, e)
 

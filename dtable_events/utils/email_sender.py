@@ -1,16 +1,18 @@
-from dtable_events.db import init_db_session_class
-from dtable_events.automations.models import get_third_party_account
-from dtable_events.dtable_io.utils import setup_logger
-from dtable_events.statistics.db import save_email_sending_records, batch_save_email_sending_records
-import requests
-import msal
-import smtplib
-import time
 import json
-from urllib import parse
+import time
+import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr, parseaddr
+from urllib import parse
+
+import msal
+import requests
+
+from dtable_events.app.log import setup_logger
+from dtable_events.automations.models import get_third_party_account
+from dtable_events.db import init_db_session_class
+from dtable_events.statistics.db import save_email_sending_records, batch_save_email_sending_records
 
 dtable_message_logger = setup_logger('dtable_events_message.log')
 
@@ -22,20 +24,38 @@ class ThirdPartyAccountInvalid(BaseException):
 
 class EmailSender:
     def __init__(self, account_id, config=None, db_session=None):
+        """
+        one of config or db_session is required
+        """
         self.account_id = account_id
         self.config = config
+        self.is_config_session = False if db_session else True
         self.db_session = db_session or init_db_session_class(self.config)()
         self._get_auth_info()
 
     def send(self, send_info, username):
-        return self._send_smtp_email(send_info, username) if self.account_type == 'LOGIN' else self._send_oauth_email(send_info, username)
-    
+        try:
+            return self._send_smtp_email(send_info, username) if self.account_type == 'LOGIN' else self._send_oauth_email(send_info, username)
+        except Exception as e:
+            dtable_message_logger.exception('account_id: %s send smtp email error: %s', self.account_id, e)
+            return {
+                'error_msg': 'Email send failed'
+            }
+        finally:
+            self.close()
+
     def batch_send(self, send_info_list, username):
-        return self._batch_send_smtp_email(send_info_list, username) if self.account_type == 'LOGIN' else self._batch_send_oauth_email(send_info_list, username)
-    
+        try:
+            return self._batch_send_smtp_email(send_info_list, username) if self.account_type == 'LOGIN' else self._batch_send_oauth_email(send_info_list, username)
+        except Exception as e:
+            dtable_message_logger.exception('account_id: %s batch send smtp email error: %s', self.account_id, e)
+        finally:
+            self.close()
+
     def close(self):
         # only for db_session = None in __init__
-        self.db_session.close()
+        if self.is_config_session:
+            self.db_session.close()
 
     def _get_auth_info(self):
         account_info = get_third_party_account(self.db_session, self.account_id)
@@ -63,7 +83,7 @@ class EmailSender:
             self.sender_name = detail.get('sender_name')
             self.sender_email = detail.get('sender_email')
         else:
-            raise ThirdPartyAccountInvalid(f'Invalid third-party email-account auth type: {self.account_type}')
+            raise ThirdPartyAccountInvalid(f'Invalid third-party email-account account_id: {self.account_id} account type: {self.account_type}')
         
     def _get_oauth_smtp_headers(self):
         app = msal.ConfidentialClientApplication(
@@ -80,7 +100,7 @@ class EmailSender:
             return headers
 
         else:
-            raise ConnectionError('Failed to acquire token', result.get('error'), result.get('error_description'))
+            raise ConnectionError(f'Failed to acquire token account_id: {self.account_id}', result.get('error'), result.get('error_description'))
 
     def _send_smtp_email(self, send_info, username):
         msg = send_info.get('message', '')
@@ -91,6 +111,7 @@ class EmailSender:
         copy_to = send_info.get('copy_to', [])
         reply_to = send_info.get('reply_to', '')
         file_download_urls = send_info.get('file_download_urls', None)
+        file_contents = send_info.get('file_contents', None)
         message_id = send_info.get('message_id', '')
         in_reply_to = send_info.get('in_reply_to', '')
         image_cid_url_map = send_info.get('image_cid_url_map', {})
@@ -142,6 +163,13 @@ class EmailSender:
                 attach_file["Content-Disposition"] = 'attachment;filename*=UTF-8\'\'' + parse.quote(file_name)
                 msg_obj.attach(attach_file)
 
+        if file_contents:
+            for file_name, content in file_contents.items():
+                attach_file = MIMEText(content, 'base64', 'utf-8')
+                attach_file["Content-Type"] = 'application/octet-stream'
+                attach_file["Content-Disposition"] = 'attachment;filename*=UTF-8\'\'' + parse.quote(file_name)
+                msg_obj.attach(attach_file)
+
         try:
             smtp = smtplib.SMTP(self.email_host, int(self.email_port), timeout=30)
         except Exception as e:
@@ -173,6 +201,7 @@ class EmailSender:
             dtable_message_logger.error(
                 'Email sending log record error: %s' % e)
         return result
+
     def _batch_send_smtp_email(self, send_info_list, username):
         try:
             smtp = smtplib.SMTP(self.email_host, int(self.email_port), timeout=30)
@@ -200,6 +229,7 @@ class EmailSender:
             copy_to = send_info.get('copy_to', [])
             reply_to = send_info.get('reply_to', '')
             file_download_urls = send_info.get('file_download_urls', None)
+            file_contents = send_info.get('file_contents', None)
             image_cid_url_map = send_info.get('image_cid_url_map', {})
 
             if not msg and not html_msg:
@@ -240,6 +270,13 @@ class EmailSender:
                     attach_file["Content-Disposition"] = 'attachment;filename*=UTF-8\'\'' + parse.quote(file_name)
                     msg_obj.attach(attach_file)
 
+            if file_contents:
+                for file_name, content in file_contents.items():
+                    attach_file = MIMEText(content, 'base64', 'utf-8')
+                    attach_file["Content-Type"] = 'application/octet-stream'
+                    attach_file["Content-Disposition"] = 'attachment;filename*=UTF-8\'\'' + parse.quote(file_name)
+                    msg_obj.attach(attach_file)
+
             try:
                 recevers = copy_to and send_to + copy_to or send_to
                 smtp.sendmail(self.sender_email if self.sender_email else self.host_user, recevers, msg_obj.as_string())
@@ -258,6 +295,7 @@ class EmailSender:
             batch_save_email_sending_records(session, username, self.email_host, send_state_list)
         except Exception as e:
             dtable_message_logger.error('Batch save email sending log error: %s' % e)
+
     def _send_oauth_email(self, send_info, username):
         # send info
         msg = send_info.get('message', '')
@@ -267,6 +305,7 @@ class EmailSender:
         copy_to = send_info.get('copy_to', [])
         reply_to = send_info.get('reply_to', '')
         file_download_urls = send_info.get('file_download_urls', None)
+        file_contents = send_info.get('file_contents', None)
         message_id = send_info.get('message_id', '')
 
         result = {}
@@ -326,8 +365,10 @@ class EmailSender:
         if message_id:
             email_data.update({'internetMessageId': message_id})
 
+        attachments = []
+
         if file_download_urls:
-            email_data.update({'attachments':[
+            attachments.extend([
                 {
                     '@odata.type': '#microsoft.graph.fileAttachment',
                     'name': 'UTF-8\'\'' + parse.quote(file_name),
@@ -335,7 +376,21 @@ class EmailSender:
                     'contentBytes': requests.get(file_url).content
                 }
                 for file_name, file_url in file_download_urls.items()
-            ]})
+            ])
+
+        if file_contents:
+            attachments.extend([
+                {
+                    '@odata.type': '#microsoft.graph.fileAttachment',
+                    'name': 'UTF-8\'\'' + parse.quote(file_name),
+                    'contentType': 'application/octet-stream',
+                    'contentBytes': file_content
+                }
+                for file_name, file_content in file_contents.items()
+            ])
+
+        if attachments:
+            email_data.update({'attachments': attachments})
 
         try:
             response = requests.post(
@@ -359,6 +414,7 @@ class EmailSender:
             dtable_message_logger.error(
                 'Email sending log record error: %s' % e)
         return result
+
     def _batch_send_oauth_email(self, send_info_list, username):
             try:
                 headers = self._get_oauth_smtp_headers()
@@ -377,6 +433,7 @@ class EmailSender:
                 copy_to = send_info.get('copy_to', [])
                 reply_to = send_info.get('reply_to', '')
                 file_download_urls = send_info.get('file_download_urls', None)
+                file_contents = send_info.get('file_contents', None)
                 message_id = send_info.get('message_id', '')
                 
                 email_data = {
@@ -424,8 +481,10 @@ class EmailSender:
                 if message_id:
                     email_data.update({'internetMessageId': message_id})
 
+                attachments = []
+
                 if file_download_urls:
-                    email_data.update({'attachments':[
+                    attachments.extend([
                         {
                             '@odata.type': '#microsoft.graph.fileAttachment',
                             'name': 'UTF-8\'\'' + parse.quote(file_name),
@@ -433,7 +492,21 @@ class EmailSender:
                             'contentBytes': requests.get(file_url).content
                         }
                         for file_name, file_url in file_download_urls.items()
-                    ]})
+                    ])
+
+                if file_contents:
+                    attachments.extend([
+                        {
+                            '@odata.type': '#microsoft.graph.fileAttachment',
+                            'name': 'UTF-8\'\'' + parse.quote(file_name),
+                            'contentType': 'application/octet-stream',
+                            'contentBytes': file_content
+                        }
+                        for file_name, file_content in file_contents.items()
+                    ])
+
+                if attachments:
+                    email_data.update({'attachments': attachments})
 
                 try:
                     response = requests.post(
@@ -461,5 +534,4 @@ class EmailSender:
 def toggle_send_email(account_id, send_info, username, config):
     sender = EmailSender(account_id, config)
     result = sender.send(send_info, username)
-    sender.close()
-    return result    
+    return result

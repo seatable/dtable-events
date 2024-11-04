@@ -889,7 +889,6 @@ def plugin_email_send_email(context, config=None):
     # send email
     sender = EmailSender(account_id, config)
     result = sender.send(email_info, username)
-    sender.close()
 
     if result.get('err_msg'):
         dtable_plugin_email_logger.error('plugin email send failed, email account id: %s, username: %s', account_id, username)
