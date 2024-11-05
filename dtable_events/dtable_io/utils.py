@@ -1519,8 +1519,11 @@ def post_big_data_screen_app_zip_file(username, repo_id, dtable_uuid, app_uuid, 
     content_poster_file_path = os.path.join(tmp_extracted_path, 'content.png')
     new_content_poster_file_path = os.path.join(tmp_extracted_path, '%s.png' % app_id)
     poster_file_name = os.path.basename(new_content_poster_file_path)
-    os.rename(content_poster_file_path, new_content_poster_file_path)
+    if os.path.isfile(content_poster_file_path):
+        os.rename(content_poster_file_path, new_content_poster_file_path)
+
     image_path = os.path.join(tmp_extracted_path, 'images/')
+
     with open(content_json_file_path, 'r') as f:
         content_json = f.read()
     try:
@@ -1562,20 +1565,22 @@ def post_big_data_screen_app_zip_file(username, repo_id, dtable_uuid, app_uuid, 
     if not path_id:
         seafile_api.mkdir_with_parents(repo_id, '/', current_file_path[1:], username)
 
-    seafile_api.post_file(repo_id, new_content_poster_file_path, current_file_path, poster_file_name, username)
+    if os.path.isfile(content_poster_file_path):
+        seafile_api.post_file(repo_id, new_content_poster_file_path, current_file_path, poster_file_name, username)
 
     # 2. handle images
     image_path_id = seafile_api.get_dir_id_by_path(repo_id, current_image_path)
     if not image_path_id:
         seafile_api.mkdir_with_parents(repo_id, '/', current_image_path[1:], username)
-    for dirpath, _, filenames in os.walk(image_path):
-        for image_name in filenames:
-            tmp_image_path = os.path.join(dirpath, image_name)
-            dtable_file_id = seafile_api.get_file_id_by_path(
-                repo_id, current_image_path + image_name
-            )
-            if not dtable_file_id:
-                seafile_api.post_file(repo_id, tmp_image_path, current_image_path, image_name, username)
+    if os.path.isdir(image_path):
+        for dirpath, _, filenames in os.walk(image_path):
+            for image_name in filenames:
+                tmp_image_path = os.path.join(dirpath, image_name)
+                dtable_file_id = seafile_api.get_file_id_by_path(
+                    repo_id, current_image_path + image_name
+                )
+                if not dtable_file_id:
+                    seafile_api.post_file(repo_id, tmp_image_path, current_image_path, image_name, username)
 
 
 def escape_sheet_name(text):
