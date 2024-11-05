@@ -399,7 +399,7 @@ class EmailSender:
                 data=json.dumps(email_data)
             )
             if response.status_code != 202:
-                raise Exception(f'Error sending email: {response.status_code} - {response.text}')
+                raise Exception(f'Error account: {self.account_id} sending email: {response.status_code} - {response.text}')
             success = True
         except Exception as e:
             dtable_message_logger.warning(e)
@@ -515,7 +515,7 @@ class EmailSender:
                         data=json.dumps(email_data)
                     )
                     if response.status_code != 202:
-                        raise Exception(f'Error sending email: {response.status_code} - {response.text}')
+                        raise Exception(f'Error account: {self.account_id} sending email: {response.status_code} - {response.text}')
                     success = True
                 except Exception as e:
                     dtable_message_logger.warning(e)
