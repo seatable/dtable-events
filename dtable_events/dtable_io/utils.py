@@ -1425,9 +1425,7 @@ def zip_big_data_screen_app(username, repo_id, dtable_uuid, app_uuid, app_id, tm
     from dtable_events.utils import uuid_str_to_36_chars, normalize_file_path, gen_file_get_url
 
     base_dir = '/asset/' + uuid_str_to_36_chars(dtable_uuid)
-    # big_data_file_path = 'files/plugins/big-data-screen/%(page_id)s/%(page_id)s.json' % ({
-    #         'page_id': page_id,
-    #     })
+
     big_data_poster_path = 'external-apps/big-data-screen/%(app_id)s/%(app_id)s.png' % ({
         'app_id': app_id
     })
@@ -1436,17 +1434,6 @@ def zip_big_data_screen_app(username, repo_id, dtable_uuid, app_uuid, app_id, tm
 
     poster_asset_path = "%s/%s" % (base_dir, big_data_poster_path)
 
-    # 1. get the json file and poster of big-data-screen page
-    #   a. json file
-    # asset_id = seafile_api.get_file_id_by_path(repo_id, asset_path)
-    # token = seafile_api.get_fileserver_access_token(
-    #     repo_id, asset_id, 'view', '', use_onetime=False
-    # )
-    # asset_name = os.path.basename(normalize_file_path(big_data_file_path))
-    # url = gen_file_get_url(token, asset_name)
-
-    # resp = requests.get(url)
-    # page_json = json.loads(resp.content)
     sql = "SELECT app_config FROM dtable_external_apps WHERE id=:app_id"
     app = db_session.execute(text(sql), {'app_id': app_id}).fetchone()
     if not app:
@@ -1536,26 +1523,19 @@ def post_big_data_screen_app_zip_file(username, repo_id, dtable_uuid, app_uuid, 
     image_path = os.path.join(tmp_extracted_path, 'images/')
     with open(content_json_file_path, 'r') as f:
         content_json = f.read()
-    app_name_file = os.path.join(tmp_extracted_path, 'app_name')
-    if os.path.isfile(app_name_file):
-        with open(app_name_file, 'r') as f:
-            app_name = f.read().strip()
-    else:
-        app_name = ''
     try:
         content = json.loads(content_json)
     except:
         content = {}
+    app_name = content.get('app_name') or ''
 
 
     base_dir = '/asset/' + dtable_uuid
-    # big_data_file_path = 'files/plugins/big-data-screen/%(page_id)s/' % ({
-    #         'page_id': page_id,
-    #     })
+
     big_data_file_path = 'external-apps/big-data-screen/%(app_id)s/' % {
         'app_id': app_id
     }
-    # image_file_path = 'files/plugins/big-data-screen/bg_images/'
+
     image_file_path = '%(big_data_file_path)s/bg_images/' % {
         'big_data_file_path': big_data_file_path.strip('/')
     }
@@ -1566,9 +1546,7 @@ def post_big_data_screen_app_zip_file(username, repo_id, dtable_uuid, app_uuid, 
     page_content_dict = content.get('page_content')
     page_content_dict['app_id'] = app_id # update app_id
     page_content_dict['app_uuid'] = app_uuid # update app_uuid
-    # tmp_page_json_path = os.path.join(tmp_extracted_path, '%s.json' % page_id)
-    # with open(tmp_page_json_path, 'wb') as f:
-    #     f.write(json.dumps(page_content_dict).encode('utf-8'))
+
     sql = "SELECT app_config FROM dtable_external_apps WHERE id=:app_id"
     app_config = json.loads(db_session.execute(text(sql), {'app_id': app_id}).fetchone().app_config)
     app_config['settings'] = page_content_dict
@@ -1583,12 +1561,7 @@ def post_big_data_screen_app_zip_file(username, repo_id, dtable_uuid, app_uuid, 
     path_id = seafile_api.get_dir_id_by_path(repo_id, current_file_path)
     if not path_id:
         seafile_api.mkdir_with_parents(repo_id, '/', current_file_path[1:], username)
-    # file_name = os.path.basename(tmp_page_json_path)
-    # dtable_file_id = seafile_api.get_file_id_by_path(
-    #     repo_id, current_file_path + file_name)
-    # if dtable_file_id:
-    #     seafile_api.del_file(repo_id, current_file_path, json.dumps([file_name]), '')
-    # seafile_api.post_file(repo_id, tmp_page_json_path, current_file_path, file_name, username)
+
     seafile_api.post_file(repo_id, new_content_poster_file_path, current_file_path, poster_file_name, username)
 
     # 2. handle images
