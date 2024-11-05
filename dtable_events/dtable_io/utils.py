@@ -1536,6 +1536,12 @@ def post_big_data_screen_app_zip_file(username, repo_id, dtable_uuid, app_uuid, 
     image_path = os.path.join(tmp_extracted_path, 'images/')
     with open(content_json_file_path, 'r') as f:
         content_json = f.read()
+    app_name_file = os.path.join(tmp_extracted_path, 'app_name')
+    if os.path.isfile(app_name_file):
+        with open(app_name_file, 'r') as f:
+            app_name = f.read().strip()
+    else:
+        app_name = ''
     try:
         content = json.loads(content_json)
     except:
@@ -1566,6 +1572,7 @@ def post_big_data_screen_app_zip_file(username, repo_id, dtable_uuid, app_uuid, 
     sql = "SELECT app_config FROM dtable_external_apps WHERE id=:app_id"
     app_config = json.loads(db_session.execute(text(sql), {'app_id': app_id}).fetchone().app_config)
     app_config['settings'] = page_content_dict
+    app_config['app_name'] = app_name
     sql = "UPDATE dtable_external_apps SET app_config=:app_config WHERE id=:app_id"
     db_session.execute(text(sql), {
         'app_config': json.dumps(app_config).encode('utf-8'),

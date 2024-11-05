@@ -328,7 +328,7 @@ def import_big_data_screen_app(username, repo_id, dtable_uuid, app_uuid, app_id,
     """
     parse the zip in tmp folders and upload it
     """
-    tmp_extracted_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'big_data_screen_zip_extracted/')
+    tmp_extracted_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'big_data_screen_zip_extracted', app_uuid)
     db_session = init_db_session_class(config)()
     try:
         post_big_data_screen_app_zip_file(username, repo_id, dtable_uuid, app_uuid, app_id, tmp_extracted_path, db_session)
