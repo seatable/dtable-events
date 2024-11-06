@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 import json
 import logging
+import re
 from datetime import datetime, timedelta
 
+import pytz
 from sqlalchemy import select, update, delete, desc, func, case
 
 from dtable_events.activities.models import Activities
@@ -200,17 +202,57 @@ def update_link_activity_timestamp(session, activity_id, op_time, detail, op_typ
     session.commit()
 
 
-def get_table_activities(session, uuid_list, start, limit, to_tz):
-    if start < 0:
-        logger.error('start must be non-negative')
-        raise RuntimeError('start must be non-negative')
+def get_shifted_days_ago(offset_str, days):
+    """Convert utcnow to offset time, then return n days ago 00:00:00 time in utc timezone
+    
+    Eg:
+        offset_str: +8:00
+        days: 3
+        UTC now: 2024-11-06 11:00:00
+        return: 
+            2024-11-06 03:00:00 -> offset timezone
+            2024-11-06 11:00:00 -> 3 days ago
+            2024-11-03 11:00:00 -> 00:00:00
+            2024-11-03 00:00:00 -> to UTC
+            2024-11-02 16:00:00
+    """
 
-    if limit <= 0:
-        logger.error('limit must be positive')
-        raise RuntimeError('limit must be positive')
+    match = re.match(r'([+-])(\d{1,2}):(\d{2})', offset_str)
+    if not match:
+        raise ValueError("Offset format must be like '+8:00' or '-9:00'")
+
+    sign = 1 if match.group(1) == '+' else -1
+    hours = int(match.group(2)) * sign
+
+    gmt_offset = f"Etc/GMT{'-' if hours >= 0 else '+'}{abs(hours)}"
+
+    utc_now = datetime.utcnow().replace(tzinfo=pytz.utc)
+    target_timezone = pytz.timezone(gmt_offset)
+    local_time = utc_now.astimezone(target_timezone)
+
+    days_ago_start = (local_time - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    days_ago_start_utc = days_ago_start.astimezone(pytz.utc)
+
+    return days_ago_start_utc
+
+
+def get_table_activities(session, uuid_list, days, start, limit, to_tz):
 
     activities = list()
     try:
+        start_utc_str = get_shifted_days_ago(to_tz, days).strftime('%Y-%m-%d %H:%M:%S')
+        # filter dtable_uuids
+        query = (
+            select(Activities.dtable_uuid)\
+            .distinct()\
+            .where(
+                Activities.dtable_uuid.in_(uuid_list),
+                Activities.op_time >= start_utc_str
+            )
+        )
+        uuid_list = session.execute(query).scalars().all()
+        # query activities
         stmt = select(
             Activities.dtable_uuid, Activities.op_time.label('op_date'),
             func.date_format(func.convert_tz(Activities.op_time, '+00:00', to_tz), '%Y-%m-%d 00:00:00').label('date'),
@@ -218,11 +260,11 @@ def get_table_activities(session, uuid_list, start, limit, to_tz):
             func.sum(case((Activities.op_type == 'modify_row', Activities.row_count))).label('modify_row'),
             func.sum(case((Activities.op_type == 'delete_row', Activities.row_count))).label('delete_row')
         ).where(
-            Activities.op_time > (datetime.utcnow() - timedelta(days=7)), Activities.dtable_uuid.in_(uuid_list)
+            Activities.op_time > start_utc_str, Activities.dtable_uuid.in_(uuid_list)
         ).group_by(Activities.dtable_uuid, 'date').order_by(desc(Activities.op_time)).slice(start, start + limit)
         activities = session.execute(stmt).all()
     except Exception as e:
-        logger.error('Get table activities failed: %s' % e)
+        logger.exception('Get table activities failed: %s', e)
 
     table_activities = list()
     for dtable_uuid, op_date, date, insert_row, modify_row, delete_row in activities:
