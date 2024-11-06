@@ -1614,6 +1614,95 @@ class LinkRecordsAction(BaseAction):
         else:
             return value
 
+    def gen_filter(self, column, other_column, raw_value, converted_value):
+        """Generate a filter dict to filter other table
+        """
+        if other_column['type'] == ColumnTypes.TEXT:
+            if column['type'] in [
+                ColumnTypes.TEXT,
+                ColumnTypes.NUMBER,
+                ColumnTypes.CHECKBOX,
+                ColumnTypes.DATE,
+                ColumnTypes.URL,
+                ColumnTypes.DURATION,
+                ColumnTypes.EMAIL,
+                ColumnTypes.RATE,
+                ColumnTypes.AUTO_NUMBER,
+                ColumnTypes.SINGLE_SELECT,
+                ColumnTypes.DEPARTMENT_SINGLE_SELECT
+            ]:
+                pass
+            elif column['type'] in [
+                ColumnTypes.COLLABORATOR
+            ]:
+                pass
+            elif column['type'] in [
+                ColumnTypes.MULTIPLE_SELECT
+            ]:
+                pass
+
+        elif other_column['type'] == ColumnTypes.NUMBER:
+            pass
+
+        elif other_column['type'] == ColumnTypes.CHECKBOX:
+            pass
+
+        elif other_column['type'] == ColumnTypes.DATE:
+            pass
+
+        elif other_column['type'] == ColumnTypes.COLLABORATOR:
+            pass
+
+        elif other_column['type'] == ColumnTypes.URL:
+            pass
+
+        elif other_column['type'] == ColumnTypes.DURATION:
+            pass
+
+        elif other_column['type'] == ColumnTypes.EMAIL:
+            pass
+
+        elif other_column['type'] == ColumnTypes.RATE:
+            pass
+
+        elif other_column['type'] == ColumnTypes.FORMULA:
+            pass
+
+        elif other_column['type'] == ColumnTypes.AUTO_NUMBER:
+            pass
+
+        elif other_column['type'] == ColumnTypes.SINGLE_SELECT:
+            pass
+
+        elif other_column['type'] == ColumnTypes.MULTIPLE_SELECT:
+            pass
+
+        elif other_column['type'] == ColumnTypes.DEPARTMENT_SINGLE_SELECT:
+            pass
+
+    def new_format_filter_groups(self):
+        filters = []
+        column_names = []
+        for match_condition in self.match_conditions:
+            column_key = match_condition.get("column_key")
+            column = self.get_column(self.auto_rule.table_id, column_key)
+            if not column:
+                raise RuleInvalidException('match column not found', 'match_column_not_found')
+            other_column_key = match_condition.get("other_column_key")
+            other_column = self.get_column(self.linked_table_id, other_column_key)
+            if not other_column:
+                raise RuleInvalidException('match other column not found', 'match_other_column_not_found')
+            row_value = self.data['converted_row'].get(column.get('name'))
+            if not row_value:
+                return [], []
+            if other_column['type'] == ColumnTypes.TEXT:
+                if column['type'] == ColumnTypes.TEXT:
+                    pass
+                elif column['type'] == ColumnTypes.NUMBER:
+                    pass
+                elif column['type'] == ColumnTypes.CHECKBOX:
+                    pass
+
     def format_filter_groups(self):
         filters = []
         column_names = []
