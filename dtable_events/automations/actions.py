@@ -21,7 +21,7 @@ from dtable_events.app.metadata_cache_managers import BaseMetadataCacheManager
 from dtable_events.app.event_redis import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, \
     SEATABLE_FAAS_AUTH_TOKEN, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL
-from dtable_events.dtable_io import send_wechat_msg, send_dingtalk_msg
+from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg, batch_send_email_msg
 from dtable_events.convert_page.manager import conver_page_to_pdf_manager
 from dtable_events.app.log import setup_logger
 from dtable_events.notification_rules.notification_rules_utils import send_notification, fill_msg_blanks_with_sql_row
@@ -1565,6 +1565,7 @@ class LinkRecordsAction(BaseAction):
         ColumnTypes.COLLABORATOR: "is_exactly",
         ColumnTypes.EMAIL: "is",
         ColumnTypes.RATE: "equal",
+        ColumnTypes.AUTO_NUMBER: "is"
     }
 
     VALID_COLUMN_TYPES = [
@@ -1614,94 +1615,260 @@ class LinkRecordsAction(BaseAction):
         else:
             return value
 
-    def gen_filter(self, column, other_column, raw_value, converted_value):
+    def gen_filter(self, column, other_column):
         """Generate a filter dict to filter other table
         """
-        if other_column['type'] == ColumnTypes.TEXT:
-            if column['type'] in [
-                ColumnTypes.TEXT,
-                ColumnTypes.NUMBER,
-                ColumnTypes.CHECKBOX,
-                ColumnTypes.DATE,
-                ColumnTypes.URL,
-                ColumnTypes.DURATION,
-                ColumnTypes.EMAIL,
-                ColumnTypes.RATE,
-                ColumnTypes.AUTO_NUMBER,
-                ColumnTypes.SINGLE_SELECT,
-                ColumnTypes.DEPARTMENT_SINGLE_SELECT
-            ]:
-                pass
-            elif column['type'] in [
-                ColumnTypes.COLLABORATOR
-            ]:
-                pass
-            elif column['type'] in [
-                ColumnTypes.MULTIPLE_SELECT
-            ]:
-                pass
+        sql_row = self.auto_rule.get_sql_row()
+        column_data = column.get('data') or {}
+        other_column_data = other_column.get('data') or {}
+
+        if other_column['type'] in [
+            ColumnTypes.TEXT,
+            ColumnTypes.URL,
+            ColumnTypes.EMAIL,
+            ColumnTypes.SINGLE_SELECT,
+            ColumnTypes.AUTO_NUMBER
+        ]:
+            filter_term = fill_msg_blanks_with_sql_row(
+                '{%s}' % column['name'],
+                [column['name']],
+                {column['name']: column},
+                sql_row,
+                self.auto_rule.db_session
+            )
+            return {
+                'column_key': other_column['key'],
+                'filter_term': filter_term,
+                'filter_predicate': self.COLUMN_FILTER_PREDICATE_MAPPING[other_column['type']]
+            }
 
         elif other_column['type'] == ColumnTypes.NUMBER:
-            pass
+            if column['type'] not in [
+                ColumnTypes.NUMBER,
+                ColumnTypes.FORMULA
+            ]:
+                filter_term = fill_msg_blanks_with_sql_row(
+                    '{%s}' % column['name'],
+                    [column],
+                    {column['name']: column},
+                    sql_row,
+                    self.auto_rule.db_session
+                )
+                try:
+                    filter_term = float(filter_term)
+                except:
+                    return None
+            elif column['type'] == ColumnTypes.NUMBER:
+                filter_term = sql_row.get(column['key'])
+                if not isinstance(filter_term, (int, float)):
+                    return None
+            else:
+                if column_data.get('result_type') == 'string':
+                    try:
+                        filter_term = float(sql_row.get(column['key']))
+                    except:
+                        return None
+                elif column_data.get('result_type') == 'number':
+                    filter_term = sql_row.get(column['key'])
+                    if not isinstance(filter_term, (int, float)):
+                        return None
+                else:
+                    return None
+
+            return {
+                'column_key': other_column['key'],
+                'filter_term': filter_term,
+                'filter_predicate': self.COLUMN_FILTER_PREDICATE_MAPPING[other_column['type']]
+            }
 
         elif other_column['type'] == ColumnTypes.CHECKBOX:
-            pass
+            if column['type'] not in [
+                ColumnTypes.CHECKBOX,
+                ColumnTypes.FORMULA
+            ]:
+                return None
+            if column['type'] == ColumnTypes.CHECKBOX:
+                filter_term = sql_row.get(column['key']) or False
+            else:
+                if column_data.get('result_type') == 'bool':
+                    filter_term = sql_row.get(column_data['key']) or False
+
+            return {
+                'column_key': other_column['key'],
+                'filter_term': filter_term,
+                'filter_predicate': self.COLUMN_FILTER_PREDICATE_MAPPING[other_column['type']]
+            }
 
         elif other_column['type'] == ColumnTypes.DATE:
-            pass
+            if column['type'] not in [
+                ColumnTypes.TEXT,
+                ColumnTypes.DATE,
+                ColumnTypes.FORMULA
+            ]:
+                return None
+
+            if column['type'] in [
+                ColumnTypes.TEXT,
+                ColumnTypes.DATE
+            ]:
+                try:
+                    value = parser.parse(sql_row.get(column['key']))
+                except:
+                    return None
+                filter_term = value.strftime('%Y-%m-%d')
+            else:
+                if column_data.get('result_type') in ('string', 'date'):
+                    try:
+                        value = parser.parse(sql_row.get(column['key']))
+                    except:
+                        return None
+                    filter_term = value.strftime('%Y-%m-%d')
+                else:
+                    return None
+
+            return {
+                'column_key': other_column['key'],
+                'filter_term': filter_term,
+                'filter_predicate': self.COLUMN_FILTER_PREDICATE_MAPPING[other_column['type']],
+                'filter_term_modifier': 'exact_date'
+            }
 
         elif other_column['type'] == ColumnTypes.COLLABORATOR:
-            pass
+            if column['type'] != ColumnTypes.COLLABORATOR:
+                return None
 
-        elif other_column['type'] == ColumnTypes.URL:
-            pass
+            filter_term = sql_row.get(column['key']) or []
+
+            return {
+                'column_key': other_column['key'],
+                'filter_term': filter_term,
+                'filter_predicate': self.COLUMN_FILTER_PREDICATE_MAPPING[other_column['type']]
+            }
 
         elif other_column['type'] == ColumnTypes.DURATION:
-            pass
+            if column['type'] != ColumnTypes.DURATION:
+                return None
 
-        elif other_column['type'] == ColumnTypes.EMAIL:
-            pass
+            filter_term = sql_row.get(column['key'])
+            if filter_term is None:
+                return None
+
+            return {
+                'column_key': other_column['key'],
+                'filter_term': filter_term,
+                'filter_predicate': self.COLUMN_FILTER_PREDICATE_MAPPING[other_column['type']]
+            }
 
         elif other_column['type'] == ColumnTypes.RATE:
-            pass
+            if column['type'] not in [
+                ColumnTypes.RATE,
+                ColumnTypes.FORMULA
+            ]:
+                return None
+
+            if column['type'] == ColumnTypes.RATE:
+                filter_term = sql_row.get(column['key'])
+                if not filter_term:
+                    return None
+            else:
+                if column_data.get('result_type') == 'string':
+                    try:
+                        filter_term = int(sql_row.get(column['key']))
+                    except:
+                        return None
+                elif column_data.get('result_type') == 'number':
+                    if not isinstance(sql_row.get(column['key']), int):
+                        return None
+                    filter_term = sql_row.get(column['key'])
+
+            return {
+                'column_key': other_column['key'],
+                'filter_term': filter_term,
+                'filter_predicate': self.COLUMN_FILTER_PREDICATE_MAPPING[other_column['type']]
+            }
 
         elif other_column['type'] == ColumnTypes.FORMULA:
-            pass
-
-        elif other_column['type'] == ColumnTypes.AUTO_NUMBER:
-            pass
-
-        elif other_column['type'] == ColumnTypes.SINGLE_SELECT:
-            pass
+            if other_column_data.get('result_type') == 'string':
+                new_other_column = {
+                    'key': other_column['key'],
+                    'type': ColumnTypes.TEXT
+                }
+            elif other_column_data.get('result_type') == 'number':
+                new_other_column = {
+                    'key': other_column['key'],
+                    'type': ColumnTypes.NUMBER
+                }
+            elif other_column_data.get('result_type') == 'bool':
+                new_other_column = {
+                    'key': other_column['key'],
+                    'type': ColumnTypes.CHECKBOX
+                }
+            else:
+                return None
+            return self.gen_filter(column, new_other_column)
 
         elif other_column['type'] == ColumnTypes.MULTIPLE_SELECT:
-            pass
+            if column['type'] not in [
+                ColumnTypes.TEXT,
+                ColumnTypes.MULTIPLE_SELECT,
+                ColumnTypes.FORMULA
+            ]:
+                return None
+            other_column_options = other_column_data.get('options') or []
+            if column['type'] == ColumnTypes.TEXT:
+                value = sql_row.get(column['key'])
+                if not value:
+                    return None
+                value_option = next(filter(lambda option: option['name'] == value, other_column_options), None)
+                if not value_option:
+                    return None
+                filter_term = [value_option['id']]
+            elif column['type'] == ColumnTypes.MULTIPLE_SELECT:
+                value = sql_row.get(column['key']) or []
+                if not isinstance(value, list):
+                    return None
+                # column option ids => column option names => other column option ids
+                column_data_options = column_data.get('options') or []
+                filter_term = []
+                for item in value:
+                    item_option = next(filter(lambda option: item == option['id'], column_data_options), None)
+                    if not item_option:
+                        continue
+                    option_name = item_option['name']
+                    item_other_option = next(filter(lambda option: option_name == option['name'], other_column_options), None)
+                    if not item_other_option:
+                        return None
+                    filter_term.append(item_other_option['id'])
+            else:
+                if column_data.get('result_type') == 'string':
+                    value = sql_row.get(column['key'])
+                    if value is None:
+                        return None
+                    other_column_data_options = other_column_data.get('options') or []
+                    value_option = next(filter(lambda option: str(value) == option['name'], other_column_data_options), None)
+                    if value_option:
+                        filter_term = [value_option['id']]
+                else:
+                    return None
+
+            return {
+                'column_key': other_column['key'],
+                'filter_term': filter_term,
+                'filter_predicate': self.COLUMN_FILTER_PREDICATE_MAPPING[other_column['type']]
+            }
 
         elif other_column['type'] == ColumnTypes.DEPARTMENT_SINGLE_SELECT:
-            pass
-
-    def new_format_filter_groups(self):
-        filters = []
-        column_names = []
-        for match_condition in self.match_conditions:
-            column_key = match_condition.get("column_key")
-            column = self.get_column(self.auto_rule.table_id, column_key)
-            if not column:
-                raise RuleInvalidException('match column not found', 'match_column_not_found')
-            other_column_key = match_condition.get("other_column_key")
-            other_column = self.get_column(self.linked_table_id, other_column_key)
-            if not other_column:
-                raise RuleInvalidException('match other column not found', 'match_other_column_not_found')
-            row_value = self.data['converted_row'].get(column.get('name'))
-            if not row_value:
-                return [], []
-            if other_column['type'] == ColumnTypes.TEXT:
-                if column['type'] == ColumnTypes.TEXT:
-                    pass
-                elif column['type'] == ColumnTypes.NUMBER:
-                    pass
-                elif column['type'] == ColumnTypes.CHECKBOX:
-                    pass
+            if column['type'] != ColumnTypes.DEPARTMENT_SINGLE_SELECT:
+                return None
+            value = sql_row.get(column['key'])
+            if not isinstance(value, int):
+                return None
+            filter_term = value
+            return {
+                'column_key': other_column['key'],
+                'filter_term': filter_term,
+                'filter_predicate': self.COLUMN_FILTER_PREDICATE_MAPPING[other_column['type']]
+            }
 
     def format_filter_groups(self):
         filters = []
@@ -1718,16 +1885,16 @@ class LinkRecordsAction(BaseAction):
             other_column = self.get_column(self.linked_table_id, other_column_key)
             if not other_column:
                 raise RuleInvalidException('match other column not found', 'match_other_column_not_found')
+            filter_item = self.gen_filter(column, other_column)
+            if not filter_item:
+                self.auto_rule.append_warning({
+                    'type': 'Matched_columns_invalid',
+                    'action_type': self.action_type,
+                    'column_key': column_key,
+                    'other_column_key': other_column_key
+                })
+                return [], []
             column_names.append(other_column['name'])
-            parsed_row_value = self.parse_column_value(other_column, row_value)
-            if not parsed_row_value and other_column['type'] in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
-                raise RuleInvalidException('match other single/multi-select column options: %s not found' % row_value, 'match_column_option_not_found')
-            filter_item = {
-                "column_key": other_column_key,
-                "filter_predicate": self.COLUMN_FILTER_PREDICATE_MAPPING.get(other_column.get('type', ''), 'is'),
-                "filter_term": parsed_row_value,
-                "filter_term_modifier":"exact_date"
-            }
 
             filters.append(filter_item)
         if filters:
