@@ -165,7 +165,7 @@ def import_excel_to_db(
 
         base = DTableServerAPI(username, dtable_uuid, dtable_server_url)
         base_columns = base.list_columns(table_name)
-        total_row_count = ws.max_row
+        total_row_count = ws.max_row if isinstance(ws.max_row, int) else len(list(ws.rows))
         column_name_type_map = {}
         column_name_data_map = {}
         for col in base_columns:
@@ -327,7 +327,7 @@ def update_excel_to_db(
 
         db_handler = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
         base = DTableServerAPI(username, dtable_uuid, dtable_server_url)
-        total_row_count = ws.max_row
+        total_row_count = ws.max_row if isinstance(ws.max_row, int) else len(list(ws.rows))
         base_columns = base.list_columns(table_name)
         column_name_type_map = {}
         column_name_data_map = {}
@@ -659,7 +659,7 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
         if (start + limit) > total_row_count:
             limit = total_row_count - start
 
-        
+
         filter_condition_groups.update({
             'limit': limit,
             'start': start
@@ -667,7 +667,7 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
 
         try:
             sql = filter2sql(table_name, cols, filter_condition_groups, by_group=True)
-            
+
             response_rows, _ = dtable_db_api.query(sql, convert=True, server_only=False)
         except ConnectionError as e:
             dtable_io_logger.exception(e)
@@ -679,7 +679,7 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
             tasks_status_map[task_id]['status'] = 'terminated'
             tasks_status_map[task_id]['err_msg'] = str(e)
             return
-        
+
         row_num = start
         try:
             write_xls_with_type(response_rows, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, is_big_data_view=True)
