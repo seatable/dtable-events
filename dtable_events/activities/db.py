@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 
 import pytz
 from sqlalchemy import select, update, delete, desc, func, case
+from dtable_events.activities.dtable_update_cache_manager import dtable_update_cache
 
 from dtable_events.activities.models import Activities
 
@@ -389,3 +390,8 @@ def save_user_activities_by_link(session, event, row1, row2):
         activity2 = Activities(dtable_uuid, row_id2, row_count2, op_user, op_type, op_time, detail2, op_app)
         session.add(activity2)
     session.commit()
+
+def cache_dtable_update_info(event):
+    dtable_uuid = event.get('dtable_uuid')
+    op_time = int(event.get('op_time'))
+    dtable_update_cache.set_update_time(dtable_uuid=dtable_uuid, op_time=op_time)

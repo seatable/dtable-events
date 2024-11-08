@@ -5,7 +5,7 @@ import json
 from threading import Thread, Event
 from json.decoder import JSONDecodeError
 from dtable_events.app.event_redis import RedisClient
-from dtable_events.activities.db import save_or_update_or_delete
+from dtable_events.activities.db import save_or_update_or_delete, cache_dtable_update_info
 from dtable_events.db import init_db_session_class
 
 logger = logging.getLogger(__name__)
@@ -46,6 +46,7 @@ class MessageHandler(Thread):
                     session = self._db_session_class()
                     try:
                         save_or_update_or_delete(session, event)
+                        cache_dtable_update_info(event)
                     except JSONDecodeError as err:
                         logger.warning('Json decode error on handling activity messages: %s' % err)
                     except Exception as e:
