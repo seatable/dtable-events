@@ -26,34 +26,36 @@ def update_dtable_updated_at_time(db_session, app):
     time_dict = cache.updated_time_dict
     if not time_dict:
         return
-    
+
     case_phrases = []
-    for dtable_uuid, update_timestamp in time_dict.items():
-        dt = datetime.fromtimestamp(update_timestamp)
-        case_item = '''WHEN uuid = '%s' THEN '%s' ''' % (dtable_uuid, str(dt))
-        case_phrases.append(case_item)
-    case_phrases.append('''ELSE updated_at''')
-    try:
-        dtable_uuids = time_dict.keys()
-        dtable_uuids = ["'%s'" % uid for uid in time_dict.keys()]
-        dtable_uuid_str = ', '.join(dtable_uuids)
-        batch_set_updated_time_sql = '''
-            UPDATE dtables 
-            SET updated_at = CASE
-            %(cases)s
-            END
-            WHERE uuid in (%(dtable_uuids)s)
-            ''' % ({
-                'cases': ' '.join(case_phrases),
-                'dtable_uuids': dtable_uuid_str
-            })
-    
-        db_session.execute(text(batch_set_updated_time_sql))
-        db_session.commit()
-    except Exception as e:
-        logging.exception('error when updated base update tiems: %s', e)
+    dtable_uuids = list(time_dict.keys())
+    step = 100
+    for i in range(0, len(dtable_uuids), step):
+        for dtable_uuid in dtable_uuids[i: i+step]:
+            dt = datetime.fromtimestamp(time_dict[dtable_uuid])
+            case_item = '''WHEN uuid = '%s' THEN '%s' ''' % (dtable_uuid, str(dt))
+            case_phrases.append(case_item)
+        case_phrases.append('''ELSE updated_at''')
+        try:
+            dtable_uuids = time_dict.keys()
+            dtable_uuids = ["'%s'" % uid for uid in time_dict.keys()]
+            dtable_uuid_str = ', '.join(dtable_uuids)
+            batch_set_updated_time_sql = '''
+                UPDATE dtables 
+                SET updated_at = CASE
+                %(cases)s
+                END
+                WHERE uuid in (%(dtable_uuids)s)
+                ''' % ({
+                    'cases': ' '.join(case_phrases),
+                    'dtable_uuids': dtable_uuid_str
+                })
+        
+            db_session.execute(text(batch_set_updated_time_sql))
+            db_session.commit()
+        except Exception as e:
+            logging.exception('error when updated base update time error: %s', e)
     cache.clean_dtable_update_time_info()
-   
 
 
 class DTableUpdateTimer(Thread):
@@ -66,7 +68,7 @@ class DTableUpdateTimer(Thread):
     def run(self):
         sched = BlockingScheduler()
         # fire at every hour in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', minute="*/1")
+        @sched.scheduled_job('cron', day_of_week='*', minute="*/10")
         def timed_job():
             logging.info('Starts to scan updated bases')
             db_session = self.db_session_class()
