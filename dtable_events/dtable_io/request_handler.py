@@ -645,14 +645,9 @@ def add_email_sending_task():
     if image_cid_url_map and not isinstance(image_cid_url_map, dict):
         image_cid_url_map = json.loads(image_cid_url_map)
 
-    auth_info = {
-        'email_host': data.get('email_host'),
-        'email_port': data.get('email_port'),
-        'host_user': data.get('host_user'),
-        'password': data.get('password'),
-        'sender_name': data.get('sender_name'),
-        'sender_email': data.get('sender_email')
-    }
+    auth_type = data.get('auth_type')
+    
+    account_id = data.get('account_id')
 
     send_info = {
         'message': data.get('message'),
@@ -670,7 +665,7 @@ def add_email_sending_task():
 
     try:
         task_id = message_task_manager.add_email_sending_task(
-            auth_info, send_info, username)
+            account_id, send_info, username)
     except Exception as e:
         logger.error(e)
         return make_response((e, 500))

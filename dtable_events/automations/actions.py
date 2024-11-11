@@ -21,7 +21,7 @@ from dtable_events.app.metadata_cache_managers import BaseMetadataCacheManager
 from dtable_events.app.event_redis import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, \
     SEATABLE_FAAS_AUTH_TOKEN, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL
-from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg, batch_send_email_msg
+from dtable_events.dtable_io import send_wechat_msg, send_dingtalk_msg
 from dtable_events.convert_page.manager import conver_page_to_pdf_manager
 from dtable_events.app.log import setup_logger
 from dtable_events.notification_rules.notification_rules_utils import send_notification, fill_msg_blanks_with_sql_row
@@ -34,6 +34,7 @@ from dtable_events.utils.dtable_db_api import DTableDBAPI, RowsQueryError, Reque
 from dtable_events.notification_rules.utils import get_nickname_by_usernames
 from dtable_events.utils.sql_generator import filter2sql, BaseSQLGenerator, ColumnFilterInvalidError
 from dtable_events.utils.universal_app_api import UniversalAppAPI
+from dtable_events.utils.email_sender import EmailSender
 
 
 logger = logging.getLogger(__name__)
@@ -1201,9 +1202,6 @@ class SendEmailAction(BaseAction):
         # send info
         self.send_info = send_info
 
-        # auth info
-        self.auth_info = {}
-
         self.column_blanks = []
         self.column_blanks_send_to = []
         self.column_blanks_copy_to = []
@@ -1271,10 +1269,6 @@ class SendEmailAction(BaseAction):
         self.init_notify_reply_to()
         self.init_notify_subject()
         self.init_notify_images()
-
-        account_detail = account_dict.get('detail', {})
-
-        self.auth_info = account_detail
 
     def fill_msg_blanks_with_sql(self, row, text, blanks, convert_to_html=False):
         col_name_dict = self.col_name_dict
@@ -1365,12 +1359,8 @@ class SendEmailAction(BaseAction):
         })
         logger.debug('send_info: %s', send_info)
         try:
-            send_email_msg(
-                auth_info=self.auth_info,
-                send_info=send_info,
-                username='automation-rules',  # username send by automation rules,
-                db_session=self.auto_rule.db_session
-            )
+            sender = EmailSender(self.account_id, db_session=self.auto_rule.db_session)
+            sender.send(send_info, 'automation-rules')
         except Exception as e:
             logger.error('send email error: %s', e)
 
@@ -1382,12 +1372,8 @@ class SendEmailAction(BaseAction):
             send_info['image_cid_url_map'] = self.image_cid_url_map
             send_info.pop('message', None)
         try:
-            send_email_msg(
-                auth_info=self.auth_info,
-                send_info=send_info,
-                username='automation-rules',  # username send by automation rules,
-                db_session=self.auto_rule.db_session
-            )
+            sender = EmailSender(self.account_id, db_session=self.auto_rule.db_session)
+            sender.send(send_info, 'automation-rules')
         except Exception as e:
             logger.error('send email error: %s', e)
 
@@ -1448,12 +1434,8 @@ class SendEmailAction(BaseAction):
         step = 10
         for i in range(0, len(send_info_list), step):
             try:
-                batch_send_email_msg(
-                    auth_info=self.auth_info,
-                    send_info_list=send_info_list[i: i+step],
-                    username='automation-rules',  # username send by automation rules,
-                    db_session=self.auto_rule.db_session
-                )
+                sender = EmailSender(self.account_id, db_session=self.auto_rule.db_session)
+                sender.batch_send(send_info_list[i: i+step], 'automation-rules')
             except Exception as e:
                 logger.error('batch send email error: %s', e)
 
@@ -3003,7 +2985,7 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
         logger.debug('rule: %s convert-and-send start check send email can_do: %s', self.auto_rule.rule_id, self.send_email_config.get('can_do'))
         if not self.send_email_config.get('can_do'):
             return
-        auth_info = self.send_email_config['account_info'].get('detail') or {}
+        account_id = self.send_email_config['account_info'].get('id')
         file_name = self.file_name
         if not file_name.endswith('.pdf'):
             file_name += '.pdf'
@@ -3026,12 +3008,8 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
             'file_contents': {file_name: pdf_content}
         }
         try:
-            send_email_msg(
-                auth_info=auth_info,
-                send_info=send_info,
-                username='automation-rules',
-                config=conver_page_to_pdf_manager.config
-            )
+            sender = EmailSender(account_id, conver_page_to_pdf_manager.config)
+            sender.send(send_info, 'automation-rules')
         except Exception as e:
             logger.exception('rule: %s dtable: %s page: %s send email: %s error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.page_id, send_info, e)
 

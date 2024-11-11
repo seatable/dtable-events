@@ -3,15 +3,9 @@ import logging
 import os
 from queue import Queue, Full
 from threading import Thread
-from urllib.parse import urlparse, parse_qs
 
-import requests
-
-from seaserv import seafile_api
-
-from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL
+from dtable_events.app.config import INNER_DTABLE_DB_URL
 from dtable_events.convert_page.utils import get_chrome_data_dir, get_driver, open_page_view, wait_page_view
-from dtable_events.dtable_io import batch_send_email_msg
 from dtable_events.utils import get_inner_dtable_server_url, get_opt_from_conf_or_env
 from dtable_events.utils.dtable_server_api import DTableServerAPI, NotFoundException
 from dtable_events.utils.dtable_db_api import DTableDBAPI
