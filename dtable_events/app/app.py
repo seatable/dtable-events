@@ -56,7 +56,7 @@ class App(object):
             self._ldap_syncer = LDAPSyncer(config)
             self._common_dataset_syncer = CommonDatasetSyncer(self, config)
             self._big_data_storage_stats_worker = BigDataStorageStatsWorker(config)
-            self._data_syncr = DataSyncer(config)
+            self._data_sync = DataSyncer(config)
             self._workflow_schedule_scanner = WorkflowSchedulesScanner(config)
             self._dtable_asset_trash_cleaner = DTableAssetTrashCleaner(config)
             self._license_expiring_notices_sender = LicenseExpiringNoticesSender()
@@ -89,7 +89,7 @@ class App(object):
             self._ldap_syncer.start()                        # default False
             self._common_dataset_syncer.start()              # default True
             self._big_data_storage_stats_worker.start()      # always True
-            self._data_syncr.start()                         # default True
+            self._data_sync.start()                         # default True
             self._workflow_schedule_scanner.start()          # default True
             self._dtable_asset_trash_cleaner.start()         # always True
             self._license_expiring_notices_sender.start()    # always True
