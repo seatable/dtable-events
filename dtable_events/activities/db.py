@@ -391,7 +391,7 @@ def save_user_activities_by_link(session, event, row1, row2):
     session.commit()
 
 def cache_dtable_update_info(app, event):
-    dtable_update_cache = app.dtable_update_cache
+    cache = app.dtable_update_cache
     dtable_uuid = event.get('dtable_uuid')
     op_time = int(event.get('op_time'))
-    dtable_update_cache.set_update_time(dtable_uuid=dtable_uuid, op_time=op_time)
+    cache.set_update_time(dtable_uuid=dtable_uuid, op_time=op_time)
