@@ -25,12 +25,15 @@ from dtable_events.convert_page.manager import conver_page_to_pdf_manager
 from dtable_events.api_calls.api_calls_counter import APICallsCounter
 from dtable_events.tasks.dtable_file_access_log_cleaner import DTableFileAccessLogCleaner
 from dtable_events.activities.dtable_update_handler import DTableUpdateHander
+from dtable_events.activities.dtable_update_cache_manager import DTableUpdateCacheManager
 
 
 class App(object):
     def __init__(self, config, task_mode):
         self._enable_foreground_tasks = task_mode.enable_foreground_tasks
         self._enable_background_tasks = task_mode.enable_background_tasks
+        
+        self.dtable_update_cache = DTableUpdateCacheManager()
 
         self._stats_sender = StatsSender(config)
 
@@ -39,7 +42,7 @@ class App(object):
 
         if self._enable_background_tasks:
             # redis client subscriber
-            self._message_handler = MessageHandler(config)
+            self._message_handler = MessageHandler(self, config)
             self._notification_rule_handler = NotificationRuleHandler(config)
             self._automation_rule_handler = AutomationRuleHandler(config)
             self._user_activity_counter = UserActivityCounter(config)
@@ -57,12 +60,12 @@ class App(object):
             self._ldap_syncer = LDAPSyncer(config)
             self._common_dataset_syncer = CommonDatasetSyncer(self, config)
             self._big_data_storage_stats_worker = BigDataStorageStatsWorker(config)
-            self._data_syncr = DataSyncer(config)
+            self._data_sync = DataSyncer(config)
             self._workflow_schedule_scanner = WorkflowSchedulesScanner(config)
             self._dtable_asset_trash_cleaner = DTableAssetTrashCleaner(config)
             self._license_expiring_notices_sender = LicenseExpiringNoticesSender()
             self._dtable_access_log_cleaner = DTableFileAccessLogCleaner(config)
-            self._dtable_update_handler = DTableUpdateHander(config)
+            self._dtable_update_handler = DTableUpdateHander(self, config)
             # convert pdf manager
             conver_page_to_pdf_manager.init(config)
 
@@ -91,7 +94,7 @@ class App(object):
             self._ldap_syncer.start()                        # default False
             self._common_dataset_syncer.start()              # default True
             self._big_data_storage_stats_worker.start()      # always True
-            self._data_syncr.start()                         # default True
+            self._data_sync.start()                         # default True
             self._workflow_schedule_scanner.start()          # default True
             self._dtable_asset_trash_cleaner.start()         # always True
             self._license_expiring_notices_sender.start()    # always True

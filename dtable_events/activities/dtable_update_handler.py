@@ -5,26 +5,24 @@ from threading import Thread
 from sqlalchemy import text
 from apscheduler.schedulers.blocking import BlockingScheduler
 from dtable_events.db import init_db_session_class
-from dtable_events.activities.dtable_update_cache_manager import dtable_update_cache
-
-
 
 class DTableUpdateHander(object):
 
-    def __init__(self, config):
+    def __init__(self, app, config):
+        self.app = app
         self._enabled = True
         self._db_session_class = init_db_session_class(config)
-        self._cache = dtable_update_cache
 
     def start(self):
         logging.info('Start dtable update scanner')
-        DTableUpdateTimer(self._db_session_class, self._cache).start()
+        DTableUpdateTimer(self._db_session_class, self.app).start()
 
     def is_enabled(self):
         return self._enabled
 
 
-def update_dtable_updated_at_time(db_session, cache):
+def update_dtable_updated_at_time(db_session, app):
+    cache = app.dtable_update_cache
     time_dict = cache.updated_time_dict
     if not time_dict:
         return
@@ -42,12 +40,13 @@ def update_dtable_updated_at_time(db_session, cache):
             continue
     cache.clean_dtable_update_time_info()
 
+
 class DTableUpdateTimer(Thread):
 
-    def __init__(self, db_session_class, cache):
+    def __init__(self, db_session_class, app):
         super(DTableUpdateTimer, self).__init__()
         self.db_session_class = db_session_class
-        self.update_cache = cache
+        self.app = app
 
     def run(self):
         sched = BlockingScheduler()
@@ -57,7 +56,7 @@ class DTableUpdateTimer(Thread):
             logging.info('Starts to scan updated bases')
             db_session = self.db_session_class()
             try:
-                update_dtable_updated_at_time(db_session, self.update_cache)
+                update_dtable_updated_at_time(db_session, self.app)
             except Exception as e:
                 logging.exception('error when scanning updated bases: %s', e)
             finally:

@@ -14,5 +14,3 @@ class DTableUpdateCacheManager(object):
 
     def clean_dtable_update_time_info(self):
         self.updated_time_dict = {}
-
-dtable_update_cache = DTableUpdateCacheManager()
