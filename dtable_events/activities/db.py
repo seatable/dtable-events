@@ -5,9 +5,10 @@ import re
 from datetime import datetime, timedelta
 
 import pytz
-from sqlalchemy import select, update, delete, desc, func, case
+from sqlalchemy import select, update, delete, desc, func, case, text
 
 from dtable_events.activities.models import Activities
+from dtable_events.app.config import TIME_ZONE
 
 logger = logging.getLogger(__name__)
 
@@ -203,18 +204,20 @@ def update_link_activity_timestamp(session, activity_id, op_time, detail, op_typ
 
 
 def get_shifted_days_ago(offset_str, days):
-    """Convert utcnow to offset time, then return n days ago 00:00:00 time in utc timezone
-    
+    """Convert utcnow to offset time, then return n days ago 00:00:00 time in TIME_ZONE config item timezone
+    The reason why convert to TIME_ZONE because `updated_at` in `dtables` is in TIME_ZONE
+
     Eg:
-        offset_str: +8:00
+        offset_str: +5:00
         days: 3
         UTC now: 2024-11-06 11:00:00
+        TIME_ZONE: Asia/Shanghai (+8:00)
         return: 
-            2024-11-06 03:00:00 -> offset timezone
-            2024-11-06 11:00:00 -> 3 days ago
-            2024-11-03 11:00:00 -> 00:00:00
-            2024-11-03 00:00:00 -> to UTC
-            2024-11-02 16:00:00
+            2024-11-06 11:00:00 (utc) -> utc to offset timezone
+            2024-11-06 16:00:00 (+5:00) -> 3 days ago
+            2024-11-03 16:00:00 (+5:00) -> 00:00:00
+            2024-11-03 00:00:00 (+5:00) -> to TIME_ZONE
+            2024-11-03 03:00:00 (+8:00)
     """
 
     match = re.match(r'([+-])(\d{1,2}):(\d{2})', offset_str)
@@ -232,26 +235,27 @@ def get_shifted_days_ago(offset_str, days):
 
     days_ago_start = (local_time - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
 
-    days_ago_start_utc = days_ago_start.astimezone(pytz.utc)
+    days_ago_start = days_ago_start.astimezone(pytz.timezone(TIME_ZONE))
 
-    return days_ago_start_utc
+    return days_ago_start
+
+
+def filter_user_activate_tables(session, days, uuid_list, to_tz):
+    start_str = get_shifted_days_ago(to_tz, days).strftime('%Y-%m-%d %H:%M:%S')
+    # filter dtable_uuids
+    sql = "SELECT uuid FROM dtables WHERE uuid IN :dtable_uuids AND updated_at > :start_time"
+    dtable_uuids = []
+    for row in session.execute(text(sql), {'dtable_uuids': uuid_list, 'start_time': start_str}):
+        dtable_uuids.append(row.uuid)
+    return dtable_uuids
 
 
 def get_table_activities(session, uuid_list, days, start, limit, to_tz):
 
     activities = list()
     try:
-        start_utc_str = get_shifted_days_ago(to_tz, days).strftime('%Y-%m-%d %H:%M:%S')
-        # filter dtable_uuids
-        query = (
-            select(Activities.dtable_uuid)\
-            .distinct()\
-            .where(
-                Activities.dtable_uuid.in_(uuid_list),
-                Activities.op_time >= start_utc_str
-            )
-        )
-        uuid_list = session.execute(query).scalars().all()
+        uuid_list = filter_user_activate_tables(session, days, uuid_list, to_tz)
+        start_utc_str = get_shifted_days_ago(to_tz, days).astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
         # query activities
         stmt = select(
             Activities.dtable_uuid, Activities.op_time.label('op_date'),
