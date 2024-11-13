@@ -16,6 +16,7 @@ __all__ = [
 
 class CleanDBRecordsWorker(object):
     def __init__(self, config):
+        self._enabled = False
         self._db_session_class = init_db_session_class(config)
 
         try:
@@ -27,6 +28,8 @@ class CleanDBRecordsWorker(object):
 
     def _parse_config(self, config):
         section_name = 'CLEAN DB'
+
+        self._enabled = config.getboolean(section_name, 'enabled', fallback=False)
 
         # Read retention times from config file
         dtable_snapshot = config.getint(section_name, 'keep_dtable_snapshot_days', fallback=365)
@@ -54,9 +57,16 @@ class CleanDBRecordsWorker(object):
 
     def start(self):
         logging.info('Start clean db records worker')
+        if not self.is_enabled():
+            logging.warning('Can not clean db records: it is not enabled!')
+            return
+
         logging.info('Using the following retention config: %s', self._retention_config)
 
         CleanDBRecordsTask(self._db_session_class, self._retention_config).start()
+
+    def is_enabled(self):
+        return self._enabled
 
 
 @dataclass
