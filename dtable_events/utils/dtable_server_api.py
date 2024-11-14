@@ -169,7 +169,7 @@ class DTableServerAPI(object):
         response = requests.get(url, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
-    def add_table(self, table_name, lang='cn', columns=None, rows=None):
+    def add_table(self, table_name, lang='cn', columns=None, rows=None, views=None, view_structure=None):
         logger.debug('add table table_name: %s columns: %s', table_name, columns)
         url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/tables/?from=dtable_events'
         json_data = {
@@ -180,6 +180,10 @@ class DTableServerAPI(object):
             json_data['columns'] = columns
             if rows:
                 json_data['rows'] = rows
+        if views:
+            json_data['views'] = views
+        if view_structure:
+            json_data['view_structure'] = view_structure
         response = requests.post(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
