@@ -7,7 +7,7 @@ from threading import Thread
 from apscheduler.schedulers.blocking import BlockingScheduler
 from sqlalchemy import text
 
-from dtable_events.db import init_db_session_class
+from dtable_events.db import init_db_session_class, is_enable_operation_log_db
 
 __all__ = [
     'CleanDBRecordsWorker',
@@ -18,6 +18,11 @@ class CleanDBRecordsWorker(object):
     def __init__(self, config):
         self._enabled = False
         self._db_session_class = init_db_session_class(config)
+
+        if is_enable_operation_log_db(config):
+            self._operation_log_db_session_class = init_db_session_class(config, db='operation_log_db')
+        else:
+            self._operation_log_db_session_class = None
 
         try:
             self._parse_config(config)
@@ -36,6 +41,7 @@ class CleanDBRecordsWorker(object):
         activities = config.getint(section_name, 'keep_activities_days', fallback=30)
         operation_log = config.getint(section_name, 'keep_operation_log_days', fallback=14)
         delete_operation_log = config.getint(section_name, 'keep_delete_operation_log_days', fallback=30)
+        dtable_db_op_log = config.getint(section_name, 'keep_dtable_db_op_log_days', fallback=30)
         notifications_usernotification = config.getint(section_name, 'keep_notifications_usernotification_days', fallback=30)
         dtable_notifications = config.getint(section_name, 'keep_dtable_notifications_days', fallback=30)
         session_log = config.getint(section_name, 'keep_session_log_days', fallback=30)
@@ -48,6 +54,7 @@ class CleanDBRecordsWorker(object):
             activities=activities,
             operation_log=operation_log,
             delete_operation_log=delete_operation_log,
+            dtable_db_op_log=dtable_db_op_log,
             notifications_usernotification=notifications_usernotification,
             dtable_notifications=dtable_notifications,
             session_log=session_log,
@@ -63,7 +70,7 @@ class CleanDBRecordsWorker(object):
 
         logging.info('Using the following retention config: %s', self._retention_config)
 
-        CleanDBRecordsTask(self._db_session_class, self._retention_config).start()
+        CleanDBRecordsTask(self._db_session_class, self._operation_log_db_session_class, self._retention_config).start()
 
     def is_enabled(self):
         return self._enabled
@@ -76,6 +83,7 @@ class RetentionConfig:
     activities: int = 30
     operation_log: int = 14
     delete_operation_log: int = 30
+    dtable_db_op_log: int = 14
     notifications_usernotification: int = 30
     dtable_notifications: int = 30
     session_log: int = 30
@@ -85,9 +93,10 @@ class RetentionConfig:
 
 
 class CleanDBRecordsTask(Thread):
-    def __init__(self, db_session_class, retention_config: RetentionConfig):
+    def __init__(self, db_session_class, operation_log_db_session_class, retention_config: RetentionConfig):
         super(CleanDBRecordsTask, self).__init__()
         self.db_session_class = db_session_class
+        self.operation_log_db_session_class = operation_log_db_session_class
         self.retention_config = retention_config
 
     def run(self):
@@ -98,12 +107,17 @@ class CleanDBRecordsTask(Thread):
             logging.info('Start cleaning database...')
 
             session = self.db_session_class()
+            if self.operation_log_db_session_class:
+                operation_log_db_session = self.operation_log_db_session_class()
+            else:
+                operation_log_db_session = None
 
             try:
                 clean_snapshots(session, self.retention_config.dtable_snapshot)
                 clean_activities(session, self.retention_config.activities)
-                clean_operation_log(session, self.retention_config.operation_log)
-                clean_delete_operation_log(session, self.retention_config.delete_operation_log)
+                clean_operation_log(operation_log_db_session or session, self.retention_config.operation_log)
+                clean_delete_operation_log(operation_log_db_session or session, self.retention_config.delete_operation_log)
+                clean_dtable_db_op_log(operation_log_db_session or session, self.retention_config.dtable_db_op_log)
                 clean_notifications(session, self.retention_config.dtable_notifications)
                 clean_user_notifications(session, self.retention_config.notifications_usernotification)
                 clean_sessions(session, self.retention_config.session_log)
@@ -114,6 +128,8 @@ class CleanDBRecordsTask(Thread):
                 logging.exception('Could not clean database')
             finally:
                 session.close()
+                if operation_log_db_session:
+                    operation_log_db_session.close()
 
         schedule.start()
 
@@ -172,6 +188,20 @@ def clean_delete_operation_log(session, keep_days: int):
     session.commit()
 
     logging.info('Removed %d entries from "delete_operation_log"', result.rowcount)
+
+
+def clean_dtable_db_op_log(session, keep_days: int):
+    if keep_days <= 0:
+        logging.info('Skipping "dtable_db_op_log" since retention time is set to %d', keep_days)
+        return
+
+    logging.info('Cleaning "dtable_db_op_log" table (older than %d days)', keep_days)
+
+    sql = 'DELETE FROM `dtable_db_op_log` WHERE `op_time` < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL :days DAY))*1000'
+    result = session.execute(text(sql), {'days': keep_days})
+    session.commit()
+
+    logging.info('Removed %d entries from "dtable_db_op_log"', result.rowcount)
 
 
 def clean_user_notifications(session, keep_days: int):
