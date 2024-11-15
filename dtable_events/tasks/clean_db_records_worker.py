@@ -116,7 +116,7 @@ class CleanDBRecordsTask(Thread):
                 clean_snapshots(session, self.retention_config.dtable_snapshot)
                 clean_activities(session, self.retention_config.activities)
                 clean_operation_log(operation_log_db_session or session, self.retention_config.operation_log)
-                clean_delete_operation_log(operation_log_db_session or session, self.retention_config.delete_operation_log)
+                clean_delete_operation_log(session, self.retention_config.delete_operation_log)
                 clean_dtable_db_op_log(operation_log_db_session or session, self.retention_config.dtable_db_op_log)
                 clean_notifications(session, self.retention_config.dtable_notifications)
                 clean_user_notifications(session, self.retention_config.notifications_usernotification)
