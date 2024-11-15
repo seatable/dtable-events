@@ -63,13 +63,17 @@ class Operator(object):
         self.filter_term_modifier = self.filter_item.get('filter_term_modifier', '')
         self.case_sensitive = self.filter_item.get('case_sensitive', False)
 
+    def escape_string(self, s: str):
+        s = s.replace("'", "''")        # convert '
+        return s
+
     def op_is(self):
         if not self.filter_term:
             return ""
         return "`%s` %s '%s'" % (
             self.column_name,
             '=',
-            self.filter_term
+            self.escape_string(self.filter_term)
         )
 
     def op_is_not(self):
@@ -78,7 +82,7 @@ class Operator(object):
         return "`%s` %s '%s'" % (
             self.column_name,
             '<>',
-            self.filter_term
+            self.escape_string(self.filter_term)
         )
 
     def op_contains(self):
@@ -87,7 +91,7 @@ class Operator(object):
         return "`%s` %s '%%%s%%'" % (
             self.column_name,
             'like' if self.case_sensitive is True else 'ilike',
-            self.filter_term.replace('\\', '\\\\') # special characters require translation
+            self.escape_string(self.filter_term)
         )
 
     def op_does_not_contain(self):
@@ -96,7 +100,7 @@ class Operator(object):
         return "`%s` %s '%%%s%%'" % (
             self.column_name,
             'not like' if self.case_sensitive is True else 'not ilike',
-            self.filter_term.replace('\\', '\\\\') # special characters require translation
+            self.escape_string(self.filter_term)
         )
 
     def op_equal(self):
@@ -166,7 +170,7 @@ class Operator(object):
         return "`%s` %s '%s'" % (
             self.column_name,
             '=',
-            self.filter_term
+            self.escape_string(self.filter_term)
         )
 
 
@@ -374,7 +378,7 @@ class SingleSelectOperator(Operator):
         return "`%s` %s '%s'" % (
             self.column_name,
             '<>',
-            filter_term
+            self.escape_string(filter_term)
         )
 
     def op_is_any_of(self):
@@ -384,7 +388,7 @@ class SingleSelectOperator(Operator):
         if not isinstance(filter_term, list):
             filter_term = [filter_term, ]
         filter_term = [self._get_option_name_by_id(f) for f in filter_term]
-        option_names = ["'%s'" % (op_name) for op_name in filter_term]
+        option_names = ["'%s'" % self.escape_string(op_name) for op_name in filter_term]
         if not option_names:
             return ""
         return "`%(column_name)s` in (%(option_names)s)" % ({
@@ -399,7 +403,7 @@ class SingleSelectOperator(Operator):
         if not isinstance(filter_term, list):
             filter_term = [filter_term, ]
         filter_term = [self._get_option_name_by_id(f) for f in filter_term]
-        option_names = ["'%s'" % (op_name) for op_name in filter_term]
+        option_names = ["'%s'" % self.escape_string(op_name) for op_name in filter_term]
         if not option_names:
             return ""
         return "`%(column_name)s` not in (%(option_names)s)" % ({
@@ -487,7 +491,7 @@ class MultipleSelectOperator(Operator):
         if not self.filter_term:
             return ""
         filter_term = [self._get_option_name_by_id(f) for f in self.filter_term]
-        option_names = ["'%s'" % op_name for op_name in filter_term]
+        option_names = ["'%s'" % self.escape_string(op_name) for op_name in filter_term]
         option_names_str = ', '.join(option_names)
         return "`%(column_name)s` in (%(option_names_str)s)" % ({
             "column_name": self.column_name,
@@ -498,7 +502,7 @@ class MultipleSelectOperator(Operator):
         if not self.filter_term:
             return ""
         filter_term = [self._get_option_name_by_id(f) for f in self.filter_term]
-        option_names = ["'%s'" % op_name for op_name in filter_term]
+        option_names = ["'%s'" % self.escape_string(op_name) for op_name in filter_term]
         option_names_str = ', '.join(option_names)
         return "`%(column_name)s` has none of (%(option_names_str)s)" % ({
             "column_name": self.column_name,
@@ -509,7 +513,7 @@ class MultipleSelectOperator(Operator):
         if not self.filter_term:
             return ""
         filter_term = [self._get_option_name_by_id(f) for f in self.filter_term]
-        option_names = ["'%s'" % op_name for op_name in filter_term]
+        option_names = ["'%s'" % self.escape_string(op_name) for op_name in filter_term]
         option_names_str = ', '.join(option_names)
         return "`%(column_name)s` has all of (%(option_names_str)s)" % ({
             "column_name": self.column_name,
@@ -520,7 +524,7 @@ class MultipleSelectOperator(Operator):
         if not self.filter_term:
             return ""
         filter_term = [self._get_option_name_by_id(f) for f in self.filter_term]
-        option_names = ["'%s'" % op_name for op_name in filter_term]
+        option_names = ["'%s'" % self.escape_string(op_name) for op_name in filter_term]
         option_names_str = ', '.join(option_names)
         return "`%(column_name)s` is exactly (%(option_names_str)s)" % ({
             "column_name": self.column_name,
