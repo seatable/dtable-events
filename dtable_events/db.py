@@ -46,7 +46,7 @@ def create_engine_from_conf(config, db='dtable_db'):
     password = db_keys_map[db]['password']
     port = db_keys_map[db]['port']
 
-    backend = config.get('DATABASE', 'type')
+    backend = config.get(db_section, 'type')
 
     if backend == 'mysql':
         if config.has_option(db_section, host):
