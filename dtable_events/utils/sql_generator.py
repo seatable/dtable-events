@@ -65,12 +65,6 @@ class Operator(object):
 
     def escape_string(self, s: str):
         s = s.replace("'", "''")        # convert '
-        s = s.replace("\\", "\\\\")     # convert \
-        s = s.replace("\x00", "\\x00")  # convert \
-        s = s.replace("\n", "\\n")      # convert \n
-        s = s.replace("\r", "\\r")      # convert \r
-        s = s.replace('"', '\\"')       # convert "
-        s = s.replace("\x1a", "\\x1a")  # convert control (Ctrl+Z)
         return s
 
     def op_is(self):
@@ -741,8 +735,8 @@ class DateOperator(Operator):
         target_date = self._format_date(date)
         return "`%(column_name)s` >= '%(target_date)s' and `%(column_name)s` < '%(next_date)s'" % ({
             "column_name": self.column_name,
-            "target_date": self.escape_string(target_date),
-            "next_date": self.escape_string(next_date)
+            "target_date": target_date,
+            "next_date": next_date
         })
 
     def op_is_within(self):
@@ -753,8 +747,8 @@ class DateOperator(Operator):
             return ""
         return "`%(column_name)s` >= '%(start_date)s' and `%(column_name)s` <= '%(end_date)s'" % ({
             "column_name": self.column_name,
-            "start_date": self.escape_string(self._format_date(start_date)),
-            "end_date": self.escape_string(self._format_date(end_date))
+            "start_date": self._format_date(start_date),
+            "end_date": self._format_date(end_date)
         })
 
     def op_is_before(self):
@@ -765,7 +759,7 @@ class DateOperator(Operator):
             return ""
         return "`%(column_name)s` < '%(target_date)s' and `%(column_name)s` is not null" % ({
             "column_name": self.column_name,
-            "target_date": self.escape_string(self._format_date(target_date))
+            "target_date": self._format_date(target_date)
         })
 
     def op_is_after(self):
@@ -777,7 +771,7 @@ class DateOperator(Operator):
         next_date = self._format_date(target_date + timedelta(days=1))
         return "`%(column_name)s` >= '%(target_date)s' and `%(column_name)s` is not null" % ({
             "column_name": self.column_name,
-            "target_date": self.escape_string(next_date),
+            "target_date": next_date,
         })
 
     def op_is_on_or_before(self):
@@ -788,7 +782,7 @@ class DateOperator(Operator):
             return ""
         return "`%(column_name)s` <= '%(target_date)s' and `%(column_name)s` is not null" % ({
             "column_name": self.column_name,
-            "target_date": self.escape_string(self._format_date(target_date))
+            "target_date": self._format_date(target_date)
         })
 
     def op_is_on_or_after(self):
@@ -799,7 +793,7 @@ class DateOperator(Operator):
             return ""
         return "`%(column_name)s` >= '%(target_date)s' and `%(column_name)s` is not null" % ({
             "column_name": self.column_name,
-            "target_date": self.escape_string(self._format_date(target_date))
+            "target_date": self._format_date(target_date)
         })
 
     def op_is_not(self):
@@ -813,8 +807,8 @@ class DateOperator(Operator):
         return "(`%(column_name)s` >= '%(end_date)s' or `%(column_name)s` <= '%(start_date)s' or `%(column_name)s` is null)" % (
         {
             "column_name": self.column_name,
-            "start_date": self.escape_string(self._format_date(start_date)),
-            "end_date": self.escape_string(self._format_date(end_date))
+            "start_date": self._format_date(start_date),
+            "end_date": self._format_date(end_date)
         })
 
 class CheckBoxOperator(Operator):
@@ -851,7 +845,7 @@ class CollaboratorOperator(Operator):
             return ""
         if not isinstance(select_collaborators, list):
             select_collaborators = [select_collaborators, ]
-        collaborator_list = ["'%s'" % self.escape_string(collaborator) for collaborator in select_collaborators]
+        collaborator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
         filter_term_str = ", ".join(collaborator_list)
         return "`%(column_name)s` in (%(filter_term_str)s)" % ({
             "column_name": self.column_name,
@@ -864,7 +858,7 @@ class CollaboratorOperator(Operator):
             return ""
         if not isinstance(select_collaborators, list):
             select_collaborators = [select_collaborators, ]
-        collaborator_list = ["'%s'" % self.escape_string(collaborator) for collaborator in select_collaborators]
+        collaborator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
         filter_term_str = ", ".join(collaborator_list)
         return "`%(column_name)s` has all of (%(filter_term_str)s)" % ({
             "column_name": self.column_name,
@@ -877,7 +871,7 @@ class CollaboratorOperator(Operator):
             return ""
         if not isinstance(select_collaborators, list):
             select_collaborators = [select_collaborators, ]
-        collaborator_list = ["'%s'" % self.escape_string(collaborator) for collaborator in select_collaborators]
+        collaborator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
         filter_term_str = ", ".join(collaborator_list)
         return "`%(column_name)s` has none of (%(filter_term_str)s)" % ({
             "column_name": self.column_name,
@@ -890,7 +884,7 @@ class CollaboratorOperator(Operator):
             return ""
         if not isinstance(select_collaborators, list):
             select_collaborators = [select_collaborators, ]
-        collaborator_list = ["'%s'" % self.escape_string(collaborator) for collaborator in select_collaborators]
+        collaborator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
         filter_term_str = ", ".join(collaborator_list)
         return "`%(column_name)s` is exactly (%(filter_term_str)s)" % ({
             "column_name": self.column_name,
@@ -918,7 +912,7 @@ class CreatorOperator(Operator):
         return "`%s` %s '%s'" % (
             self.column_name,
             '=',
-            self.escape_string(term),
+            term,
         )
 
     def op_is_not(self):
@@ -930,7 +924,7 @@ class CreatorOperator(Operator):
         return "`%s` %s '%s'" % (
             self.column_name,
             '<>',
-            self.escape_string(term)
+            term
         )
 
     def op_contains(self):
@@ -939,7 +933,7 @@ class CreatorOperator(Operator):
             return ''
         if not isinstance(select_collaborators, list):
             select_collaborators = [select_collaborators, ]
-        creator_list = ["'%s'" % self.escape_string(collaborator) for collaborator in select_collaborators]
+        creator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
         filter_term_str = ", ".join(creator_list)
         return "`%(column_name)s` in (%(filter_term_str)s)" % ({
             "column_name": self.column_name,
@@ -952,7 +946,7 @@ class CreatorOperator(Operator):
             return ''
         if not isinstance(select_collaborators, list):
             select_collaborators = [select_collaborators, ]
-        creator_list = ["'%s'" % self.escape_string(collaborator) for collaborator in select_collaborators]
+        creator_list = ["'%s'" % collaborator for collaborator in select_collaborators]
         return "`%(column_name)s` not in (%(filter_term_str)s)" % ({
             "column_name": self.column_name,
             "filter_term_str": ', '.join(creator_list)
@@ -968,7 +962,7 @@ class CreatorOperator(Operator):
         return "%s %s '%s'" % (
             self.column_name,
             '=',
-            self.escape_string(creator)
+            creator
         )
 
 class FileOperator(Operator):
