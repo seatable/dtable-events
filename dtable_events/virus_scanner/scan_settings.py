@@ -45,22 +45,23 @@ class Settings(object):
         self.parse_send_mail_config(config)
 
     def parse_scan_config(self, seafile_config):
-        if seafile_config.has_option('virus_scan', 'scan_command'):
-            self.scan_cmd = seafile_config.get('virus_scan', 'scan_command')
+        section_name = 'VIRUS SCAN'
+        if seafile_config.has_option(section_name, 'scan_command'):
+            self.scan_cmd = seafile_config.get(section_name, 'scan_command')
         if not self.scan_cmd:
-            logger.info('[virus_scan] scan_command option is not found in seafile.conf, disable virus scan.')
+            logger.info(f'[{section_name}] scan_command option is not found in seafile.conf, disable virus scan.')
             return False
 
         vcode = None
-        if seafile_config.has_option('virus_scan', 'virus_code'):
-            vcode = seafile_config.get('virus_scan', 'virus_code')
+        if seafile_config.has_option(section_name, 'virus_code'):
+            vcode = seafile_config.get(section_name, 'virus_code')
         if not vcode:
             logger.info('virus_code is not set, disable virus scan.')
             return False
 
         nvcode = None
-        if seafile_config.has_option('virus_scan', 'nonvirus_code'):
-            nvcode = seafile_config.get('virus_scan', 'nonvirus_code')
+        if seafile_config.has_option(section_name, 'nonvirus_code'):
+            nvcode = seafile_config.get(section_name, 'nonvirus_code')
         if not nvcode:
             logger.info('nonvirus_code is not set, disable virus scan.')
             return False
@@ -77,36 +78,36 @@ class Settings(object):
             logger.info('invalid nonvirus_code format, disable virus scan.')
             return False
 
-        if seafile_config.has_option('virus_scan', 'scan_interval'):
+        if seafile_config.has_option(section_name, 'scan_interval'):
             try:
-                self.scan_interval = seafile_config.getint('virus_scan', 'scan_interval')
+                self.scan_interval = seafile_config.getint(section_name, 'scan_interval')
             except ValueError:
                 pass
 
-        if seafile_config.has_option('virus_scan', 'scan_size_limit'):
+        if seafile_config.has_option(section_name, 'scan_size_limit'):
             try:
                 # in M unit
-                self.scan_size_limit = seafile_config.getint('virus_scan', 'scan_size_limit')
+                self.scan_size_limit = seafile_config.getint(section_name, 'scan_size_limit')
             except ValueError:
                 pass
 
-        if seafile_config.has_option('virus_scan', 'scan_skip_ext'):
-            exts = seafile_config.get('virus_scan', 'scan_skip_ext').split(',')
+        if seafile_config.has_option(section_name, 'scan_skip_ext'):
+            exts = seafile_config.get(section_name, 'scan_skip_ext').split(',')
             # .jpg, .mp3, .mp4 format
             exts = [ext.strip() for ext in exts if ext]
             self.scan_skip_ext = [ext.lower() for ext in exts
                                   if len(ext) > 1 and ext[0] == '.']
 
-        if seafile_config.has_option('virus_scan', 'threads'):
+        if seafile_config.has_option(section_name, 'threads'):
             try:
-                self.threads = seafile_config.getint('virus_scan', 'threads')
+                self.threads = seafile_config.getint(section_name, 'threads')
             except ValueError:
                 pass
 
         return True
 
     def parse_send_mail_config(self, config):
-        section_name = 'SEAHUB EMAIL'
+        section_name = 'EMAIL SENDER'
         key_enabled = 'enabled'
 
         if not config.has_section(section_name):

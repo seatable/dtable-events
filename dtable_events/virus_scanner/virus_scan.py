@@ -11,6 +11,7 @@ from .thread_pool import ThreadPool
 from .scan_settings import logger
 from dtable_events.utils import get_python_executable
 from dtable_events.app.config import dtable_web_dir
+from dtable_events.virus_scanner.scan_settings import Settings
 
 
 class ScanTask(object):
@@ -21,7 +22,7 @@ class ScanTask(object):
 
 
 class VirusScan(object):
-    def __init__(self, settings):
+    def __init__(self, settings: Settings):
         self.settings = settings
         self.db_oper = DBOper(settings)
 

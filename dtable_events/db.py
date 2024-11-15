@@ -20,31 +20,48 @@ SeafBase = automap_base()
 
 def create_engine_from_conf(config, db='dtable_db'):
 
-    db_sec = 'DATABASE'
-    user = 'username'
-    db_name = 'db_name'
+    db_keys_map = {
+        'dtable_db': {
+            'db_section': 'DATABASE',
+            'user': 'username',
+            'host': 'host',
+            'db_name': 'db_name',
+            'password': 'password',
+            'port': 'port'
+        },
+        'seafile': {
+            'db_section': 'database',
+            'user': 'user',
+            'host': 'host',
+            'db_name': 'db_name',
+            'password': 'password',
+            'port': 'port'
+        }
+    }
 
-    if db == 'seafile':
-        db_sec = 'database'
-        user = 'user'
-        db_name = 'db_name'
+    db_section = db_keys_map[db]['db_section']
+    user = db_keys_map[db]['user']
+    host = db_keys_map[db]['host']
+    db_name = db_keys_map[db]['db_name']
+    password = db_keys_map[db]['password']
+    port = db_keys_map[db]['port']
 
-    backend = config.get(db_sec, 'type')
+    backend = config.get('DATABASE', 'type')
 
     if backend == 'mysql':
-        if config.has_option(db_sec, 'host'):
-            host = config.get(db_sec, 'host').lower()
+        if config.has_option(db_section, host):
+            host = config.get(db_section, host).lower()
         else:
             host = 'localhost'
 
-        if config.has_option(db_sec, 'port'):
-            port = config.getint(db_sec, 'port')
+        if config.has_option(db_section, port):
+            port = config.getint(db_section, port)
         else:
             port = 3306
 
-        username = config.get(db_sec, user)
-        password = config.get(db_sec, 'password')
-        db_name = config.get(db_sec, db_name)
+        username = config.get(db_section, user)
+        password = config.get(db_section, password)
+        db_name = config.get(db_section, db_name)
 
         db_url = "mysql+mysqldb://%s:%s@%s:%s/%s?charset=utf8" % \
                  (username, quote_plus(password), host, port, db_name)
