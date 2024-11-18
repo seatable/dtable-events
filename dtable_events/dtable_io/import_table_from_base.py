@@ -225,6 +225,9 @@ def import_table_from_base(context):
         # These column types refer to the data of other columns, so not support to import.
         unsupported_columns = ['link', 'formula', 'link-formula']
 
+        src_views = src_table.get('views', [])
+        src_view_structure = src_table.get('view_structure', {})
+
         # trans asset url and copy asset
         succeed, new_table = trans_and_copy_asset(
             src_table, src_repo_id, src_dtable_uuid, dst_workspace_id, dst_repo_id, dst_dtable_uuid, username)
@@ -258,7 +261,7 @@ def import_table_from_base(context):
 
         src_rows = new_table.get('rows', [])
         dst_table_name = get_non_duplicated_name(dst_table_name, [t['name'] for t in dst_dtable_json['tables']])
-        dst_dtable_server_api.add_table(dst_table_name, lang=lang, columns=dst_columns, rows=src_rows)
+        dst_dtable_server_api.add_table(dst_table_name, lang=lang, columns=dst_columns, rows=src_rows, views=src_views, view_structure=src_view_structure)
     except BaseExceedsException as e:
         error_msg = 'import_table_from_base: %s' % json.dumps({'error_type': e.args[0], 'error_msg': e.args[1]})
         raise Exception(error_msg)
