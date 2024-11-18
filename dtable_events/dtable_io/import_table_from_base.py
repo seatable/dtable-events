@@ -226,7 +226,7 @@ def import_table_from_base(context):
         unsupported_columns = ['link', 'formula', 'link-formula']
 
         src_views = src_table.get('views', [])
-        src_view_structure = src_table.get('view_structure', [])
+        src_view_structure = src_table.get('view_structure', {})
 
         # trans asset url and copy asset
         succeed, new_table = trans_and_copy_asset(
