@@ -79,7 +79,7 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
         try:
             prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id)
         except Exception as e:
-            dtable_io_logger.warning('create asset folder failed. ERROR: {}'.format(e))
+            dtable_io_logger.exception('create asset folder failed. ERROR: {}'.format(e))
 
     # 3. copy forms
     try:
