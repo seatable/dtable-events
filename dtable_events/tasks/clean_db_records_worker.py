@@ -7,7 +7,7 @@ from threading import Thread
 from apscheduler.schedulers.blocking import BlockingScheduler
 from sqlalchemy import text
 
-from dtable_events.db import init_db_session_class, is_enable_operation_log_db
+from dtable_events.db import init_db_session_class, init_operation_db_session_class, is_enable_operation_log_db
 
 __all__ = [
     'CleanDBRecordsWorker',
@@ -20,7 +20,7 @@ class CleanDBRecordsWorker(object):
         self._db_session_class = init_db_session_class(config)
 
         if is_enable_operation_log_db(config):
-            self._operation_log_db_session_class = init_db_session_class(config, db='operation_log_db')
+            self._operation_log_db_session_class = init_operation_db_session_class(config)
         else:
             self._operation_log_db_session_class = None
 
