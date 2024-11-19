@@ -111,8 +111,8 @@ def init_seafile_db_session_class(config):
     try:
         engine = create_seafile_engine_from_conf(config)
     except (configparser.NoOptionError, configparser.NoSectionError) as e:
-        logger.error("Init db session class error: %s" % e)
-        raise RuntimeError("Init db session class error: %s" % e)
+        logger.error("Init operation-log db session class error: %s" % e)
+        raise RuntimeError("Init operation-log db session class error: %s" % e)
 
     session = sessionmaker(bind=engine)
     return session
