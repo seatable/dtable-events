@@ -1,10 +1,10 @@
 import uuid
+
+import jwt
 import requests
 
-try:
-    from seahub.settings import DTABLE_STORAGE_SERVER_URL
-except ImportError as err:
-    DTABLE_STORAGE_SERVER_URL = ''
+from dtable_events.app.config import DTABLE_PRIVATE_KEY
+from dtable_events.utils import get_inner_dtable_server_url
 
 
 TIMEOUT = 90
@@ -39,15 +39,23 @@ class DTableStorageServerAPI(object):
         """
         :param server_url: str
         """
-        self.server_url = DTABLE_STORAGE_SERVER_URL.rstrip('/')
+        self.server_url = get_inner_dtable_server_url().rstrip('/')
 
     def __str__(self):
         return '<DTable Storage Server API [ %s ]>' % self.server_url
 
+    def get_headers(self, dtable_uuid):
+        payload = {
+            'dtable_uuid': uuid_str_to_36_chars(dtable_uuid),
+            'is_internal': True
+        }
+        access_token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
+        return {'Authorization': f'Token {access_token}'}
+
     def get_dtable(self, dtable_uuid):
         dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
-        url = self.server_url + '/dtables/' + dtable_uuid
-        response = requests.get(url, timeout=TIMEOUT)
+        url = self.server_url + f'/api/v1/internal/storage/dtables/{dtable_uuid}/'
+        response = requests.get(url, headers=self.get_headers(dtable_uuid), timeout=TIMEOUT)
         try:
             data = parse_response(response)
         except StorageAPIError as e:
@@ -57,22 +65,24 @@ class DTableStorageServerAPI(object):
 
     def create_empty_dtable(self, dtable_uuid):
         dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
-        url = self.server_url + '/dtables/' + dtable_uuid
-        response = requests.put(url, timeout=TIMEOUT)
+        url = self.server_url + f'/api/v1/internal/storage/dtables/{dtable_uuid}/'
+        response = requests.put(url, headers=self.get_headers(dtable_uuid), timeout=TIMEOUT)
         data = parse_response(response)
         return data
 
     def save_dtable(self, dtable_uuid, json_string):
         dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
-        url = self.server_url + '/dtables/' + dtable_uuid
-        response = requests.put(url, data=json_string, timeout=TIMEOUT)
+        url = self.server_url + f'/api/v1/internal/storage/dtables/{dtable_uuid}/'
+        headers = self.get_headers(dtable_uuid)
+        headers['Content-Type'] = 'application/json'
+        response = requests.put(url, headers=headers, data=json_string, timeout=TIMEOUT)
         data = parse_response(response)
         return data
 
     def delete_dtable(self, dtable_uuid):
         dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
-        url = self.server_url + '/dtables/' + dtable_uuid
-        response = requests.delete(url, timeout=TIMEOUT)
+        url = self.server_url + f'/api/v1/internal/storage/dtables/{dtable_uuid}/'
+        response = requests.delete(url, headers=self.get_headers(dtable_uuid), timeout=TIMEOUT)
         try:
             data = parse_response(response)
         except StorageAPIError as e:
