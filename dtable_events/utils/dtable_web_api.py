@@ -66,7 +66,7 @@ class DTableWebAPI:
         # response dict like
         # {
         #   'user_script_permissions': {username1: {'can_run_python_script': True/False}}
-        #   'can_schedule_run_script': {org1: {'can_run_python_script': True/False}}
+        #   'org_script_permissions': {org1: {'can_run_python_script': True/False}}
         # }
         try:
             resp = requests.get(url, headers=headers, json=json_data)
