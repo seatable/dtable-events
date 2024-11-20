@@ -24,7 +24,7 @@ def main():
 
     redis_cache.init_redis(config)  # init redis instance for redis_cache
 
-    seafile_conf_path = '/opt/seafile/conf/seafile.conf'
+    seafile_conf_path = '/opt/seatable/conf/seafile.conf'
     for conf_dir in [
         os.environ.get('SEAFILE_CENTRAL_CONF_DIR'),
         os.environ.get('SEAFILE_CONF_DIR')
