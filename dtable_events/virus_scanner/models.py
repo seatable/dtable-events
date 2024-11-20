@@ -1,5 +1,7 @@
+from datetime import datetime
+
 from sqlalchemy.orm import mapped_column
-from sqlalchemy.sql.sqltypes import Integer, String, Text, Boolean
+from sqlalchemy.sql.sqltypes import Integer, String, Text, Boolean, DateTime
 
 from dtable_events.db import Base
 
@@ -9,6 +11,8 @@ class VirusScanRecord(Base):
 
     repo_id = mapped_column(String(length=36), nullable=False, primary_key=True)
     scan_commit_id = mapped_column(String(length=40), nullable=False)
+    created_at = mapped_column(DateTime, nullable=False, default=datetime.now)
+    updated_at = mapped_column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
     __table_args__ = {'extend_existing': True}
 
     def __init__(self, repo_id, scan_commit_id):
@@ -26,6 +30,8 @@ class VirusFile(Base):
     file_path = mapped_column(Text, nullable=False)
     has_deleted = mapped_column(Boolean, nullable=False, index=True)
     has_ignored = mapped_column(Boolean, nullable=False, index=True)
+    created_at = mapped_column(DateTime, nullable=False, default=datetime.now)
+    updated_at = mapped_column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
     __table_args__ = {'extend_existing': True}
 
     def __init__(self, repo_id, commit_id, file_path, has_deleted, has_ignored):

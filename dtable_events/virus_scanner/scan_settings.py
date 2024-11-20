@@ -3,7 +3,7 @@ import os
 import logging
 
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool
-from dtable_events.db import init_db_session_class
+from dtable_events.db import init_db_session_class, init_seafile_db_session_class
 
 logger = logging.getLogger('virus_scan')
 logger.setLevel(logging.INFO)
@@ -35,12 +35,13 @@ class Settings(object):
 
         try:
             self.session_cls = init_db_session_class(config)
-            self.seaf_session_cls = init_db_session_class(seafile_config, db='seafile')
+            self.seaf_session_cls = init_seafile_db_session_class(seafile_config)
         except Exception as e:
             logger.warning('Failed to init db session class: %s', e)
             return
 
-        self.enable_scan = True
+        section_name = 'VIRUS SCAN'
+        self.enable_scan = config.getboolean(section_name, 'enabled', fallback=False)
 
         self.parse_send_mail_config(config)
 

@@ -103,6 +103,7 @@ class App(object):
             self._license_expiring_notices_sender.start()    # always True
             self._dtable_access_log_cleaner.start()          # always True
             self._dtable_update_handler.start()              # always True
+            # interval
             self._virus_scanner.start()                      # default False
             # convert pdf manager
             conver_page_to_pdf_manager.start()               # always True
