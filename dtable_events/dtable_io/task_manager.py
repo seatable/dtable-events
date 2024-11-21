@@ -427,7 +427,7 @@ class TaskManager(object):
 
                 # run
                 task_result = task[0](*task[1])
-                if not task_result or isinstance(task_result, dict):
+                if isinstance(task_result, dict):
                     task_result['success'] = True
                 else:
                     task_result = {'success': True}

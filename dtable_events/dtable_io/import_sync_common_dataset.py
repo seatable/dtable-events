@@ -150,7 +150,8 @@ def sync_common_dataset(context, config):
         if result and 'task_status_code' in result and result['task_status_code'] != 200:
             if result['task_status_code'] == 500:
                 dtable_io_logger.error(result)
-            raise Exception(result)
+            error_msg = 'import_sync_common_dataset:%s' % json.dumps(result)
+            raise Exception(error_msg)
 
     # get base's metadata
     src_dtable_server_api = DTableServerAPI(operator, src_dtable_uuid, dtable_server_url)
@@ -234,7 +235,8 @@ def import_common_dataset(context, config):
     else:
         if result and 'task_status_code' in result and result['task_status_code'] != 200:
             dtable_io_logger.error(result['error_msg'])
-            raise Exception(result)
+            error_msg = 'import_sync_common_dataset:%s' % json.dumps(result)
+            raise Exception(error_msg)
         dst_table_id = result.get('dst_table_id')
 
     # get base's metadata
