@@ -19,9 +19,6 @@ def main():
 
     config = get_config(args.config_file)
 
-    if is_syslog_enabled(config):
-        app_logger.add_syslog_handler()
-
     redis_cache.init_redis(config)  # init redis instance for redis_cache
 
     seafile_conf_path = '/opt/seatable/conf/seafile.conf'
