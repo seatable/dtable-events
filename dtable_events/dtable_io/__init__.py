@@ -47,6 +47,10 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
     2. make zip file
     3. return zip file's content
     """
+    task_result = {
+        'warnings': []
+    }
+
     dtable_io_logger.info('Start prepare /tmp/dtable-io/{}/zip_file.zip for export DTable.'.format(dtable_uuid))
 
     tmp_file_path = os.path.join('/tmp/dtable-io', dtable_uuid,
@@ -79,7 +83,9 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
         try:
             prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id)
         except Exception as e:
-            dtable_io_logger.exception('create asset folder failed. ERROR: {}'.format(e))
+            dtable_io_logger.exception('dtable: {} create asset folder failed. ERROR: {}'.format(dtable_uuid, e))
+            if e.args and e.args[0] == 'size too large':
+                task_result['warnings'].append({'type': 'asset_size_too_large'})
 
     # 3. copy forms
     try:
@@ -138,6 +144,8 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
 
     dtable_io_logger.info('Create /tmp/dtable-io/{}/zip_file.zip success!'.format(dtable_uuid))
     # we remove '/tmp/dtable-io/<dtable_uuid>' in dtable web api
+
+    return task_result
 
 
 def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage,

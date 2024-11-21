@@ -157,6 +157,10 @@ def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id):
             progress = json.loads(seafile_api.query_zip_progress(token))
         except Exception as e:
             raise e
+        else:
+            failed_reason = progress.get('failed_reason')
+            if failed_reason:
+                raise Exception(failed_reason)
 
     asset_url = gen_dir_zip_download_url(token)
     try:
