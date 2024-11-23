@@ -1688,7 +1688,7 @@ class LinkRecordsAction(BaseAction):
                     'filter_predicate': self.COLUMN_FILTER_PREDICATE_MAPPING[ColumnTypes.CHECKBOX]
                 }
             elif other_column['type'] == ColumnTypes.FORMULA:
-                if other_column_data.get('result') == 'bool':
+                if other_column_data.get('result_type') == 'bool':
                     return self.gen_filter(column, {'key': other_column['key'], 'type': ColumnTypes.CHECKBOX})
 
         elif column['type'] == ColumnTypes.DATE:
@@ -1750,6 +1750,8 @@ class LinkRecordsAction(BaseAction):
                 return self.gen_filter({'key': column['key'], 'type': ColumnTypes.TEXT}, other_column)
             elif column_data.get('result_type') == 'number':
                 return self.gen_filter({'key': column['key'], 'type': ColumnTypes.NUMBER}, other_column)
+            elif column_data.get('result_type') == 'date':
+                return self.gen_filter({'key': column['key'], 'type': ColumnTypes.DATE}, other_column)
             elif column_data.get('result_type') == 'bool':
                 return self.gen_filter({'key': column['key'], 'type': ColumnTypes.CHECKBOX}, other_column)
 
