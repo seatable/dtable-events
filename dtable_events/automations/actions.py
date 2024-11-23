@@ -19,9 +19,8 @@ from seaserv import seafile_api
 from dtable_events.automations.models import get_third_party_account
 from dtable_events.app.metadata_cache_managers import BaseMetadataCacheManager
 from dtable_events.app.event_redis import redis_cache
-from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, \
-    SEATABLE_FAAS_AUTH_TOKEN, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL
-from dtable_events.dtable_io import send_wechat_msg, send_email_msg, send_dingtalk_msg, batch_send_email_msg
+from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL
+from dtable_events.dtable_io import send_wechat_msg, send_dingtalk_msg
 from dtable_events.convert_page.manager import conver_page_to_pdf_manager
 from dtable_events.app.log import setup_logger
 from dtable_events.notification_rules.notification_rules_utils import send_notification, fill_msg_blanks_with_sql_row
@@ -1592,38 +1591,6 @@ class LinkRecordsAction(BaseAction):
         self.match_conditions = match_conditions or []
         self.linked_row_ids = []
 
-    def parse_column_value(self, column, value):
-        if column.get('type') == ColumnTypes.SINGLE_SELECT:
-            column_data = column.get('data') or {}
-            select_options = column_data.get('options') or []
-            for option in select_options:
-                if value == option.get('name'):
-                    return option.get('id')
-
-        elif column.get('type') == ColumnTypes.MULTIPLE_SELECT:
-            m_column_data = column.get('data') or {}
-            m_select_options = m_column_data.get('options') or []
-            if isinstance(value, list):
-                parse_value_list = []
-                for option in m_select_options:
-                    if option.get('name') in value:
-                        option_id = option.get('id')
-                        parse_value_list.append(option_id)
-                return parse_value_list
-        elif column.get('type') in [ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
-            return [value]
-        else:
-            return value
-
-    def parse_text_to_number(self, cell_value):
-        try:
-            return int(cell_value)
-        except:
-            try:
-                float(cell_value)
-            except:
-                pass
-        return None
 
     def gen_filter(self, column, other_column):
         """Generate a filter dict to filter other table
