@@ -734,7 +734,7 @@ def get_update_row_data(excel_row, dtable_row, excel_col_name_to_type):
             excel_cell_val = False
         dtable_cell_val = '' if dtable_cell_val is None else dtable_cell_val
         excel_cell_val = '' if excel_cell_val is None else excel_cell_val
-        
+
         if excel_cell_val != dtable_cell_val:
             update_excel_row[col_name] = excel_cell_val
     if update_excel_row:
@@ -1355,7 +1355,7 @@ def parse_number_format(column_data, cell_value):
     if not column_data:
         return gen_decimal_format(cell_value)
     # src_format is None, if column format does not be changed
-    src_format = column_data.get('format')
+    src_format = column_data.get('format', 'number')
     enable_precision = column_data.get('enable_precision', False)
     precision = column_data.get('precision', 0)
 
@@ -1723,6 +1723,7 @@ def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_
                 cell_value = parse_link(column, cell_value, email2nickname)
             elif col_type == ColumnTypes.LONG_TEXT:
                 cell_value = parse_dtable_long_text(cell_value)
+                cell_value = cell_value.strip()
             else:
                 cell_value = cell_data2str(cell_value)
             c = WriteOnlyCell(ws, value=ILLEGAL_CHARACTERS_RE.sub('', cell_value))
