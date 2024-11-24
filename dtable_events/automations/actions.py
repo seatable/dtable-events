@@ -21,7 +21,8 @@ from dtable_events.app.metadata_cache_managers import BaseMetadataCacheManager
 from dtable_events.app.event_redis import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL
 from dtable_events.dtable_io import send_wechat_msg, send_dingtalk_msg
-from dtable_events.convert_page.manager import conver_page_to_pdf_manager
+# from dtable_events.convert_page.manager import conver_page_to_pdf_manager
+from dtable_events.convert_page.new_manager import conver_page_to_pdf_manager
 from dtable_events.app.log import setup_logger
 from dtable_events.notification_rules.notification_rules_utils import send_notification, fill_msg_blanks_with_sql_row
 from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url, \
