@@ -1734,6 +1734,21 @@ class LinkRecordsAction(BaseAction):
                     'filter_predicate': self.COLUMN_FILTER_PREDICATE_MAPPING[ColumnTypes.DURATION]
                 }
 
+        elif column['type'] == ColumnTypes.EMAIL:
+            if other_column['type'] in [ColumnTypes.TEXT, ColumnTypes.EMAIL]:
+                return {
+                    'column_key': other_column['key'],
+                    'filter_term': cell_value,
+                    'filter_predicate': self.COLUMN_FILTER_PREDICATE_MAPPING[other_column['type']]
+                }
+            elif other_column['type'] == ColumnTypes.FORMULA:
+                if other_column_data.get('result_type') == 'string':
+                    return {
+                        'column_key': other_column['key'],
+                        'filter_term': cell_value,
+                        'filter_predicate': self.COLUMN_FILTER_PREDICATE_MAPPING[ColumnTypes.TEXT]
+                    }
+
         elif column['type'] == ColumnTypes.RATE:
             if other_column['type'] in [ColumnTypes.NUMBER, ColumnTypes.RATE]:
                 return {
