@@ -3084,14 +3084,13 @@ class ConvertPageToPDFAction(BaseAction):
                     'row_id': row_id,
                     'row': {target_column['name']: files}
                 })
-            dtable_server_api = DTableServerAPI('dtable-events', self.auto_rule.dtable_uuid, get_inner_dtable_server_url())
+            # use 'Automation Rule' username to update to avoid loop trigger automation-rule
+            dtable_server_api = DTableServerAPI('Automation Rule', self.auto_rule.dtable_uuid, get_inner_dtable_server_url())
             dtable_server_api.batch_update_rows(table['name'], updates)
         except Exception as e:
             logger.exception('rule: %s dtable: %s page: %s rows: %s update rows error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.page_id, self.row_pdfs, e)
 
-    def do_action(self):
-        if not self.can_do_action():
-            return
+    def condition_cron_convert(self):
         rows = self.auto_rule.get_trigger_conditions_rows(self, warning_rows=CONVERT_PAGE_TO_PDF_ROWS_LIMIT)[:CONVERT_PAGE_TO_PDF_ROWS_LIMIT]
         if not rows:
             return
@@ -3107,9 +3106,6 @@ class ConvertPageToPDFAction(BaseAction):
             'dtable_uuid': self.auto_rule.dtable_uuid,
             'page_id': self.page_id,
             'row_ids': [row['_id'] for row in rows],
-            # 'repo_id': self.repo_id,
-            # 'workspace_id': self.workspace_id,
-            # 'file_names_dict': file_names_dict,
             'target_column_key': self.target_column_key,
             'table_id': self.auto_rule.table_id,
             'plugin_type': 'page-design',
@@ -3126,6 +3122,45 @@ class ConvertPageToPDFAction(BaseAction):
                 'type': 'convert_page_to_pdf_server_busy',
                 'page_id': self.page_id
             })
+
+    def per_update_convert(self):
+        file_names_dict = {}
+        blanks = set(re.findall(r'\{([^{]*?)\}', self.file_name))
+        col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
+        column_blanks = [blank for blank in blanks if blank in col_name_dict]
+        sql_row = self.auto_rule.get_sql_row()
+        file_name = self.fill_msg_blanks_with_sql(column_blanks, col_name_dict, sql_row)
+        file_names_dict[sql_row['_id']] = file_name
+        self.file_names_dict = file_names_dict
+        task_info = {
+            'dtable_uuid': self.auto_rule.dtable_uuid,
+            'page_id': self.page_id,
+            'row_ids': [sql_row['_id']],
+            'target_column_key': self.target_column_key,
+            'table_id': self.auto_rule.table_id,
+            'plugin_type': 'page-design',
+            'action_type': self.action_type,
+            'per_converted_callbacks': [self.upload_pdf_cb],
+            'all_converted_callbacks': [self.update_rows_cb]
+        }
+        try:
+            # put resources check to the place before convert page,
+            # because there is a distance between putting task to queue and converting page
+            conver_page_to_pdf_manager.add_task(task_info)
+        except Full:
+            self.auto_rule.append_warning({
+                'type': 'convert_page_to_pdf_server_busy',
+                'page_id': self.page_id
+            })
+
+    def do_action(self):
+        if not self.can_do_action():
+            return
+        if self.auto_rule.run_condition in CRON_CONDITIONS:
+            if self.auto_rule.trigger.get('condition') == CONDITION_PERIODICALLY_BY_CONDITION:
+                self.condition_cron_convert()
+        elif self.auto_rule.run_condition == PER_UPDATE:
+            self.per_update_convert()
         self.auto_rule.set_done_actions()
 
 
@@ -3635,6 +3670,8 @@ class AutomationRule:
                 return True
             return False
         elif action_type == 'convert_page_to_pdf':
+            if run_condition == PER_UPDATE:
+                return True
             if run_condition in CRON_CONDITIONS and trigger_condition == CONDITION_PERIODICALLY_BY_CONDITION:
                 return True
             return False
