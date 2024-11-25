@@ -268,11 +268,6 @@ class TaskManager(object):
 
     def query_status(self, task_id):
         task_result = self.task_results_map.pop(task_id, None)
-        # if task_result == 'success':
-        #     return True, None
-        # if isinstance(task_result, str) and task_result.startswith('error_'):
-        #     return True, task_result[6:]
-        # return False, None
         if not task_result:
             return False, None
         return True, task_result
