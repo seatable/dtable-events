@@ -6,7 +6,7 @@ from copy import deepcopy
 import markdown
 from dateutil import parser
 
-from dtable_events.notification_rules.utils import get_nickname_by_usernames
+from dtable_events.notification_rules.utils import get_nickname_by_usernames, get_department_name
 from dtable_events.utils.constants import ARRAY_FORMAL_COLUMNS, DURATION_ZERO_DISPLAY, ColumnTypes, DurationFormatsType, FormulaResultType
 
 
@@ -448,6 +448,18 @@ class RateMessageFormatter(TextMessageFormatter):
     pass
 
 
+class DepartmentSingleSelectMessageFormatter(TextMessageFormatter):
+
+    def format_message(self, value, db_session):
+        if not value:
+            return self.EMPTY_MESSAGE
+        try:
+            value = int(value)
+        except:
+            return self.EMPTY_MESSAGE
+        return get_department_name(value, db_session)
+
+
 formatter_map = {
     ColumnTypes.CHECKBOX: CheckboxMessageFormatter,
     ColumnTypes.IMAGE: ImageMessageFormatter,
@@ -471,7 +483,8 @@ formatter_map = {
     ColumnTypes.EMAIL: EmailMessageFormatter,
     ColumnTypes.DURATION: DurationMessageFormatter,
     ColumnTypes.RATE: RateMessageFormatter,
-    ColumnTypes.LINK_FORMULA: LinkFormulaMessageFormatter
+    ColumnTypes.LINK_FORMULA: LinkFormulaMessageFormatter,
+    ColumnTypes.DEPARTMENT_SINGLE_SELECT: DepartmentSingleSelectMessageFormatter
 }
 
 
@@ -487,7 +500,8 @@ def create_formatter_params(formatter_type, **kwargs):
         ColumnTypes.LINK_FORMULA,
         ColumnTypes.CREATOR,
         ColumnTypes.LAST_MODIFIER,
-        ColumnTypes.FORMULA
+        ColumnTypes.FORMULA,
+        ColumnTypes.DEPARTMENT_SINGLE_SELECT
     ]:
         params['db_session'] = db_session
     if formatter_type == ColumnTypes.LONG_TEXT:

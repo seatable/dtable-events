@@ -39,3 +39,22 @@ def get_nickname_by_usernames(usernames, db_session):
         logger.error('check nicknames error: %s', e)
 
     return users_dict
+
+
+def get_department_name(department_id, db_session):
+    cache_timeout = 60 * 60 * 24
+    cache_key = f'department:name:{department_id}'
+    department_name = cache.get(cache_key)
+    if department_name:
+        cache.set(cache_key, department_name, cache_timeout)
+        return department_name
+    sql = "SELECT name FROM departments_v2 WHERE id=:department_id"
+    try:
+        department = db_session.execute(sql, {'department_id': department_id}).fetchone()
+    except Exception as e:
+        logger.error('check department: %s name error: %s', department_id, e)
+        return ''
+    if not department:
+        return ''
+    cache.set(cache_key, department.name, cache_timeout)
+    return department.name
