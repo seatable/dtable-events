@@ -384,15 +384,19 @@ def query_status():
         return make_response(('task_id not found.', 404))
 
     try:
-        is_finished, error = task_manager.query_status(task_id)
+        is_finished, task_result = task_manager.query_status(task_id)
     except Exception as e:
         logger.debug(e)
         return make_response((e, 500))
 
-    if error:
-        return make_response((error, 500))
+    if task_result and not task_result.get('success'):
+        return make_response((task_result, 500))
 
-    return make_response(({'is_finished': is_finished}, 200))
+    return_result = {'is_finished': is_finished}
+    if isinstance(task_result, dict):
+        return_result.update(task_result)
+
+    return make_response((return_result, 200))
 
 
 @app.route('/cancel-task', methods=['GET'])

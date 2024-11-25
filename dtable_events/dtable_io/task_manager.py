@@ -268,11 +268,9 @@ class TaskManager(object):
 
     def query_status(self, task_id):
         task_result = self.task_results_map.pop(task_id, None)
-        if task_result == 'success':
-            return True, None
-        if isinstance(task_result, str) and task_result.startswith('error_'):
-            return True, task_result[6:]
-        return False, None
+        if not task_result:
+            return False, None
+        return True, task_result
 
     def convert_page_to_pdf(self, dtable_uuid, plugin_type, page_id, row_id, username):
         from dtable_events.dtable_io import convert_page_to_pdf
@@ -423,26 +421,33 @@ class TaskManager(object):
                 start_time = time.time()
 
                 # run
-                task[0](*task[1])
-                self.task_results_map[task_id] = 'success'
+                task_result = task[0](*task[1])
+                if isinstance(task_result, dict):
+                    task_result['success'] = True
+                else:
+                    task_result = {'success': True}
+                self.task_results_map[task_id] = task_result
 
                 finish_time = time.time()
                 dtable_io_logger.info('Run task success: %s cost %ds \n' % (task_info, int(finish_time - start_time)))
                 self.current_task_info.pop(task_id, None)
             except Exception as e:
-                self.task_results_map[task_id] = 'error_' + str(e.args[0])
+                self.task_results_map[task_id] = {
+                    'success': False,
+                    'error_msg': str(e.args[0])
+                }
                 if str(e.args[0]) in ('Excel format error', 'Number of cells returned exceeds the limit of 1 million', 'base_exceeds_limit'):
-                    dtable_io_logger.warning('Failed to handle task %s, error: %s \n' % (task_info, e))
+                    dtable_io_logger.warning('Failed to handle task %s args: %s error: %s \n' % (task_info, task[1], e))
                 elif str(e.args[0]).startswith('import_sync_common_dataset:'):
                     # Errors in import/sync common dataset, those have been record in real task code, so no duplicated error logs here
                     # Including source/destination table not found...
-                    dtable_io_logger.warning('Failed to handle task %s error: %s \n' % (task_info, e))
+                    dtable_io_logger.warning('Failed to handle task %s args: %s error: %s \n' % (task_info, task[1], e))
                 elif str(e.args[0]).startswith('import_table_from_base:'):
                     # Errors in import-table-from-base, those have been record in real task code, so no duplicated error logs here
-                    dtable_io_logger.warning('Failed to handle task %s error: %s \n' % (task_info, e))
+                    dtable_io_logger.warning('Failed to handle task %s args: %s error: %s \n' % (task_info, task[1], e))
                 else:
                     dtable_io_logger.exception(e)
-                    dtable_io_logger.error('Failed to handle task %s, error: %s \n' % (task_info, e))
+                    dtable_io_logger.error('Failed to handle task %s, args: %s, error: %s \n' % (task_info, task[1], e))
                 self.current_task_info.pop(task_id, None)
             finally:
                 self.tasks_map.pop(task_id, None)
