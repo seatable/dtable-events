@@ -27,7 +27,6 @@ from dtable_events.dtable_io.excel import parse_excel_csv_to_json, import_excel_
     import_excel_csv_add_table_by_dtable_server, update_parsed_file_by_dtable_server, \
     parse_update_excel_upload_excel_to_json, parse_update_csv_upload_csv_to_json, parse_and_import_excel_csv_to_dtable, \
     parse_and_import_excel_csv_to_table, parse_and_update_file_to_table, parse_and_append_excel_csv_to_table
-from dtable_events.convert_page.utils import get_chrome_data_dir, convert_page_to_pdf as _convert_page_to_pdf, get_driver
 from dtable_events.statistics.db import save_email_sending_records, batch_save_email_sending_records
 from dtable_events.data_sync.data_sync_utils import run_sync_emails
 from dtable_events.utils import get_inner_dtable_server_url, is_valid_email, uuid_str_to_36_chars
@@ -667,29 +666,8 @@ def send_notification_msg(emails, user_col_key, msg, dtable_uuid, username, tabl
         dtable_message_logger.info('Notification sending success!')
     return result
 
+
 def convert_page_to_pdf(dtable_uuid, plugin_type, page_id, row_id, username=None):
-    dtable_server_url = get_inner_dtable_server_url()
-    if not username:
-        username = 'dtable-events'
-    access_token = DTableServerAPI(username, dtable_uuid, dtable_server_url).internal_access_token
-    target_dir = '/tmp/dtable-io/convert-page-to-pdf'
-    if not os.path.isdir(target_dir):
-        os.makedirs(target_dir)
-    target_path = os.path.join(target_dir, '%s_%s_%s.pdf' % (dtable_uuid, page_id, row_id))
-
-    chrome_data_dir_name = f'{dtable_uuid}-{page_id}-{row_id}'
-    driver = get_driver(get_chrome_data_dir(chrome_data_dir_name))
-    try:
-        _convert_page_to_pdf(driver, dtable_uuid, plugin_type, page_id, row_id, access_token, target_path)
-    except Exception as e:
-        dtable_io_logger.exception('convert dtable: %s page: %s row: %s error: %s', dtable_uuid, page_id, row_id, e)
-    finally:
-        if os.path.exists(chrome_data_dir_name):
-            shutil.rmtree(chrome_data_dir_name)
-        driver.quit()
-
-
-def new_convert_page_to_pdf(dtable_uuid, plugin_type, page_id, row_id, username=None):
     dtable_server_url = get_inner_dtable_server_url()
     if not username:
         username = 'dtable-events'
@@ -704,11 +682,11 @@ def new_convert_page_to_pdf(dtable_uuid, plugin_type, page_id, row_id, username=
         if plugin_type == 'page-design':
             url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/row/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id, row_id)
         elif plugin_type == 'document':
-            pass
+            url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/document/%s/row/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id, row_id)
         if not url:
             return
         url += '?access-token=%s&need_convert=%s' % (access_token, 0)
-        print('url: ', url)
+        dtable_io_logger.debug('convert_page_to_pdf url: %s', url)
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch(headless=True)
             context = await browser.new_context()

@@ -273,10 +273,10 @@ class TaskManager(object):
         return True, task_result
 
     def convert_page_to_pdf(self, dtable_uuid, plugin_type, page_id, row_id, username):
-        from dtable_events.dtable_io import convert_page_to_pdf, new_convert_page_to_pdf
+        from dtable_events.dtable_io import convert_page_to_pdf
 
         task_id = str(uuid.uuid4())
-        task = (new_convert_page_to_pdf,
+        task = (convert_page_to_pdf,
                 (dtable_uuid, plugin_type, page_id, row_id, username))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task

@@ -22,8 +22,7 @@ from dtable_events.tasks.big_data_storage_stats_worker import BigDataStorageStat
 from dtable_events.data_sync.data_syncer import DataSyncer
 from dtable_events.workflow.workflow_actions import WorkflowActionsHandler
 from dtable_events.workflow.workflow_schedules_scanner import WorkflowSchedulesScanner
-# from dtable_events.convert_page.manager import conver_page_to_pdf_manager
-from dtable_events.convert_page.new_manager import conver_page_to_pdf_manager
+from dtable_events.convert_page.manager import conver_page_to_pdf_manager
 from dtable_events.api_calls.api_calls_counter import APICallsCounter
 from dtable_events.tasks.dtable_file_access_log_cleaner import DTableFileAccessLogCleaner
 from dtable_events.activities.dtable_update_handler import DTableUpdateHander
