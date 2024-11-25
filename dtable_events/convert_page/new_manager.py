@@ -133,10 +133,11 @@ class BrowserWorker(Thread):
                     dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, dtable_server_url)
                     url += '?access-token=%s&need_convert=%s' % (dtable_server_api.access_token, 0)
                     page = await context.new_page()
-                    page.on("request", lambda request: logger.info(f"Request: {request.method} {request.url}"))
-                    # page.on("console", lambda msg: logger.info(f"Console [{msg.type()}]: {msg.text()}"))
-                    await page.goto(url, wait_until="networkidle")
-                    await page.wait_for_load_state('load')
+                    page.on("request", lambda request: logger.debug(f"Request: {request.method} {request.url}"))
+                    page.on("response", lambda response: logger.debug(f"Response: {response.status} {response.url}"))
+                    page.on("console", lambda msg: logger.debug(f"Console [{msg.type}]: {msg.text}"))
+                    await page.goto(url, wait_until="load")
+                    await page.wait_for_load_state('networkidle')
                     pdf_content = await page.pdf(format='A4')
                     if action_type == 'convert_page_to_pdf':
                         for callback in per_converted_callbacks:

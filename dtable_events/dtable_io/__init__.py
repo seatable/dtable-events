@@ -1,9 +1,11 @@
+import asyncio
 import os
 import shutil
 import uuid
 
 import requests
 from datetime import datetime
+from playwright.async_api import async_playwright
 
 from seaserv import seafile_api
 
@@ -39,6 +41,9 @@ dtable_io_logger = setup_logger('dtable_events_io.log')
 dtable_message_logger = setup_logger('dtable_events_message.log')
 dtable_data_sync_logger = setup_logger('dtable_events_data_sync.log')
 dtable_plugin_email_logger = setup_logger('dtable_events_plugin_email.log')
+
+convert_pdf_loop = asyncio.new_event_loop()
+asyncio.set_event_loop(convert_pdf_loop)
 
 
 def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asset_dir_id, config):
@@ -682,6 +687,43 @@ def convert_page_to_pdf(dtable_uuid, plugin_type, page_id, row_id, username=None
         if os.path.exists(chrome_data_dir_name):
             shutil.rmtree(chrome_data_dir_name)
         driver.quit()
+
+
+def new_convert_page_to_pdf(dtable_uuid, plugin_type, page_id, row_id, username=None):
+    dtable_server_url = get_inner_dtable_server_url()
+    if not username:
+        username = 'dtable-events'
+    access_token = DTableServerAPI(username, dtable_uuid, dtable_server_url).internal_access_token
+    target_dir = '/tmp/dtable-io/convert-page-to-pdf'
+    if not os.path.isdir(target_dir):
+        os.makedirs(target_dir)
+    target_path = os.path.join(target_dir, '%s_%s_%s.pdf' % (dtable_uuid, page_id, row_id))
+
+    async def access_and_save():
+        url = ''
+        if plugin_type == 'page-design':
+            url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/row/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id, row_id)
+        elif plugin_type == 'document':
+            pass
+        if not url:
+            return
+        url += '?access-token=%s&need_convert=%s' % (access_token, 0)
+        print('url: ', url)
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(headless=True)
+            context = await browser.new_context()
+            page = await context.new_page()
+            try:
+                page.on("request", lambda request: dtable_io_logger.debug(f"Request: {request.method} {request.url}"))
+                page.on("response", lambda response: dtable_io_logger.debug(f"Response: {response.status} {response.url}"))
+                page.on("console", lambda msg: dtable_io_logger.debug(f"Console [{msg.type}]: {msg.text}"))
+                await page.goto(url, wait_until="load")
+                await page.wait_for_load_state('networkidle')
+                await page.pdf(path=target_path, format='A4')
+            except Exception as e:
+                dtable_io_logger.exception('dtable: %s plugin: %s page: %s row: %s error: %s', dtable_uuid, plugin_type, page_id, row_id, e)
+
+    convert_pdf_loop.run_until_complete(access_and_save())
 
 
 def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image=False):
