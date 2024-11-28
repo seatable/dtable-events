@@ -6,6 +6,7 @@ import uuid
 import requests
 from datetime import datetime
 from playwright.async_api import async_playwright
+from playwright._impl._errors import TimeoutError
 
 from seaserv import seafile_api
 
@@ -35,6 +36,7 @@ from dtable_events.utils.exception import ExcelFormatError
 from dtable_events.utils.email_sender import EmailSender
 from dtable_events.dtable_io.utils import clear_tmp_dir, clear_tmp_file, clear_tmp_files_and_dirs
 from dtable_events.app.log import setup_logger
+from dtable_events.convert_page.utils import get_pdf_print_options
 
 dtable_io_logger = setup_logger('dtable_events_io.log')
 dtable_message_logger = setup_logger('dtable_events_message.log')
@@ -696,8 +698,11 @@ def convert_page_to_pdf(dtable_uuid, plugin_type, page_id, row_id, username=None
                 page.on("response", lambda response: dtable_io_logger.debug(f"Response: {response.status} {response.url}"))
                 page.on("console", lambda msg: dtable_io_logger.debug(f"Console [{msg.type}]: {msg.text}"))
                 await page.goto(url, wait_until="load")
-                await page.wait_for_load_state('networkidle')
-                await page.pdf(path=target_path, format='A4')
+                await page.wait_for_load_state('networkidle', timeout=180*1000)
+                await page.pdf(path=target_path, **get_pdf_print_options())
+            except TimeoutError:
+                dtable_io_logger.exception('dtable: %s plugin: %s page: %s row: %s timeout', dtable_uuid, plugin_type, page_id, row_id)
+                await page.pdf(path=target_path, **get_pdf_print_options())
             except Exception as e:
                 dtable_io_logger.exception('dtable: %s plugin: %s page: %s row: %s error: %s', dtable_uuid, plugin_type, page_id, row_id, e)
 
