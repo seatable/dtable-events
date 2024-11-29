@@ -2440,23 +2440,6 @@ class BaseSQLGenerator(object):
             filter_conjunction_split = " %s " % filter_conjunction
             filter_string_list = []
             for filter_item in filters:
-                # column_key = filter_item.get('column_key')
-                # column_name = filter_item.get('column_name')
-                # if not (column_key or column_name):
-                #     continue
-                # column = column_key and self._get_column_by_key(column_key)
-                # if not column:
-                #     column = column_name and self._get_column_by_name(column_name)
-                # if not column:
-                #     raise ValueError('Column not found column_key: %s column_name: %s' % (column_key, column_name))
-                # column_type = column.get('type')
-                # operator_cls = _get_operator_by_type(column_type)
-                # if not operator_cls:
-                #     raise ValueError('filter: %s not support to sql' % filter_item)
-                # operator = operator_cls(column, filter_item)
-                # sql_condition = _filter2sqlslice(operator)
-                # if not sql_condition:
-                #     continue
                 sql_condition = self._filter_item_2_sql(filter_item)
                 if not sql_condition:
                     continue
