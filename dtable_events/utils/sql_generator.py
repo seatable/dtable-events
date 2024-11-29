@@ -2440,21 +2440,24 @@ class BaseSQLGenerator(object):
             filter_conjunction_split = " %s " % filter_conjunction
             filter_string_list = []
             for filter_item in filters:
-                column_key = filter_item.get('column_key')
-                column_name = filter_item.get('column_name')
-                if not (column_key or column_name):
-                    continue
-                column = column_key and self._get_column_by_key(column_key)
-                if not column:
-                    column = column_name and self._get_column_by_name(column_name)
-                if not column:
-                    raise ValueError('Column not found column_key: %s column_name: %s' % (column_key, column_name))
-                column_type = column.get('type')
-                operator_cls = _get_operator_by_type(column_type)
-                if not operator_cls:
-                    raise ValueError('filter: %s not support to sql' % filter_item)
-                operator = operator_cls(column, filter_item)
-                sql_condition = _filter2sqlslice(operator)
+                # column_key = filter_item.get('column_key')
+                # column_name = filter_item.get('column_name')
+                # if not (column_key or column_name):
+                #     continue
+                # column = column_key and self._get_column_by_key(column_key)
+                # if not column:
+                #     column = column_name and self._get_column_by_name(column_name)
+                # if not column:
+                #     raise ValueError('Column not found column_key: %s column_name: %s' % (column_key, column_name))
+                # column_type = column.get('type')
+                # operator_cls = _get_operator_by_type(column_type)
+                # if not operator_cls:
+                #     raise ValueError('filter: %s not support to sql' % filter_item)
+                # operator = operator_cls(column, filter_item)
+                # sql_condition = _filter2sqlslice(operator)
+                # if not sql_condition:
+                #     continue
+                sql_condition = self._filter_item_2_sql(filter_item)
                 if not sql_condition:
                     continue
                 filter_string_list.append(sql_condition)
@@ -2472,6 +2475,37 @@ class BaseSQLGenerator(object):
             group_conjunction_split.join(group_string_list)
         )
 
+    def _filter_item_2_sql(self, filter_item):
+        inner_filters = filter_item.get('filters')
+        if inner_filters and isinstance(inner_filters, list):
+            inner_filter_conjunction = filter_item.get('filter_conjunction', 'And')
+            inner_filter_condition_list = []
+            for inner_item in inner_filters:
+                sql_condition = self._filter_item_2_sql(inner_item)
+                if sql_condition:
+                    inner_filter_condition_list.append(sql_condition)
+            inner_filter_conjunction_split = f" {inner_filter_conjunction} "
+            return f"({inner_filter_conjunction_split.join(inner_filter_condition_list)})"
+        column_key = filter_item.get('column_key')
+        column_name = filter_item.get('column_name')
+        # skip when the column key or name is missing
+        if not (column_key or column_name):
+            return
+        column = column_key and self._get_column_by_key(column_key)
+        if not column:
+            column = column_name and self._get_column_by_name(column_name)
+        if not column:
+            raise ValueError('Column not found column_key: %s column_name: %s' % (column_key, column_name))
+        column_type = column.get('type')
+        operator_cls = _get_operator_by_type(column_type)
+        if not operator_cls:
+            raise ValueError('filter: %s not support to sql' % filter_item)
+        operator = operator_cls(column, filter_item)
+        sql_condition = _filter2sqlslice(operator)
+        if not sql_condition:
+            return
+        return sql_condition
+
     def _filter2sql(self):
         filter_conditions = self.filter_conditions
         filters = filter_conditions.get('filters', [])
@@ -2484,22 +2518,7 @@ class BaseSQLGenerator(object):
         filter_content = ''
         filter_conjunction_split = " %s " % filter_conjunction
         for filter_item in filters:
-            column_key = filter_item.get('column_key')
-            column_name = filter_item.get('column_name')
-            # skip when the column key or name is missing
-            if not (column_key or column_name):
-                continue
-            column = column_key and self._get_column_by_key(column_key)
-            if not column:
-                column = column_name and self._get_column_by_name(column_name)
-            if not column:
-                raise ValueError('Column not found column_key: %s column_name: %s' % (column_key, column_name))
-            column_type = column.get('type')
-            operator_cls = _get_operator_by_type(column_type)
-            if not operator_cls:
-                raise ValueError('filter: %s not support to sql' % filter_item)
-            operator = operator_cls(column, filter_item)
-            sql_condition = _filter2sqlslice(operator)
+            sql_condition = self._filter_item_2_sql(filter_item)
             if not sql_condition:
                 continue
             filter_string_list.append(sql_condition)
@@ -2624,3 +2643,18 @@ def statistic2sql(table, statistic_type, statistic, username='', id_in_org='', c
 def linkRecords2sql(current_table, link_column, link_record_ids, tables):
     sql_generator = LinkRecordsSQLGenerator(current_table, link_column, link_record_ids, tables)
     return sql_generator.to_sql()
+
+def is_user_filter(filter_item):
+    filter_predicate = filter_item.get('filter_predicate')
+    if filter_predicate in ['include_me', 'is_current_user_ID']:
+        return True
+    filter_term = filter_item.get('filter_term')
+    if filter_term in ['current_user_department', 'current_user_department_and_sub']:
+        return True
+    inner_filters = filter_item.get('filters')
+    if inner_filters and isinstance(inner_filters, list):
+        return any([is_user_filter(inner_filter_item) for inner_filter_item in inner_filters])
+    return False
+
+def has_user_filter(filters):
+    return any([is_user_filter(filter_item) for filter_item in filters])

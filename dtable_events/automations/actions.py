@@ -31,7 +31,8 @@ from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 from dtable_events.utils.dtable_db_api import DTableDBAPI, RowsQueryError, Request429Error
 from dtable_events.notification_rules.utils import get_nickname_by_usernames
-from dtable_events.utils.sql_generator import filter2sql, BaseSQLGenerator, ColumnFilterInvalidError
+from dtable_events.utils.sql_generator import filter2sql, BaseSQLGenerator, ColumnFilterInvalidError, \
+    has_user_filter, is_user_filter
 from dtable_events.utils.universal_app_api import UniversalAppAPI
 from dtable_events.utils.email_sender import EmailSender
 
@@ -3466,16 +3467,15 @@ class AutomationRule:
         filter_groups = []
 
         if view_filters:
-            for filter_item in view_filters:
-                if filter_item.get('filter_predicate') in ('include_me', 'is_current_user_ID'):
-                    raise RuleInvalidException('view filter has invalid filter', 'rule_view_filters_invalid')
+            if has_user_filter(view_filters):
+                raise RuleInvalidException('view filter has invalid filter', 'rule_view_filters_invalid')
             filter_groups.append({'filters': view_filters, 'filter_conjunction': view_filter_conjunction})
 
         if filters:
             # remove the duplicate filter which may already exist in view filter
             trigger_filters = []
             for filter_item in filters:
-                if filter_item.get('filter_predicate') in ('include_me', 'is_current_user_ID'):
+                if is_user_filter(filter_item):
                     raise RuleInvalidException('rule filter has invalid filter', 'rule_trigger_filters_invalid')
                 if filter_item not in view_filters:
                     trigger_filters.append(filter_item)

@@ -9,7 +9,7 @@ from sqlalchemy import text
 import jwt
 import requests
 
-from dtable_events.utils.sql_generator import filter2sql
+from dtable_events.utils.sql_generator import filter2sql, has_user_filter
 from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL
 from dtable_events.app.metadata_cache_managers import RuleInstantMetadataCacheManger, RuleIntervalMetadataCacheManager
 from dtable_events.utils import is_valid_email, get_inner_dtable_server_url
@@ -116,13 +116,10 @@ def list_rows_near_deadline_with_dtable_db(dtable_metadata, table_id, view_id, d
         'start': 0,
         'limit': 25
     }
-    new_filters = []
-    for item in filters:
-        if item.get('filter_predicate') in ('include_me', 'is_current_user_ID'):
-            return [], None, False
-        new_filters.append(item)
+    if has_user_filter(filters):
+        return [], None, False
     filter_conditions['filter_groups'] = [{
-        'filters': new_filters,
+        'filters': filters,
         'filter_conjunction': filter_conjunction
     }]
     filter_conditions['filter_groups'].append({
