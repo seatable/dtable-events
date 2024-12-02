@@ -27,11 +27,11 @@ def update_dtable_updated_at_time(db_session, app):
     if not time_dict:
         return
 
-    case_phrases = []
     dtable_uuids = list(time_dict.keys())
     step = 100
     for i in range(0, len(dtable_uuids), step):
         step_dtable_uuids = []
+        case_phrases = []
         for dtable_uuid in dtable_uuids[i: i+step]:
             dt = datetime.fromtimestamp(time_dict[dtable_uuid])
             case_item = '''WHEN uuid = '%s' THEN '%s' ''' % (dtable_uuid, str(dt))
