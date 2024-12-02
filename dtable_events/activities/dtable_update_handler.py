@@ -31,15 +31,15 @@ def update_dtable_updated_at_time(db_session, app):
     dtable_uuids = list(time_dict.keys())
     step = 100
     for i in range(0, len(dtable_uuids), step):
+        step_dtable_uuids = []
         for dtable_uuid in dtable_uuids[i: i+step]:
             dt = datetime.fromtimestamp(time_dict[dtable_uuid])
             case_item = '''WHEN uuid = '%s' THEN '%s' ''' % (dtable_uuid, str(dt))
             case_phrases.append(case_item)
+            step_dtable_uuids.append("'%s'" % dtable_uuid)
         case_phrases.append('''ELSE updated_at''')
         try:
-            dtable_uuids = time_dict.keys()
-            dtable_uuids = ["'%s'" % uid for uid in time_dict.keys()]
-            dtable_uuid_str = ', '.join(dtable_uuids)
+            dtable_uuid_str = ', '.join(step_dtable_uuids)
             batch_set_updated_time_sql = '''
                 UPDATE dtables 
                 SET updated_at = CASE
