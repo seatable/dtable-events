@@ -28,16 +28,29 @@ class BrowserWorker(Thread):
         self.context = None
         self.pages = pages
 
+        self.is_browser_alive = False
+
         self.loop = asyncio.new_event_loop()  # each thread has own event loop
 
+    def disconnect_browser_cb(self):
+        self.is_browser_alive = False
+        self.browser = None
+        self.context = None
+        logger.error(f"Thread-{self.thread_id} browser disconnected... will use new browser")
+
     async def get_context(self):
+        if not self.is_browser_alive:
+            logger.info(f"Thread-{self.thread_id} browser make a new browser...")
+
         if self.context:
             return self.context
 
         if not self.playwright:
             self.playwright = await async_playwright().start()
         if not self.browser:
+            self.is_browser_alive = True
             self.browser = await self.playwright.chromium.launch(headless=True)
+            self.browser.on('disconnected', self.disconnect_browser_cb)
         self.context = await self.browser.new_context()
         return self.context
 
@@ -134,8 +147,6 @@ class BrowserWorker(Thread):
         table = resources.get('table')
         target_column = resources.get('target_column')
 
-        context = await self.get_context()
-
         # convert
         # open all tabs of rows pages by pages
         # wait render and convert to pdf one by one
@@ -143,6 +154,7 @@ class BrowserWorker(Thread):
         dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, dtable_server_url)
         for i in range(0, len(row_ids), pages):
             tasks = []
+            context = await self.get_context()
             # open rows
             for row_id in row_ids[i: i+pages]:
                 url = ''
@@ -157,7 +169,7 @@ class BrowserWorker(Thread):
             results = await asyncio.gather(*tasks, return_exceptions=True)
             for result in results:
                 if isinstance(result, Exception):
-                    logger.exception(result)
+                    logger.exception(f'Thread-{self.thread_id} convert rows error: {e}')
 
         # callbacks
         if action_type == 'convert_page_to_pdf':
