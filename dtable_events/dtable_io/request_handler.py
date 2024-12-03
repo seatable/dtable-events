@@ -377,17 +377,17 @@ def add_append_excel_csv_upload_file_task():
 def query_status():
     is_valid, error = check_auth_token(request)
     if not is_valid:
-        return make_response((error, 403))
+        return make_response(({'error_msg': error}, 403))
 
     task_id = request.args.get('task_id')
     if not task_manager.is_valid_task_id(task_id):
-        return make_response(('task_id not found.', 404))
+        return make_response(({'error_msg': 'task_id not found.'}, 404))
 
     try:
         is_finished, task_result = task_manager.query_status(task_id)
     except Exception as e:
-        logger.debug(e)
-        return make_response((e, 500))
+        logger.exception(e)
+        return make_response(({'error_msg': 'Internal Server Error'}, 500))
 
     if task_result and not task_result.get('success'):
         return make_response((task_result, 500))

@@ -251,10 +251,14 @@ def filter_user_activate_tables(session, days, uuid_list, to_tz):
 
 
 def get_table_activities(session, uuid_list, days, start, limit, to_tz):
+    if not uuid_list:
+        return []
 
     activities = list()
     try:
         uuid_list = filter_user_activate_tables(session, days, uuid_list, to_tz)
+        if not uuid_list:
+            return []
         start_utc_str = get_shifted_days_ago(to_tz, days).astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
         # query activities
         stmt = select(
