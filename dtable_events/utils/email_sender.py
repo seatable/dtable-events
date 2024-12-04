@@ -466,11 +466,15 @@ class EmailSender:
 
         self.email_provider = detail.get('email_provider', 'GeneralEmailProvider')
 <<<<<<< HEAD
+<<<<<<< HEAD
         if self.email_provider == 'GeneralEmailProvider':
             self.sender = SMTPSendEmail(self.db_session, self.account_id, detail, self.operator)
         elif self.email_provider == 'Gmail':
 =======
         if self.email_provider in ['GeneralEmailProvider', 'LOGIN']:
+=======
+        if self.email_provider == 'GeneralEmailProvider':
+>>>>>>> 7318dac (wip: support oauth email account send email)
             self.sender = SMTPSendEmail(self.db_session, self.account_id, detail, self.operator)
         elif self.email_provider == 'GmailOAuth':
 >>>>>>> 5dbaf57 (wip: support oauth email account send email)
