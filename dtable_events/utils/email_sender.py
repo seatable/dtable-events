@@ -470,6 +470,7 @@ class EmailSender:
         if self.email_provider == 'GeneralEmailProvider':
             self.sender = SMTPSendEmail(self.db_session, self.account_id, detail, self.operator)
         elif self.email_provider == 'Gmail':
+<<<<<<< HEAD
 =======
         if self.email_provider in ['GeneralEmailProvider', 'LOGIN']:
 =======
@@ -478,6 +479,8 @@ class EmailSender:
             self.sender = SMTPSendEmail(self.db_session, self.account_id, detail, self.operator)
         elif self.email_provider == 'GmailOAuth':
 >>>>>>> 5dbaf57 (wip: support oauth email account send email)
+=======
+>>>>>>> a4b332b (opt: Gmail_OAuth -> Gmail)
             self.sender = GoogleAPISendEmail(self.db_session, self.account_id, detail, self.operator)
         elif self.email_provider == 'Outlook':
             self.sender = MS365APISendEmail(self.db_session, self.account_id, detail, self.operator)
