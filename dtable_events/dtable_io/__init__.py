@@ -895,8 +895,8 @@ def plugin_email_send_email(context, config=None):
     thread_table_name = table_info.get('thread_table_name')
 
     # send email
-    sender = EmailSender(account_id, config)
-    result = sender.send(email_info, username)
+    sender = EmailSender(account_id, username, config)
+    result = sender.send(email_info)
 
     if result.get('err_msg'):
         dtable_plugin_email_logger.error('plugin email send failed, email account id: %s, username: %s', account_id, username)

@@ -501,8 +501,8 @@ class SendEmailAction(BaseAction):
         }
         try:
             send_info['message'] = self.generate_real_msg(self.msg, sql_row)
-            sender = EmailSender(self.account_id, db_session=self.context.db_session)
-            sender.send(send_info, self.send_from)
+            sender = EmailSender(self.account_id, self.send_from, db_session=self.context.db_session)
+            sender.send(send_info)
         except Exception as e:
             logger.exception(e)
             logger.error('send email error: %s send_info: %s', e, send_info)
