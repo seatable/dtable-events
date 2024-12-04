@@ -465,7 +465,7 @@ class EmailSender:
             raise ThirdPartyAccountInvalid('Third party account %s is invalid.' % self.account_id)
 
         self.email_provider = detail.get('email_provider', 'GeneralEmailProvider')
-        if self.email_provider in ['GeneralEmailProvider', 'LOGIN']:
+        if self.email_provider == 'GeneralEmailProvider':
             self.sender = SMTPSendEmail(self.db_session, self.account_id, detail, self.operator)
         elif self.email_provider == 'GmailOAuth':
             self.sender = GoogleAPISendEmail(self.db_session, self.account_id, detail, self.operator)
