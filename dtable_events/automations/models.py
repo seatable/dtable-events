@@ -11,7 +11,6 @@ import json
 logger = logging.getLogger(__name__)
 
 ENCRYPT_KEYS = ['password', 'webhook_url', 'api_key', 'secret_key', 'repo_api_token', 'client_secret']
-
 def _encrypt_detail(detail):
     detail_clone = deepcopy(detail)
     cryptor = AESPasswordHasher()
@@ -25,7 +24,7 @@ def _encrypt_detail(detail):
     except Exception as e:
         logger.error(e)
         return None
-    
+
 def _decrypt_detail(detail):
     detail_clone = deepcopy(detail)
     cryptor = AESPasswordHasher()
