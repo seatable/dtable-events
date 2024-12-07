@@ -648,8 +648,6 @@ def add_email_sending_task():
     image_cid_url_map = data.get('image_cid_url_map', {})
     if image_cid_url_map and not isinstance(image_cid_url_map, dict):
         image_cid_url_map = json.loads(image_cid_url_map)
-
-    auth_type = data.get('auth_type')
     
     account_id = data.get('account_id')
 

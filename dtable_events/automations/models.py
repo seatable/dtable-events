@@ -10,32 +10,34 @@ import json
 
 logger = logging.getLogger(__name__)
 
+ENCRYPT_KEYS = ['password', 'webhook_url', 'api_key', 'secret_key', 'repo_api_token', 'client_secret']
+def _encrypt_detail(detail):
+    detail_clone = deepcopy(detail)
+    cryptor = AESPasswordHasher()
+    try:
+        encrypted_details = {
+            key: cryptor.encode(detail_clone[key])
+            for key in ENCRYPT_KEYS if key in detail_clone and detail_clone[key]
+        }
+        detail_clone.update(encrypted_details)
+        return json.dumps(detail_clone)
+    except Exception as e:
+        logger.error(e)
+        return None
 
 def _decrypt_detail(detail):
     detail_clone = deepcopy(detail)
     cryptor = AESPasswordHasher()
     try:
-        if 'password' in detail_clone.keys():
-            password = detail_clone.get('password')
-            if password:
-                detail_clone.update({'password': cryptor.decode(password)})
-        if 'webhook_url' in detail.keys():
-            webhook_url = detail.get('webhook_url')
-            if webhook_url:
-                detail_clone.update({'webhook_url': cryptor.decode(webhook_url)})
-        if 'api_key' in detail.keys():
-            api_key = detail.get('api_key')
-            if api_key:
-                detail_clone.update({'api_key': cryptor.decode(api_key)})
-        if 'secret_key' in detail.keys():
-            secret_key = detail.get('secret_key')
-            if secret_key:
-                detail_clone.update({'secret_key': cryptor.decode(secret_key)})
+        decrypted_details = {
+            key: cryptor.decode(detail_clone[key])
+            for key in ENCRYPT_KEYS if key in detail_clone and detail_clone[key]
+        }
+        detail_clone.update(decrypted_details)
         return detail_clone
     except Exception as e:
         logger.error(e)
         return None
-
 
 class BoundThirdPartyAccounts(Base):
     __tablename__ = 'bound_third_party_accounts'
@@ -64,6 +66,16 @@ def get_third_party_account(session, account_id):
     account = session.scalars(stmt).first()
     if account:
         return account.to_dict()
+    else:
+        logger.warning("Third party account %s does not exists." % account_id)
+        return None
+    
+def update_third_party_account_detail(session, account_id, new_detail):
+    stmt = select(BoundThirdPartyAccounts).where(BoundThirdPartyAccounts.id == account_id).limit(1)
+    account = session.scalars(stmt).first()
+    if account:
+        account.detail = _encrypt_detail(new_detail)
+        session.commit()
     else:
         logger.warning("Third party account %s does not exists." % account_id)
         return None

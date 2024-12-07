@@ -1359,8 +1359,8 @@ class SendEmailAction(BaseAction):
         })
         logger.debug('send_info: %s', send_info)
         try:
-            sender = EmailSender(self.account_id, db_session=self.auto_rule.db_session)
-            sender.send(send_info, 'automation-rules')
+            sender = EmailSender(self.account_id, 'automation-rules', db_session=self.auto_rule.db_session)
+            sender.send(send_info)
         except Exception as e:
             logger.error('send email error: %s', e)
 
@@ -1372,8 +1372,8 @@ class SendEmailAction(BaseAction):
             send_info['image_cid_url_map'] = self.image_cid_url_map
             send_info.pop('message', None)
         try:
-            sender = EmailSender(self.account_id, db_session=self.auto_rule.db_session)
-            sender.send(send_info, 'automation-rules')
+            sender = EmailSender(self.account_id, 'automation-rules', db_session=self.auto_rule.db_session)
+            sender.send(send_info)
         except Exception as e:
             logger.error('send email error: %s', e)
 
@@ -1434,8 +1434,8 @@ class SendEmailAction(BaseAction):
         step = 10
         for i in range(0, len(send_info_list), step):
             try:
-                sender = EmailSender(self.account_id, db_session=self.auto_rule.db_session)
-                sender.batch_send(send_info_list[i: i+step], 'automation-rules')
+                sender = EmailSender(self.account_id, 'automation-rules', db_session=self.auto_rule.db_session)
+                sender.batch_send(send_info_list[i: i+step])
             except Exception as e:
                 logger.error('batch send email error: %s', e)
 
@@ -3221,8 +3221,8 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
             'file_contents': {file_name: pdf_content}
         }
         try:
-            sender = EmailSender(account_id, conver_page_to_pdf_manager.config)
-            sender.send(send_info, 'automation-rules')
+            sender = EmailSender(account_id, 'automation-rules', conver_page_to_pdf_manager.config)
+            sender.send(send_info)
         except Exception as e:
             logger.exception('rule: %s dtable: %s page: %s send email: %s error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.page_id, send_info, e)
 
