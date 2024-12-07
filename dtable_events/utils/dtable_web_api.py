@@ -160,7 +160,7 @@ class DTableWebAPI:
             'operator': operator
         }, headers=headers, timeout=10)
         return parse_response(response)
-    
+
     def get_users_common_info(self, user_id_list):
         url = self.dtable_web_service_url + '/api/v2.1/users-common-info/'
         json_data = {
@@ -179,7 +179,10 @@ class DTableWebAPI:
         url = '%(server_url)s/api/v2.1/internal-notifications/?from=dtable_events' % {
             'server_url': self.dtable_web_service_url
         }
-        token = jwt.encode({}, DTABLE_PRIVATE_KEY, algorithm='HS256')
+        payload = {
+            'exp': int(time.time()) + 60
+        }
+        token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
         headers = {'Authorization': 'Token ' + token}
         resp = requests.post(url, json={
             'detail': detail,
@@ -187,7 +190,7 @@ class DTableWebAPI:
             'type': msg_type
         }, headers=headers)
         return parse_response(resp)
-    
+
     def internal_submit_row_workflow(self, workflow_token, row_id, rule_id=None):
         logger.debug('internal submit row workflow token: %s row_id: %s rule_id: %s', workflow_token, row_id, rule_id)
         url = '%(server_url)s/api/v2.1/workflows/%(workflow_token)s/internal-task-submit/' % {
@@ -201,6 +204,10 @@ class DTableWebAPI:
         }
         if rule_id:
             data['automation_rule_id'] = rule_id
-        header_token = 'Token ' + jwt.encode({'token': workflow_token}, DTABLE_PRIVATE_KEY, 'HS256')
+        payload = {
+            'exp': int(time.time()) + 60,
+            'token': workflow_token
+        }
+        header_token = 'Token ' + jwt.encode(payload, DTABLE_PRIVATE_KEY, 'HS256')
         resp = requests.post(url, data=data, headers={'Authorization': header_token}, timeout=30)
         return parse_response(resp)
