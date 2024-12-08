@@ -23,6 +23,7 @@ from dtable_events.data_sync.data_syncer import DataSyncer
 from dtable_events.workflow.workflow_actions import WorkflowActionsHandler
 from dtable_events.workflow.workflow_schedules_scanner import WorkflowSchedulesScanner
 from dtable_events.convert_page.manager import conver_page_to_pdf_manager
+from dtable_events.convert_page.process_monitor import browser_monitor
 from dtable_events.api_calls.api_calls_counter import APICallsCounter
 from dtable_events.tasks.dtable_file_access_log_cleaner import DTableFileAccessLogCleaner
 from dtable_events.activities.dtable_update_handler import DTableUpdateHander
@@ -107,3 +108,4 @@ class App(object):
             self._virus_scanner.start()                      # default False
             # convert pdf manager
             conver_page_to_pdf_manager.start()               # always True
+            browser_monitor.start()                          # always True
