@@ -36,6 +36,7 @@ from dtable_events.utils.exception import ExcelFormatError
 from dtable_events.utils.email_sender import EmailSender
 from dtable_events.dtable_io.utils import clear_tmp_dir, clear_tmp_file, clear_tmp_files_and_dirs
 from dtable_events.app.log import setup_logger
+from dtable_events.convert_page.process_monitor import browser_monitor
 from dtable_events.convert_page.utils import get_pdf_print_options
 
 dtable_io_logger = setup_logger('dtable_events_io.log')
@@ -693,6 +694,8 @@ def convert_page_to_pdf(dtable_uuid, plugin_type, page_id, row_id, username=None
             browser = await playwright.chromium.launch(headless=True)
             context = await browser.new_context()
             page = await context.new_page()
+            pid = browser._impl_obj._connection._transport._proc.pid
+            browser_monitor.add_pid_info({pid: {'name': f"dtable-io dtable_uuid: {dtable_uuid} plugin: {plugin_type} page_id: {page_id} row_id: {row_id}"}})
             try:
                 page.on("request", lambda request: dtable_io_logger.debug(f"Request: {request.method} {request.url}"))
                 page.on("response", lambda response: dtable_io_logger.debug(f"Response: {response.status} {response.url}"))

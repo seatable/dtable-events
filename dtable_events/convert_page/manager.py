@@ -7,6 +7,7 @@ from playwright.async_api import async_playwright
 from playwright._impl._errors import TimeoutError
 
 from dtable_events.app.config import INNER_DTABLE_DB_URL, DTABLE_WEB_SERVICE_URL
+from dtable_events.convert_page.process_monitor import browser_monitor
 from dtable_events.convert_page.utils import get_pdf_print_options
 from dtable_events.utils import get_inner_dtable_server_url, get_opt_from_conf_or_env, uuid_str_to_36_chars
 from dtable_events.utils.dtable_db_api import DTableDBAPI
@@ -29,6 +30,7 @@ class BrowserWorker(Thread):
         self.pages = pages
 
         self.is_browser_alive = False
+        self.browser_pid = None
 
         self.loop = asyncio.new_event_loop()  # each thread has own event loop
 
@@ -52,6 +54,8 @@ class BrowserWorker(Thread):
             self.browser = await self.playwright.chromium.launch(headless=True)
             self.browser.on('disconnected', self.disconnect_browser_cb)
         self.context = await self.browser.new_context()
+        self.browser_pid = self.browser._impl_obj._connection._transport._proc.pid
+        browser_monitor.add_pid_info({self.browser_pid: {'name': f"BrowserWorker: Thread - {self.thread_id}"}})
         return self.context
 
     def check_resources(self, dtable_uuid, plugin_type, page_id, table_id, target_column_key, row_ids):
@@ -249,10 +253,13 @@ class BrowserWorker(Thread):
             try:
                 await self.browser.close()
             except Exception as e:
-                logger.exception(f'do convert Thread-{self.thread_id} close context error: {e}')
+                logger.exception(f'do convert Thread-{self.thread_id} close browser error: {e}')
             finally:
                 self.context = None
                 self.browser = None
+        finally:
+            if self.browser_pid:
+                browser_monitor.remove_pid(self.browser_pid)
 
     def run(self):
         asyncio.set_event_loop(self.loop)
