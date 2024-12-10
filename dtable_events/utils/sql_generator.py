@@ -62,6 +62,8 @@ class Operator(object):
         self.filter_term = self.filter_item.get('filter_term', '')
         self.filter_term_modifier = self.filter_item.get('filter_term_modifier', '')
         self.case_sensitive = self.filter_item.get('case_sensitive', False)
+        self.current_user_department = self.filter_item.get('current_user_department', [])
+        self.current_user_department_and_sub = self.filter_item.get('current_user_department_and_sub', [])
 
     def escape_string(self, s: str):
         s = s.replace("'", "''")        # convert '
@@ -281,60 +283,80 @@ class DepartmentSingleSelectOperator(Operator):
     def op_is(self):
         if not self.filter_term:
             return ''
-        filter_term = self.filter_term
-        if not filter_term:
-            return ''
-        if isinstance(filter_term, list):
-            filter_term_str = ", ".join(map(str, filter_term))
-            return "`%s` %s (%s)" % (
-                self.column_name,
-                'in',
-                filter_term_str
-            )
-        return "`%s` %s %s" % (
-            self.column_name,
-            '=',
-            filter_term
-        )
+
+        if self.filter_term == 'current_user_department':
+            if not self.current_user_department:
+                return 'false'
+            filter_term_str = "(%s)" % ', '.join([str(item) for item in self.current_user_department])
+            return f"`{self.column_name}` IN {filter_term_str}"
+
+        if self.filter_term == 'current_user_department_and_sub':
+            if not self.current_user_department_and_sub:
+                return 'false'
+            filter_term_str = "(%s)" % ', '.join([str(item) for item in self.current_user_department_and_sub])
+            return f"`{self.column_name}` IN {filter_term_str}"
+
+        return f"`{self.column_name}` = {self.filter_term}"
 
     def op_is_not(self):
         if not self.filter_term:
             return ''
-        filter_term = self.filter_term
-        if isinstance(filter_term, list):
-            filter_term_str = ", ".join(map(str, filter_term))
-            return "`%s` %s (%s)" % (
-                self.column_name,
-                'not in',
-                filter_term_str
-            )
-        return "`%s` %s %s" % (
-            self.column_name,
-            '<>',
-            filter_term
-        )
+
+        if self.filter_term == 'current_user_department':
+            if not self.current_user_department:
+                return 'true'
+            filter_term_str = "(%s)" % ', '.join([str(item) for item in self.current_user_department])
+            return f"`{self.column_name}` NOT IN {filter_term_str}"
+
+        if self.filter_term == 'current_user_department_and_sub':
+            if not self.current_user_department_and_sub:
+                return 'true'
+            filter_term_str = "(%s)" % ', '.join([str(item) for item in self.current_user_department_and_sub])
+            return f"`{self.column_name}` NOT IN {filter_term_str}"
+
+        return f"`{self.column_name}` <> {self.filter_term}"
 
     def op_is_any_of(self):
-        if not self.filter_term or not isinstance(self.filter_term, list):
+        if not self.filter_term:
             return ''
-        filter_term = self.filter_term
-        filter_term_str = ", ".join(map(str, filter_term))
-        return "`%s` %s (%s)" % (
-            self.column_name,
-            'in',
-            filter_term_str
-        )
+
+        real_filter_term = []
+        for item in self.filter_term:
+            if item == 'current_user_department':
+                real_filter_term.extend(self.current_user_department)
+                continue
+            if item == 'current_user_department_and_sub':
+                real_filter_term.extend(self.current_user_department_and_sub)
+                continue
+            real_filter_term.append(item)
+
+        if not real_filter_term:
+            return 'false'
+
+        filter_term_str = "(%s)" % ', '.join([str(item) for item in real_filter_term])
+
+        return f"`{self.column_name}` IN {filter_term_str}"
 
     def op_is_none_of(self):
-        if not self.filter_term or not isinstance(self.filter_term, list):
+        if not self.filter_term:
             return ''
-        filter_term = self.filter_term
-        filter_term_str = ", ".join(map(str, filter_term))
-        return "`%s` %s (%s)" % (
-            self.column_name,
-            'not in',
-            filter_term_str
-        )
+
+        real_filter_term = []
+        for item in self.filter_term:
+            if item == 'current_user_department':
+                real_filter_term.extend(self.current_user_department)
+                continue
+            if item == 'current_user_department_and_sub':
+                real_filter_term.extend(self.current_user_department_and_sub)
+                continue
+            real_filter_term.append(item)
+
+        if not real_filter_term:
+            return 'true'
+
+        filter_term_str = "(%s)" % ', '.join([str(item) for item in real_filter_term])
+
+        return f"`{self.column_name}` NOT IN {filter_term_str}"
 
 
 class SingleSelectOperator(Operator):
@@ -427,43 +449,87 @@ class DepartmentMultipleSelectOperator(Operator):
 
     def op_has_any_of(self):
         if not self.filter_term:
-            return ""
-        filter_term = self.filter_term
-        filter_term_str = ', '.join(map(str, filter_term))
-        return "`%(column_name)s` in (%(filter_term_str)s)" % ({
-            "column_name": self.column_name,
-            "filter_term_str": filter_term_str
-        })
+            return ''
+
+        real_filter_term = []
+        for item in self.filter_term:
+            if item == 'current_user_department':
+                real_filter_term.extend(self.current_user_department)
+                continue
+            if item == 'current_user_department_and_sub':
+                real_filter_term.extend(self.current_user_department_and_sub)
+                continue
+            real_filter_term.append(item)
+
+        if not real_filter_term:
+            return ''
+
+        filter_term_str = "(%s)" % ', '.join([str(item) for item in real_filter_term])
+
+        return f"`{self.column_name}` IN {filter_term_str}"
 
     def op_has_none_of(self):
         if not self.filter_term:
-            return ""
-        filter_term = self.filter_term
-        filter_term_str = ', '.join(map(str, filter_term))
-        return "`%(column_name)s` has none of (%(filter_term_str)s)" % ({
-            "column_name": self.column_name,
-            "filter_term_str": filter_term_str
-        })
+            return ''
+
+        real_filter_term = []
+        for item in self.filter_term:
+            if item == 'current_user_department':
+                real_filter_term.extend(self.current_user_department)
+                continue
+            if item == 'current_user_department_and_sub':
+                real_filter_term.extend(self.current_user_department_and_sub)
+                continue
+            real_filter_term.append(item)
+
+        if not real_filter_term:
+            return ''
+
+        filter_term_str = "(%s)" % ', '.join([str(item) for item in real_filter_term])
+
+        return f"`{self.column_name}` NOT IN {filter_term_str}"
 
     def op_has_all_of(self):
         if not self.filter_term:
-            return ""
-        filter_term = self.filter_term
-        filter_term_str = ', '.join(map(str, filter_term))
-        return "`%(column_name)s` has all of (%(filter_term_str)s)" % ({
-            "column_name": self.column_name,
-            "filter_term_str": filter_term_str
-        })
+            return ''
+
+        real_filter_term = []
+        for item in self.filter_term:
+            if item == 'current_user_department':
+                real_filter_term.extend(self.current_user_department)
+                continue
+            if item == 'current_user_department_and_sub':
+                real_filter_term.extend(self.current_user_department_and_sub)
+                continue
+            real_filter_term.append(item)
+
+        if not real_filter_term:
+            return ''
+
+        filter_term_str = "(%s)" % ', '.join([str(item) for item in real_filter_term])
+
+        return f"`{self.column_name}` HAS ALL OF {filter_term_str}"
 
     def op_is_exactly(self):
         if not self.filter_term:
-            return ""
-        filter_term = self.filter_term
-        filter_term_str = ', '.join(map(str, filter_term))
-        return "`%(column_name)s` is exactly (%(filter_term_str)s)" % ({
-            "column_name": self.column_name,
-            "filter_term_str": filter_term_str
-        })
+            return ''
+
+        real_filter_term = []
+        for item in self.filter_term:
+            if item == 'current_user_department':
+                real_filter_term.extend(self.current_user_department)
+                continue
+            if item == 'current_user_department_and_sub':
+                real_filter_term.extend(self.current_user_department_and_sub)
+                continue
+            real_filter_term.append(item)
+
+        if not real_filter_term:
+            return ''
+
+        filter_term_str = "(%s)" % ', '.join([str(item) for item in real_filter_term])
+
+        return f"`{self.column_name}` IS EXACTLY {filter_term_str}"
 
 class MultipleSelectOperator(Operator):
     SUPPORT_FILTER_PREDICATE = [
@@ -1222,18 +1288,13 @@ class StatisticSQLGenerator(object):
                 if item.get('filter_predicate') == 'is_current_user_ID':
                     item['filter_term'] = id_in_org
                 if filter_term == 'current_user_department':
-                    item['filter_term'] = current_user_department_ids
+                    item['current_user_department'] = current_user_department_ids
                 if filter_term == 'current_user_department_and_sub':
-                    item['filter_term'] = current_user_department_and_sub_ids
+                    item['current_user_department_and_sub'] = current_user_department_and_sub_ids
                 if isinstance(filter_term, list):
                     if 'current_user_department' in filter_term or 'current_user_department_and_sub' in filter_term:
-                        for i, term in enumerate(filter_term):
-                            if term == 'current_user_department':
-                                filter_term[i] = current_user_department_ids
-                            elif term == 'current_user_department_and_sub':
-                                filter_term[i] = current_user_department_and_sub_ids
-                        flat_result = [item for sublist in filter_term for item in (sublist if isinstance(sublist, list) else [sublist])]
-                        item['filter_term'] = list(set(flat_result))
+                        item['current_user_department'] = current_user_department_ids
+                        item['current_user_department_and_sub'] = current_user_department_and_sub_ids
         self.filters = filters
 
         filter_conjunction = statistic.get('filter_conjunction', 'and')
