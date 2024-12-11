@@ -1,6 +1,7 @@
 import base64
 import logging
 import os
+from django.utils.encoding import force_str
 try:
     from Crypto.Cipher import AES
 except ImportError:
@@ -34,6 +35,10 @@ class AESPasswordHasher:
         if not secret:
             secret = SECRET_KEY[:BLOCK_SIZE]
         self.cipher = AES.new(secret.encode('utf-8'), AES.MODE_ECB)
+
+    def encode(self, password):
+        password = force_str(password)
+        return "%s$%s" % (self.algorithm, EncodeAES(self.cipher, password))
 
     def decode(self, encoded):
         algorithm, data = encoded.split('$', 1)
