@@ -1,4 +1,5 @@
 import json
+import logging.handlers
 
 import requests
 import os
@@ -20,7 +21,7 @@ from urllib.parse import quote as urlquote
 from sqlalchemy import text
 from seaserv import seafile_api
 
-from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_FILE_SERVER_ROOT, ENABLE_SEATABLE_EVENTS_LOGS_TO_STDOUT
+from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_FILE_SERVER_ROOT
 from dtable_events.dtable_io.external_app import APP_USERS_COUMNS_TYPE_MAP, match_user_info, update_app_sync, \
     get_row_ids_for_delete, get_app_users
 from dtable_events.dtable_io.task_manager import task_manager
@@ -43,13 +44,13 @@ def setup_logger(logname):
     # logs to file
     logdir = os.path.join(os.environ.get('LOG_DIR', ''))
     log_file = os.path.join(logdir, logname)
-    handler = handlers.TimedRotatingFileHandler(log_file, when='MIDNIGHT', interval=1, backupCount=7)
+    handler = logging.handlers.TimedRotatingFileHandler(log_file, when='MIDNIGHT', interval=1, backupCount=7)
     formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
     handler.setFormatter(formatter)
     handler.addFilter(logging.Filter(logname))
     logger.addHandler(handler)
 
-    if ENABLE_SEATABLE_EVENTS_LOGS_TO_STDOUT:
+    if os.environ.get('SEATABLE_LOG_TO_STDOUT', False):
         # logs to stdout
         logger_component_name = logname.split('.')[0]
         stdout_formatter = logging.Formatter(f'[{logger_component_name}]' + ' [%(asctime)s] [%(levelname)s] %(message)s')
