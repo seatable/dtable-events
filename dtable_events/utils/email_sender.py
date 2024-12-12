@@ -17,10 +17,10 @@ from abc import ABC, abstractmethod
 
 dtable_message_logger = setup_logger('dtable_events_message.log')
 
-class ThirdPartyAccountNotFound(BaseException):
+class ThirdPartyAccountNotFound(Exception):
     pass
 
-class ThirdPartyAccountInvalid(BaseException):
+class ThirdPartyAccountInvalid(Exception):
     pass
 
 class _SendEmailBaseClass(ABC):
@@ -128,7 +128,7 @@ class SMTPSendEmail(_SendEmailBaseClass):
         self.sender_email = detail.get('sender_email')
         self.operator = operator
 
-        if not all([self.email_host,  self.email_port, self.host_user, self.password, self.sender_name, self.sender_email]):
+        if not all([self.email_host,  self.email_port, self.host_user, self.password]):
             raise ThirdPartyAccountInvalid('Third party account %s is invalid.' % self.account_id) 
     
     def send(self, send_info):
@@ -499,6 +499,7 @@ class EmailSender:
             self.db_session.close()
 
 def toggle_send_email(account_id, send_info, username, config):
+    result = {}
     try:
         sender = EmailSender(account_id, username, config)
         result = sender.send(send_info)
