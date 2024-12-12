@@ -58,7 +58,7 @@ def setup_logger(logname, fmt=None, level=None, propagate=None):
     setup logger for dtable io
     """
     logger = logging.getLogger(logname)
-    if propagate is not None:
+    if propagate:
         logger.propagate = propagate
 
     # logs to file

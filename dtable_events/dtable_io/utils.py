@@ -34,6 +34,7 @@ FILE_URL_PREFIX = 'file://dtable-bundle/asset/files/'
 IMG_URL_PREFIX = 'file://dtable-bundle/asset/images/'
 DTABLE_IO_DIR = '/tmp/dtable-io/'
 
+
 def gen_inner_file_get_url(token, filename):
     FILE_SERVER_PORT = task_manager.conf['file_server_port']
     INNER_FILE_SERVER_ROOT = 'http://127.0.0.1:' + str(FILE_SERVER_PORT)
