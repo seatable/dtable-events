@@ -531,5 +531,5 @@ def toggle_send_email(account_id, send_info, username, config):
         result = sender.send(send_info)
     except Exception as e:
         dtable_message_logger.exception(f'toggle send email failure: {e}')
-        result = {'error_msg': e}
+        result['error_msg'] = e
     return result
