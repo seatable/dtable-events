@@ -340,6 +340,29 @@ class UpdateAction(BaseAction):
         
         return value
 
+    def add_or_create_options_for_multiple_select(self, column, value):
+        table_name = self.update_data['table_name']
+        column_data = column.get('data') or {}
+        select_options = column_data.get('options') or []
+        
+        existing_names = set()
+        for op in select_options:
+            name = op.get('name')
+            if name and isinstance(name, str):
+                existing_names.add(name)
+
+        to_be_added_options = [name for name in value if name not in existing_names]
+
+        if to_be_added_options:
+            self.auto_rule.dtable_server_api.add_column_options(
+                table_name,
+                column['name'],
+                options = [gen_random_option(option) for option in to_be_added_options]
+            )
+        self.auto_rule.cache_clean()
+        
+        return value
+
     def format_time_by_offset(self, offset, format_length):
         cur_datetime = datetime.now()
         cur_datetime_offset = cur_datetime + timedelta(days=offset)
@@ -387,7 +410,7 @@ class UpdateAction(BaseAction):
                     except Exception as e:
                         logger.error(e)
                         filtered_updates[col_name] = self.updates.get(col_key)
-                elif col_type == ColumnTypes.SINGLE_SELECT:
+                elif col_type in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
                     try:
                         data_dict = self.updates.get(col_key)
                         if not data_dict:
@@ -402,7 +425,10 @@ class UpdateAction(BaseAction):
                                 src_col = self.col_key_dict.get(src_col_key)
                                 value = src_row.get(src_col['name'])
                                 if value:
-                                    filtered_updates[col_name] = self.add_or_create_options(col, value)
+                                    if col_type == ColumnTypes.SINGLE_SELECT:
+                                        filtered_updates[col_name] = self.add_or_create_options(col, value)
+                                    else:
+                                        filtered_updates[col_name] = self.add_or_create_options_for_multiple_select(col, value)
                             elif set_type == 'set_empty':
                                 filtered_updates[col_name] = None
                         else:
@@ -442,6 +468,11 @@ class UpdateAction(BaseAction):
 
                 elif col_type in [
                     ColumnTypes.NUMBER,
+                    ColumnTypes.DURATION,
+                    ColumnTypes.RATE,
+                    ColumnTypes.TEXT,
+                    ColumnTypes.URL,
+                    ColumnTypes.EMAIL,
                 ]:
                     try:
                         data_dict = self.updates.get(col_key)
@@ -451,6 +482,10 @@ class UpdateAction(BaseAction):
                             set_type = data_dict.get('set_type')
                             if set_type == 'default':
                                 value = data_dict.get('value')
+                                if isinstance(value, str):
+                                    blanks = set(re.findall(r'\{([^{]*?)\}', value))
+                                    column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
+                                    value = fill_msg_blank_func(row, value, column_blanks)
                                 filtered_updates[col_name] = self.parse_column_value(col, value)
                             elif set_type == 'column':
                                 src_col_key = data_dict.get('value')
@@ -2213,6 +2248,27 @@ class AddRecordToOtherTableAction(BaseAction):
         )
         return value
 
+    def add_or_create_options_for_multiple_select(self, column, value):
+        table_name = self.row_data['table_name']
+        column_data = column.get('data') or {}
+        select_options = column_data.get('options') or []
+        
+        existing_names = set()
+        for op in select_options:
+            name = op.get('name')
+            if name and isinstance(name, str):
+                existing_names.add(name)
+
+        to_be_added_options = [name for name in value if name not in existing_names]
+
+        if to_be_added_options:
+            self.auto_rule.dtable_server_api.add_column_options(
+                table_name,
+                column['name'],
+                options = [gen_random_option(option) for option in to_be_added_options]
+            )
+        return value
+
     def init_append_rows(self):
         sql_row = self.auto_rule.get_sql_row()
         src_row = self.data['converted_row']
@@ -2261,7 +2317,7 @@ class AddRecordToOtherTableAction(BaseAction):
                         logger.error(e)
                         filtered_updates[col_name] = self.row.get(col_key)
 
-                elif col_type == ColumnTypes.SINGLE_SELECT:
+                elif col_type in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
                     try:
                         data_dict = self.row.get(col_key)
                         if not data_dict:
@@ -2276,7 +2332,10 @@ class AddRecordToOtherTableAction(BaseAction):
                                 src_col = self.col_key_dict.get(src_col_key)
                                 value = src_row.get(src_col['name'])
                                 if value:
-                                    filtered_updates[col_name] = self.add_or_create_options(col, value)
+                                    if col_type == ColumnTypes.SINGLE_SELECT:
+                                        filtered_updates[col_name] = self.add_or_create_options(col, value)
+                                    else:
+                                        filtered_updates[col_name] = self.add_or_create_options_for_multiple_select(col, value)
                         else:
                             value = data_dict # compatible with the old data strcture
                             filtered_updates[col_name] = self.parse_column_value(col, value)
@@ -2311,7 +2370,12 @@ class AddRecordToOtherTableAction(BaseAction):
                         filtered_updates[col_name] = self.row.get(col_key)
 
                 elif col_type in [
-                        ColumnTypes.NUMBER, 
+                        ColumnTypes.NUMBER,
+                        ColumnTypes.DURATION,
+                        ColumnTypes.RATE,
+                        ColumnTypes.TEXT,
+                        ColumnTypes.URL,
+                        ColumnTypes.EMAIL,
                     ]:
                     try:
                         data_dict = self.row.get(col_key)
@@ -2321,6 +2385,12 @@ class AddRecordToOtherTableAction(BaseAction):
                             set_type = data_dict.get('set_type')
                             if set_type == 'default':
                                 value = data_dict.get('value')
+
+                            if isinstance(value, str):
+                                blanks = set(re.findall(r'\{([^{]*?)\}', value))
+                                self.column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
+                                value = self.fill_msg_blanks_with_sql(sql_row, value, self.column_blanks)
+
                                 filtered_updates[col_name] = self.parse_column_value(col, value)
                             elif set_type == 'column':
                                 src_col_key = data_dict.get('value')
