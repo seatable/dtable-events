@@ -471,6 +471,7 @@ class UpdateAction(BaseAction):
                     ColumnTypes.TEXT,
                     ColumnTypes.URL,
                     ColumnTypes.EMAIL,
+                    ColumnTypes.LONG_TEXT,
                 ]:
                     try:
                         data_dict = self.updates.get(col_key)
@@ -2339,6 +2340,7 @@ class AddRecordToOtherTableAction(BaseAction):
                         ColumnTypes.TEXT,
                         ColumnTypes.URL,
                         ColumnTypes.EMAIL,
+                        ColumnTypes.LONG_TEXT,
                     ]:
                     try:
                         data_dict = self.row.get(col_key)
