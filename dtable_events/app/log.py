@@ -27,19 +27,21 @@ class LogConfigurator(object):
     def _rotating_config(self):
         logging.root.setLevel(self._level)
 
-        # logs to file
-        file_formatter = logging.Formatter('[%(asctime)s] %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s')
-        file_handler = handlers.TimedRotatingFileHandler(self._logfile, when='W0', interval=1, backupCount=7)
-        file_handler.setLevel(self._level)
-        file_handler.setFormatter(file_formatter)
-        logging.root.addHandler(file_handler)
-
-        if os.environ.get('SEATABLE_LOG_TO_STDOUT', False):
+        if os.environ.get('SEATABLE_LOG_TO_STDOUT', 'false') == 'true':
             # logs to stdout
             stdout_formatter = logging.Formatter('[dtable-events] [%(asctime)s] %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s')
             stdout_handler = logging.StreamHandler()
             stdout_handler.setFormatter(stdout_formatter)  
             logging.root.addHandler(stdout_handler)
+        else:
+            # logs to file
+            file_formatter = logging.Formatter('[%(asctime)s] %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s')
+            file_handler = handlers.TimedRotatingFileHandler(self._logfile, when='W0', interval=1, backupCount=7)
+            file_handler.setLevel(self._level)
+            file_handler.setFormatter(file_formatter)
+            logging.root.addHandler(file_handler)
+
+        
 
     def _basic_config(self):
         # Log to stdout. Mainly for development.
@@ -61,20 +63,7 @@ def setup_logger(logname, fmt=None, level=None, propagate=None):
     if propagate:
         logger.propagate = propagate
 
-    # logs to file
-    logdir = os.path.join(os.environ.get('LOG_DIR', ''))
-    log_file = os.path.join(logdir, logname)
-    handler = handlers.TimedRotatingFileHandler(log_file, when='MIDNIGHT', interval=1, backupCount=7)
-    if level:
-        handler.setLevel(level)
-    if not fmt:
-        fmt = '[%(asctime)s] [%(levelname)s] %(filename)s[line:%(lineno)d] %(message)s'
-    formatter = logging.Formatter(fmt)
-    handler.setFormatter(formatter)
-    handler.addFilter(logging.Filter(logname))
-    logger.addHandler(handler)
-
-    if os.environ.get('SEATABLE_LOG_TO_STDOUT', False):
+    if os.environ.get('SEATABLE_LOG_TO_STDOUT', 'false') == 'true':
         # logs to stdout
         logger_component_name = logname.split('.')[0]
         stdout_handler = logging.StreamHandler()
@@ -86,5 +75,18 @@ def setup_logger(logname, fmt=None, level=None, propagate=None):
         stdout_handler.setFormatter(stdout_formatter)
         stdout_handler.addFilter(logging.Filter(logname))
         logger.addHandler(stdout_handler)
+    else:
+        # logs to file
+        logdir = os.path.join(os.environ.get('LOG_DIR', ''))
+        log_file = os.path.join(logdir, logname)
+        handler = handlers.TimedRotatingFileHandler(log_file, when='MIDNIGHT', interval=1, backupCount=7)
+        if level:
+            handler.setLevel(level)
+        if not fmt:
+            fmt = '[%(asctime)s] [%(levelname)s] %(filename)s[line:%(lineno)d] %(message)s'
+        formatter = logging.Formatter(fmt)
+        handler.setFormatter(formatter)
+        handler.addFilter(logging.Filter(logname))
+        logger.addHandler(handler)
 
     return logger
