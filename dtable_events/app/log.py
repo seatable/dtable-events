@@ -25,19 +25,28 @@ class LogConfigurator(object):
             self._rotating_config()
 
     def _rotating_config(self):
-        # Rotating log
-        handler = handlers.TimedRotatingFileHandler(self._logfile, when='W0', interval=1, backupCount=7)
-        handler.setLevel(self._level)
-        formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] %(filename)s[line:%(lineno)d] %(message)s')
-        handler.setFormatter(formatter)
-
         logging.root.setLevel(self._level)
-        logging.root.addHandler(handler)
+
+        if os.environ.get('SEATABLE_LOG_TO_STDOUT', 'false') == 'true':
+            # logs to stdout
+            stdout_formatter = logging.Formatter('[dtable-events] [%(asctime)s] %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s')
+            stdout_handler = logging.StreamHandler()
+            stdout_handler.setFormatter(stdout_formatter)  
+            logging.root.addHandler(stdout_handler)
+        else:
+            # logs to file
+            file_formatter = logging.Formatter('[%(asctime)s] %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s')
+            file_handler = handlers.TimedRotatingFileHandler(self._logfile, when='W0', interval=1, backupCount=7)
+            file_handler.setLevel(self._level)
+            file_handler.setFormatter(file_formatter)
+            logging.root.addHandler(file_handler)
+
+        
 
     def _basic_config(self):
         # Log to stdout. Mainly for development.
         kw = {
-            'format': '[%(asctime)s] [%(levelname)s] %(filename)s[line:%(lineno)d] %(message)s',
+            'format': '[dtable-events] [%(asctime)s] %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s',
             'datefmt': '%m/%d/%Y %H:%M:%S',
             'level': self._level,
             'stream': sys.stdout
@@ -50,21 +59,34 @@ def setup_logger(logname, fmt=None, level=None, propagate=None):
     """
     setup logger for dtable io
     """
-    logdir = os.path.join(os.environ.get('LOG_DIR', ''))
-    log_file = os.path.join(logdir, logname)
-    handler = handlers.TimedRotatingFileHandler(log_file, when='MIDNIGHT', interval=1, backupCount=7)
-    if level:
-        handler.setLevel(level)
-    if not fmt:
-        fmt = '[%(asctime)s] [%(levelname)s] %(filename)s[line:%(lineno)d] %(message)s'
-    formatter = logging.Formatter(fmt)
-    handler.setFormatter(formatter)
-    handler.addFilter(logging.Filter(logname))
-
     logger = logging.getLogger(logname)
-    logger.addHandler(handler)
-
-    if propagate is not None:
+    if propagate:
         logger.propagate = propagate
+
+    if os.environ.get('SEATABLE_LOG_TO_STDOUT', 'false') == 'true':
+        # logs to stdout
+        logger_component_name = logname.split('.')[0]
+        stdout_handler = logging.StreamHandler()
+        if level:
+            stdout_handler.setLevel(level)
+        if not fmt:
+            fmt = f'[{logger_component_name}]' + '[%(asctime)s] [%(levelname)s] %(filename)s[line:%(lineno)d] %(message)s'
+        stdout_formatter = logging.Formatter(fmt)
+        stdout_handler.setFormatter(stdout_formatter)
+        stdout_handler.addFilter(logging.Filter(logname))
+        logger.addHandler(stdout_handler)
+    else:
+        # logs to file
+        logdir = os.path.join(os.environ.get('LOG_DIR', ''))
+        log_file = os.path.join(logdir, logname)
+        handler = handlers.TimedRotatingFileHandler(log_file, when='MIDNIGHT', interval=1, backupCount=7)
+        if level:
+            handler.setLevel(level)
+        if not fmt:
+            fmt = '[%(asctime)s] [%(levelname)s] %(filename)s[line:%(lineno)d] %(message)s'
+        formatter = logging.Formatter(fmt)
+        handler.setFormatter(formatter)
+        handler.addFilter(logging.Filter(logname))
+        logger.addHandler(handler)
 
     return logger
