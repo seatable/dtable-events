@@ -289,6 +289,44 @@ class BaseAction:
         url = gen_file_get_url(token, asset_name)
         return  asset_name, url
 
+    def add_or_create_options(self, table_name, column, value):
+        column_data = column.get('data') or {}
+
+        select_options = column_data.get('options') or []
+        for option in select_options:
+            if value == option.get('name'):
+                return value
+        self.auto_rule.dtable_server_api.add_column_options(
+            table_name,
+            column['name'],
+            options = [gen_random_option(value)]
+        )
+        self.auto_rule.cache_clean()
+
+        return value
+
+    def add_or_create_options_for_multiple_select(self, table_name, column, value):
+        column_data = column.get('data') or {}
+        select_options = column_data.get('options') or []
+
+        existing_names = set()
+        for op in select_options:
+            name = op.get('name')
+            if name and isinstance(name, str):
+                existing_names.add(name)
+
+        to_be_added_options = [name for name in value if name not in existing_names]
+
+        if to_be_added_options:
+            self.auto_rule.dtable_server_api.add_column_options(
+                table_name,
+                column['name'],
+                options = [gen_random_option(option) for option in to_be_added_options]
+            )
+        self.auto_rule.cache_clean()
+
+        return value
+
 
 class UpdateAction(BaseAction):
 
@@ -322,46 +360,6 @@ class UpdateAction(BaseAction):
         }
         self.col_name_dict = {}
         self.init_updates()
-
-    def add_or_create_options(self, column, value):
-        table_name = self.update_data['table_name']
-        column_data = column.get('data') or {}
-        
-        select_options = column_data.get('options') or []
-        for option in select_options:
-            if value == option.get('name'):
-                return value
-        self.auto_rule.dtable_server_api.add_column_options(
-            table_name,
-            column['name'],
-            options = [gen_random_option(value)]
-        )
-        self.auto_rule.cache_clean()
-        
-        return value
-
-    def add_or_create_options_for_multiple_select(self, column, value):
-        table_name = self.update_data['table_name']
-        column_data = column.get('data') or {}
-        select_options = column_data.get('options') or []
-        
-        existing_names = set()
-        for op in select_options:
-            name = op.get('name')
-            if name and isinstance(name, str):
-                existing_names.add(name)
-
-        to_be_added_options = [name for name in value if name not in existing_names]
-
-        if to_be_added_options:
-            self.auto_rule.dtable_server_api.add_column_options(
-                table_name,
-                column['name'],
-                options = [gen_random_option(option) for option in to_be_added_options]
-            )
-        self.auto_rule.cache_clean()
-        
-        return value
 
     def format_time_by_offset(self, offset, format_length):
         cur_datetime = datetime.now()
@@ -426,9 +424,9 @@ class UpdateAction(BaseAction):
                                 value = src_row.get(src_col['name'])
                                 if value:
                                     if col_type == ColumnTypes.SINGLE_SELECT:
-                                        filtered_updates[col_name] = self.add_or_create_options(col, value)
+                                        filtered_updates[col_name] = self.add_or_create_options(self.auto_rule.table_info['name'], col, value)
                                     else:
-                                        filtered_updates[col_name] = self.add_or_create_options_for_multiple_select(col, value)
+                                        filtered_updates[col_name] = self.add_or_create_options_for_multiple_select(self.auto_rule.table_info['name'], col, value)
                             elif set_type == 'set_empty':
                                 filtered_updates[col_name] = None
                         else:
@@ -2234,41 +2232,6 @@ class AddRecordToOtherTableAction(BaseAction):
         if format_length == 1:
             return cur_datetime_offset.strftime("%Y-%m-%d")
 
-    def add_or_create_options(self, column, value):
-        table_name = self.row_data['table_name']
-        column_data = column.get('data') or {}
-        select_options = column_data.get('options') or []
-        for option in select_options:
-            if value == option.get('name'):
-                return value
-        self.auto_rule.dtable_server_api.add_column_options(
-            table_name,
-            column['name'],
-            options = [gen_random_option(value)]
-        )
-        return value
-
-    def add_or_create_options_for_multiple_select(self, column, value):
-        table_name = self.row_data['table_name']
-        column_data = column.get('data') or {}
-        select_options = column_data.get('options') or []
-        
-        existing_names = set()
-        for op in select_options:
-            name = op.get('name')
-            if name and isinstance(name, str):
-                existing_names.add(name)
-
-        to_be_added_options = [name for name in value if name not in existing_names]
-
-        if to_be_added_options:
-            self.auto_rule.dtable_server_api.add_column_options(
-                table_name,
-                column['name'],
-                options = [gen_random_option(option) for option in to_be_added_options]
-            )
-        return value
-
     def init_append_rows(self):
         sql_row = self.auto_rule.get_sql_row()
         src_row = self.data['converted_row']
@@ -2333,9 +2296,9 @@ class AddRecordToOtherTableAction(BaseAction):
                                 value = src_row.get(src_col['name'])
                                 if value:
                                     if col_type == ColumnTypes.SINGLE_SELECT:
-                                        filtered_updates[col_name] = self.add_or_create_options(col, value)
+                                        filtered_updates[col_name] = self.add_or_create_options(self.get_table_name(self.dst_table_id), col, value)
                                     else:
-                                        filtered_updates[col_name] = self.add_or_create_options_for_multiple_select(col, value)
+                                        filtered_updates[col_name] = self.add_or_create_options_for_multiple_select(self.get_table_name(self.dst_table_id), col, value)
                         else:
                             value = data_dict # compatible with the old data strcture
                             filtered_updates[col_name] = self.parse_column_value(col, value)
