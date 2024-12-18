@@ -330,21 +330,17 @@ class GoogleAPISendEmail(_ThirdpartyAPISendEmail):
     def __init__(self, db_session, account_id, detail, operator):
         super().__init__(db_session, account_id, detail, operator)
 
-        self.gmail_api_send_emails_endpoint = f'https://gmail.googleapis.com/upload/gmail/v1/users/{parse.quote(self.host_user)}/messages/send'
+        self.gmail_api_send_emails_endpoint = f'https://gmail.googleapis.com/upload/gmail/v1/users/{parse.quote(self.host_user)}/messages/send?uploadType=multipart'
 
     def _on_sending_email(self, msg_obj):
-        msg_bytes = msg_obj.as_bytes()
-        base64_bytes = base64.b64encode(msg_bytes).decode()
-        payload = {
-            'raw': base64_bytes
-        }
+        msg_string = msg_obj.as_string()
         
         headers = {
             'Authorization': f'Bearer {self.access_token}',
-            'Content-Type': 'application/json'
+            'Content-Type': 'message/rfc822'
         }
         
-        return requests.post(self.gmail_api_send_emails_endpoint, data=json.dumps(payload), headers=headers)
+        return requests.post(self.gmail_api_send_emails_endpoint, data=msg_string, headers=headers)
 
 class MS365APISendEmail(_ThirdpartyAPISendEmail):
     def __init__(self, db_session, account_id, detail, operator):
