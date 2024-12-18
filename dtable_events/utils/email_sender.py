@@ -453,17 +453,14 @@ class MS365APISendEmail(_ThirdpartyAPISendEmail):
 
     def _on_sending_email(self, msg_obj):
         msg_bytes = msg_obj.as_bytes()
-        base64_bytes = base64.b64encode(msg_bytes).decode()
-        payload = {
-            'message': base64_bytes
-        }
-        
+        msg_base64 = base64.b64encode(msg_bytes).decode()
+
         headers = {
             'Authorization': f'Bearer {self.access_token}',
-            'Content-Type': 'application/json'
+            'Content-Type': 'text/plain'
         }
         
-        return requests.post(self.outlook_api_send_emails_endpoint, data=json.dumps(payload), headers=headers)
+        return requests.post(self.outlook_api_send_emails_endpoint, data=msg_base64, headers=headers)
 
 class EmailSender:
     def __init__(self, account_id, operator, config=None, db_session=None):
