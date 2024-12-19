@@ -23,6 +23,9 @@ class ThirdPartyAccountNotFound(Exception):
 class ThirdPartyAccountInvalid(Exception):
     pass
 
+class ThirdPartyAccountFetchTokenFailure(Exception):
+    pass
+
 def _check_and_raise_error(response):
     if response.status_code >= 400:
         raise ConnectionError(response.json())
@@ -260,8 +263,18 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
             response = requests.post(self.token_url, headers=headers, data=parse.urlencode(params))
             _check_and_raise_error(response)
             response = response.json()
-            dtable_message_logger.exception(response)
-            self._check_and_update_refresh_token(response.get('access_token'), response.get('ext_expires_in') + time.time(), response.get('refresh_token'))
+            if not response.get('access_token'):
+                raise ThirdPartyAccountFetchTokenFailure(f'Failure to fetch access token, account_id: {self.account_id}')
+            expires_at = 0
+            if response.get('ext_expires_at'):
+                expires_at = response.get('ext_expires_at')
+            elif response.get('expires_at'):
+                expires_at = response.get('expires_at')
+            elif response.get('ext_expires_in'):
+                expires_at = response.get('ext_expires_in') + time.time()
+            elif response.get('expires_in'):
+                expires_at = response.get('expires_in') + time.time()
+            self._check_and_update_refresh_token(response.get('access_token'), expires_at, response.get('refresh_token') or self.refresh_token)
 
     def _check_and_update_refresh_token(self, new_access_token, new_expires_at, new_refresh_token):
         self.access_token = new_access_token
