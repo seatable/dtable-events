@@ -23,6 +23,13 @@ class ThirdPartyAccountNotFound(Exception):
 class ThirdPartyAccountInvalid(Exception):
     pass
 
+class ThirdPartyAccountFetchTokenFailure(Exception):
+    pass
+
+def _check_and_raise_error(response):
+    if response.status_code >= 400:
+        raise ConnectionError(response.json())
+
 class _SendEmailBaseClass(ABC):
     def _build_msg_obj(self, send_info):
         msg = send_info.get('message', '')
@@ -41,6 +48,8 @@ class _SendEmailBaseClass(ABC):
         msg = send_info.get('message', '')
         html_msg = send_info.get('html_message', '')
         if not msg and not html_msg:
+            dtable_message_logger.warning(
+                'Email message invalid. message: %s, html_message: %s' % (msg, html_msg))
             raise ValueError('Email message invalid')
 
         send_to = [formataddr(parseaddr(to)) for to in send_to]
@@ -108,12 +117,10 @@ class _SendEmailBaseClass(ABC):
             dtable_message_logger.exception('Batch save email sending log error: %s' % e)
 
     @abstractmethod
-    def send(self, send_info):
-        pass
+    def send(self, send_info): ...
 
     @abstractmethod
-    def batch_send(self,send_info_list):
-        pass
+    def batch_send(self,send_info_list): ...
 
 class SMTPSendEmail(_SendEmailBaseClass):
 
@@ -229,6 +236,8 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
         self.client_id = detail.get('client_id')
         self.client_secret = detail.get('client_secret')
         self.refresh_token = detail.get('refresh_token')
+        self.access_token = detail.get('access_token')
+        self.expires_at = detail.get('expires_at')
         self.token_url = detail.get('token_url')
         self.scopes = detail.get('scopes')
         self.operator = operator
@@ -240,31 +249,44 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
         
     # request access_token
     def _request_access_token(self):
-        params = {
-            'grant_type': 'refresh_token',
-            'client_id': self.client_id,
-            'client_secret': self.client_secret,
-            'refresh_token': self.refresh_token,
-            'scope': self.scopes
-        }
-        headers = {
-            'Content-Type': 'application/x-www-form-urlencoded'
-        }
-        response = requests.post(self.token_url, headers=headers, data=parse.urlencode(params))
-        response.raise_for_status()
-        response = response.json()
-        self.access_token = response.get('access_token')
-        self._check_and_update_refresh_token(response.get('refresh_token'))
+        if not self.access_token or not self.expires_at or self.expires_at - time.time() < 300:
+            params = {
+                'grant_type': 'refresh_token',
+                'client_id': self.client_id,
+                'client_secret': self.client_secret,
+                'refresh_token': self.refresh_token,
+                'scope': ' '.join(self.scopes)
+            }
+            headers = {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+            response = requests.post(self.token_url, headers=headers, data=parse.urlencode(params))
+            _check_and_raise_error(response)
+            response = response.json()
+            if not response.get('access_token'):
+                raise ThirdPartyAccountFetchTokenFailure(f'Failure to fetch access token, account_id: {self.account_id}')
+            expires_at = 0
+            if response.get('ext_expires_at'):
+                expires_at = response.get('ext_expires_at')
+            elif response.get('expires_at'):
+                expires_at = response.get('expires_at')
+            elif response.get('ext_expires_in'):
+                expires_at = response.get('ext_expires_in') + time.time()
+            elif response.get('expires_in'):
+                expires_at = response.get('expires_in') + time.time()
+            self._check_and_update_refresh_token(response.get('access_token'), expires_at, response.get('refresh_token') or self.refresh_token)
 
-    def _check_and_update_refresh_token(self, new_refresh_token):
-        if new_refresh_token and self.refresh_token != new_refresh_token:
-            self.refresh_token = new_refresh_token
-            self.detail['refresh_token'] = new_refresh_token
-            update_third_party_account_detail(self.db_session, self.account_id, self.detail)
+    def _check_and_update_refresh_token(self, new_access_token, new_expires_at, new_refresh_token):
+        self.access_token = new_access_token
+        self.expires_at = new_expires_at
+        self.refresh_token = new_refresh_token
+        self.detail['access_token'] = new_access_token
+        self.detail['expires_at'] = new_expires_at
+        self.detail['refresh_token'] = new_refresh_token
+        update_third_party_account_detail(self.db_session, self.account_id, self.detail)
 
     @abstractmethod
-    def _on_sendding_email(self, /):
-        pass
+    def _on_sending_email(self, /): ...
 
     def send(self, send_info):
         result = {}
@@ -273,13 +295,14 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
             msg_obj = self._build_msg_obj(send_info)
         except Exception as e:
             result['err_msg'] = 'Email message invalid'
+            dtable_message_logger.exception(e)
             return result
         
         response = self._on_sending_email(msg_obj)
 
         success = False
         try:
-            response.raise_for_status()
+            _check_and_raise_error(response)
             success = True
         except Exception as e:
             dtable_message_logger.warning(
@@ -304,7 +327,7 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
             response = self._on_sending_email(msg_obj)
 
             try:
-                response.raise_for_status()
+                _check_and_raise_error(response)
                 success = True
             except Exception as e:
                 dtable_message_logger.warning('Email sending failed. email: %s, error: %s' % (self.host_user, e))
@@ -320,42 +343,39 @@ class GoogleAPISendEmail(_ThirdpartyAPISendEmail):
     def __init__(self, db_session, account_id, detail, operator):
         super().__init__(db_session, account_id, detail, operator)
 
-        self.gmail_api_send_emails_endpoint = f'https://gmail.googleapis.com/upload/gmail/v1/users/{self.host_user}/messages/send'
+        self.gmail_api_send_emails_endpoint = f'https://gmail.googleapis.com/upload/gmail/v1/users/{parse.quote(self.host_user)}/messages/send?uploadType=multipart'
 
     def _on_sending_email(self, msg_obj):
-        msg_bytes = msg_obj.as_bytes()
-        base64_bytes = base64.urlsafe_b64encode(msg_bytes)
-        base64url_encoded_message = parse.quote_plus(base64_bytes.decode()).replace('+', '-').replace('/', '_')
-        payload = {
-            'raw': base64url_encoded_message
-        }
+        msg_string = msg_obj.as_string()
         
         headers = {
             'Authorization': f'Bearer {self.access_token}',
-            'Content-Type': 'application/json'
+            'Content-Type': 'message/rfc822'
         }
         
-        return requests.post(self.gmail_api_send_emails_endpoint, data=json.dumps(payload), headers=headers)
+        return requests.post(self.gmail_api_send_emails_endpoint, data=msg_string, headers=headers)
 
 class MS365APISendEmail(_ThirdpartyAPISendEmail):
     def __init__(self, db_session, account_id, detail, operator):
         super().__init__(db_session, account_id, detail, operator)
 
-        self.outlook_api_send_emails_endpoint = 'https://graph.microsoft.com/v1.0' + ('/me/sendMail' if self.host_user == 'me' else f'/users/{self.host_user}/sendMail')
+        self.outlook_api_send_emails_endpoint = 'https://graph.microsoft.com/v1.0' + ('/me/sendMail' if self.host_user == 'me' else f'/users/{parse.quote(self.host_user)}/sendMail')
 
-    def _build_msg_obj(self, send_info):
+    def _build_msg_obj_ms_json(self, send_info):
         # send info
         msg = send_info.get('message', '')
         html_msg = send_info.get('html_message', '')
         send_to = send_info.get('send_to', [])
         subject = send_info.get('subject', '')
         copy_to = send_info.get('copy_to', [])
-        reply_to = send_info.get('reply_to', '')
+        reply_to = send_info.get('reply_to') or []
         file_download_urls = send_info.get('file_download_urls', None)
         file_contents = send_info.get('file_contents', None)
         message_id = send_info.get('message_id', '')
 
         if not msg and not html_msg:
+            dtable_message_logger.warning(
+                'Email message invalid. message: %s, html_message: %s' % (msg, html_msg))
             raise ValueError('Email message invalid')
         
         email_data = {
@@ -431,8 +451,8 @@ class MS365APISendEmail(_ThirdpartyAPISendEmail):
             email_data.update({'attachments': attachments})
 
         return email_data
-
-    def _on_sending_email(self, email_data):
+    
+    def _on_sending_email_by_ms_json(self, email_data):
         headers = {
             'Authorization': f'Bearer {self.access_token}',
             'Content-Type': 'application/json'
@@ -443,6 +463,17 @@ class MS365APISendEmail(_ThirdpartyAPISendEmail):
             data=json.dumps(email_data),
             headers=headers
         )
+
+    def _on_sending_email(self, msg_obj):
+        msg_bytes = msg_obj.as_bytes()
+        msg_base64 = base64.b64encode(msg_bytes).decode()
+
+        headers = {
+            'Authorization': f'Bearer {self.access_token}',
+            'Content-Type': 'text/plain'
+        }
+        
+        return requests.post(self.outlook_api_send_emails_endpoint, data=msg_base64, headers=headers)
 
 class EmailSender:
     def __init__(self, account_id, operator, config=None, db_session=None):
@@ -465,6 +496,7 @@ class EmailSender:
             raise ThirdPartyAccountInvalid('Third party account %s is invalid.' % self.account_id)
 
         self.email_provider = detail.get('email_provider', 'GeneralEmailProvider')
+
         if self.email_provider == 'GeneralEmailProvider':
             self.sender = SMTPSendEmail(self.db_session, self.account_id, detail, self.operator)
         elif self.email_provider == 'Gmail':
