@@ -495,6 +495,10 @@ class UpdateAction(BaseAction):
                                 filtered_updates[col_name] = None
                         else:
                             value = data_dict  # compatible with the old data strcture
+                            if isinstance(value, str):
+                                blanks = set(re.findall(r'\{([^{]*?)\}', value))
+                                column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
+                                value = fill_msg_blank_func(row, value, column_blanks)
                             filtered_updates[col_name] = self.parse_column_value(col, value)
 
                     except Exception as e:
@@ -2351,10 +2355,10 @@ class AddRecordToOtherTableAction(BaseAction):
                             if set_type == 'default':
                                 value = data_dict.get('value')
 
-                            if isinstance(value, str):
-                                blanks = set(re.findall(r'\{([^{]*?)\}', value))
-                                self.column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
-                                value = self.fill_msg_blanks_with_sql(sql_row, value, self.column_blanks)
+                                if isinstance(value, str):
+                                    blanks = set(re.findall(r'\{([^{]*?)\}', value))
+                                    self.column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
+                                    value = self.fill_msg_blanks_with_sql(sql_row, value, self.column_blanks)
 
                                 filtered_updates[col_name] = self.parse_column_value(col, value)
                             elif set_type == 'column':
@@ -2364,10 +2368,14 @@ class AddRecordToOtherTableAction(BaseAction):
                                 filtered_updates[col_name] = value
                         else:
                             value = data_dict # compatible with the old data strcture
+                            if isinstance(value, str):
+                                blanks = set(re.findall(r'\{([^{]*?)\}', value))
+                                column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
+                                value = self.fill_msg_blanks_with_sql(sql_row, value, column_blanks)
                             filtered_updates[col_name] = self.parse_column_value(col, value)
                 
                     except Exception as e:
-                        logger.error(e)
+                        logger.exception(e)
                         filtered_updates[col_name] = self.row.get(col_key)
                 else:
                     filtered_updates[col_name] = self.parse_column_value(col, self.row.get(col_key))
