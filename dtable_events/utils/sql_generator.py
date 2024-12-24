@@ -846,9 +846,11 @@ class DateOperator(Operator):
         target_date, _ = self._other_date()
         if not target_date:
             return ""
-        return "`%(column_name)s` <= '%(target_date)s' and `%(column_name)s` is not null" % ({
+
+        next_date = self._format_date(target_date + timedelta(days=1))
+        return "`%(column_name)s` < '%(target_date)s' and `%(column_name)s` is not null" % ({
             "column_name": self.column_name,
-            "target_date": self._format_date(target_date)
+            "target_date": next_date
         })
 
     def op_is_on_or_after(self):
