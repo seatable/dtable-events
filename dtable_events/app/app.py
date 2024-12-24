@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import time
+
 from dtable_events.activities.handlers import MessageHandler
 from dtable_events.app.stats_sender import StatsSender
 from dtable_events.statistics.counter import UserActivityCounter
@@ -107,3 +109,6 @@ class App(object):
             self._virus_scanner.start()                      # default False
             # convert pdf manager
             conver_page_to_pdf_manager.start()               # always True
+
+        while True:
+            time.sleep(60)
