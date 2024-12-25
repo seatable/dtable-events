@@ -502,7 +502,7 @@ class UpdateAction(BaseAction):
                             filtered_updates[col_name] = self.parse_column_value(col, value)
 
                     except Exception as e:
-                        logger.error(e)
+                        logger.exception(e)
                         filtered_updates[col_name] = self.updates.get(col_key)
                 else:
                     cell_value = self.updates.get(col_key)
