@@ -266,7 +266,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM `Table1` WHERE `createTime` <= '2021-12-20' and `createTime` is not null LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `createTime` < '2021-12-21' and `createTime` is not null LIMIT 0, 100",
         "by_group": False,
     },
     {
