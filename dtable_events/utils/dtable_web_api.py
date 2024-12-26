@@ -211,3 +211,19 @@ class DTableWebAPI:
         header_token = 'Token ' + jwt.encode(payload, DTABLE_PRIVATE_KEY, 'HS256')
         resp = requests.post(url, data=data, headers={'Authorization': header_token}, timeout=30)
         return parse_response(resp)
+
+    def internal_update_exceed_api_quota(self, month, org_ids):
+        logger.debug('internal update exeed api quota month: %s org_ids: %s', month, org_ids)
+        url = '%(server_url)s/api/v2.1/internal/update-exceed-api-quota/' % {
+            'server_url': self.dtable_web_service_url
+        }
+        data = {
+            'org_ids': org_ids,
+            'month': month
+        }
+        payload = {
+            'exp': int(time.time()) + 60
+        }
+        header_token = 'Token ' + jwt.encode(payload, DTABLE_PRIVATE_KEY, 'HS256')
+        resp = requests.post(url, json=data, headers={'Authorization': header_token}, timeout=30)
+        return parse_response(resp)
