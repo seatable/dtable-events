@@ -147,10 +147,10 @@ def parse_formula_number(cell_data, column_data):
     return value
 
 
-def cell_data2str(cell_data):
+def cell_data2str(cell_data, delimiter=' '):
     if isinstance(cell_data, list):
         cell_data.sort()
-        return ' '.join(cell_data2str(item) for item in cell_data)
+        return delimiter.join(cell_data2str(item, delimiter=delimiter) for item in cell_data)
     elif cell_data is None:
         return ''
     else:
@@ -1631,11 +1631,12 @@ class LinkRecordsAction(BaseAction):
         self.linked_row_ids = []
 
 
-    def gen_filter(self, column, other_column):
+    def gen_filter(self, column, other_column, cell_value=None):
         """Generate a filter dict to filter other table
         """
         sql_row = self.auto_rule.get_sql_row()
-        cell_value = sql_row.get(column['key'])
+        if not cell_value:
+            cell_value = sql_row.get(column['key'])
         column_data = column.get('data') or {}
         other_column_data = other_column.get('data') or {}
 
@@ -1808,6 +1809,8 @@ class LinkRecordsAction(BaseAction):
                 return self.gen_filter({'key': column['key'], 'type': ColumnTypes.DATE}, other_column)
             elif column_data.get('result_type') == 'bool':
                 return self.gen_filter({'key': column['key'], 'type': ColumnTypes.CHECKBOX}, other_column)
+            elif column_data.get('result_type') == 'array':
+                return self.gen_filter({'key': column['key'], 'type': ColumnTypes.TEXT}, other_column, cell_value=cell_data2str(cell_value, delimiter=','))
 
         elif column['type'] == ColumnTypes.AUTO_NUMBER:
             return self.gen_filter({'key': column['key'], 'type': ColumnTypes.TEXT}, other_column)
