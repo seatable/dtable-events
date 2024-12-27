@@ -2,6 +2,7 @@ import re
 import json
 import csv
 import os
+import pytz
 from io import StringIO
 from dateutil import parser
 from openpyxl.styles import PatternFill
@@ -1391,9 +1392,21 @@ def parse_number_format(column_data, cell_value):
 def convert_time_to_utc_str(time_str):
     if 'Z' in time_str:
         utc_time = datetime.strptime(time_str, '%Y-%m-%dT%H:%M:%S.%fZ')
-    else:
+        return utc_to_tz(utc_time, timezone).strftime('%Y-%m-%d %H:%M:%S')
+    elif '+00:00' in time_str:
+        # deal not big_data time_str
         utc_time = datetime.strptime(time_str, '%Y-%m-%dT%H:%M:%S.%f+00:00')
-    return utc_to_tz(utc_time, timezone).strftime('%Y-%m-%d %H:%M:%S')
+        return utc_to_tz(utc_time, timezone).strftime('%Y-%m-%d %H:%M:%S')
+    elif '+' in time_str:
+        # deal big_data time_str
+        time_format = "%Y-%m-%dT%H:%M:%S.%f%z"
+        parsed_time = datetime.strptime(time_str, time_format)
+        time_stamp = parsed_time.timestamp()
+        target_timezone = pytz.timezone(TIME_ZONE)
+        localized_datetime = datetime.fromtimestamp(time_stamp, target_timezone)
+        return localized_datetime.strftime('%Y-%m-%d %H:%M:%S')
+    else:
+        return time_str
 
 
 def select_option_to_name(id2name, cell):
