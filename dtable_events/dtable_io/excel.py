@@ -1400,11 +1400,10 @@ def convert_time_to_utc_str(time_str):
     elif '+' in time_str:
         # deal big_data time_str
         time_format = "%Y-%m-%dT%H:%M:%S.%f%z"
-        parsed_time = datetime.strptime(time_str, time_format)
-        time_stamp = parsed_time.timestamp()
-        target_timezone = pytz.timezone(TIME_ZONE)
-        localized_datetime = datetime.fromtimestamp(time_stamp, target_timezone)
-        return localized_datetime.strftime('%Y-%m-%d %H:%M:%S')
+        time_stamp = datetime.strptime(time_str, time_format).timestamp()
+        target_timezone = pytz.timezone('UTC')
+        utc_time = datetime.fromtimestamp(time_stamp, target_timezone)
+        return utc_to_tz(utc_time, timezone).strftime('%Y-%m-%d %H:%M:%S')
     else:
         return time_str
 
