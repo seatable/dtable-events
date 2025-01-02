@@ -1254,8 +1254,13 @@ def convert_formula_number(value, column_data):
 
 
 def parse_summary_value(cell_data, column_data):
+    def remove_zeros_from_end(s_number):
+        if '.' in s_number:
+            return s_number.rstrip('0').rstrip('.')
+        return s_number
+    
     value = str(cell_data)
-    precision = column_data.get('precision', 0)
+    precision = column_data.get('precision', 2)
     src_format = column_data.get('format')
 
     if src_format == 'percent':
@@ -1281,14 +1286,17 @@ def parse_summary_value(cell_data, column_data):
             if len(s_value) == 1:
                 s_value = '0' + s_value
             return h_value + ':' + m_value + ':' + s_value
-    value_list = value.split('.')
-    value_precision = len(value_list[1]) if (len(value_list) > 1) else 0
 
-    if precision > 0 and precision > value_precision:
-        if value_precision > 0:
-            value = value + '0' * (precision - value_precision)
-        else:
-            value = value + '.' + '0' * (precision - value_precision)
+    value_list = value.split('.')
+    value_precision = min(len(value_list[1]) if len(value_list) > 1 else 0, 8)
+
+    if precision > value_precision:
+        value = f"{float(value):.{precision}f}"
+    else:
+        rounded_value = round(float(value), min(precision, 8))
+        value = f"{rounded_value:.{min(precision, 8)}f}"
+
+    value = remove_zeros_from_end(value)
 
     # add symbol
     if src_format == 'euro':
