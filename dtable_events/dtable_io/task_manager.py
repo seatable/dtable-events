@@ -1,3 +1,4 @@
+import inspect
 import os
 import queue
 import threading
@@ -7,6 +8,31 @@ from threading import Lock
 
 
 from seaserv import seafile_api
+
+
+def log_function_call(func):
+
+    def wrapper(*args, **kwargs):
+        from dtable_events.dtable_io import dtable_io_logger
+
+        func_name = func.__name__
+
+        signature = inspect.signature(func)
+        bound_args = signature.bind(*args, **kwargs)
+        bound_args.apply_defaults()
+
+        max_length_value = 100
+        args_str_list = []
+        for name, value in bound_args.arguments.items():
+            if name == 'self':
+                continue
+            args_str_list.append(f"{name}: {str(value)[:max_length_value]+'...' if len(str(value)) > max_length_value else str(value)}")
+        args_repr = ', '.join(args_str_list)
+
+        dtable_io_logger.info("func: %s args: %s", func_name, args_repr)
+
+        return func(*args, **kwargs)
+    return wrapper
 
 
 class TaskManager(object):
@@ -38,6 +64,7 @@ class TaskManager(object):
     def is_valid_task_id(self, task_id):
         return task_id in (self.tasks_map.keys() | self.task_results_map.keys())
 
+    @log_function_call
     def add_export_task(self, username, repo_id, workspace_id, dtable_uuid, dtable_name, ignore_asset):
         from dtable_events.dtable_io import get_dtable_export_content
 
@@ -54,6 +81,7 @@ class TaskManager(object):
 
         return task_id
 
+    @log_function_call
     def add_import_task(self, username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage,
                         can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id):
         from dtable_events.dtable_io import post_dtable_import_files
@@ -66,6 +94,7 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    @log_function_call
     def add_export_dtable_asset_files_task(self, username, repo_id, dtable_uuid, files, files_map=None):
         from dtable_events.dtable_io import get_dtable_export_asset_files
 
@@ -76,6 +105,7 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    @log_function_call
     def add_export_dtable_big_data_screen_task(self, username, repo_id, dtable_uuid, page_id):
         from  dtable_events.dtable_io import get_dtable_export_big_data_screen
         task_id = str(uuid.uuid4())
@@ -85,6 +115,7 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    @log_function_call
     def add_import_dtable_big_data_screen_task(self, username, repo_id, dtable_uuid, page_id):
         from  dtable_events.dtable_io import import_big_data_screen
         task_id = str(uuid.uuid4())
@@ -94,6 +125,7 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    @log_function_call
     def add_export_dtable_big_data_screen_app_task(self, username, repo_id, dtable_uuid, app_uuid, app_id):
         from  dtable_events.dtable_io import get_dtable_export_big_data_screen_app
         task_id = str(uuid.uuid4())
@@ -103,6 +135,7 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    @log_function_call
     def add_import_dtable_big_data_screen_app_task(self, username, repo_id, dtable_uuid, app_uuid, app_id):
         from  dtable_events.dtable_io import import_big_data_screen_app
         task_id = str(uuid.uuid4())
@@ -112,7 +145,7 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
-
+    @log_function_call
     def add_transfer_dtable_asset_files_task(self, username, repo_id, dtable_uuid, files, files_map, parent_dir, relative_path, replace, repo_api_token, seafile_server_url):
         from dtable_events.dtable_io import get_dtable_transfer_asset_files
         task_id = str(uuid.uuid4())
@@ -133,6 +166,7 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    @log_function_call
     def add_parse_excel_csv_task(self, username, repo_id, file_name, file_type, parse_type, dtable_uuid):
         from dtable_events.dtable_io import parse_excel_csv
 
@@ -143,6 +177,7 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    @log_function_call
     def add_import_excel_csv_task(self, username, repo_id, dtable_uuid, dtable_name, included_tables, lang):
         from dtable_events.dtable_io import import_excel_csv
 
@@ -153,6 +188,7 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    @log_function_call
     def add_import_excel_csv_add_table_task(self, username, dtable_uuid, dtable_name, included_tables, lang):
         from dtable_events.dtable_io import import_excel_csv_add_table
 
@@ -163,6 +199,7 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    @log_function_call
     def add_append_excel_csv_append_parsed_file_task(self, username, dtable_uuid, file_name, table_name):
         from dtable_events.dtable_io import append_excel_csv_append_parsed_file
 
@@ -173,6 +210,7 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    @log_function_call
     def add_append_excel_csv_upload_file_task(self, username, file_name, dtable_uuid, table_name, file_type):
         from dtable_events.dtable_io import append_excel_csv_upload_file
 
@@ -183,6 +221,7 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    @log_function_call
     def add_run_auto_rule_task(self, automation_rule_id, username, org_id, dtable_uuid, run_condition, trigger, actions):
         from dtable_events.automations.auto_rules_utils import run_auto_rule_task
         task_id = str(uuid.uuid4())
@@ -199,6 +238,7 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    @log_function_call
     def add_update_excel_csv_update_parsed_file_task(self, username, dtable_uuid, file_name, table_name,
                                                      selected_columns):
         from dtable_events.dtable_io import update_excel_csv_update_parsed_file
@@ -210,6 +250,7 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    @log_function_call
     def add_update_excel_upload_excel_task(self, username, file_name, dtable_uuid, table_name):
         from dtable_events.dtable_io import update_excel_upload_excel
 
@@ -220,6 +261,7 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    @log_function_call
     def add_update_csv_upload_csv_task(self, username, file_name, dtable_uuid, table_name):
         from dtable_events.dtable_io import update_csv_upload_csv
 
@@ -230,6 +272,7 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    @log_function_call
     def add_import_excel_csv_to_dtable_task(self, username, repo_id, dtable_name, dtable_uuid, file_type, lang):
         from dtable_events.dtable_io import import_excel_csv_to_dtable
 
@@ -239,6 +282,7 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    @log_function_call
     def add_import_excel_csv_to_table_task(self, username, file_name, dtable_uuid, file_type, lang):
         from dtable_events.dtable_io import import_excel_csv_to_table
 
@@ -248,6 +292,7 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    @log_function_call
     def add_update_table_via_excel_csv_task(self, username, file_name, dtable_uuid, table_name, selected_columns, file_type):
         from dtable_events.dtable_io import update_table_via_excel_csv
 
@@ -257,6 +302,7 @@ class TaskManager(object):
         self.tasks_map[task_id] = task
         return task_id
 
+    @log_function_call
     def add_append_excel_csv_to_table_task(self, username, file_name, dtable_uuid, table_name, file_type):
         from dtable_events.dtable_io import append_excel_csv_to_table
 
@@ -283,6 +329,7 @@ class TaskManager(object):
 
         return task_id
 
+    @log_function_call
     def add_import_table_from_base_task(self, context):
         from dtable_events.dtable_io.import_table_from_base import import_table_from_base
 
@@ -293,6 +340,7 @@ class TaskManager(object):
 
         return task_id
 
+    @log_function_call
     def add_import_common_dataset_task(self, context):
         from dtable_events.dtable_io.import_sync_common_dataset import import_common_dataset
 
@@ -304,6 +352,7 @@ class TaskManager(object):
 
         return task_id
 
+    @log_function_call
     def add_sync_common_dataset_task(self, context):
         """
         return: task_id -> str or None, error_type -> str or None
@@ -324,6 +373,7 @@ class TaskManager(object):
 
         return task_id, None
 
+    @log_function_call
     def add_force_sync_common_dataset_task(self, context):
         """
         return: task_id -> str or None, error_type -> str or None
@@ -344,6 +394,7 @@ class TaskManager(object):
 
         return task_id, None
 
+    @log_function_call
     def add_convert_view_to_excel_task(self, dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image):
         from dtable_events.dtable_io import convert_view_to_excel
 
@@ -354,6 +405,7 @@ class TaskManager(object):
 
         return task_id
 
+    @log_function_call
     def add_convert_table_to_excel_task(self, dtable_uuid, table_id, username, name, repo_id, is_support_image):
         from dtable_events.dtable_io import convert_table_to_excel
 
@@ -364,6 +416,7 @@ class TaskManager(object):
 
         return task_id
 
+    @log_function_call
     def add_app_users_sync_task(self, dtable_uuid, app_name, app_id, table_name, table_id, username):
         from dtable_events.dtable_io import app_user_sync
         task_id = str(uuid.uuid4())
@@ -373,6 +426,7 @@ class TaskManager(object):
 
         return task_id
 
+    @log_function_call
     def add_export_page_design_task(self, repo_id, dtable_uuid, page_id, username):
         from dtable_events.dtable_io import export_page_design
         task_id = str(uuid.uuid4())
@@ -382,6 +436,7 @@ class TaskManager(object):
 
         return task_id
 
+    @log_function_call
     def add_import_page_design_task(self, repo_id, workspace_id, dtable_uuid, page_id, is_dir, username):
         from dtable_events.dtable_io import import_page_design
         task_id = str(uuid.uuid4())

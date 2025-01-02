@@ -101,6 +101,21 @@ def convert_dtable_export_file_and_image_url(workspace_id, dtable_uuid, dtable_c
     return dtable_content
 
 
+def logger_dtable_info(dtable_uuid, content, username, op_type):
+    from dtable_events.dtable_io import dtable_io_logger
+
+    try:
+        tables = content.get('tables') or []
+        rows_count = 0
+        for table in tables:
+            table_rows_count = len(table.get('rows') or [])
+            dtable_io_logger.info('%s dtable user: %s dtable: %s table: %s name: %s rows: %s', op_type, username , dtable_uuid, table.get('_id'), table.get('name'), table_rows_count)
+            rows_count += table_rows_count
+        dtable_io_logger.info('%s dtable user: %s dtable: %s total rows count: %s', op_type, username, dtable_uuid, rows_count)
+    except Exception as e:
+        dtable_io_logger.exception('%s user: %s info dtable: %s error: %s', op_type, username, dtable_uuid, e)
+
+
 def prepare_dtable_json_from_memory(workspace_id, dtable_uuid, username):
     """
     Used in dtable file export in real-time from memory by request the api of dtable-server
@@ -115,6 +130,7 @@ def prepare_dtable_json_from_memory(workspace_id, dtable_uuid, username):
     dtable_server_api = DTableServerAPI(username, dtable_uuid, get_inner_dtable_server_url())
     json_content = dtable_server_api.get_base()
     dtable_content = convert_dtable_export_file_and_image_url(workspace_id, dtable_uuid, json_content)
+    logger_dtable_info(dtable_uuid, dtable_content, username, 'export dtable')
     content_json = json.dumps(dtable_content).encode('utf-8')
     path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_asset', 'content.json')
 
@@ -136,6 +152,7 @@ def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id):
     :param asset_dir_id:
     :return:
     """
+    from dtable_events.dtable_io import dtable_io_logger
 
     # get file server access token
     fake_obj_id = {
@@ -152,6 +169,7 @@ def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id):
 
     progress = {'zipped': 0, 'total': 1}
     while progress['zipped'] != progress['total']:
+        dtable_io_logger.info('export dtable user: %s dtable: %s query zip progress: %s', username, dtable_uuid, progress)
         time.sleep(0.5)   # sleep 0.5 second
         try:
             progress = json.loads(seafile_api.query_zip_progress(token))
@@ -167,6 +185,7 @@ def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id):
         resp = requests.get(asset_url)
     except Exception as e:
         raise e
+    dtable_io_logger.info('export dtable user: %s dtable: %s asset size: %sMib', username, dtable_uuid, len(resp.content) / 1024 / 1024)
     file_obj = io.BytesIO(resp.content)
     if is_zipfile(file_obj):
         with ZipFile(file_obj) as zp:
@@ -406,6 +425,7 @@ def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_n
     :param dtable_file_name:    xxx.dtable, the name of zip we imported
     :return:
     """
+    from dtable_events.dtable_io import dtable_io_logger
     from dtable_events.utils.storage_backend import storage_backend
 
     # change url in content json, then save it at file server
@@ -424,12 +444,14 @@ def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_n
             raise e
         return
 
+    logger_dtable_info(dtable_uuid, content, username, 'import dtable')
+
     content_json = convert_dtable_import_file_url(content, workspace_id, dtable_uuid)
 
     try:
         content_json = update_custom_assets(content, dtable_uuid, db_session)
     except Exception as e:
-        logging.exception('update dtable: %s update custom assets error: %s', dtable_uuid, e)
+        dtable_io_logger.exception('update dtable: %s update custom assets error: %s', dtable_uuid, e)
 
     try:
         storage_backend.save_dtable(dtable_uuid, json.dumps(content_json), username, in_storage, repo_id, dtable_file_name)
