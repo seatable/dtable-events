@@ -101,7 +101,7 @@ def convert_dtable_export_file_and_image_url(workspace_id, dtable_uuid, dtable_c
     return dtable_content
 
 
-def logger_dtable_info(dtable_uuid, content, username, op_type):
+def log_dtable_info(dtable_uuid, content, username, op_type):
     from dtable_events.dtable_io import dtable_io_logger
 
     try:
@@ -130,7 +130,7 @@ def prepare_dtable_json_from_memory(workspace_id, dtable_uuid, username):
     dtable_server_api = DTableServerAPI(username, dtable_uuid, get_inner_dtable_server_url())
     json_content = dtable_server_api.get_base()
     dtable_content = convert_dtable_export_file_and_image_url(workspace_id, dtable_uuid, json_content)
-    logger_dtable_info(dtable_uuid, dtable_content, username, 'export dtable')
+    log_dtable_info(dtable_uuid, dtable_content, username, 'export dtable')
     content_json = json.dumps(dtable_content).encode('utf-8')
     path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_asset', 'content.json')
 
@@ -185,7 +185,7 @@ def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id):
         resp = requests.get(asset_url)
     except Exception as e:
         raise e
-    dtable_io_logger.info('export dtable user: %s dtable: %s asset size: %sMib', username, dtable_uuid, len(resp.content) / 1024 / 1024)
+    dtable_io_logger.info('export dtable user: %s dtable: %s asset size: %s MB', username, dtable_uuid, len(resp.content) / 1024 / 1024)
     file_obj = io.BytesIO(resp.content)
     if is_zipfile(file_obj):
         with ZipFile(file_obj) as zp:
@@ -444,7 +444,7 @@ def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_n
             raise e
         return
 
-    logger_dtable_info(dtable_uuid, content, username, 'import dtable')
+    log_dtable_info(dtable_uuid, content, username, 'import dtable')
 
     content_json = convert_dtable_import_file_url(content, workspace_id, dtable_uuid)
 
