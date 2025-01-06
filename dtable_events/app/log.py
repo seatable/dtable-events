@@ -60,7 +60,7 @@ def setup_logger(logname, fmt=None, level=None, propagate=None):
     setup logger for dtable io
     """
     logger = logging.getLogger(logname)
-    if propagate:
+    if propagate is not None:
         logger.propagate = propagate
 
     if os.environ.get('SEATABLE_LOG_TO_STDOUT', 'false') == 'true':

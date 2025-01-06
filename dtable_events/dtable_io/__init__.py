@@ -35,10 +35,10 @@ from dtable_events.utils.email_sender import EmailSender
 from dtable_events.dtable_io.utils import clear_tmp_dir, clear_tmp_file, clear_tmp_files_and_dirs
 from dtable_events.app.log import setup_logger
 
-dtable_io_logger = setup_logger('dtable_events_io.log')
-dtable_message_logger = setup_logger('dtable_events_message.log')
-dtable_data_sync_logger = setup_logger('dtable_events_data_sync.log')
-dtable_plugin_email_logger = setup_logger('dtable_events_plugin_email.log')
+dtable_io_logger = setup_logger('dtable_events_io.log', propagate=False)
+dtable_message_logger = setup_logger('dtable_events_message.log', propagate=False)
+dtable_data_sync_logger = setup_logger('dtable_events_data_sync.log', propagate=False)
+dtable_plugin_email_logger = setup_logger('dtable_events_plugin_email.log', propagate=False)
 
 
 def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asset_dir_id, config):

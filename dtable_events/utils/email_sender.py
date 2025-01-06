@@ -15,7 +15,7 @@ from dtable_events.db import init_db_session_class
 from dtable_events.statistics.db import save_email_sending_records, batch_save_email_sending_records
 from abc import ABC, abstractmethod
 
-dtable_message_logger = setup_logger('dtable_events_message.log')
+dtable_message_logger = setup_logger('dtable_events_message.log', propagate=False)
 
 class ThirdPartyAccountNotFound(Exception):
     pass
