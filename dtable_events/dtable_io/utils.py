@@ -109,11 +109,11 @@ def log_dtable_info(dtable_uuid, content, username, op_type):
         rows_count = 0
         for table in tables:
             table_rows_count = len(table.get('rows') or [])
-            dtable_io_logger.info('%s dtable user: %s dtable: %s table: %s name: %s rows: %s', op_type, username , dtable_uuid, table.get('_id'), table.get('name'), table_rows_count)
+            dtable_io_logger.info('%s username: %s dtable: %s table: %s name: %s rows: %s', op_type, username , dtable_uuid, table.get('_id'), table.get('name'), table_rows_count)
             rows_count += table_rows_count
-        dtable_io_logger.info('%s dtable user: %s dtable: %s total rows count: %s', op_type, username, dtable_uuid, rows_count)
+        dtable_io_logger.info('%s username: %s dtable: %s total rows count: %s', op_type, username, dtable_uuid, rows_count)
     except Exception as e:
-        dtable_io_logger.exception('%s user: %s info dtable: %s error: %s', op_type, username, dtable_uuid, e)
+        dtable_io_logger.exception('%s username: %s dtable: %s error: %s', op_type, username, dtable_uuid, e)
 
 
 def prepare_dtable_json_from_memory(workspace_id, dtable_uuid, username):
@@ -168,8 +168,8 @@ def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id):
         raise e
 
     progress = {'zipped': 0, 'total': 1}
+    dtable_io_logger.info('export dtable: %s username: %s start to zip assets', dtable_uuid, username)
     while progress['zipped'] != progress['total']:
-        dtable_io_logger.info('export dtable user: %s dtable: %s query zip progress: %s', username, dtable_uuid, progress)
         time.sleep(0.5)   # sleep 0.5 second
         try:
             progress = json.loads(seafile_api.query_zip_progress(token))
@@ -179,13 +179,14 @@ def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id):
             failed_reason = progress.get('failed_reason')
             if failed_reason:
                 raise Exception(failed_reason)
+    dtable_io_logger.info('export dtable: %s username: %s zip assets done', dtable_uuid, username)
 
     asset_url = gen_dir_zip_download_url(token)
     try:
         resp = requests.get(asset_url)
     except Exception as e:
         raise e
-    dtable_io_logger.info('export dtable user: %s dtable: %s asset size: %s MB', username, dtable_uuid, len(resp.content) / 1024 / 1024)
+    dtable_io_logger.info('export dtable user: %s dtable: %s asset size: %.2f MB', username, dtable_uuid, len(resp.content) / 1024 / 1024)
     file_obj = io.BytesIO(resp.content)
     if is_zipfile(file_obj):
         with ZipFile(file_obj) as zp:
