@@ -9,13 +9,14 @@ from sqlalchemy import text
 from dateutil import parser
 
 from dtable_events.app.config import INNER_DTABLE_DB_URL
+from dtable_events.app.log import setup_logger
 from dtable_events.utils import get_inner_dtable_server_url, uuid_str_to_36_chars, uuid_str_to_32_chars
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import BaseExceedsException, DTableServerAPI
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.utils.sql_generator import BaseSQLGenerator, SQLGeneratorOptionInvalidError, ColumnFilterInvalidError
 
-logger = logging.getLogger(__name__)
+cds_logger = setup_logger('dtable_events_cds.log', propagate=False)
 
 dtable_server_url = get_inner_dtable_server_url()
 
@@ -487,7 +488,7 @@ def get_converted_cell_value(dtable_db_cell_value, transfered_column, col):
                 start, end = match_obj.span()
                 return float(str(dtable_db_cell_value)[start: end])
             except Exception as e:
-                logger.error('re search: %s in: %s error: %s', re_number, dtable_db_cell_value, e)
+                cds_logger.error('re search: %s in: %s error: %s', re_number, dtable_db_cell_value, e)
                 return
         elif result_type == 'date':
             return dtable_db_cell_value
@@ -534,7 +535,7 @@ def get_converted_cell_value(dtable_db_cell_value, transfered_column, col):
                 else:
                     return float(str(dtable_db_cell_value)[start: end])
             except Exception as e:
-                logger.error('re search: %s in: %s error: %s', re_number, dtable_db_cell_value, e)
+                cds_logger.error('re search: %s in: %s error: %s', re_number, dtable_db_cell_value, e)
                 return
         elif result_type == 'date':
             return dtable_db_cell_value
@@ -664,8 +665,8 @@ def is_equal(v1, v2, column_type):
         else:
             return v1 == v2
     except Exception as e:
-        logger.exception(e)
-        logger.error('sync common dataset value v1: %s, v2: %s type: %s error: %s', v1, v2, column_type, e)
+        cds_logger.exception(e)
+        cds_logger.error('sync common dataset value v1: %s, v2: %s type: %s error: %s', v1, v2, column_type, e)
         return False
 
 
@@ -725,7 +726,7 @@ def create_dst_table_or_update_columns(dst_dtable_uuid, dst_table_id, dst_table_
                 'task_status_code': 400
             }
         except Exception as e:
-            logger.error(e)  # TODO: table exists shoud return 400
+            cds_logger.error(e)  # TODO: table exists shoud return 400
             return None, {
                 'dst_table_id': None,
                 'error_msg': 'create table error',
@@ -750,7 +751,7 @@ def create_dst_table_or_update_columns(dst_dtable_uuid, dst_table_id, dst_table_
                     'task_status_code': 400
                 }
             except Exception as e:
-                logger.error('batch append columns to dst dtable: %s, table: %s error: %s', dst_dtable_uuid, dst_table_id, e)
+                cds_logger.error('batch append columns to dst dtable: %s, table: %s error: %s', dst_dtable_uuid, dst_table_id, e)
                 return None, {
                     'dst_table_id': None,
                     'error_msg': 'append columns error',
@@ -773,7 +774,7 @@ def create_dst_table_or_update_columns(dst_dtable_uuid, dst_table_id, dst_table_
                     'task_status_code': 400
                 }
             except Exception as e:
-                logger.error('batch update columns to dst dtable: %s, table: %s error: %s', dst_dtable_uuid, dst_table_id, e)
+                cds_logger.error('batch update columns to dst dtable: %s, table: %s error: %s', dst_dtable_uuid, dst_table_id, e)
                 return None, {
                     'dst_table_id': None,
                     'error_msg': 'update columns error',
@@ -796,7 +797,7 @@ def append_dst_rows(dst_dtable_uuid, dst_table_name, to_be_appended_rows, dst_dt
                 'task_status_code': 400
             }
         except Exception as e:
-            logger.error('sync dataset append rows dst dtable: %s dst table: %s error: %s', dst_dtable_uuid, dst_table_name, e)
+            cds_logger.error('sync dataset append rows dst dtable: %s dst table: %s error: %s', dst_dtable_uuid, dst_table_name, e)
             return {
                 'dst_table_id': None,
                 'error_msg': 'append rows error',
@@ -825,7 +826,7 @@ def update_dst_rows(dst_dtable_uuid, dst_table_name, to_be_updated_rows, dst_dta
                 'task_status_code': 400
             }
         except Exception as e:
-            logger.error('sync dataset update rows dst dtable: %s dst table: %s error: %s', dst_dtable_uuid, dst_table_name, e)
+            cds_logger.error('sync dataset update rows dst dtable: %s dst table: %s error: %s', dst_dtable_uuid, dst_table_name, e)
             return {
                 'dst_table_id': None,
                 'error_msg': 'update rows error',
@@ -840,10 +841,10 @@ def delete_dst_rows(dst_dtable_uuid, dst_table_name, to_be_deleted_row_ids, dst_
             dst_dtable_server_api.batch_delete_rows(dst_table_name, to_be_deleted_row_ids[i: i+step])
             stats_info['deleted_rows_count'] += len(to_be_deleted_row_ids[i: i+step])
         except Exception as e:
-            logger.error('sync dataset delete rows dst dtable: %s dst table: %s error: %s', dst_dtable_uuid, dst_table_name, e)
+            cds_logger.error('sync dataset delete rows dst dtable: %s dst table: %s error: %s', dst_dtable_uuid, dst_table_name, e)
 
 
-def get_dataset_data(src_dtable_uuid, src_table, src_view_id, server_only=True):
+def get_dataset_data(dataset_id, src_dtable_uuid, src_table, src_view_id, server_only=True):
     """
     :return: dataset_data -> dict or None, error_body -> dict or None
     """
@@ -852,7 +853,7 @@ def get_dataset_data(src_dtable_uuid, src_table, src_view_id, server_only=True):
     try:
         src_view = [view for view in src_table['views'] if view['_id'] == src_view_id][0]
     except IndexError:
-        logger.warning("src view %s not found" % src_view_id)
+        cds_logger.warning("src view %s not found" % src_view_id)
         return None, {
             'dst_table_id': None,
             'error_msg': 'view %s not found' % src_view_id,
@@ -865,13 +866,13 @@ def get_dataset_data(src_dtable_uuid, src_table, src_view_id, server_only=True):
         'filter_conjunction': src_view.get('filter_conjunction', 'And'),
         'sorts': src_view.get('sorts', [])
     }
-    logger.debug('filter_conditions: %s', filter_conditions)
+    cds_logger.debug('filter_conditions: %s', filter_conditions)
     try:
         sql_generator = BaseSQLGenerator(src_table['name'], src_table['columns'], filter_conditions=filter_conditions)
         filter_clause = sql_generator._filter2sql()
         sort_clause = sql_generator._sort2sql()
     except ColumnFilterInvalidError as e:
-        logger.warning('src dtable: %s src table: %s src view: %s filter_conditions: %s to sql ColumnFilterInvalidError: %s', src_dtable_uuid, src_table['name'], src_view['_id'], filter_conditions, e)
+        cds_logger.warning('src dtable: %s src table: %s src view: %s filter_conditions: %s to sql ColumnFilterInvalidError: %s', src_dtable_uuid, src_table['name'], src_view['_id'], filter_conditions, e)
         return None, {
             'dst_table_id': None,
             'error_msg': 'generate src view sql error: %s' % e,
@@ -879,7 +880,7 @@ def get_dataset_data(src_dtable_uuid, src_table, src_view_id, server_only=True):
             'task_status_code': 400
         }
     except SQLGeneratorOptionInvalidError as e:
-        logger.warning('src dtable: %s src table: %s src view: %s filter_conditions: %s to sql option invalid error: %s', src_dtable_uuid, src_table['name'], src_view['_id'], filter_conditions, e)
+        cds_logger.warning('src dtable: %s src table: %s src view: %s filter_conditions: %s to sql option invalid error: %s', src_dtable_uuid, src_table['name'], src_view['_id'], filter_conditions, e)
         return None, {
             'dst_table_id': None,
             'error_msg': 'generate src view sql error: %s' % e,
@@ -887,7 +888,7 @@ def get_dataset_data(src_dtable_uuid, src_table, src_view_id, server_only=True):
             'task_status_code': 400
         }
     except Exception as e:
-        logger.exception('src dtable: %s src table: %s src view: %s filter_conditions: %s to sql error: %s', src_dtable_uuid, src_table['name'], src_view['_id'], filter_conditions, e)
+        cds_logger.exception('src dtable: %s src table: %s src view: %s filter_conditions: %s to sql error: %s', src_dtable_uuid, src_table['name'], src_view['_id'], filter_conditions, e)
         return None, {
             'dst_table_id': None,
             'error_msg': 'generate src view sql error: %s' % e,
@@ -899,11 +900,11 @@ def get_dataset_data(src_dtable_uuid, src_table, src_view_id, server_only=True):
     start, step = 0, 10000
     while True:
         sql = f"{sql_template} LIMIT {start}, {step}"
-        logger.debug('fetch src dtable: %s table: %s view: %s sql: %s', src_dtable_uuid, src_table['name'], src_view['_id'], sql[:200])
+        cds_logger.debug('fetch src dtable: %s table: %s view: %s sql: %s', src_dtable_uuid, src_table['name'], src_view['_id'], sql[:200])
         try:
             rows, _ = src_dtable_db_api.query(sql, convert=False, server_only=server_only)
         except Exception as e:
-            logger.error('fetch src dtable: %s table: %s view: %s sql: %s error: %s', src_dtable_uuid, src_table['name'], src_view['_id'], sql[:200], e)
+            cds_logger.error('fetch src dtable: %s table: %s view: %s sql: %s error: %s', src_dtable_uuid, src_table['name'], src_view['_id'], sql[:200], e)
             return None, {
                 'dst_table_id': None,
                 'error_msg': 'fetch src rows id error: %s' % e,
@@ -916,9 +917,11 @@ def get_dataset_data(src_dtable_uuid, src_table, src_view_id, server_only=True):
             rows_id_list.append(row['_id'])
             if len(rows_id_list) >= SRC_ROWS_LIMIT:
                 break
+        cds_logger.info('dataset_id: %s src_dtable_uuid: %s src_table_id: %s src_view_id: %s fetched rows: %s', dataset_id, src_dtable_uuid, src_table['_id'], src_view_id, len(rows_id_list))
         if len(rows) < step or len(rows_id_list) >= SRC_ROWS_LIMIT:
             break
         start += step
+    cds_logger.info('dataset_id: %s src_dtable_uuid: %s src_table_id: %s src_view_id: %s fetched rows: %s totally', dataset_id, src_dtable_uuid, src_table['_id'], src_view_id, len(rows_id_list))
     dataset_data = {'rows_id_list': rows_id_list, 'rows_dict': rows_dict}
     return dataset_data, None
 
@@ -984,11 +987,11 @@ def _import_sync_CDS(context):
     start, step = 0, 10000
     while is_sync and True:
         sql = f"SELECT `_id` FROM `{dst_table_name}` LIMIT {start}, {step}"
-        logger.debug('fetch dst rows-id sql: %s', sql[:200])
+        cds_logger.debug('fetch dst rows-id sql: %s', sql[:200])
         try:
             rows, _ = dst_dtable_db_api.query(sql, convert=False, server_only=True)
         except Exception as e:
-            logger.error('fetch dst rows id sql: %s error: %s', sql[:200], e)
+            cds_logger.error('fetch dst rows id sql: %s error: %s', sql[:200], e)
             return {
                 'dst_table_id': None,
                 'error_msg': 'fetch dst rows id error: %s' % e,
@@ -1003,13 +1006,13 @@ def _import_sync_CDS(context):
     to_be_appended_rows_id_set = dataset_data['rows_dict'].keys() - dst_rows_id_set
     to_be_updated_rows_id_set = dataset_data['rows_dict'].keys() & dst_rows_id_set
     to_be_deleted_rows_id_set = dst_rows_id_set - dataset_data['rows_dict'].keys()
-    logger.debug('to_be_appended_rows_id_set: %s, to_be_updated_rows_id_set: %s, to_be_deleted_rows_id_set: %s', len(to_be_appended_rows_id_set), len(to_be_updated_rows_id_set), len(to_be_deleted_rows_id_set))
+    cds_logger.debug('to_be_appended_rows_id_set: %s, to_be_updated_rows_id_set: %s, to_be_deleted_rows_id_set: %s', len(to_be_appended_rows_id_set), len(to_be_updated_rows_id_set), len(to_be_deleted_rows_id_set))
     stats_info['to_be_appended_rows_count'] = len(to_be_appended_rows_id_set)
     stats_info['to_be_updated_rows_count'] = len(to_be_updated_rows_id_set)
     stats_info['to_be_deleted_rows_count'] = len(to_be_deleted_rows_id_set)
 
     # delete dst to-be-deleted-rows
-    logger.debug('will delete %s rows', len(to_be_deleted_rows_id_set))
+    cds_logger.debug('will delete %s rows', len(to_be_deleted_rows_id_set))
     delete_dst_rows(dst_dtable_uuid, dst_table_name, list(to_be_deleted_rows_id_set), dst_dtable_server_api, stats_info)
 
     dst_query_columns = ', '.join(['_id'] + ["`%s`" % col['name'] for col in final_columns])
@@ -1020,7 +1023,7 @@ def _import_sync_CDS(context):
     to_be_updated_rows_id_list = list(to_be_updated_rows_id_set)
     step = 10000
     for i in range(0, len(to_be_updated_rows_id_list), step):
-        logger.debug('to_be_updated_rows_id_list i: %s step: %s', i, step)
+        cds_logger.debug('to_be_updated_rows_id_list i: %s step: %s', i, step)
         src_rows = [dataset_data['rows_dict'][row_id] for row_id in to_be_updated_rows_id_list[i: i+step]]
 
         ## fetch dst to-be-updated-rows
@@ -1029,7 +1032,7 @@ def _import_sync_CDS(context):
         try:
             dst_rows, _ = dst_dtable_db_api.query(sql, convert=False, server_only=True)
         except Exception as e:
-            logger.error('fetch dst to-be-updated-rows sql: %s error: %s', sql[:200], e)
+            cds_logger.error('fetch dst to-be-updated-rows sql: %s error: %s', sql[:200], e)
             return {
                 'dst_table_id': None,
                 'error_msg': 'fetch dst to-be-updated-rows error: %s' % e,
@@ -1038,7 +1041,7 @@ def _import_sync_CDS(context):
 
         ## update
         to_be_updated_rows, _ = generate_synced_rows(src_rows, src_columns, final_columns, rows_invalid_infos, dst_rows=dst_rows)
-        logger.debug('step src update-rows: %s to-be-updated-rows: %s', len(to_be_updated_rows_id_list[i: i+step]), len(to_be_updated_rows))
+        cds_logger.debug('step src update-rows: %s to-be-updated-rows: %s', len(to_be_updated_rows_id_list[i: i+step]), len(to_be_updated_rows))
         error_resp = update_dst_rows(dst_dtable_uuid, dst_table_name, to_be_updated_rows, dst_dtable_server_api, stats_info)
         if error_resp:
             return error_resp
@@ -1049,7 +1052,7 @@ def _import_sync_CDS(context):
 
     step = 10000
     for i in range(0, len(to_be_appended_rows_id_list), step):
-        logger.debug('to_be_appended_rows_id_list i: %s, step: %s', i, step)
+        cds_logger.debug('to_be_appended_rows_id_list i: %s, step: %s', i, step)
         step_to_be_appended_rows_id_list = []
         step_row_sort_dict = {}
         for j in range(step):
@@ -1072,7 +1075,7 @@ def _import_sync_CDS(context):
             logs.append(f"\trow: {row_id}")
             for invalid_cell_info in invalid_cell_infos:
                 logs.append(f"\t\t{invalid_cell_info}")
-        logger.warning('\n'.join(logs))
+        cds_logger.warning('\n'.join(logs))
 
     return {
         'dst_table_id': dst_table_id,
@@ -1087,6 +1090,7 @@ def import_sync_CDS(context):
 
     stats_info['org_id'] = context.get('org_id')
     stats_info['dataset_id'] = int(context.get('dataset_id'))
+    stats_info['dataset_sync_id'] = context.get('dataset_sync_id')
     stats_info['src_dtable_uuid'] = uuid_str_to_32_chars(context.get('src_dtable_uuid'))
     stats_info['src_table_id'] = (context.get('src_table') or {}).get('_id')
     stats_info['src_view_id'] = context.get('src_view_id')
@@ -1096,11 +1100,22 @@ def import_sync_CDS(context):
         stats_info['dst_table_id'] = context.get('dst_table_id')
     else:
         stats_info['import_or_sync'] = 'import'
+        stats_info['dst_table_id'] = None
     stats_info['operator'] = context.get('operator')
-    stats_info['started_at'] = datetime.now().isoformat()
+    started_at = datetime.now()
+    stats_info['started_at'] = started_at.isoformat()
 
     context['stats_info'] = stats_info
 
+    cds_logger.info('start to sync dataset_id: %s sync_id: %s src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s operator: %s', 
+                stats_info['dataset_id'], 
+                stats_info['dataset_sync_id'],
+                stats_info['src_dtable_uuid'],
+                stats_info['src_table_id'],
+                stats_info['src_view_id'],
+                stats_info['dst_dtable_uuid'],
+                stats_info['dst_table_id'],
+                stats_info['operator'])
     try:
         result = _import_sync_CDS(context)
     except Exception as e:
@@ -1111,7 +1126,22 @@ def import_sync_CDS(context):
         stats_info['dst_table_id'] = result.get('dst_table_id')
         stats_info['is_success'] = True
     finally:
-        stats_info['finished_at'] = datetime.now().isoformat()
+        finished_at = datetime.now()
+        stats_info['finished_at'] = finished_at.isoformat()
+        cds_logger.info('finished sync dataset_id: %s sync_id: %s src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s operator: %s cost: %ss', 
+                    stats_info['dataset_id'],
+                    stats_info['dataset_sync_id'],
+                    stats_info['src_dtable_uuid'],
+                    stats_info['src_table_id'],
+                    stats_info['src_view_id'],
+                    stats_info['dst_dtable_uuid'],
+                    stats_info['dst_table_id'],
+                    stats_info['operator'],
+                    (finished_at - started_at).seconds)
+        cds_logger.info('finished sync dataset_id: %s sync_id: %s detail: %s',
+                    stats_info['dataset_id'],
+                    stats_info['dataset_sync_id'],
+                    stats_info)
         stats_sender.send(stats_sender.CDS_CHANNEL, stats_info)
     return result
 
@@ -1122,7 +1152,7 @@ def set_common_dataset_invalid(dataset_id, db_session):
         db_session.execute(text(sql), {'dataset_id': dataset_id})
         db_session.commit()
     except Exception as e:
-        logger.error('set state of common dataset: %s error: %s', dataset_id, e)
+        cds_logger.error('set state of common dataset: %s error: %s', dataset_id, e)
 
 
 def set_common_dataset_syncs_invalid(dataset_sync_ids, db_session):
@@ -1131,7 +1161,7 @@ def set_common_dataset_syncs_invalid(dataset_sync_ids, db_session):
         db_session.execute(text(sql), {'dataset_sync_ids': dataset_sync_ids})
         db_session.commit()
     except Exception as e:
-        logger.error('set state of common dataset sync: %s error: %s', dataset_sync_ids, e)
+        cds_logger.error('set state of common dataset sync: %s error: %s', dataset_sync_ids, e)
 
 
 def gen_src_assets(src_dtable_uuid, src_table_id, src_view_id, dataset_sync_ids, db_session):
@@ -1143,7 +1173,7 @@ def gen_src_assets(src_dtable_uuid, src_table_id, src_view_id, dataset_sync_ids,
     try:
         src_dtable_metadata = src_dtable_server_api.get_metadata()
     except Exception as e:
-        logging.error('request src dst dtable: %s metadata error: %s', src_dtable_uuid, e)
+        cds_logger.error('request src dst dtable: %s metadata error: %s', src_dtable_uuid, e)
         return None
     src_table, src_view = None, None
     for table in src_dtable_metadata.get('tables', []):
@@ -1152,7 +1182,7 @@ def gen_src_assets(src_dtable_uuid, src_table_id, src_view_id, dataset_sync_ids,
             break
     if not src_table:
         set_common_dataset_syncs_invalid(dataset_sync_ids, db_session)
-        logging.warning('src: %s, %s, %s Source table not found.', src_dtable_uuid, src_table_id, src_view_id)
+        cds_logger.warning('src: %s, %s, %s Source table not found.', src_dtable_uuid, src_table_id, src_view_id)
         return None
     for view in src_table.get('views', []):
         if view['_id'] == src_view_id:
@@ -1160,7 +1190,7 @@ def gen_src_assets(src_dtable_uuid, src_table_id, src_view_id, dataset_sync_ids,
             break
     if not src_view:
         set_common_dataset_syncs_invalid(dataset_sync_ids, db_session)
-        logging.warning('src: %s, %s, %s Source view not found.', src_dtable_uuid, src_table_id, src_view_id)
+        cds_logger.warning('src: %s, %s, %s Source view not found.', src_dtable_uuid, src_table_id, src_view_id)
         return None
 
     src_version = src_dtable_metadata.get('version')
@@ -1187,7 +1217,7 @@ def gen_dst_assets(dst_dtable_uuid, dst_table_id, dataset_sync_id, db_session):
     try:
         dst_dtable_metadata = dst_dtable_server_api.get_metadata()
     except Exception as e:
-        logging.error('request src dst dtable: %s metadata error: %s', dst_dtable_uuid, e)
+        cds_logger.error('request src dst dtable: %s metadata error: %s', dst_dtable_uuid, e)
         return None
     dst_table = None
     for table in dst_dtable_metadata.get('tables', []):
@@ -1196,7 +1226,7 @@ def gen_dst_assets(dst_dtable_uuid, dst_table_id, dataset_sync_id, db_session):
             break
     if not dst_table:
         set_common_dataset_syncs_invalid([dataset_sync_id], db_session)
-        logging.warning('sync: %s destination table not found.', dataset_sync_id)
+        cds_logger.warning('sync: %s destination table not found.', dataset_sync_id)
         return None
     return {
         'dst_table_name': dst_table['name'],
@@ -1217,16 +1247,18 @@ def batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session, is_for
     sync_ids = [dataset_sync.sync_id for dataset_sync in dataset_syncs]
     src_assets = gen_src_assets(src_dtable_uuid, src_table_id, src_view_id, sync_ids, db_session)
     if not src_assets:
+        cds_logger.info('sync dataset_id: %s break!', dataset_id)
         return
     src_table = src_assets.get('src_table')
     try:
-        dataset_data, error = get_dataset_data(src_dtable_uuid, src_table, src_view_id)
+        dataset_data, error = get_dataset_data(dataset_id, src_dtable_uuid, src_table, src_view_id)
     except Exception as e:
-        logging.exception('request dtable: %s table: %s view: %s data error: %s', src_dtable_uuid, src_table_id, src_view_id, e)
+        cds_logger.exception('request dtable: %s table: %s view: %s data error: %s', src_dtable_uuid, src_table_id, src_view_id, e)
     if error:
         if error.get('task_status_code') == 400 and error.get('error_type') == 'wrong_filter_in_filters':
             set_common_dataset_syncs_invalid(sync_ids, db_session)
-        logging.error('request dtable: %s table: %s view: %s data error: %s', src_dtable_uuid, src_table_id, src_view_id, error)
+        cds_logger.error('request dtable: %s table: %s view: %s data error: %s', src_dtable_uuid, src_table_id, src_view_id, error)
+        cds_logger.info('sync dataset_id: %s break!', dataset_id)
         return
     for dataset_sync in dataset_syncs:
         dst_dtable_uuid = uuid_str_to_36_chars(dataset_sync.dst_dtable_uuid)
@@ -1237,9 +1269,11 @@ def batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session, is_for
         dst_assets = gen_dst_assets(dst_dtable_uuid, dst_table_id, dataset_sync_id, db_session)
 
         if not dst_assets:
+            cds_logger.info('sync dataset_id: %s sync_id: %s break!', dataset_id, dataset_sync_id)
             continue
 
         if not is_force_sync and src_assets.get('src_version') == last_src_version:
+            cds_logger.info('sync dataset_id: %s sync_id: %s break, src last version not changed!', dataset_id, dataset_sync_id)
             continue
 
         src_table = src_assets.get('src_table')
@@ -1247,6 +1281,7 @@ def batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session, is_for
         try:
             result = import_sync_CDS({
                 'dataset_id': dataset_id,
+                'dataset_sync_id': dataset_sync_id,
                 'src_dtable_uuid': src_dtable_uuid,
                 'dst_dtable_uuid': dst_dtable_uuid,
                 'src_table': src_table,
@@ -1262,7 +1297,7 @@ def batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session, is_for
                 'app': app
             })
         except Exception as e:
-            logging.error('sync common dataset src-uuid: %s src-table: %s src-view: %s dst-uuid: %s dst-table: %s error: %s', 
+            cds_logger.error('sync common dataset src-uuid: %s src-table: %s src-view: %s dst-uuid: %s dst-table: %s error: %s', 
                         src_dtable_uuid, src_table['name'], src_view_id, dst_dtable_uuid, dst_table_name, e)
             continue
         else:
@@ -1273,11 +1308,11 @@ def batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session, is_for
                     'exceed_columns_limit',
                     'exceed_rows_limit'
                 ):
-                    logging.warning('src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s client error: %s',
+                    cds_logger.warning('src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s client error: %s',
                                     src_dtable_uuid, src_table_id, src_view_id, dst_dtable_uuid, dst_table_id, result)
                     set_common_dataset_syncs_invalid([dataset_sync_id], db_session)
                 else:
-                    logging.error('src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s error: %s',
+                    cds_logger.error('src_dtable_uuid: %s src_table_id: %s src_view_id: %s dst_dtable_uuid: %s dst_table_id: %s error: %s',
                                 src_dtable_uuid, src_table_id, src_view_id, dst_dtable_uuid, dst_table_id, result)
                 continue
         sql = '''
