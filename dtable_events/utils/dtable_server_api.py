@@ -296,7 +296,7 @@ class DTableServerAPI(object):
             'table_id': table_id,
             'columns': columns
         }
-        response = requests.put(url, json=json_data, headers=self.headers)
+        response = requests.put(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
     def batch_append_rows(self, table_name, rows_data, need_convert_back=None):
