@@ -79,7 +79,7 @@ def check_common_dataset(app, session_class):
             try:
                 batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session)
             except Exception as e:
-                cds_logger.exception('batch sync common dataset: %s error: %s', dataset_id, e)
+                cds_logger.exception('batch sync common dataset_id: %s error: %s', dataset_id, e)
             finally:
                 cds_logger.info('finish sync dataset_id: %s syncs count: %s', dataset_id, len(dataset_syncs))
                 cds_logger.info('left datasets: %s dataset-syncs: %s', len(cds_dst_dict) - dataset_count, len(dataset_sync_list) - sync_count)
@@ -95,7 +95,7 @@ class CommonDatasetSyncerTimer(Thread):
     def run(self):
         sched = BlockingScheduler()
         # fire at every hour in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='12', misfire_grace_time=600)
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', misfire_grace_time=600)
         def timed_job():
             logging.info('Starts to scan common dataset syncs...')
             try:
