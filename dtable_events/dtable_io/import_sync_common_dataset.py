@@ -3,9 +3,8 @@ from datetime import datetime
 
 from sqlalchemy import text
 
-from dtable_events.common_dataset.common_dataset_sync_utils import import_sync_CDS, get_dataset_data, batch_sync_common_dataset
+from dtable_events.common_dataset.common_dataset_sync_utils import import_sync_CDS, get_dataset_data, batch_sync_common_dataset, cds_logger
 from dtable_events.db import init_db_session_class
-from dtable_events.dtable_io import dtable_io_logger
 from dtable_events.utils import uuid_str_to_32_chars, uuid_str_to_36_chars, get_inner_dtable_server_url
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.dtable_io.task_manager import task_manager
@@ -42,7 +41,7 @@ def force_sync_common_dataset(context: dict, config):
         try:
             batch_sync_common_dataset(context.get('app'), dataset_id, results, db_session, is_force_sync=True, operator=context.get('operator'))
         except Exception as e:
-            dtable_io_logger.exception('force sync dataset: %s error: %s', dataset_id, e)
+            cds_logger.exception('force sync dataset: %s error: %s', dataset_id, e)
         else:
             for sync_item in results:
                 task_manager.finish_dataset_sync(sync_item.sync_id)
@@ -75,6 +74,7 @@ def sync_common_dataset(context, config):
     lang = context.get('lang', 'en')
 
     dataset_id = context.get('dataset_id')
+    sync_id = context.get('sync_id')
 
     org_id = context.get('org_id')
 
@@ -82,7 +82,7 @@ def sync_common_dataset(context, config):
     try:
         db_session = init_db_session_class(config)()
     except Exception as e:
-        dtable_io_logger.error('create db session failed. ERROR: {}'.format(e))
+        cds_logger.error('create db session failed. ERROR: {}'.format(e))
         return
 
     sql = '''
@@ -98,13 +98,13 @@ def sync_common_dataset(context, config):
             'src_version': src_version
         })
     except Exception as e:
-        dtable_io_logger.error('get src version error: %s', e)
+        cds_logger.error('get src version error: %s', e)
         db_session.close()
         return
 
     sync_dataset = list(sync_dataset)
     if sync_dataset:
-        dtable_io_logger.debug('sync_dataset: %s', sync_dataset[0])
+        cds_logger.debug('sync_dataset: %s', sync_dataset[0])
         sql = '''
             UPDATE dtable_common_dataset_sync SET is_valid=1
             WHERE dataset_id=:dataset_id AND dst_dtable_uuid=:dst_dtable_uuid AND dst_table_id=:dst_table_id
@@ -117,16 +117,17 @@ def sync_common_dataset(context, config):
             })
             db_session.commit()
         except Exception as e:
-            dtable_io_logger.error('update sync reset is_valid error: %s', e)
+            cds_logger.error('update sync reset is_valid error: %s', e)
         return
 
     try:
-        dataset_data, result = get_dataset_data(src_dtable_uuid, src_table, src_view_id)
+        dataset_data, result = get_dataset_data(dataset_id, src_dtable_uuid, src_table, src_view_id)
         if result:
-            dtable_io_logger.error('dtable: %s table: %s view: %s get dataset data error: %s', src_dtable_uuid, src_table['_id'], src_view_id, result)
+            cds_logger.error('dtable: %s table: %s view: %s get dataset data error: %s', src_dtable_uuid, src_table['_id'], src_view_id, result)
         else:
             result = import_sync_CDS({
                 'dataset_id': dataset_id,
+                'dataset_sync_id': sync_id,
                 'src_dtable_uuid': src_dtable_uuid,
                 'dst_dtable_uuid': dst_dtable_uuid,
                 'src_table': src_table,
@@ -142,14 +143,14 @@ def sync_common_dataset(context, config):
                 'app': context.get('app')
             })
     except Exception as e:
-        dtable_io_logger.exception(e)
-        dtable_io_logger.error('sync common dataset error: %s', e)
+        cds_logger.exception(e)
+        cds_logger.error('sync common dataset error: %s', e)
         db_session.close()
         raise Exception(str(e))
     else:
         if result and 'task_status_code' in result and result['task_status_code'] != 200:
             if result['task_status_code'] == 500:
-                dtable_io_logger.error(result)
+                cds_logger.error(result)
             error_msg = 'import_sync_common_dataset:%s' % json.dumps(result)
             raise Exception(error_msg)
 
@@ -158,7 +159,7 @@ def sync_common_dataset(context, config):
     try:
         src_metadata = src_dtable_server_api.get_metadata()
     except Exception as e:
-        dtable_io_logger.error('get metadata error:  %s', e)
+        cds_logger.error('get metadata error:  %s', e)
         return None, 'get metadata error: %s' % (e,)
 
     last_src_version = src_metadata.get('version')
@@ -178,7 +179,7 @@ def sync_common_dataset(context, config):
         })
         db_session.commit()
     except Exception as e:
-        dtable_io_logger.error('insert dtable common dataset sync error: %s', e)
+        cds_logger.error('insert dtable common dataset sync error: %s', e)
     finally:
         db_session.close()
 
@@ -206,16 +207,17 @@ def import_common_dataset(context, config):
         db_session = init_db_session_class(config)()
     except Exception as e:
         db_session = None
-        dtable_io_logger.error('create db session failed. ERROR: {}'.format(e))
+        cds_logger.error('create db session failed. ERROR: {}'.format(e))
         return
 
     try:
-        dataset_data, result = get_dataset_data(src_dtable_uuid, src_table, src_view_id)
+        dataset_data, result = get_dataset_data(dataset_id, src_dtable_uuid, src_table, src_view_id)
         if result:
-            dtable_io_logger.error('dtable: %s table: %s view: %s get dataset data error: %s', src_dtable_uuid, src_table['_id'], src_view_id, result)
+            cds_logger.error('dtable: %s table: %s view: %s get dataset data error: %s', src_dtable_uuid, src_table['_id'], src_view_id, result)
         else:
             result = import_sync_CDS({
                 'dataset_id': dataset_id,
+                'dataset_sync_id': None,
                 'src_dtable_uuid': src_dtable_uuid,
                 'dst_dtable_uuid': dst_dtable_uuid,
                 'src_table': src_table,
@@ -229,12 +231,12 @@ def import_common_dataset(context, config):
                 'app': context.get('app')
             })
     except Exception as e:
-        dtable_io_logger.exception(e)
-        dtable_io_logger.error('import common dataset error: %s', e)
+        cds_logger.exception(e)
+        cds_logger.error('import common dataset error: %s', e)
         raise Exception(e)
     else:
         if result and 'task_status_code' in result and result['task_status_code'] != 200:
-            dtable_io_logger.error(result['error_msg'])
+            cds_logger.error(result['error_msg'])
             error_msg = 'import_sync_common_dataset:%s' % json.dumps(result)
             raise Exception(error_msg)
         dst_table_id = result.get('dst_table_id')
@@ -244,7 +246,7 @@ def import_common_dataset(context, config):
     try:
         src_metadata = src_dtable_server_api.get_metadata()
     except Exception as e:
-        dtable_io_logger.error('get metadata error:  %s', e)
+        cds_logger.error('get metadata error:  %s', e)
         return None, 'get metadata error: %s' % (e,)
 
     last_src_version = src_metadata.get('version')
@@ -266,6 +268,6 @@ def import_common_dataset(context, config):
         })
         db_session.commit()
     except Exception as e:
-        dtable_io_logger.error('insert dtable common dataset sync error: %s', e)
+        cds_logger.error('insert dtable common dataset sync error: %s', e)
     finally:
         db_session.close()

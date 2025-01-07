@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 from dtable_events import init_db_session_class
 from dtable_events.app.config import DTABLE_PRIVATE_KEY
-from dtable_events.common_dataset.common_dataset_sync_utils import batch_sync_common_dataset
+from dtable_events.common_dataset.common_dataset_sync_utils import batch_sync_common_dataset, cds_logger
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool
 
 class CommonDatasetSyncer(object):
@@ -65,11 +65,25 @@ def list_pending_common_dataset_syncs(db_session):
 def check_common_dataset(app, session_class):
     with session_class() as db_session:
         dataset_sync_list = list(list_pending_common_dataset_syncs(db_session))
+        cds_logger.info('checkout %s syncs', len(dataset_sync_list))
         cds_dst_dict = defaultdict(list)
         for dataset_sync in dataset_sync_list:
             cds_dst_dict[dataset_sync.dataset_id].append(dataset_sync)
+        cds_logger.info('checkout %s common-dataset(s)', len(cds_dst_dict))
+        dataset_count = 0
+        sync_count = 0
         for dataset_id, dataset_syncs in cds_dst_dict.items():
-            batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session)
+            dataset_count += 1
+            sync_count += len(dataset_syncs)
+            cds_logger.info('start to sync no: %s dataset_id: %s syncs count: %s', dataset_count, dataset_id, len(dataset_syncs))
+            try:
+                batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session)
+            except Exception as e:
+                cds_logger.exception('batch sync common dataset_id: %s error: %s', dataset_id, e)
+            finally:
+                cds_logger.info('finish sync dataset_id: %s syncs count: %s', dataset_id, len(dataset_syncs))
+                cds_logger.info('left datasets: %s dataset-syncs: %s', len(cds_dst_dict) - dataset_count, len(dataset_sync_list) - sync_count)
+        cds_logger.info('all syncs done')
 
 
 class CommonDatasetSyncerTimer(Thread):
