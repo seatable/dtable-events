@@ -1159,18 +1159,6 @@ def parse_collaborator(cell_value, name_to_email):
     return email_list
 
 
-def get_summary(summary, summary_col_info, column_name, head_name_to_head):
-    summary_type = summary_col_info.get(column_name, 'sum').lower()
-    column_info = head_name_to_head.get(column_name)
-    # return summary info if column type is formula and result type is number for excel value
-    # because grouped summary row does not contain format symbol like $, ￥, %, etc
-    if column_info and column_info.get('type') == 'formula' and column_info.get('data').get('result_type') == 'number':
-        return parse_summary_value(summary.get(summary_type), column_info.get('data'))
-    if column_info and column_info.get('type') == 'duration':
-        return format_duration(summary.get(summary_type), column_info.get('data'))
-    return summary.get(summary_type)
-
-
 def parse_geolocation(cell_data):
     if not isinstance(cell_data, dict):
         return str(cell_data)
@@ -1254,13 +1242,8 @@ def convert_formula_number(value, column_data):
 
 
 def parse_summary_value(cell_data, column_data):
-    def remove_zeros_from_end(s_number):
-        if '.' in s_number:
-            return s_number.rstrip('0').rstrip('.')
-        return s_number
-    
     value = str(cell_data)
-    precision = column_data.get('precision', 2)
+    precision = column_data.get('precision', 0)
     src_format = column_data.get('format')
 
     if src_format == 'percent':
@@ -1288,15 +1271,13 @@ def parse_summary_value(cell_data, column_data):
             return h_value + ':' + m_value + ':' + s_value
 
     value_list = value.split('.')
-    value_precision = min(len(value_list[1]) if len(value_list) > 1 else 0, 8)
+    value_precision = len(value_list[1]) if (len(value_list) > 1) else 0
 
-    if precision > value_precision:
-        value = f"{float(value):.{precision}f}"
-    else:
-        rounded_value = round(float(value), min(precision, 8))
-        value = f"{rounded_value:.{min(precision, 8)}f}"
-
-    value = remove_zeros_from_end(value)
+    if precision > 0 and precision > value_precision:
+        if value_precision > 0:
+            value = value + '0' * (precision - value_precision)
+        else:
+            value = value + '.' + '0' * (precision - value_precision)
 
     # add symbol
     if src_format == 'euro':
@@ -1448,15 +1429,15 @@ def is_int_str(num):
 
 def gen_decimal_format(num):
     # when the precision is not set, the precision is determined based on the value itself
+    # For numerical types without specified precision, the precision remains consistent with the front-end
     try:
         if float(num) == int(float(num)):
             return '0'
     except:
         return '0'
 
-    decimal_cnt = len(str(num).split('.')[1])
-    if decimal_cnt > 8:
-        decimal_cnt = 8
+    num = round(num, 8)
+    decimal_cnt = len(str(num).strip('0').split('.')[1])
     return '0.' + '0' * decimal_cnt
 
 
@@ -1620,7 +1601,7 @@ def format_duration(cell_data, column_data):
         return h_value + ':' + m_value + ':' + s_value
 
 
-def handle_grouped_row(row, ws, cols_without_hidden, column_name_to_column, sub_level, summary_col_info, head_name_to_head, summaries):
+def handle_grouped_row(row, ws, cols_without_hidden, column_name_to_column, sub_level, summary_col_info, summaries):
     from openpyxl.cell import WriteOnlyCell
     cell_list = []
     is_first_column = True
@@ -1645,12 +1626,30 @@ def handle_grouped_row(row, ws, cols_without_hidden, column_name_to_column, sub_
                 cell_value = cell_data2str(first_cell_value)
                 c = WriteOnlyCell(ws, value=ILLEGAL_CHARACTERS_RE.sub('', cell_value))
         else:
-            cell_value = summaries.get(col_name)
-            if cell_value:
+            summary_info = summaries.get(col_name)
+            if summary_info:
                 # not empty means summary value
                 # like {'price': {'sum': 89, 'average': 49.5, 'median': 49.5, 'max': 66, 'min': 233}, ...}
-                cell_value = get_summary(cell_value, summary_col_info, col_name, head_name_to_head)
-            c = WriteOnlyCell(ws, value=cell_value)
+                # grouped summary row does not contain format symbol like $, ￥, %, etc
+
+                column = column_name_to_column.get(col_name)
+                summary_type = summary_col_info.get(col_name, 'sum').lower()
+                cell_value = summary_info.get(summary_type)
+
+                if column.get('type') == ColumnTypes.FORMULA and isinstance(column.get('data'), dict) \
+                        and column.get('data').get('result_type') == 'number':
+                    cell_value = parse_summary_value(cell_value, column.get('data'))
+                    formula_value, number_format = parse_formula_number(cell_value, column.get('data'))
+                    c = WriteOnlyCell(ws, value=formula_value)
+                    c.number_format = number_format
+                elif column and column.get('type') == 'duration':
+                    duration_value = format_duration(cell_value, column.get('data'))
+                    c = WriteOnlyCell(ws, value=duration_value)
+                else:
+                    cell_value = cell_data2str(cell_value)
+                    c = WriteOnlyCell(ws, value=ILLEGAL_CHARACTERS_RE.sub('', cell_value))
+            else:
+                c = WriteOnlyCell(ws, value=None)
 
         try:
             c.fill = grouped_row_fills[sub_level]
@@ -1824,14 +1823,13 @@ def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, rep
 
 def handle_grouped_view_rows(view_rows, row_num_info, ws, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid,
                     repo_id, image_param, cols_without_hidden, column_name_to_column, summary_col_info, row_list, sub_level, row_height):
-    head_name_to_head = {head.get('name'): head for head in cols_without_hidden}
     for row in view_rows:
         group_subgroups = row.get('subgroups')
         group_rows = row.get('rows')
         summaries = row.get('summaries', {})
 
         # write grouped row to ws
-        row_cells = handle_grouped_row(row, ws, cols_without_hidden, column_name_to_column, sub_level, summary_col_info, head_name_to_head, summaries)
+        row_cells = handle_grouped_row(row, ws, cols_without_hidden, column_name_to_column, sub_level, summary_col_info, summaries)
         row_num_info['row_num'] += 1
         row_list.append(row_cells)
 
