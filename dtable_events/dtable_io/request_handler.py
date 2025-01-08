@@ -5,6 +5,7 @@ import logging
 from flask import Flask, request, make_response
 
 from dtable_events.app.config import DTABLE_PRIVATE_KEY
+from dtable_events.dtable_io import dtable_io_logger
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.dtable_io.task_message_manager import message_task_manager
 from dtable_events.dtable_io.task_data_sync_manager import data_sync_task_manager
@@ -42,7 +43,6 @@ def add_export_task():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -59,7 +59,7 @@ def add_export_task():
         task_id = task_manager.add_export_task(
             username, repo_id, workspace_id, dtable_uuid, table_name, ignore_asset)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -73,7 +73,6 @@ def add_import_task():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -96,7 +95,7 @@ def add_import_task():
             username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage, can_use_automation_rules,
             can_use_workflows, can_use_external_apps, owner, org_id)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -108,7 +107,6 @@ def add_big_data_screen_export_task():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -123,7 +121,7 @@ def add_big_data_screen_export_task():
         task_id = task_manager.add_export_dtable_big_data_screen_task(
             username, repo_id, dtable_uuid, page_id)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -135,7 +133,6 @@ def add_big_data_screen_import_task():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -150,7 +147,7 @@ def add_big_data_screen_import_task():
         task_id = task_manager.add_import_dtable_big_data_screen_task(
             username, repo_id, dtable_uuid, page_id)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -163,7 +160,6 @@ def add_big_data_screen_app_export_task():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -179,7 +175,7 @@ def add_big_data_screen_app_export_task():
         task_id = task_manager.add_export_dtable_big_data_screen_app_task(
             username, repo_id, dtable_uuid, app_uuid, app_id)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -192,7 +188,6 @@ def add_big_data_screen_app_import_task():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -208,7 +203,7 @@ def add_big_data_screen_app_import_task():
         task_id = task_manager.add_import_dtable_big_data_screen_app_task(
             username, repo_id, dtable_uuid, app_uuid, app_id)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -221,7 +216,6 @@ def add_parse_excel_csv_task():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -238,7 +232,7 @@ def add_parse_excel_csv_task():
         task_id = task_manager.add_parse_excel_csv_task(
             username, repo_id, file_name, file_type, parse_type, dtable_uuid)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -251,7 +245,6 @@ def add_import_excel_csv_task():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -274,7 +267,7 @@ def add_import_excel_csv_task():
         task_id = task_manager.add_import_excel_csv_task(
             username, repo_id, dtable_uuid, dtable_name, included_tables, lang)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -287,7 +280,6 @@ def add_import_excel_csv_add_table_task():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -309,7 +301,7 @@ def add_import_excel_csv_add_table_task():
         task_id = task_manager.add_import_excel_csv_add_table_task(
             username, dtable_uuid, dtable_name, included_tables, lang)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -322,7 +314,6 @@ def add_append_excel_csv_append_parsed_file_task():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -337,7 +328,7 @@ def add_append_excel_csv_append_parsed_file_task():
         task_id = task_manager.add_append_excel_csv_append_parsed_file_task(
             username, dtable_uuid, file_name, table_name)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -350,7 +341,6 @@ def add_append_excel_csv_upload_file_task():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -367,7 +357,7 @@ def add_append_excel_csv_upload_file_task():
         task_id = task_manager.add_append_excel_csv_upload_file_task(
             username, file_name, dtable_uuid, table_name, file_type)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -386,7 +376,7 @@ def query_status():
     try:
         is_finished, task_result = task_manager.query_status(task_id)
     except Exception as e:
-        logger.exception(e)
+        dtable_io_logger.exception(e)
         return make_response(({'error_msg': 'Internal Server Error'}, 500))
 
     if task_result and not task_result.get('success'):
@@ -412,7 +402,7 @@ def cancel_status():
     try:
         task_manager.cancel_task(task_id)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'success': True}, 200))
@@ -431,7 +421,7 @@ def query_message_send_status():
     try:
         is_finished, result = message_task_manager.query_status(task_id)
     except Exception as e:
-        logger.debug(e)  # task_id not found
+        dtable_io_logger.debug(e)  # task_id not found
         return make_response((e, 500))
 
     resp = dict(is_finished=is_finished)
@@ -452,7 +442,7 @@ def cancel_message_send_status():
     try:
         message_task_manager.cancel_task(task_id)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'success': True}, 200))
@@ -465,7 +455,6 @@ def convert_page_to_pdf():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -481,7 +470,7 @@ def convert_page_to_pdf():
         task_id = task_manager.convert_page_to_pdf(
             dtable_uuid, plugin_type, page_id, row_id, username)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -494,7 +483,6 @@ def dtable_asset_files():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -519,7 +507,7 @@ def dtable_asset_files():
         task_id = task_manager.add_export_dtable_asset_files_task(
             username, repo_id, dtable_uuid, files, files_map)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -532,7 +520,6 @@ def transfer_dtable_asset_files():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -563,7 +550,7 @@ def transfer_dtable_asset_files():
             username, repo_id, dtable_uuid, files, files_map, parent_dir,
             relative_path, replace, repo_api_token, seafile_server_url)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -589,7 +576,7 @@ def add_wechat_sending_task():
     try:
         task_id = message_task_manager.add_wechat_sending_task(webhook_url, msg, msg_type)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -614,7 +601,7 @@ def add_dingtalk_sending_task():
     try:
         task_id = message_task_manager.add_dingtalk_sending_task(webhook_url, msg)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -669,7 +656,7 @@ def add_email_sending_task():
         task_id = message_task_manager.add_email_sending_task(
             account_id, send_info, username)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -701,7 +688,7 @@ def add_notification_sending_task():
             email_list, user_col_key, msg, dtable_uuid, username, table_id, row_id
         )
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -732,7 +719,7 @@ def add_run_auto_rule_task():
         task_id = task_manager.add_run_auto_rule_task(
             automation_rule_id, username, org_id, dtable_uuid, run_condition, trigger, actions)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -745,7 +732,6 @@ def add_update_excel_upload_excel_task():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -760,7 +746,7 @@ def add_update_excel_upload_excel_task():
         task_id = task_manager.add_update_excel_upload_excel_task(
             username, file_name, dtable_uuid, table_name, )
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -773,7 +759,6 @@ def add_update_excel_csv_update_parsed_file_task():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -789,7 +774,7 @@ def add_update_excel_csv_update_parsed_file_task():
         task_id = task_manager.add_update_excel_csv_update_parsed_file_task(
             username, dtable_uuid, file_name, table_name, selected_columns)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -802,7 +787,6 @@ def add_update_csv_upload_csv_task():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -818,7 +802,7 @@ def add_update_csv_upload_csv_task():
         task_id = task_manager.add_update_csv_upload_csv_task(
             username, file_name, dtable_uuid, table_name)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -831,7 +815,6 @@ def add_import_excel_csv_to_dtable_task():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -847,7 +830,7 @@ def add_import_excel_csv_to_dtable_task():
     try:
         task_id = task_manager.add_import_excel_csv_to_dtable_task(username, repo_id, dtable_name, dtable_uuid, file_type, lang)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -860,7 +843,6 @@ def add_import_excel_to_table_task():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -875,7 +857,7 @@ def add_import_excel_to_table_task():
     try:
         task_id = task_manager.add_import_excel_csv_to_table_task(username, file_name, dtable_uuid, file_type, lang)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -888,7 +870,6 @@ def add_update_table_via_excel_csv_task():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -905,7 +886,7 @@ def add_update_table_via_excel_csv_task():
         task_id = task_manager.add_update_table_via_excel_csv_task(
             username, file_name, dtable_uuid, table_name, selected_columns, file_type)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -918,7 +899,6 @@ def add_append_excel_csv_to_table_task():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -934,7 +914,7 @@ def add_append_excel_csv_to_table_task():
         task_id = task_manager.add_append_excel_csv_to_table_task(
             username, file_name, dtable_uuid, table_name, file_type)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -947,7 +927,6 @@ def import_table_from_base():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -961,7 +940,7 @@ def import_table_from_base():
     try:
         task_id = task_manager.add_import_table_from_base_task(context)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -973,7 +952,6 @@ def import_common_dataset():
     if not is_valid:
         return make_response((error, 403))
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -986,7 +964,7 @@ def import_common_dataset():
     try:
         task_id = task_manager.add_import_common_dataset_task(context)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -998,7 +976,6 @@ def sync_common_data():
     if not is_valid:
         return make_response((error, 403))
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -1013,7 +990,7 @@ def sync_common_data():
         if error_type == 'syncing':
             return make_response({'error_msg': 'Dataset is syncing'}, 429)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -1025,7 +1002,6 @@ def force_sync_common_data():
     if not is_valid:
         return make_response((error, 403))
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -1040,7 +1016,7 @@ def force_sync_common_data():
         if error_type == 'syncing':
             return make_response({'error_msg': 'Dataset is force syncing'}, 429)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -1053,7 +1029,6 @@ def convert_view_to_excel():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -1078,7 +1053,7 @@ def convert_view_to_excel():
     try:
         task_id = task_manager.add_convert_view_to_excel_task(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -1091,7 +1066,6 @@ def convert_table_to_excel():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -1107,7 +1081,7 @@ def convert_table_to_excel():
     try:
         task_id = task_manager.add_convert_table_to_excel_task(dtable_uuid, table_id, username, name, repo_id, is_support_image)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -1136,7 +1110,7 @@ def add_app_users_sync_task():
     try:
         task_id = task_manager.add_app_users_sync_task(dtable_uuid, app_name, app_id, table_name, table_id, username)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -1157,7 +1131,7 @@ def sync_email():
     try:
         task_id = data_sync_task_manager.add_sync_email_task(context)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -1170,7 +1144,6 @@ def convert_big_data_view_to_excel():
         return make_response((error, 403))
 
     if big_data_task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (big_data_task_manager.tasks_queue.qsize(), big_data_task_manager.current_task_info,
                                     big_data_task_manager.threads_is_alive()))
@@ -1188,7 +1161,7 @@ def convert_big_data_view_to_excel():
     try:
         task_id = big_data_task_manager.add_convert_big_data_view_to_excel_task(dtable_uuid, table_id, view_id, username, name, repo_id, is_support_image)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -1201,7 +1174,6 @@ def add_import_big_excel_task():
         return make_response((error, 403))
 
     if big_data_task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (big_data_task_manager.tasks_queue.qsize(), big_data_task_manager.current_task_info,
                                     big_data_task_manager.threads_is_alive()))
@@ -1217,7 +1189,7 @@ def add_import_big_excel_task():
         task_id = big_data_task_manager.add_import_big_excel_task(
             username, dtable_uuid, table_name, file_path)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
     return make_response(({'task_id': task_id}, 200))
 
@@ -1228,7 +1200,6 @@ def add_update_big_excel_task():
         return make_response((error, 403))
 
     if big_data_task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (big_data_task_manager.tasks_queue.qsize(), big_data_task_manager.current_task_info,
                                     big_data_task_manager.threads_is_alive()))
@@ -1247,7 +1218,7 @@ def add_update_big_excel_task():
         task_id = big_data_task_manager.add_update_big_excel_task(
             username, dtable_uuid, table_name, file_path, ref_columns, is_insert_new_data)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
     return make_response(({'task_id': task_id}, 200))
 
@@ -1259,7 +1230,6 @@ def add_export_page_design_task():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -1274,7 +1244,7 @@ def add_export_page_design_task():
         task_id = task_manager.add_export_page_design_task(
             repo_id, dtable_uuid, page_id, username)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -1287,7 +1257,6 @@ def add_import_page_design_task():
         return make_response((error, 403))
 
     if task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
                                     task_manager.threads_is_alive()))
@@ -1304,7 +1273,7 @@ def add_import_page_design_task():
         task_id = task_manager.add_import_page_design_task(
             repo_id, workspace_id, dtable_uuid, page_id, is_dir, username)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -1323,7 +1292,7 @@ def query_big_data_status():
     try:
         is_finished, result = big_data_task_manager.query_status(task_id)
     except Exception as e:
-        logger.debug(e)  # task_id not found
+        dtable_io_logger.debug(e)  # task_id not found
         return make_response((e, 500))
 
     resp = dict(is_finished=is_finished)
@@ -1344,7 +1313,7 @@ def query_data_sync_status():
     try:
         is_finished = data_sync_task_manager.query_status(task_id)
     except Exception as e:
-        logger.debug(e)
+        dtable_io_logger.debug(e)
         return make_response((e, 500))
 
     resp = dict(is_finished=is_finished)
@@ -1366,7 +1335,7 @@ def add_email_to_table():
     try:
         task_id = plugin_email_task_manager.add_send_email_task(context)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
@@ -1385,7 +1354,7 @@ def query_plugin_email_send_status():
     try:
         is_finished = plugin_email_task_manager.query_status(task_id)
     except Exception as e:
-        logger.debug(e)
+        dtable_io_logger.debug(e)
         return make_response((e, 500))
 
     resp = dict(is_finished=is_finished)
@@ -1399,7 +1368,6 @@ def convert_app_table_page_to_excel():
         return make_response((error, 403))
 
     if big_data_task_manager.tasks_queue.full():
-        from dtable_events.dtable_io import dtable_io_logger
         dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
                                  % (big_data_task_manager.tasks_queue.qsize(), big_data_task_manager.current_task_info,
                                     big_data_task_manager.threads_is_alive()))
@@ -1419,7 +1387,7 @@ def convert_app_table_page_to_excel():
     try:
         task_id = big_data_task_manager.add_convert_app_table_page_to_excel_task(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_condition_groups, shown_column_keys, is_support_image)
     except Exception as e:
-        logger.error(e)
+        dtable_io_logger.error(e)
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
