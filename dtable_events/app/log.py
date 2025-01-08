@@ -29,13 +29,13 @@ class LogConfigurator(object):
 
         if os.environ.get('SEATABLE_LOG_TO_STDOUT', 'false') == 'true':
             # logs to stdout
-            stdout_formatter = logging.Formatter('[dtable-events] [%(asctime)s] %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s')
+            stdout_formatter = logging.Formatter('[dtable-events] [%(asctime)s] %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
             stdout_handler = logging.StreamHandler()
-            stdout_handler.setFormatter(stdout_formatter)  
+            stdout_handler.setFormatter(stdout_formatter)
             logging.root.addHandler(stdout_handler)
         else:
             # logs to file
-            file_formatter = logging.Formatter('[%(asctime)s] %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s')
+            file_formatter = logging.Formatter('[%(asctime)s] %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
             file_handler = handlers.TimedRotatingFileHandler(self._logfile, when='W0', interval=1, backupCount=7)
             file_handler.setLevel(self._level)
             file_handler.setFormatter(file_formatter)
@@ -71,7 +71,7 @@ def setup_logger(logname, fmt=None, level=None, propagate=None):
             stdout_handler.setLevel(level)
         if not fmt:
             fmt = f'[{logger_component_name}]' + '[%(asctime)s] [%(levelname)s] %(filename)s[line:%(lineno)d] %(message)s'
-        stdout_formatter = logging.Formatter(fmt)
+        stdout_formatter = logging.Formatter(fmt, datefmt="%Y-%m-%d %H:%M:%S")
         stdout_handler.setFormatter(stdout_formatter)
         stdout_handler.addFilter(logging.Filter(logname))
         logger.addHandler(stdout_handler)
@@ -84,7 +84,7 @@ def setup_logger(logname, fmt=None, level=None, propagate=None):
             handler.setLevel(level)
         if not fmt:
             fmt = '[%(asctime)s] [%(levelname)s] %(filename)s[line:%(lineno)d] %(message)s'
-        formatter = logging.Formatter(fmt)
+        formatter = logging.Formatter(fmt, datefmt="%Y-%m-%d %H:%M:%S")
         handler.setFormatter(formatter)
         handler.addFilter(logging.Filter(logname))
         logger.addHandler(handler)

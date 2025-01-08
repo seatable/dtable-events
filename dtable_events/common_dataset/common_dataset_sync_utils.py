@@ -1250,16 +1250,8 @@ def batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session, is_for
         cds_logger.info('sync dataset_id: %s break!', dataset_id)
         return
     src_table = src_assets.get('src_table')
-    try:
-        dataset_data, error = get_dataset_data(dataset_id, src_dtable_uuid, src_table, src_view_id)
-    except Exception as e:
-        cds_logger.exception('request dtable: %s table: %s view: %s data error: %s', src_dtable_uuid, src_table_id, src_view_id, e)
-    if error:
-        if error.get('task_status_code') == 400 and error.get('error_type') == 'wrong_filter_in_filters':
-            set_common_dataset_syncs_invalid(sync_ids, db_session)
-        cds_logger.error('request dtable: %s table: %s view: %s data error: %s', src_dtable_uuid, src_table_id, src_view_id, error)
-        cds_logger.info('sync dataset_id: %s break!', dataset_id)
-        return
+
+    dataset_data = None
     for dataset_sync in dataset_syncs:
         dst_dtable_uuid = uuid_str_to_36_chars(dataset_sync.dst_dtable_uuid)
         dst_table_id = dataset_sync.dst_table_id
@@ -1278,6 +1270,19 @@ def batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session, is_for
 
         src_table = src_assets.get('src_table')
         dst_table_name = dst_assets.get('dst_table_name')
+
+        if not dataset_data:
+            try:
+                dataset_data, error = get_dataset_data(dataset_id, src_dtable_uuid, src_table, src_view_id)
+            except Exception as e:
+                cds_logger.exception('request dtable: %s table: %s view: %s data error: %s', src_dtable_uuid, src_table_id, src_view_id, e)
+            if error:
+                if error.get('task_status_code') == 400 and error.get('error_type') == 'wrong_filter_in_filters':
+                    set_common_dataset_syncs_invalid(sync_ids, db_session)
+                cds_logger.error('request dtable: %s table: %s view: %s data error: %s', src_dtable_uuid, src_table_id, src_view_id, error)
+                cds_logger.info('sync dataset_id: %s break!', dataset_id)
+                return
+
         try:
             result = import_sync_CDS({
                 'dataset_id': dataset_id,
