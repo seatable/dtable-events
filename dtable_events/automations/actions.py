@@ -3691,15 +3691,18 @@ class AutomationRule:
         return False
 
     def do_actions(self, with_test=False):
-        auto_rule_logger.info('rule: %s run_condition: %s trigger_condition: %s start, is a test run: %s', self.rule_id, self.run_condition, self.trigger.get('condition'), with_test)
+        if with_test:
+            auto_rule_logger.info('rule: %s run_condition: %s trigger_condition: %s start, a test run', self.rule_id, self.run_condition, self.trigger.get('condition'))
+        else:
+            auto_rule_logger.info('rule: %s run_condition: %s trigger_condition: %s start', self.rule_id, self.run_condition, self.trigger.get('condition'))
         if (not self.can_do_actions()) and (not with_test):
-            auto_rule_logger.info('rule: %s can not do actions, with_test: %s', self.rule_id, with_test)
+            auto_rule_logger.info('rule: %s can not do actions', self.rule_id)
             return
 
         for action_info in self.action_infos:
             if not self.current_valid:
                 break
-            auto_rule_logger.info('rule: %s start action: %s type: %s', self.rule_id, action_info.get('_id'), action_info['type'])
+            auto_rule_logger.info('rule: %s start action: %s ', self.rule_id, action_info['type'])
             logger.debug('rule: %s start action: %s type: %s', self.rule_id, action_info.get('_id'), action_info['type'])
             if not self.can_condition_trigger_action(action_info):
                 auto_rule_logger.info('rule: %s forbidden trigger action: %s type: %s when run_condition: %s trigger_condition: %s', self.rule_id, action_info.get('_id'), action_info['type'], self.run_condition, self.trigger.get('condition'))
@@ -3872,8 +3875,6 @@ class AutomationRule:
                 self.task_run_success = False
                 auto_rule_logger.exception('rule: %s, do action: %s error: %s', self.rule_id, action_info, e)
                 logger.exception('rule: %s, do action: %s error: %s', self.rule_id, action_info, e)
-            finally:
-                auto_rule_logger.info('rule: %s action: %s type: %s finished', self.rule_id, action_info.get('_id'), action_info['type'])
 
         auto_rule_logger.info('rule: %s all actions finished done_actions: %s', self.rule_id, self.done_actions)
 

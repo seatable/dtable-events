@@ -38,7 +38,7 @@ def scan_triggered_automation_rules(event_data, db_session, per_minute_trigger_l
             'last_trigger_time': last_trigger_time,
         }
         try:
-            auto_rule_logger.info('start to run auto rule: %s', rule_id)
+            auto_rule_logger.info('run auto rule %s', rule_id)
             auto_rule = AutomationRule(event_data, db_session, trigger, actions, options, rule_instant_metadata_cache_manager, per_minute_trigger_limit=per_minute_trigger_limit)
             auto_rule.do_actions()
         except Exception as e:
