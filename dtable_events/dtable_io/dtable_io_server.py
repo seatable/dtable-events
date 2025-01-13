@@ -2,6 +2,7 @@ from threading import Thread
 
 from gevent.pywsgi import WSGIServer
 
+from dtable_events.app.log import setup_logger
 from dtable_events.dtable_io.request_handler import app as application
 from dtable_events.dtable_io.task_big_data_manager import big_data_task_manager
 from dtable_events.dtable_io.task_manager import task_manager
@@ -28,7 +29,8 @@ class DTableIOServer(Thread):
         plugin_email_task_manager.run()
         big_data_task_manager.run()
 
-        self._server = WSGIServer((self._host, int(self._port)), application)
+        io_server_logger = setup_logger('dtable_events_io_server', fmt="%(message)s")
+        self._server = WSGIServer((self._host, int(self._port)), application, log=io_server_logger)
 
     def _parse_config(self, config):
         if config.has_option('DTABLE-IO', 'host'):
