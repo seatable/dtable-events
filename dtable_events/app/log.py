@@ -29,24 +29,23 @@ class LogConfigurator(object):
 
         if os.environ.get('SEATABLE_LOG_TO_STDOUT', 'false') == 'true':
             # logs to stdout
-            stdout_formatter = logging.Formatter('[dtable-events] [%(asctime)s] %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
+            stdout_formatter = logging.Formatter('[dtable-events] [%(asctime)s] [%(levelname)s] %(filename)s[line:%(lineno)d] %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
             stdout_handler = logging.StreamHandler()
             stdout_handler.setFormatter(stdout_formatter)
             logging.root.addHandler(stdout_handler)
         else:
             # logs to file
-            file_formatter = logging.Formatter('[%(asctime)s] %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
+            file_formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] %(filename)s[line:%(lineno)d] %(message)s', datefmt="%Y-%m-%d %H:%M:%S")
             file_handler = handlers.TimedRotatingFileHandler(self._logfile, when='W0', interval=1, backupCount=7)
             file_handler.setLevel(self._level)
             file_handler.setFormatter(file_formatter)
             logging.root.addHandler(file_handler)
 
-        
 
     def _basic_config(self):
         # Log to stdout. Mainly for development.
         kw = {
-            'format': '[dtable-events] [%(asctime)s] %(filename)s[line:%(lineno)d] [%(levelname)s] %(message)s',
+            'format': '[dtable-events] [%(asctime)s] [%(levelname)s] %(filename)s[line:%(lineno)d] %(message)s',
             'datefmt': '%m/%d/%Y %H:%M:%S',
             'level': self._level,
             'stream': sys.stdout
@@ -65,7 +64,7 @@ def setup_logger(logname, fmt=None, level=None, propagate=None):
 
     if os.environ.get('SEATABLE_LOG_TO_STDOUT', 'false') == 'true':
         # logs to stdout
-        logger_component_name = logname.split('.')[0]
+        logger_component_name = logname
         stdout_handler = logging.StreamHandler()
         if level:
             stdout_handler.setLevel(level)
@@ -78,7 +77,7 @@ def setup_logger(logname, fmt=None, level=None, propagate=None):
     else:
         # logs to file
         logdir = os.path.join(os.environ.get('LOG_DIR', ''))
-        log_file = os.path.join(logdir, logname)
+        log_file = os.path.join(logdir, f"{logname}.log")
         handler = handlers.TimedRotatingFileHandler(log_file, when='MIDNIGHT', interval=1, backupCount=7)
         if level:
             handler.setLevel(level)
