@@ -39,7 +39,7 @@ from dtable_events.utils.email_sender import EmailSender
 
 logger = logging.getLogger(__name__)
 auto_rule_logger = setup_logger(
-    'automation_rules.log',
+    'automation_rules',
     level=logging.INFO,
     propagate=False
 )

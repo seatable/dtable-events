@@ -16,7 +16,7 @@ from dtable_events.utils.dtable_server_api import BaseExceedsException, DTableSe
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.utils.sql_generator import BaseSQLGenerator, SQLGeneratorOptionInvalidError, ColumnFilterInvalidError
 
-cds_logger = setup_logger('dtable_events_cds.log', propagate=False)
+cds_logger = setup_logger('dtable_events_cds', propagate=False)
 
 dtable_server_url = get_inner_dtable_server_url()
 
