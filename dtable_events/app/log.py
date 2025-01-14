@@ -17,12 +17,12 @@ def _get_log_level(level):
 def get_format(component=None, fmt=None):
     if not component:
         if not fmt:
-            return '[%(asctime)s] [%(levelname)s] %(filename)s[line:%(lineno)d] %(message)s'
+            return '[%(asctime)s] [%(levelname)s] %(filename)s[line:%(lineno)s] %(message)s'
         else:
             return fmt
     else:
         if not fmt:
-            return f'[{component}] [%(asctime)s] [%(levelname)s] %(filename)s[line:%(lineno)d] %(message)s'
+            return f'[{component}] [%(asctime)s] [%(levelname)s] %(filename)s[line:%(lineno)s] %(message)s'
         else:
             return f'[{component}] {fmt}'
 
