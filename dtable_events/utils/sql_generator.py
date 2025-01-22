@@ -1452,7 +1452,10 @@ class StatisticSQLGenerator(object):
                 detail_column_name = self._statistic_column_name_to_sql(detail_column, groupby_columns_dict[column_key]['group_by'])
                 if detail_column_name not in groupby_column_names:
                     continue
-                filter_sqls.append(f"{detail_column_name}='{filter_value}'")
+                if detail_column_name.startswith('YEAR'):
+                    filter_sqls.append(f"{detail_column_name}={filter_value}")
+                else:
+                    filter_sqls.append(f"{detail_column_name}='{filter_value}'")
 
         if filter_sqls:
             if self.filter_sql:
