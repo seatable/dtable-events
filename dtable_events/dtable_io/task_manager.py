@@ -357,11 +357,14 @@ class TaskManager(object):
         """
         return: task_id -> str or None, error_type -> str or None
         """
+        from dtable_events.dtable_io import dtable_io_logger
         from dtable_events.dtable_io.import_sync_common_dataset import sync_common_dataset
 
         dataset_sync_id = context.get('sync_id')
         with self.dataset_sync_ids_lock:
             if self.is_syncing(dataset_sync_id):
+                dtable_io_logger.warning('sync_id: %s dst_dtable_uuid: %s dst_table_id: %s is syncing, current syncing ids: %s', 
+                                        dataset_sync_id, context.get('dst_dtable_uuid'), context.get('dst_table_id'), self.dataset_sync_ids)
                 return None, 'syncing'
             self.add_dataset_sync(dataset_sync_id)
 
@@ -378,11 +381,13 @@ class TaskManager(object):
         """
         return: task_id -> str or None, error_type -> str or None
         """
+        from dtable_events.dtable_io import dtable_io_logger
         from dtable_events.dtable_io.import_sync_common_dataset import force_sync_common_dataset
 
         dataset_id = context.get('dataset_id')
         with self.force_sync_dataset_ids_lock:
             if self.is_dataset_force_syncing(dataset_id):
+                dtable_io_logger.warning('dataset: %s is syncing, current syncing datasets: %s', dataset_id, self.force_sync_dataset_ids)
                 return None, 'syncing'
             self.force_sync_dataset_ids.add(dataset_id)
 
