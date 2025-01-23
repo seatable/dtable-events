@@ -42,7 +42,7 @@ def force_sync_common_dataset(context: dict, config):
             batch_sync_common_dataset(context.get('app'), dataset_id, results, db_session, is_force_sync=True, operator=context.get('operator'))
         except Exception as e:
             cds_logger.exception('force sync dataset: %s error: %s', dataset_id, e)
-        else:
+        finally:
             for sync_item in results:
                 task_manager.finish_dataset_sync(sync_item.sync_id)
 
