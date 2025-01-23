@@ -387,7 +387,8 @@ class TaskManager(object):
         dataset_id = context.get('dataset_id')
         with self.force_sync_dataset_ids_lock:
             if self.is_dataset_force_syncing(dataset_id):
-                dtable_io_logger.warning('dataset: %s is syncing, current syncing datasets: %s', dataset_id, self.force_sync_dataset_ids)
+                dtable_io_logger.warning('dataset: %s is syncing, src_dtable_uuid: %s, dst_dtable_uuids: %s, current syncing datasets: %s', 
+                                        dataset_id, context.get('src_dtable_uuid'), context.get('dst_dtable_uuids'), self.force_sync_dataset_ids)
                 return None, 'syncing'
             self.force_sync_dataset_ids.add(dataset_id)
 
