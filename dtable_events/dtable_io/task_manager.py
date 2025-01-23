@@ -359,7 +359,7 @@ class TaskManager(object):
         """
         from dtable_events.dtable_io.import_sync_common_dataset import sync_common_dataset
 
-        dataset_sync_id = context.get('dataset_sync_id')
+        dataset_sync_id = context.get('sync_id')
         with self.dataset_sync_ids_lock:
             if self.is_syncing(dataset_sync_id):
                 return None, 'syncing'
@@ -508,7 +508,7 @@ class TaskManager(object):
                 self.tasks_map.pop(task_id, None)
                 if getattr(task[0], '__name__', None) == 'sync_common_dataset':
                     context = task[1][0]
-                    self.finish_dataset_sync(context.get('dataset_sync_id'))
+                    self.finish_dataset_sync(context.get('sync_id'))
                 if getattr(task[0], '__name__', None) == 'force_sync_common_dataset':
                     context = task[1][0]
                     self.finish_dataset_force_sync(context.get('dataset_id'))
@@ -525,12 +525,12 @@ class TaskManager(object):
     def cancel_task(self, task_id):
         self.tasks_map.pop(task_id, None)
 
-    def is_syncing(self, db_sync_id):
-        return db_sync_id in self.dataset_sync_ids
+    def is_syncing(self, sync_id):
+        return sync_id in self.dataset_sync_ids
 
-    def finish_dataset_sync(self, db_sync_id):
+    def finish_dataset_sync(self, sync_id):
         with self.dataset_sync_ids_lock:
-            self.dataset_sync_ids -= {db_sync_id}
+            self.dataset_sync_ids -= {sync_id}
 
     def add_dataset_sync(self, db_sync_id):
         self.dataset_sync_ids.add(db_sync_id)
