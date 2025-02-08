@@ -1,5 +1,6 @@
 import logging
 import re
+import pytz
 from datetime import datetime, timedelta
 
 from dateutil.relativedelta import relativedelta
@@ -626,10 +627,17 @@ class DateOperator(Operator):
         if dt:
             return dt.strftime("%Y-%m-%d")
 
+    def _format_to_utc_date(self, dt):
+        if dt:
+            end_date = dt.astimezone(pytz.UTC)
+
+            return end_date.strftime("%Y-%m-%dT%H:%M:%S.%f+00:00")
+
     def _other_date(self):
         filter_term_modifier = self.filter_term_modifier
         filter_term = self.filter_term
         today = datetime.today()
+        today = today.replace(hour=0, minute=0, second=0, microsecond=0)
         year = today.year
 
         if filter_term_modifier == FilterTermModifier.TODAY:
@@ -685,7 +693,7 @@ class DateOperator(Operator):
 
         if filter_term_modifier == FilterTermModifier.EXACT_DATE:
             try:
-                return datetime.strptime(filter_term, "%Y-%m-%d").date(), None
+                return datetime.strptime(filter_term, "%Y-%m-%d"), None
             except ValueError:
                 raise DateTimeQueryInvalidError(self.column_name)
             except:
@@ -797,8 +805,12 @@ class DateOperator(Operator):
         date, _ = self._other_date()
         if not date:
             return ""
-        next_date = self._format_date(date + timedelta(days=1))
-        target_date = self._format_date(date)
+        if self.column.get('type') in [ColumnTypes.CTIME, ColumnTypes.MTIME]:
+            next_date = self._format_to_utc_date(date + timedelta(days=1))
+            target_date = self._format_to_utc_date(date)
+        else:
+            next_date = self._format_date(date + timedelta(days=1))
+            target_date = self._format_date(date)
         return "`%(column_name)s` >= '%(target_date)s' and `%(column_name)s` < '%(next_date)s'" % ({
             "column_name": self.column_name,
             "target_date": target_date,
@@ -811,10 +823,19 @@ class DateOperator(Operator):
         start_date, end_date = self._other_date()
         if not (start_date, end_date ):
             return ""
-        return "`%(column_name)s` >= '%(start_date)s' and `%(column_name)s` <= '%(end_date)s'" % ({
+        end_date += timedelta(days=1)
+
+        if self.column.get('type') in [ColumnTypes.CTIME, ColumnTypes.MTIME]:
+            formatted_start_date = self._format_to_utc_date(start_date)
+            formatted_end_date = self._format_to_utc_date(end_date)
+        else:
+            formatted_start_date = self._format_date(start_date)
+            formatted_end_date = self._format_date(end_date)
+
+        return "`%(column_name)s` >= '%(start_date)s' and `%(column_name)s` < '%(end_date)s'" % ({
             "column_name": self.column_name,
-            "start_date": self._format_date(start_date),
-            "end_date": self._format_date(end_date)
+            "start_date": formatted_start_date,
+            "end_date": formatted_end_date
         })
 
     def op_is_before(self):
@@ -823,9 +844,15 @@ class DateOperator(Operator):
         target_date, _ = self._other_date()
         if not target_date:
             return ""
+
+        if self.column.get('type') in [ColumnTypes.CTIME, ColumnTypes.MTIME]:
+            formatted_target_date = self._format_to_utc_date(target_date)
+        else:
+            formatted_target_date = self._format_date(target_date)
+
         return "`%(column_name)s` < '%(target_date)s' and `%(column_name)s` is not null" % ({
             "column_name": self.column_name,
-            "target_date": self._format_date(target_date)
+            "target_date": formatted_target_date
         })
 
     def op_is_after(self):
@@ -834,7 +861,10 @@ class DateOperator(Operator):
         target_date, _ = self._other_date()
         if not target_date:
             return ""
-        next_date = self._format_date(target_date + timedelta(days=1))
+        if self.column.get('type') in [ColumnTypes.CTIME, ColumnTypes.MTIME]:
+            next_date = self._format_to_utc_date(target_date + timedelta(days=1))
+        else:
+            next_date = self._format_date(target_date + timedelta(days=1))
         return "`%(column_name)s` >= '%(target_date)s' and `%(column_name)s` is not null" % ({
             "column_name": self.column_name,
             "target_date": next_date,
@@ -847,7 +877,10 @@ class DateOperator(Operator):
         if not target_date:
             return ""
 
-        next_date = self._format_date(target_date + timedelta(days=1))
+        if self.column.get('type') in [ColumnTypes.CTIME, ColumnTypes.MTIME]:
+            next_date = self._format_to_utc_date(target_date + timedelta(days=1))
+        else:
+            next_date = self._format_date(target_date + timedelta(days=1))
         return "`%(column_name)s` < '%(target_date)s' and `%(column_name)s` is not null" % ({
             "column_name": self.column_name,
             "target_date": next_date
@@ -859,9 +892,14 @@ class DateOperator(Operator):
         target_date, _ = self._other_date()
         if not target_date:
             return ""
+        if self.column.get('type') in [ColumnTypes.CTIME, ColumnTypes.MTIME]:
+            target_date = self._format_to_utc_date(target_date)
+        else:
+            target_date = self._format_date(target_date)
+
         return "`%(column_name)s` >= '%(target_date)s' and `%(column_name)s` is not null" % ({
             "column_name": self.column_name,
-            "target_date": self._format_date(target_date)
+            "target_date": target_date
         })
 
     def op_is_not(self):
@@ -870,13 +908,21 @@ class DateOperator(Operator):
         target_date, _ = self._other_date()
         if not target_date:
             return ""
-        start_date = target_date - timedelta(days=1)
+        start_date = target_date
         end_date = target_date + timedelta(days=1)
-        return "(`%(column_name)s` >= '%(end_date)s' or `%(column_name)s` <= '%(start_date)s' or `%(column_name)s` is null)" % (
+
+        if self.column.get('type') in [ColumnTypes.CTIME, ColumnTypes.MTIME]:
+            formatted_start_date = self._format_to_utc_date(start_date)
+            formatted_end_date = self._format_to_utc_date(end_date)
+        else:
+            formatted_start_date = self._format_date(start_date)
+            formatted_end_date = self._format_date(end_date)
+
+        return "(`%(column_name)s` >= '%(end_date)s' or `%(column_name)s` < '%(start_date)s' or `%(column_name)s` is null)" % (
         {
             "column_name": self.column_name,
-            "start_date": self._format_date(start_date),
-            "end_date": self._format_date(end_date)
+            "start_date": formatted_start_date,
+            "end_date": formatted_end_date
         })
 
 class CheckBoxOperator(Operator):
