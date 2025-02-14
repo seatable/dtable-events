@@ -13,8 +13,8 @@ def get_expected_sql_for_modifier(filter_modifier, column_name):
         end_date = today + timedelta(days=14 - week_day)
 
     start_date = start_date.strftime("%Y-%m-%d")
-    end_date = end_date.strftime("%Y-%m-%d")
-    expected_sql = "SELECT * FROM `Table1` WHERE `%s` >= '%s' and `%s` < '%s' LIMIT 0, 100" % (column_name, start_date, column_name, end_date + timedelta(days=1))
+    end_date = (end_date + timedelta(days=1)).strftime("%Y-%m-%d")
+    expected_sql = "SELECT * FROM `Table1` WHERE `%s` >= '%s' and `%s` < '%s' LIMIT 0, 100" % (column_name, start_date, column_name, end_date)
     return expected_sql
 
 
