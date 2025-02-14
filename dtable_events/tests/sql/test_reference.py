@@ -255,7 +255,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM `Table1` WHERE (`Time2d` >= '2021-12-21' or `Time2d` <= '2021-12-19' or `Time2d` is null) LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE (`Time2d` >= '2021-12-21' or `Time2d` < '2021-12-20' or `Time2d` is null) LIMIT 0, 100",
         "by_group": False,
     },
     {
