@@ -18,11 +18,6 @@ class Base(DeclarativeBase):
 SeafBase = automap_base()
 
 
-def is_enable_operation_log_db(config):
-    db_sec = 'DATABASE'
-    return config.getboolean(db_sec, 'enable_operation_log_db', fallback=False)
-
-
 def create_engine_from_conf(config):
     backend = config.get('DATABASE', 'type')
 
@@ -153,18 +148,6 @@ def init_seafile_db_session_class(config):
     """Configure session class for mysql according to the config file."""
     try:
         engine = create_seafile_engine_from_conf(config)
-    except (configparser.NoOptionError, configparser.NoSectionError) as e:
-        logger.error("Init operation-log db session class error: %s" % e)
-        raise RuntimeError("Init operation-log db session class error: %s" % e)
-
-    session = sessionmaker(bind=engine)
-    return session
-
-
-def init_operation_db_session_class(config):
-    """Configure session class for mysql according to the config file."""
-    try:
-        engine = create_operation_log_db_engine_from_conf(config)
     except (configparser.NoOptionError, configparser.NoSectionError) as e:
         logger.error("Init operation-log db session class error: %s" % e)
         raise RuntimeError("Init operation-log db session class error: %s" % e)

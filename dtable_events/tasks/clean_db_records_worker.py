@@ -7,7 +7,8 @@ from threading import Thread
 from apscheduler.schedulers.blocking import BlockingScheduler
 from sqlalchemy import text
 
-from dtable_events.db import init_db_session_class, init_operation_db_session_class, is_enable_operation_log_db
+from dtable_events.app.config import ENABLE_OPERATION_LOG_DB
+from dtable_events.db import init_db_session_class
 
 __all__ = [
     'CleanDBRecordsWorker',
@@ -18,11 +19,6 @@ class CleanDBRecordsWorker(object):
     def __init__(self, config):
         self._enabled = False
         self._db_session_class = init_db_session_class(config)
-
-        if is_enable_operation_log_db(config):
-            self._operation_log_db_session_class = init_operation_db_session_class(config)
-        else:
-            self._operation_log_db_session_class = None
 
         try:
             self._parse_config(config)
@@ -70,7 +66,7 @@ class CleanDBRecordsWorker(object):
 
         logging.info('Using the following retention config: %s', self._retention_config)
 
-        CleanDBRecordsTask(self._db_session_class, self._operation_log_db_session_class, self._retention_config).start()
+        CleanDBRecordsTask(self._db_session_class, self._retention_config).start()
 
     def is_enabled(self):
         return self._enabled
@@ -93,10 +89,9 @@ class RetentionConfig:
 
 
 class CleanDBRecordsTask(Thread):
-    def __init__(self, db_session_class, operation_log_db_session_class, retention_config: RetentionConfig):
+    def __init__(self, db_session_class, retention_config: RetentionConfig):
         super(CleanDBRecordsTask, self).__init__()
         self.db_session_class = db_session_class
-        self.operation_log_db_session_class = operation_log_db_session_class
         self.retention_config = retention_config
 
     def run(self):
@@ -107,17 +102,14 @@ class CleanDBRecordsTask(Thread):
             logging.info('Start cleaning database...')
 
             session = self.db_session_class()
-            if self.operation_log_db_session_class:
-                operation_log_db_session = self.operation_log_db_session_class()
-            else:
-                operation_log_db_session = None
 
             try:
                 clean_snapshots(session, self.retention_config.dtable_snapshot)
                 clean_activities(session, self.retention_config.activities)
-                clean_operation_log(operation_log_db_session or session, self.retention_config.operation_log)
+                if not ENABLE_OPERATION_LOG_DB:
+                    clean_operation_log(session, self.retention_config.operation_log)
+                    clean_dtable_db_op_log(session, self.retention_config.dtable_db_op_log)
                 clean_delete_operation_log(session, self.retention_config.delete_operation_log)
-                clean_dtable_db_op_log(operation_log_db_session or session, self.retention_config.dtable_db_op_log)
                 clean_notifications(session, self.retention_config.dtable_notifications)
                 clean_user_notifications(session, self.retention_config.notifications_usernotification)
                 clean_sessions(session, self.retention_config.session_log)
@@ -128,8 +120,6 @@ class CleanDBRecordsTask(Thread):
                 logging.exception('Could not clean database')
             finally:
                 session.close()
-                if operation_log_db_session:
-                    operation_log_db_session.close()
 
         schedule.start()
 
