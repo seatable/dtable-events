@@ -127,6 +127,7 @@ def create_db_tables(config):
         raise RuntimeError("Create tables error: %s" % e)
 
     Base.metadata.create_all(engine)
+    engine.dispose()
 
 
 def prepare_seafile_tables(seafile_config):
@@ -138,3 +139,4 @@ def prepare_seafile_tables(seafile_config):
         raise RuntimeError("create db engine error: %s" % e)
 
     SeafBase.prepare(autoload_with=engine)
+    engine.dispose()
