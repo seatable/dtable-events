@@ -240,12 +240,12 @@ class TaskManager(object):
 
     @log_function_call
     def add_update_excel_csv_update_parsed_file_task(self, username, dtable_uuid, file_name, table_name,
-                                                     selected_columns):
+                                                     selected_columns, can_add_row, can_update_row):
         from dtable_events.dtable_io import update_excel_csv_update_parsed_file
 
         task_id = str(uuid.uuid4())
         task = (update_excel_csv_update_parsed_file,
-                (username, dtable_uuid, file_name, table_name, selected_columns))
+                (username, dtable_uuid, file_name, table_name, selected_columns, can_add_row, can_update_row))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         return task_id
@@ -293,11 +293,11 @@ class TaskManager(object):
         return task_id
 
     @log_function_call
-    def add_update_table_via_excel_csv_task(self, username, file_name, dtable_uuid, table_name, selected_columns, file_type):
+    def add_update_table_via_excel_csv_task(self, username, file_name, dtable_uuid, table_name, selected_columns, file_type, can_add_row, can_update_row):
         from dtable_events.dtable_io import update_table_via_excel_csv
 
         task_id = str(uuid.uuid4())
-        task = (update_table_via_excel_csv, (username, file_name, dtable_uuid, table_name, selected_columns, file_type))
+        task = (update_table_via_excel_csv, (username, file_name, dtable_uuid, table_name, selected_columns, file_type, can_add_row, can_update_row))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         return task_id
