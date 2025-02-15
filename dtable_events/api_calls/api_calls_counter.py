@@ -105,7 +105,7 @@ class APICallsCounter:
             try:
                 dtable_web_api.internal_update_exceed_api_quota(month, org_ids)
             except Exception as e:
-                logger.exception('update org_ids: %s error: %s', org_ids, e)
+                logger.exception('update exceed api quota error: %s', e)
 
     def count_api_calls(self, info, db_session):
         component = info.get('component')
@@ -166,7 +166,7 @@ class APICallsCounter:
         def timed_job():
             session = self._db_session_class()
             sql = "DELETE FROM `exceed_api_quota_teams`"
-            logger.info('Reset exceed_api_quota_teams now: %s', datetime.now())
+            logger.info('Start to reset exceed_api_quota_teams')
             try:
                 session.execute(text(sql))
                 session.commit()
