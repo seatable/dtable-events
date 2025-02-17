@@ -21,6 +21,7 @@ from dtable_events.automations.dtable_automation_rules_scanner import DTableAuto
 from dtable_events.webhook.webhook import Webhooker
 from dtable_events.common_dataset.common_dataset_syncer import CommonDatasetSyncer
 from dtable_events.tasks.big_data_storage_stats_worker import BigDataStorageStatsWorker
+from dtable_events.tasks.clean_db_records_worker import CleanDBRecordsWorker
 from dtable_events.data_sync.data_syncer import DataSyncer
 from dtable_events.workflow.workflow_actions import WorkflowActionsHandler
 from dtable_events.workflow.workflow_schedules_scanner import WorkflowSchedulesScanner
@@ -63,6 +64,7 @@ class App(object):
             self._ldap_syncer = LDAPSyncer(config)
             self._common_dataset_syncer = CommonDatasetSyncer(self, config)
             self._big_data_storage_stats_worker = BigDataStorageStatsWorker(config)
+            self._clean_db_records_worker = CleanDBRecordsWorker(config)
             self._data_sync = DataSyncer(config)
             self._workflow_schedule_scanner = WorkflowSchedulesScanner(config)
             self._dtable_asset_trash_cleaner = DTableAssetTrashCleaner(config)
@@ -99,6 +101,7 @@ class App(object):
             self._ldap_syncer.start()                        # default False
             self._common_dataset_syncer.start()              # default True
             self._big_data_storage_stats_worker.start()      # always True
+            self._clean_db_records_worker.start()            # default false
             self._data_sync.start()                          # default True
             self._workflow_schedule_scanner.start()          # default True
             self._dtable_asset_trash_cleaner.start()         # always True

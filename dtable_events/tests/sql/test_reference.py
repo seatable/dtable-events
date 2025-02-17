@@ -13,8 +13,8 @@ def get_expected_sql_for_modifier(filter_modifier, column_name):
         end_date = today + timedelta(days=14 - week_day)
 
     start_date = start_date.strftime("%Y-%m-%d")
-    end_date = end_date.strftime("%Y-%m-%d")
-    expected_sql = "SELECT * FROM `Table1` WHERE `%s` >= '%s' and `%s` <= '%s' LIMIT 0, 100" % (column_name, start_date, column_name, end_date)
+    end_date = (end_date + timedelta(days=1)).strftime("%Y-%m-%d")
+    expected_sql = "SELECT * FROM `Table1` WHERE `%s` >= '%s' and `%s` < '%s' LIMIT 0, 100" % (column_name, start_date, column_name, end_date)
     return expected_sql
 
 
@@ -255,7 +255,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM `Table1` WHERE (`Time2d` >= '2021-12-21' or `Time2d` <= '2021-12-19' or `Time2d` is null) LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE (`Time2d` >= '2021-12-21' or `Time2d` < '2021-12-20' or `Time2d` is null) LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -266,7 +266,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM `Table1` WHERE `createTime` < '2021-12-21' and `createTime` is not null LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `createTime` < '2021-12-21T00:00:00.000000+00:00' and `createTime` is not null LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -277,7 +277,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM `Table1` WHERE `createTime` >= '2021-12-20' and `createTime` is not null LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `createTime` >= '2021-12-20T00:00:00.000000+00:00' and `createTime` is not null LIMIT 0, 100",
         "by_group": False,
     },
     {
@@ -288,7 +288,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql": "SELECT * FROM `Table1` WHERE `modifyTime` >= '2021-12-21' and `modifyTime` is not null LIMIT 0, 100",
+        "expected_sql": "SELECT * FROM `Table1` WHERE `modifyTime` >= '2021-12-21T00:00:00.000000+00:00' and `modifyTime` is not null LIMIT 0, 100",
         "by_group": False,
     },
 
@@ -561,7 +561,7 @@ TEST_CONDITIONS = [
             "filter_predicate": 'And',
             "sorts":[],
         },
-        "expected_sql":"SELECT * FROM `Table1` WHERE `名称` = 'LINK' And `AutoNo` ilike '%NO%' And `rate` > 6 And `Mul` in ('aa', 'bb', 'cc', 'dd') And `modifyTime` >= '2021-12-21' and `modifyTime` is not null And `Sing` not in ('a', 'b', 'c') LIMIT 0, 100",
+        "expected_sql":"SELECT * FROM `Table1` WHERE `名称` = 'LINK' And `AutoNo` ilike '%NO%' And `rate` > 6 And `Mul` in ('aa', 'bb', 'cc', 'dd') And `modifyTime` >= '2021-12-21T00:00:00.000000+00:00' and `modifyTime` is not null And `Sing` not in ('a', 'b', 'c') LIMIT 0, 100",
         "by_group": False,
     },
 
@@ -594,7 +594,7 @@ TEST_CONDITIONS = [
             "limit": 500
         },
         "by_group": True,
-        "expected_sql":"SELECT * FROM `Table1` WHERE (`名称` = 'LINK' And `AutoNo` ilike '%NO%') Or (`rate` > 6 Or `Mul` in ('aa', 'bb', 'cc', 'dd') Or `modifyTime` >= '2021-12-21' and `modifyTime` is not null) ORDER BY `名称` DESC, `AutoNo` ASC LIMIT 0, 500"
+        "expected_sql":"SELECT * FROM `Table1` WHERE (`名称` = 'LINK' And `AutoNo` ilike '%NO%') Or (`rate` > 6 Or `Mul` in ('aa', 'bb', 'cc', 'dd') Or `modifyTime` >= '2021-12-21T00:00:00.000000+00:00' and `modifyTime` is not null) ORDER BY `名称` DESC, `AutoNo` ASC LIMIT 0, 500"
     },
 
     # Not group, column not found raise Exception
