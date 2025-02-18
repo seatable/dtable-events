@@ -30,6 +30,7 @@ from dtable_events.api_calls.api_calls_counter import APICallsCounter
 from dtable_events.tasks.dtable_file_access_log_cleaner import DTableFileAccessLogCleaner
 from dtable_events.activities.dtable_update_handler import DTableUpdateHander
 from dtable_events.activities.dtable_update_cache_manager import DTableUpdateCacheManager
+from dtable_events.tasks.ai_stats_worker import AIStatsWorker
 
 
 class App(object):
@@ -75,6 +76,8 @@ class App(object):
             self._virus_scanner = VirusScanner(config, seafile_config)
             # convert pdf manager
             conver_page_to_pdf_manager.init(config)
+            # ai stats, listen redis and cron
+            self.ai_stats_worker = AIStatsWorker(config)
 
     def serve_forever(self):
 
@@ -112,6 +115,8 @@ class App(object):
             self._virus_scanner.start()                      # default False
             # convert pdf manager
             conver_page_to_pdf_manager.start()               # always True
+            # ai stats, listen redis and cron
+            self.ai_stats_worker.start()                     # default False
 
         while True:
             time.sleep(60)
