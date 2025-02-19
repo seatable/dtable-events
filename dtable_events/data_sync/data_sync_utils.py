@@ -353,17 +353,29 @@ def sync_email_to_table(seatable, dtable_db_api, email_table_name, link_table_na
     update_threads(seatable, dtable_db_api, email_table_name, link_table_name, email_list, to_be_updated_thread_dict)
 
 
-def set_data_sync_invalid(data_sync_id, db_session):
-    sql = "UPDATE dtable_data_syncs SET is_valid=0 WHERE id =:data_sync_id"
-
-    db_session.execute(text(sql), {'data_sync_id': data_sync_id})
+def set_data_sync_invalid(data_sync_id, db_session, error_type):
+    sql = "UPDATE dtable_data_syncs SET is_valid=0, error_type=:error_type WHERE id =:data_sync_id"
+    db_session.execute(text(sql), {'data_sync_id': data_sync_id, 'error_type': error_type})
     db_session.commit()
 
 
 def update_sync_time(data_sync_id, db_session):
-    sql = "UPDATE dtable_data_syncs SET last_sync_time=:last_sync_time WHERE id =:data_sync_id"
-
+    sql = "UPDATE dtable_data_syncs SET last_sync_time=:last_sync_time, login_attempt_times=0, error_type=NULL WHERE id =:data_sync_id"
     db_session.execute(text(sql), {'data_sync_id': data_sync_id, 'last_sync_time': datetime.now()})
+    db_session.commit()
+
+
+def increase_data_sync_consecutive_errors_times(data_sync_id, db_session, consecutive_errors_times, pre_error_type, error_type):
+    if error_type == pre_error_type:
+        consecutive_errors_times += 1
+    else:
+        consecutive_errors_times = 1
+    sql = "UPDATE dtable_data_syncs SET consecutive_errors_times=:consecutive_errors_times, error_type=:error_type WHERE id =:data_sync_id"
+    db_session.execute(text(sql), {
+        'data_sync_id': data_sync_id,
+        'consecutive_errors_times': consecutive_errors_times,
+        'error_type': error_type
+    })
     db_session.commit()
 
 
@@ -374,6 +386,8 @@ def run_sync_emails(context):
     repo_id = context['repo_id']
     workspace_id = context['workspace_id']
     db_session = context['db_session']
+    consecutive_errors_times = context['consecutive_errors_times']
+    pre_error_type = context['error_type']
 
     send_date = context.get('send_date')
     username = context.get('username', 'Data Sync')
@@ -385,9 +399,8 @@ def run_sync_emails(context):
     link_table_id = detail.get('link_table_id')
 
     if not all([account_id, email_table_id, link_table_id]):
-        set_data_sync_invalid(data_sync_id, db_session)
-        logger.warning('account settings invalid, dtable_uuid: %s, data_sync_id: %s, email_table_id:%s, link_table_id:%s',
-                       dtable_uuid, data_sync_id, email_table_id, link_table_id)
+        error_type = 'configuration_invalid'
+        set_data_sync_invalid(data_sync_id, db_session, error_type)
         return
 
     if not send_date:
@@ -404,8 +417,8 @@ def run_sync_emails(context):
 
     account = get_third_party_account(db_session, account_id)
     if not account or account.get('account_type') != 'email' or not account.get('detail'):
-        set_data_sync_invalid(data_sync_id, db_session)
-        logger.warning('third party account not found, dtable_uuid: %s, data_sync_id: %s.', dtable_uuid, data_sync_id)
+        error_type = 'third_party_account_not_found'
+        set_data_sync_invalid(data_sync_id, db_session, error_type)
         return
     account_detail = account.get('detail')
 
@@ -414,19 +427,8 @@ def run_sync_emails(context):
     email_user = account_detail.get('host_user')
     email_password = account_detail.get('password')
     if not all([imap_host, imap_port, email_user, email_password]):
-        set_data_sync_invalid(data_sync_id, db_session)
-        logger.warning('third party account invalid, dtable_uuid: %s, data_sync_id: %s.', dtable_uuid, data_sync_id)
-        return
-
-    # check imap account
-    try:
-        imap = login_imap(imap_host, email_user, email_password, port=imap_port)
-    except LoginError as e:
-        logger.warning('dtable_uuid: %s, data_sync_id: %s, user or password invalid, email: %s user login error: %s', dtable_uuid, data_sync_id, email_user, e)
-        set_data_sync_invalid(data_sync_id, db_session)
-        return
-    except Exception as e:
-        logger.warning('dtable_uuid: %s, data_sync_id: %s, imap_server: %s, email_user: %s, login error: %s', dtable_uuid, data_sync_id, imap_host, email_user, e)
+        error_type = 'third_party_account_invalid'
+        set_data_sync_invalid(data_sync_id, db_session, error_type)
         return
 
     dtable_server_api = DTableServerAPI(username, dtable_uuid, api_url,
@@ -436,7 +438,6 @@ def run_sync_emails(context):
                                         )
 
     dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
-
     metadata = dtable_server_api.get_metadata()
 
     email_table_name = ''
@@ -456,8 +457,8 @@ def run_sync_emails(context):
             break
 
     if not email_table_name or not link_table_name:
-        set_data_sync_invalid(data_sync_id, db_session)
-        logger.warning('email table or link table invalid, dtable_uuid: %s, data_sync_id: %s.', dtable_uuid, data_sync_id)
+        error_type = 'table_not_found'
+        set_data_sync_invalid(data_sync_id, db_session, error_type)
         return
 
     # check required columns
@@ -466,29 +467,41 @@ def run_sync_emails(context):
 
     for col_name in REQUIRED_EMAIL_COLUMNS:
         if not email_columns_dict.get(col_name):
-            set_data_sync_invalid(data_sync_id, db_session)
-            logger.warning('dtable_uuid: %s, data_sync_id: %s, email table no such column: %s', dtable_uuid, data_sync_id, col_name)
+            error_type = 'column_not_found'
+            set_data_sync_invalid(data_sync_id, db_session, error_type)
             return
 
     for col_name in REQUIRED_THREAD_COLUMNS:
         if not link_columns_dict.get(col_name):
-            set_data_sync_invalid(data_sync_id, db_session)
-            logger.warning('dtable_uuid: %s, data_sync_id: %s, thread table no such column: %s', dtable_uuid, data_sync_id, col_name)
+            error_type = 'column_not_found'
+            set_data_sync_invalid(data_sync_id, db_session, error_type)
             return
+
+    # check imap account
+    try:
+        imap = login_imap(imap_host, email_user, email_password, port=imap_port)
+    except Exception as e:
+        error_type = 'third_party_account_login_error'
+        if pre_error_type and consecutive_errors_times >= 4:
+            set_data_sync_invalid(data_sync_id, db_session, error_type)
+        else:
+            increase_data_sync_consecutive_errors_times(data_sync_id, db_session, consecutive_errors_times, pre_error_type, error_type)
+        logger.warning('dtable_uuid: %s, data_sync_id: %s, imap_server: %s, email_user: %s, login error: %s', dtable_uuid, data_sync_id, imap_host, email_user, e)
+        return
 
     try:
         email_list = sorted(imap.search_emails_by_send_date(send_date, 'SINCE'), key=lambda x: str_2_datetime(x['Date']))
-    except socket.timeout as e:
-        logger.exception(e)
-        logger.error('dtable_uuid: %s, data_sync_id: %s, email: %s get emails timeout: %s', dtable_uuid, data_sync_id, email_user, e)
+    except Exception as e:
+        logger.exception('dtable_uuid: %s, data_sync_id: %s, email: %s get emails timeout: %s', dtable_uuid, data_sync_id, email_user, e)
         return
+    finally:
+        imap.close()
 
     logger.info('dtable_uuid: %s, data_sync_id: %s, email: {email_user} fetch %s emails', dtable_uuid, data_sync_id, len(email_list))
 
     try:
         sync_email_to_table(dtable_server_api, dtable_db_api, email_table_name, link_table_name, send_date, email_list)
     except Exception as e:
-        logger.exception(e)
-        logger.error('dtable_uuid: %s, data_sync_id: %s, email_user: %s sync and update link error: %s', dtable_uuid, data_sync_id, email_user, e)
+        logger.exception('dtable_uuid: %s, data_sync_id: %s, email_user: %s sync and update link error: %s', dtable_uuid, data_sync_id, email_user, e)
         return
     update_sync_time(data_sync_id, db_session)

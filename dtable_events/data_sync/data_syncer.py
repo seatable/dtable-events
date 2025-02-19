@@ -52,7 +52,8 @@ class DataSyncer(object):
 
 def list_pending_data_syncs(db_session):
     sql = '''
-            SELECT das.id, das.dtable_uuid, das.sync_type, das.detail, w.repo_id, w.id FROM dtable_data_syncs das
+            SELECT das.id, das.dtable_uuid, das.sync_type, das.detail, w.repo_id, w.id, das.consecutive_errors_times, 
+            das.error_type FROM dtable_data_syncs das
             INNER JOIN dtables d ON das.dtable_uuid=d.uuid AND d.deleted=0
             INNER JOIN workspaces w ON w.id=d.workspace_id
             WHERE das.is_valid=1
@@ -91,6 +92,8 @@ def check_data_syncs(db_session, max_workers):
             'detail': json.loads(data_sync[3]),
             'repo_id': data_sync[4],
             'workspace_id': data_sync[5],
+            'consecutive_errors_times': data_sync[6],
+            'error_type': data_sync[7],
             'db_session': db_session
         }
         tasks.append(executor.submit(run_sync_task, sync_info))
