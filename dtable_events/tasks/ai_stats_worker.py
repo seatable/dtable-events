@@ -71,7 +71,7 @@ class AIStatsWorker:
             self.user_stats[username][model]['output_tokens'] += usage.get('output_tokens') or 0
 
     def receive(self):
-        logger.info('Starting receiving ai calls...')
+        logger.info('Starts to receive ai calls...')
         subscriber = self._redis_client.get_subscriber(self.channel)
 
         while True:
@@ -188,9 +188,9 @@ class AIStatsWorker:
     def stats(self):
         sched = BlockingScheduler()
         # fire at 0,30 in every hour
-        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='0,30', misfire_grace_time=600)
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='*', misfire_grace_time=600)
         def timed_job():
-            logging.info('Starts to stats ai calls in memory...')
+            logger.info('Starts to stats ai calls in memory...')
             self.stats_worker()
 
         sched.start()
@@ -200,7 +200,7 @@ class AIStatsWorker:
         # fire at 0 o'clock in every day of week
         @sched.scheduled_job('cron', day_of_week='*', hour='0', misfire_grace_time=600)
         def timed_job():
-            logging.info('Starts to clean old stats ai...')
+            logger.info('Starts to clean old stats ai...')
             session = self._db_session_class()
             sql1 = "DELETE FORM `stats_ai_by_team` WHERE `month` < :clean_month"
             sql2 = "DELETE FORM `stats_ai_by_owner` WHERE `month` < :clean_month"
