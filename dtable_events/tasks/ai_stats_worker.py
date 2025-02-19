@@ -6,8 +6,9 @@ from copy import deepcopy
 from datetime import datetime
 from threading import Thread, Lock
 
-from sqlalchemy import text
 from apscheduler.schedulers.blocking import BlockingScheduler
+from dateutil import relativedelta
+from sqlalchemy import text
 
 from dtable_events.app.config import AI_PRICES, BAIDU_OCR_TOKENS
 from dtable_events.app.event_redis import RedisClient
@@ -25,8 +26,9 @@ class AIStatsWorker:
         self.stats_lock = Lock()
         self.org_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
         self.user_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
-        self._parse_config(config)
         self.channel = 'log_ai_model_usage'
+        self.keep_months = 3
+        self._parse_config(config)
 
     def _parse_config(self, config):
         """parse send email related options from config file
@@ -99,11 +101,12 @@ class AIStatsWorker:
         logger.info('There are %s org stats', len(org_stats))
         logger.info('There are %s user stats', len(user_stats))
 
-        data = []
         month = datetime.today().replace(day=1).date()
-        sql = '''
-        INSERT INTO `ai_stats`(`org_id`, `owner_id`, `month`, `model`, `input_tokens`, `output_tokens`, `cost`, `created_at`, `updated_at`) 
-        VALUES (:org_id, :owner_id, :month, :model, :input_tokens, :output_tokens, :cost, :created_at, :updated_at)
+
+        team_data = []
+        team_sql = '''
+        INSERT INTO `stats_ai_by_team`(`org_id`, `month`, `model`, `input_tokens`, `output_tokens`, `cost`, `created_at`, `updated_at`) 
+        VALUES (:org_id, :month, :model, :input_tokens, :output_tokens, :cost, :created_at, :updated_at)
         ON DUPLICATE KEY UPDATE `input_tokens`=`input_tokens`+VALUES(`input_tokens`),
                                 `output_tokens`=`output_tokens`+VALUES(`output_tokens`),
                                 `cost`=`cost`+VALUES(`cost`),
@@ -125,7 +128,6 @@ class AIStatsWorker:
 
                 params = {
                     'org_id': org_id,
-                    'owner_id': None,
                     'month': month,
                     'model': model,
                     'input_tokens': input_tokens,
@@ -134,8 +136,17 @@ class AIStatsWorker:
                     'created_at': datetime.now(),
                     'updated_at': datetime.now()
                 }
-                data.append(params)
+                team_data.append(params)
 
+        owner_data = []
+        owner_sql = '''
+        INSERT INTO `stats_ai_by_owner`(`owner_id`, `month`, `model`, `input_tokens`, `output_tokens`, `cost`, `created_at`, `updated_at`) 
+        VALUES (:owner_id, :month, :model, :input_tokens, :output_tokens, :cost, :created_at, :updated_at)
+        ON DUPLICATE KEY UPDATE `input_tokens`=`input_tokens`+VALUES(`input_tokens`),
+                                `output_tokens`=`output_tokens`+VALUES(`output_tokens`),
+                                `cost`=`cost`+VALUES(`cost`),
+                                `updated_at`=VALUES(`updated_at`)
+        '''
         for username, models_dict in user_stats.items():
             for model, usage in models_dict.items():
                 input_tokens = usage.get('input_tokens') or 0
@@ -151,24 +162,23 @@ class AIStatsWorker:
                 logger.info('user %s model %s, input_tokens %s cost %s, output_tokens %s cost %s', org_id, model, input_tokens, input_cost, output_tokens, output_cost)
 
                 params = {
-                    'org_id': None,
                     'owner_id': username,
                     'month': month,
                     'model': model,
                     'input_tokens': input_tokens,
-                    'output_tokens': output_tokens_price,
+                    'output_tokens': output_tokens,
                     'cost': input_cost + output_cost,
                     'created_at': datetime.now(),
                     'updated_at': datetime.now()
                 }
-                data.append(params)
-
-        if not data:
-            return
+                owner_data.append(params)
 
         session = self._db_session_class()
         try:
-            session.execute(text(sql), data)
+            if team_data:
+                session.execute(text(team_sql), team_data)
+            if owner_data:
+                session.execute(text(owner_sql), owner_data)
             session.commit()
         except Exception as e:
             logger.exception(e)
@@ -185,9 +195,30 @@ class AIStatsWorker:
 
         sched.start()
 
+    def clean(self):
+        sched = BlockingScheduler()
+        # fire at 0 o'clock in every day of week
+        @sched.scheduled_job('cron', day_of_week='*', hour='0', misfire_grace_time=600)
+        def timed_job():
+            logging.info('Starts to clean old stats ai...')
+            session = self._db_session_class()
+            sql1 = "DELETE FORM `stats_ai_by_team` WHERE `month` < :clean_month"
+            sql2 = "DELETE FORM `stats_ai_by_owner` WHERE `month` < :clean_month"
+            clean_month = (datetime.now() - relativedelta.relativedelta(months=self.keep_months)).strftime('%Y-%m-01')
+            try:
+                session.execute(text(sql1), {'clean_month': clean_month})
+                session.execute(text(sql2), {'clean_month': clean_month})
+            except Exception as e:
+                logger.exception(e)
+            finally:
+                session.close()
+
+        sched.start()
+
     def start(self):
         if not self._enabled:
             logger.warning('Can not stats AI: it is not enabled!')
             return
         Thread(target=self.receive, daemon=True).start()
         Thread(target=self.stats, daemon=True).start()
+        Thread(target=self.clean, daemon=True).start()
