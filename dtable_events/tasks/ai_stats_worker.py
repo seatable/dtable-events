@@ -188,7 +188,7 @@ class AIStatsWorker:
     def stats(self):
         sched = BlockingScheduler()
         # fire at 0,30 in every hour
-        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='*', misfire_grace_time=600)
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='0,30', misfire_grace_time=600)
         def timed_job():
             logger.info('Starts to stats ai calls in memory...')
             self.stats_worker()
