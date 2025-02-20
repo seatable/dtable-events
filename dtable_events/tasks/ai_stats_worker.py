@@ -24,8 +24,6 @@ class AIStatsWorker:
         self._db_session_class = init_db_session_class(config)
         self._redis_client = RedisClient(config)
         self.stats_lock = Lock()
-        self.org_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
-        self.user_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
         self.assistant_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
         self.channel = 'log_ai_model_usage'
         self.keep_months = 3
