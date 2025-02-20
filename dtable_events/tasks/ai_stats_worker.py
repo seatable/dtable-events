@@ -13,7 +13,7 @@ from sqlalchemy import text
 from dtable_events.app.config import AI_PRICES, BAIDU_OCR_TOKENS
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.db import init_db_session_class
-from dtable_events.utils import get_opt_from_conf_or_env, parse_bool
+from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,7 @@ class AIStatsWorker:
         self.stats_lock = Lock()
         self.org_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
         self.user_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
+        self.assistant_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
         self.channel = 'log_ai_model_usage'
         self.keep_months = 3
         self._parse_config(config)
@@ -42,9 +43,10 @@ class AIStatsWorker:
         self._enabled = enabled
 
     def save_to_memory(self, usage_info):
-        if not usage_info.get('model'):
+        if not usage_info.get('model') or not usage_info.get('assistant_uuid'):
             return
 
+        assistant_uuid = uuid_str_to_36_chars(usage_info.get('assistant_uuid'))
         model = usage_info['model']
         usage = usage_info.get('usage')
 
@@ -61,14 +63,8 @@ class AIStatsWorker:
         if model in BAIDU_OCR_TOKENS:
             usage['output_tokens'] = BAIDU_OCR_TOKENS[model]
 
-        org_id = usage_info.get('org_id')
-        username = usage_info.get('username')
-        if org_id and org_id != -1:
-            self.org_stats[org_id][model]['input_tokens'] += usage.get('input_tokens') or 0
-            self.org_stats[org_id][model]['output_tokens'] += usage.get('output_tokens') or 0
-        elif username:
-            self.user_stats[username][model]['input_tokens'] += usage.get('input_tokens') or 0
-            self.user_stats[username][model]['output_tokens'] += usage.get('output_tokens') or 0
+        self.assistant_stats[assistant_uuid][model]['input_tokens'] += usage.get('input_tokens') or 0
+        self.assistant_stats[assistant_uuid][model]['output_tokens'] += usage.get('output_tokens') or 0
 
     def receive(self):
         logger.info('Starts to receive ai calls...')
@@ -91,12 +87,45 @@ class AIStatsWorker:
                 logger.error('Failed get message from redis: %s' % e)
                 subscriber = self._redis_client.get_subscriber(self.channel)
 
+    def query_assistant_owners(self, assistant_uuids, session):
+        sql = '''
+            SELECT aao.assistant_uuid, aao.owner, w.org_id FROM ai_assistant_owner aao
+            JOIN workspaces w ON aao.owner=w.owner
+            WHERE aao.assistant_uuid IN :assistant_uuids
+        '''
+        results = session.execute(text(sql), {'assistant_uuids': assistant_uuids})
+        ret = {item.assistant_uuid: {'org_id': item.org_id, 'owner': item.owner} for item in results}
+        return ret
+
     def stats_worker(self):
+        if not self.assistant_stats:
+            logger.info('There are no assistant stats')
+            return
         with self.stats_lock:
-            org_stats = deepcopy(self.org_stats)
-            user_stats = deepcopy(self.user_stats)
-            self.org_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
-            self.user_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
+            assistant_stats = deepcopy(self.assistant_stats)
+            self.assistant_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
+
+        logger.info('There are %s assistant stats', len(assistant_stats))
+
+        session = self._db_session_class()
+        assistant_owners_dict = self.query_assistant_owners(list(assistant_stats.keys()), session)
+
+        org_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
+        user_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
+
+        for assistant_uuid, models_dict in assistant_stats.items():
+            owner_info = assistant_owners_dict.get(assistant_uuid)
+            if not owner_info:
+                logger.warning('assistant %s not found in db', assistant_uuid)
+                continue
+            org_id = owner_info.get('org_id')
+            owner = owner_info.get('owner')
+            if org_id == -1 and '@seafile_group' in owner:
+                pass
+            owner_stat = org_stats[org_id] if org_id != -1 else user_stats[owner]
+            for model, usage in models_dict.items():
+                owner_stat[model]['input_tokens'] += usage.get('input_tokens') or 0
+                owner_stat[model]['output_tokens'] += usage.get('output_tokens') or 0
 
         logger.info('There are %s org stats', len(org_stats))
         logger.info('There are %s user stats', len(user_stats))
@@ -153,13 +182,13 @@ class AIStatsWorker:
                 output_tokens = usage.get('output_tokens') or 0
 
                 if model not in AI_PRICES:
-                    logger.info('user %s price of model %s not defined', org_id, model)
+                    logger.info('user %s price of model %s not defined', username, model)
                     continue
                 input_tokens_price = AI_PRICES[model].get('input_tokens_1k') or 0
                 output_tokens_price = AI_PRICES[model].get('output_tokens_1k') or 0
                 input_cost = input_tokens_price * (input_tokens / 1000)
                 output_cost = output_tokens_price * (output_tokens / 1000)
-                logger.info('user %s model %s, input_tokens %s cost %s, output_tokens %s cost %s', org_id, model, input_tokens, input_cost, output_tokens, output_cost)
+                logger.info('user %s model %s, input_tokens %s cost %s, output_tokens %s cost %s', username, model, input_tokens, input_cost, output_tokens, output_cost)
 
                 params = {
                     'owner_id': username,
@@ -173,7 +202,6 @@ class AIStatsWorker:
                 }
                 owner_data.append(params)
 
-        session = self._db_session_class()
         try:
             if team_data:
                 session.execute(text(team_sql), team_data)
@@ -188,7 +216,7 @@ class AIStatsWorker:
     def stats(self):
         sched = BlockingScheduler()
         # fire at 0,30 in every hour
-        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='0,30', misfire_grace_time=600)
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='*/5', misfire_grace_time=600)
         def timed_job():
             logger.info('Starts to stats ai calls in memory...')
             self.stats_worker()
