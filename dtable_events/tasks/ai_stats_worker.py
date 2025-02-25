@@ -118,15 +118,13 @@ class AIStatsWorker:
                 continue
             org_id = owner_info.get('org_id')
             owner = owner_info.get('owner')
-            if org_id == -1 and '@seafile_group' in owner:
-                pass
             owner_stat = org_stats[org_id] if org_id != -1 else user_stats[owner]
             for model, usage in models_dict.items():
                 owner_stat[model]['input_tokens'] += usage.get('input_tokens') or 0
                 owner_stat[model]['output_tokens'] += usage.get('output_tokens') or 0
 
         logger.info('There are %s org stats', len(org_stats))
-        logger.info('There are %s user stats', len(user_stats))
+        logger.info('There are %s user stats (including groups with -1 org_id)', len(user_stats))
 
         month = datetime.today().replace(day=1).date()
 
