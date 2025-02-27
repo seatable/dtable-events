@@ -520,7 +520,10 @@ def parse_and_import_excel_csv_to_table(file_name, dtable_uuid, username, file_t
     upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, content, lang)
 
 
-def parse_and_update_file_to_table(file_name, username, dtable_uuid, table_name, selected_columns, file_type):
+def parse_and_update_file_to_table(file_name, username, dtable_uuid, table_name, selected_columns, file_type, can_add_row, can_update_row):
+    if not can_add_row and not can_update_row:
+        return
+
     related_users = get_related_nicknames_from_dtable(dtable_uuid)
     name_to_email = {user.get('name'): user.get('email') for user in related_users}
 
@@ -559,8 +562,10 @@ def parse_and_update_file_to_table(file_name, username, dtable_uuid, table_name,
             options = [gen_random_option(option) for option in to_be_added_options]
             dtable_server_api.add_column_options(table_name, col_name, options)
 
-    update_rows_by_dtable_db(dtable_db_api, update_rows, table_name)
-    append_rows_by_dtable_server(dtable_server_api, insert_rows, table_name)
+    if can_update_row:
+        update_rows_by_dtable_db(dtable_db_api, update_rows, table_name)
+    if can_add_row:
+        append_rows_by_dtable_server(dtable_server_api, insert_rows, table_name)
 
 
 def parse_and_append_excel_csv_to_table(username, file_name, dtable_uuid, table_name, file_type):
@@ -759,7 +764,10 @@ def get_dtable_row_data(dtable_rows, key_columns, excel_col_name_to_type, excel_
     return dtable_row_data
 
 
-def update_parsed_file_by_dtable_server(username, dtable_uuid, file_name, table_name, selected_columns):
+def update_parsed_file_by_dtable_server(username, dtable_uuid, file_name, table_name, selected_columns, can_add_row, can_update_row):
+    if not can_add_row and not can_update_row:
+        return
+
     # get json file
     tmp_file_path = os.path.join(EXCEL_IMPORT_DIR, dtable_uuid, file_name + '.json')
     with open(tmp_file_path, 'r') as f:
@@ -795,8 +803,10 @@ def update_parsed_file_by_dtable_server(username, dtable_uuid, file_name, table_
             options = [gen_random_option(option) for option in to_be_added_options]
             dtable_server_api.add_column_options(table_name, col_name, options)
 
-    update_rows_by_dtable_db(dtable_db_api, update_rows, table_name)
-    append_rows_by_dtable_server(dtable_server_api, insert_rows, table_name)
+    if can_update_row:
+        update_rows_by_dtable_db(dtable_db_api, update_rows, table_name)
+    if can_add_row:
+        append_rows_by_dtable_server(dtable_server_api, insert_rows, table_name)
 
 
 def get_cell_value(row, col, excel_col_name_to_type):
