@@ -11,7 +11,7 @@ from dateutil import relativedelta
 from sqlalchemy import text
 
 from dtable_events.app.config import AI_PRICES, BAIDU_OCR_TOKENS
-from dtable_events.app.event_redis import RedisClient
+from dtable_events.app.event_redis import RedisClient, redis_cache
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars
 
@@ -24,9 +24,11 @@ class AIStatsWorker:
         self._db_session_class = init_db_session_class(config)
         self._redis_client = RedisClient(config)
         self.stats_lock = Lock()
-        self.assistant_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
+        self.org_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
+        self.owner_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
         self.channel = 'log_ai_model_usage'
         self.keep_months = 3
+        self.owner_info_cache_timeout = 24 * 60 * 60
         self._parse_config(config)
 
     def _parse_config(self, config):
@@ -40,13 +42,17 @@ class AIStatsWorker:
         enabled = parse_bool(enabled)
         self._enabled = enabled
 
-    def save_to_memory(self, usage_info):
+    def save_to_memory(self, usage_info, session):
         if not usage_info.get('model') or not usage_info.get('assistant_uuid'):
             return
 
         assistant_uuid = uuid_str_to_36_chars(usage_info.get('assistant_uuid'))
         model = usage_info['model']
         usage = usage_info.get('usage')
+
+        if model not in AI_PRICES:
+            logger.warning('model %s price not defined')
+            return
 
         if 'prompt_tokens' in usage:
             usage['input_tokens'] = usage['prompt_tokens']
@@ -61,8 +67,16 @@ class AIStatsWorker:
         if model in BAIDU_OCR_TOKENS:
             usage['output_tokens'] = BAIDU_OCR_TOKENS[model]
 
-        self.assistant_stats[assistant_uuid][model]['input_tokens'] += usage.get('input_tokens') or 0
-        self.assistant_stats[assistant_uuid][model]['output_tokens'] += usage.get('output_tokens') or 0
+        owner_info = self.query_assistant_owner(assistant_uuid, session)
+        if not owner_info:
+            logger.warning('assistant %s has no owner', assistant_uuid)
+            return
+        if owner_info['org_id'] != -1:
+            self.org_stats[owner_info['org_id']][model]['input_tokens'] += usage.get('input_tokens') or 0
+            self.org_stats[owner_info['org_id']][model]['output_tokens'] += usage.get('output_tokens') or 0
+        else:
+            self.owner_stats[owner_info['owner_id']][model]['input_tokens'] += usage.get('input_tokens') or 0
+            self.owner_stats[owner_info['owner_id']][model]['output_tokens'] += usage.get('output_tokens') or 0
 
     def receive(self):
         logger.info('Starts to receive ai calls...')
@@ -76,55 +90,53 @@ class AIStatsWorker:
                         usage_info = json.loads(message['data'])
                     except:
                         logger.warning('log_ai_model_usage message invalid')
+                        continue
+                    session = self._db_session_class()
                     logger.debug('usage_info %s', usage_info)
-                    with self.stats_lock:
-                        self.save_to_memory(usage_info)
+                    try:
+                        with self.stats_lock:
+                            self.save_to_memory(usage_info, session)
+                    except Exception as e:
+                        logger.exception('save usage_info %s to memory error %s', usage_info, e)
+                    finally:
+                        session.close()
                 else:
                     time.sleep(0.5)
             except Exception as e:
                 logger.error('Failed get message from redis: %s' % e)
                 subscriber = self._redis_client.get_subscriber(self.channel)
 
-    def query_assistant_owners(self, assistant_uuids, session):
+    def get_assistant_cache_key(self, assistant_uuid):
+        return f'assistant:{assistant_uuid}:owner'
+
+    def query_assistant_owner(self, assistant_uuid, session):
+        cache_key = self.get_assistant_cache_key(assistant_uuid)
+        owner_info = redis_cache.get(cache_key)
+        if owner_info:
+            return json.loads(owner_info)
         sql = '''
             SELECT aao.assistant_uuid, aao.owner, w.org_id FROM ai_assistant_owner aao
             JOIN workspaces w ON aao.owner=w.owner
-            WHERE aao.assistant_uuid IN :assistant_uuids
+            WHERE aao.assistant_uuid=:assistant_uuid
         '''
-        results = session.execute(text(sql), {'assistant_uuids': assistant_uuids})
-        ret = {item.assistant_uuid: {'org_id': item.org_id, 'owner': item.owner} for item in results}
-        return ret
+        results = session.execute(text(sql), {'assistant_uuid': assistant_uuid})
+        row = results.fetchone()
+        if not row:
+            return None
+        owner_info = {'org_id': row.org_id, 'owner_id': row.owner}
+        redis_cache.set(cache_key, json.dumps(owner_info), timeout=self.owner_info_cache_timeout)
+        return owner_info
 
     def stats_worker(self):
-        if not self.assistant_stats:
-            logger.info('There are no assistant stats')
+        if not self.org_stats and not self.owner_stats:
+            logger.info('There are no stats')
             return
         with self.stats_lock:
-            assistant_stats = deepcopy(self.assistant_stats)
-            self.assistant_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
-
-        logger.info('There are %s assistant stats', len(assistant_stats))
-
-        session = self._db_session_class()
-        assistant_owners_dict = self.query_assistant_owners(list(assistant_stats.keys()), session)
-
-        org_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
-        user_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
-
-        for assistant_uuid, models_dict in assistant_stats.items():
-            owner_info = assistant_owners_dict.get(assistant_uuid)
-            if not owner_info:
-                logger.warning('assistant %s not found in db', assistant_uuid)
-                continue
-            org_id = owner_info.get('org_id')
-            owner = owner_info.get('owner')
-            owner_stat = org_stats[org_id] if org_id != -1 else user_stats[owner]
-            for model, usage in models_dict.items():
-                owner_stat[model]['input_tokens'] += usage.get('input_tokens') or 0
-                owner_stat[model]['output_tokens'] += usage.get('output_tokens') or 0
+            org_stats = deepcopy(self.org_stats)
+            owner_stats = deepcopy(self.owner_stats)
 
         logger.info('There are %s org stats', len(org_stats))
-        logger.info('There are %s user stats (including groups with -1 org_id)', len(user_stats))
+        logger.info('There are %s owner stats (including groups with -1 org_id)', len(owner_stats))
 
         month = datetime.today().replace(day=1).date()
 
@@ -142,9 +154,6 @@ class AIStatsWorker:
                 input_tokens = usage.get('input_tokens') or 0
                 output_tokens = usage.get('output_tokens') or 0
 
-                if model not in AI_PRICES:
-                    logger.info('org %s price of model %s not defined', org_id, model)
-                    continue
                 input_tokens_price = AI_PRICES[model].get('input_tokens_1k') or 0
                 output_tokens_price = AI_PRICES[model].get('output_tokens_1k') or 0
                 input_cost = input_tokens_price * (input_tokens / 1000)
@@ -172,22 +181,19 @@ class AIStatsWorker:
                                 `cost`=`cost`+VALUES(`cost`),
                                 `updated_at`=VALUES(`updated_at`)
         '''
-        for username, models_dict in user_stats.items():
+        for owner_id, models_dict in owner_stats.items():
             for model, usage in models_dict.items():
                 input_tokens = usage.get('input_tokens') or 0
                 output_tokens = usage.get('output_tokens') or 0
 
-                if model not in AI_PRICES:
-                    logger.info('user %s price of model %s not defined', username, model)
-                    continue
                 input_tokens_price = AI_PRICES[model].get('input_tokens_1k') or 0
                 output_tokens_price = AI_PRICES[model].get('output_tokens_1k') or 0
                 input_cost = input_tokens_price * (input_tokens / 1000)
                 output_cost = output_tokens_price * (output_tokens / 1000)
-                logger.info('user %s model %s, input_tokens %s cost %s, output_tokens %s cost %s', username, model, input_tokens, input_cost, output_tokens, output_cost)
+                logger.info('owner %s model %s, input_tokens %s cost %s, output_tokens %s cost %s', owner_id, model, input_tokens, input_cost, output_tokens, output_cost)
 
                 params = {
-                    'owner_id': username,
+                    'owner_id': owner_id,
                     'month': month,
                     'model': model,
                     'input_tokens': input_tokens,
@@ -198,6 +204,7 @@ class AIStatsWorker:
                 }
                 owner_data.append(params)
 
+        session = self._db_session_class()
         try:
             if team_data:
                 session.execute(text(team_sql), team_data)
