@@ -68,19 +68,26 @@ def create_seafile_engine_from_conf(config):
     backend = config.get('database', 'type')
 
     if backend == 'mysql':
-        if config.has_option('database', 'host'):
-            host = config.get('database', 'host').lower()
-        else:
-            host = 'localhost'
+        if not (host := os.getenv('SEATABLE_MYSQL_DB_HOST')):
+            if config.has_option('database', 'host'):
+                host = config.get('database', 'host').lower()
+            else:
+                host = 'localhost'
 
-        if config.has_option('database', 'port'):
-            port = config.getint('database', 'port')
-        else:
-            port = 3306
+        if not (port := os.getenv('SEATABLE_MYSQL_DB_PORT')):
+            if config.has_option('database', 'port'):
+                port = config.getint('database', 'port')
+            else:
+                port = 3306
 
-        username = config.get('database', 'user')
-        password = config.get('database', 'password')
-        db_name = config.get('database', 'db_name')
+        if not (username := os.getenv('SEATABLE_MYSQL_DB_USER')):
+            username = config.get('database', 'user')
+
+        if not (password := os.getenv('SEATABLE_MYSQL_DB_PASSWORD')):
+            password = config.get('database', 'password')
+
+        if not (db_name := os.getenv('SEATABLE_MYSQL_DB_SEAFILE_DB_NAME')):
+            db_name = config.get('database', 'db_name')
 
         db_url = "mysql+mysqldb://%s:%s@%s:%s/%s?charset=utf8" % \
                  (username, quote_plus(password), host, port, db_name)
