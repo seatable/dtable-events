@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import configparser
 import logging
+import os
 from urllib.parse import quote_plus
 
 from sqlalchemy import create_engine
@@ -22,19 +23,26 @@ def create_engine_from_conf(config):
     backend = config.get('DATABASE', 'type')
 
     if backend == 'mysql':
-        if config.has_option('DATABASE', 'host'):
-            host = config.get('DATABASE', 'host').lower()
-        else:
-            host = 'localhost'
+        if not (host := os.getenv('SEATABLE_MYSQL_DB_HOST')):
+            if config.has_option('DATABASE', 'host'):
+                host = config.get('DATABASE', 'host').lower()
+            else:
+                host = 'localhost'
 
-        if config.has_option('DATABASE', 'port'):
-            port = config.getint('DATABASE', 'port')
-        else:
-            port = 3306
+        if not (port := os.getenv('SEATABLE_MYSQL_DB_PORT')):
+            if config.has_option('DATABASE', 'port'):
+                port = config.getint('DATABASE', 'port')
+            else:
+                port = 3306
 
-        username = config.get('DATABASE', 'username')
-        password = config.get('DATABASE', 'password')
-        db_name = config.get('DATABASE', 'db_name')
+        if not (username := os.getenv('SEATABLE_MYSQL_DB_USER')):
+            username = config.get('DATABASE', 'username')
+
+        if not (password := os.getenv('SEATABLE_MYSQL_DB_PASSWORD')):
+            password = config.get('DATABASE', 'password')
+
+        if not (db_name := os.getenv('SEATABLE_MYSQL_DB_DTABLE_DB_NAME')):
+            db_name = config.get('DATABASE', 'db_name')
 
         db_url = "mysql+mysqldb://%s:%s@%s:%s/%s?charset=utf8" % \
                  (username, quote_plus(password), host, port, db_name)
