@@ -635,7 +635,7 @@ def add_email_sending_task():
     image_cid_url_map = data.get('image_cid_url_map', {})
     if image_cid_url_map and not isinstance(image_cid_url_map, dict):
         image_cid_url_map = json.loads(image_cid_url_map)
-    
+
     account_id = data.get('account_id')
 
     send_info = {
@@ -769,10 +769,15 @@ def add_update_excel_csv_update_parsed_file_task():
     file_name = request.args.get('file_name')
     table_name = request.args.get('table_name')
     selected_columns = request.args.get('selected_columns')
+    can_add_row = request.args.get('can_add_row', 'false')
+    can_update_row = request.args.get('can_update_row', 'false')
+
+    can_add_row = to_python_boolean(can_add_row)
+    can_update_row = to_python_boolean(can_update_row)
 
     try:
         task_id = task_manager.add_update_excel_csv_update_parsed_file_task(
-            username, dtable_uuid, file_name, table_name, selected_columns)
+            username, dtable_uuid, file_name, table_name, selected_columns, can_add_row, can_update_row)
     except Exception as e:
         dtable_io_logger.error(e)
         return make_response((e, 500))
@@ -881,10 +886,15 @@ def add_update_table_via_excel_csv_task():
     table_name = request.args.get('table_name')
     selected_columns = request.args.get('selected_columns')
     file_type = request.args.get('file_type')
+    can_add_row = request.args.get('can_add_row', 'false')
+    can_update_row = request.args.get('can_update_row', 'false')
+
+    can_add_row = to_python_boolean(can_add_row)
+    can_update_row = to_python_boolean(can_update_row)
 
     try:
         task_id = task_manager.add_update_table_via_excel_csv_task(
-            username, file_name, dtable_uuid, table_name, selected_columns, file_type)
+            username, file_name, dtable_uuid, table_name, selected_columns, file_type, can_add_row, can_update_row)
     except Exception as e:
         dtable_io_logger.error(e)
         return make_response((e, 500))
@@ -1214,9 +1224,14 @@ def add_update_big_excel_task():
     ref_columns = data.get('ref_columns')
     is_insert_new_data = data.get('is_insert_new_data', 'false')
     is_insert_new_data = to_python_boolean(is_insert_new_data)
+    can_add_row = data.get('can_add_row', 'false')
+    can_update_row = data.get('can_update_row', 'false')
+
+    can_add_row = to_python_boolean(can_add_row)
+    can_update_row = to_python_boolean(can_update_row)
     try:
         task_id = big_data_task_manager.add_update_big_excel_task(
-            username, dtable_uuid, table_name, file_path, ref_columns, is_insert_new_data)
+            username, dtable_uuid, table_name, file_path, ref_columns, can_add_row, can_update_row, is_insert_new_data)
     except Exception as e:
         dtable_io_logger.error(e)
         return make_response((e, 500))

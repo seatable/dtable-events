@@ -416,13 +416,13 @@ def append_excel_csv_upload_file(username, file_name, dtable_uuid, table_name, f
     else:
         dtable_io_logger.info('parse append excel or csv %s.%s success!' % (file_name, file_type))
 
-def update_excel_csv_update_parsed_file(username, dtable_uuid, file_name, table_name, selected_columns):
+def update_excel_csv_update_parsed_file(username, dtable_uuid, file_name, table_name, selected_columns, can_add_row, can_update_row):
     """
     upload excel/csv json file to dtable-server
     """
     dtable_io_logger.info('Start import file: {}.'.format(dtable_uuid))
     try:
-        update_parsed_file_by_dtable_server(username, dtable_uuid, file_name, table_name, selected_columns)
+        update_parsed_file_by_dtable_server(username, dtable_uuid, file_name, table_name, selected_columns, can_add_row, can_update_row)
     except Exception as e:
         dtable_io_logger.exception('update excel,csv failed. dtable_uuid: %s, table_name: %s ERROR: %s' % (dtable_uuid, table_name, e))
         raise Exception('Update excel or csv error')
@@ -495,13 +495,13 @@ def import_excel_csv_to_table(username, file_name, dtable_uuid, file_type, lang)
         dtable_io_logger.info('import excel or csv %s.%s to table success!' % (file_name, file_type))
 
 
-def update_table_via_excel_csv(username, file_name, dtable_uuid, table_name, selected_columns, file_type):
+def update_table_via_excel_csv(username, file_name, dtable_uuid, table_name, selected_columns, file_type, can_add_row, can_update_row):
     """
     update excel/csv file to table
     """
     dtable_io_logger.info('Start update file: %s.%s to table.' % (file_name, file_type))
     try:
-        parse_and_update_file_to_table(file_name, username, dtable_uuid, table_name, selected_columns, file_type)
+        parse_and_update_file_to_table(file_name, username, dtable_uuid, table_name, selected_columns, file_type, can_add_row, can_update_row)
     except Exception as e:
         dtable_io_logger.exception('update file update to table failed. dtable_uuid: %s, table_name: %s ERROR: %s' % (dtable_uuid, table_name, e))
         raise Exception('Update excel or csv error')
@@ -969,14 +969,14 @@ def import_big_excel(username, dtable_uuid, table_name, file_path, task_id, task
         dtable_io_logger.info('import big excel %s.xlsx success!' % table_name)
 
 
-def update_big_excel(username, dtable_uuid, table_name, file_path, ref_columns, is_insert_new_data, task_id, tasks_status_map):
+def update_big_excel(username, dtable_uuid, table_name, file_path, ref_columns, is_insert_new_data, can_add_row, can_update_row, task_id, tasks_status_map):
     """
     upload excel json file to dtable-db
     """
 
     dtable_io_logger.info('Start update big excel: {}.'.format(dtable_uuid))
     try:
-        update_excel_to_db(username, dtable_uuid, table_name, file_path, ref_columns, is_insert_new_data, task_id, tasks_status_map)
+        update_excel_to_db(username, dtable_uuid, table_name, file_path, ref_columns, is_insert_new_data, task_id, tasks_status_map, can_add_row, can_update_row)
     except Exception as e:
         dtable_io_logger.exception('update big excel failed. ERROR: {}'.format(e))
     else:

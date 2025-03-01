@@ -291,8 +291,9 @@ def update_excel_to_db(
         ref_columns,
         is_insert_new_data,
         task_id,
-        tasks_status_map
-
+        tasks_status_map,
+        can_add_row,
+        can_update_row
 ):
     from dtable_events.dtable_io import dtable_io_logger
 
@@ -396,9 +397,9 @@ def update_excel_to_db(
                         base_columns = base.list_columns(table_name)
                         dtable_col_name_to_column = {col['name']: col for col in base_columns}
 
-                    if is_insert_new_data and rows_for_import:
+                    if is_insert_new_data and rows_for_import and can_add_row:
                         db_handler.insert_rows(table_name, rows_for_import)
-                    if rows_for_update:
+                    if rows_for_update and can_update_row:
                         db_handler.batch_update_rows(table_name, rows_for_update)
                     excel_row_datas = []
                 tasks_status_map[task_id]['rows_handled'] = total_count
@@ -421,9 +422,9 @@ def update_excel_to_db(
         )
         add_column_options(base, table_name, excel_select_column_options, dtable_col_name_to_column)
 
-        if is_insert_new_data and rows_for_import:
+        if is_insert_new_data and rows_for_import and can_add_row:
             db_handler.insert_rows(table_name, rows_for_import)
-        if rows_for_update:
+        if rows_for_update and can_update_row:
             db_handler.batch_update_rows(table_name, rows_for_update)
         total_count += len(excel_row_datas)
 
