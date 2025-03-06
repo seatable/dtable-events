@@ -38,7 +38,11 @@ class RedisClient(object):
                 self._port = config.getint('REDIS', 'port')
         else:
             self._port = redis_port
-
+        try:
+            self._port = int(self._port)
+        except:
+            raise ValueError(f'Invalid redis port: {self._port}')
+        
         if not (redis_password := os.getenv('REDIS_PASSWORD')):
             if config.has_option('REDIS', 'password'):
                 self._password = config.get('REDIS', 'password')

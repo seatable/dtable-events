@@ -20,7 +20,7 @@ SeafBase = automap_base()
 
 
 def create_engine_from_conf(config):
-    backend = config.get('DATABASE', 'type')
+    backend = config.get('DATABASE', 'type') if config.has_section('DATABASE') and config.has_option('DATABASE', 'type') else 'mysql'
 
     if backend == 'mysql':
         if not (host := os.getenv('SEATABLE_MYSQL_DB_HOST')):
@@ -34,6 +34,11 @@ def create_engine_from_conf(config):
                 port = config.getint('DATABASE', 'port')
             else:
                 port = 3306
+
+        try:
+            port = int(port)
+        except:
+            raise ValueError(f'Invalid database port: {port}')
 
         if not (username := os.getenv('SEATABLE_MYSQL_DB_USER')):
             username = config.get('DATABASE', 'username')
@@ -65,7 +70,7 @@ def create_engine_from_conf(config):
 
 
 def create_seafile_engine_from_conf(config):
-    backend = config.get('database', 'type')
+    backend = config.get('DATABASE', 'type') if config.has_section('DATABASE') and config.has_option('DATABASE', 'type') else 'mysql'
 
     if backend == 'mysql':
         if not (host := os.getenv('SEATABLE_MYSQL_DB_HOST')):
@@ -79,6 +84,11 @@ def create_seafile_engine_from_conf(config):
                 port = config.getint('database', 'port')
             else:
                 port = 3306
+
+        try:
+            port = int(port)
+        except:
+            raise ValueError(f'Invalid database port: {port}')
 
         if not (username := os.getenv('SEATABLE_MYSQL_DB_USER')):
             username = config.get('database', 'user')
