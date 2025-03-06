@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+import os
 import time
 import redis
 
@@ -25,14 +26,28 @@ class RedisClient(object):
             )
 
     def _parse_config(self, config):
-        if config.has_option('REDIS', 'host'):
-            self._host = config.get('REDIS', 'host')
 
-        if config.has_option('REDIS', 'port'):
-            self._port = config.getint('REDIS', 'port')
+        if not (redis_host := os.getenv('REDIS_SERVER')):
+            if config.has_option('REDIS', 'host'):
+                self._host = config.get('REDIS', 'host')
+        else:
+            self._host = redis_host
 
-        if config.has_option('REDIS', 'password'):
-            self._password = config.get('REDIS', 'password')
+        if not (redis_port := os.getenv('REDIS_PORT')):
+            if config.has_option('REDIS', 'port'):
+                self._port = config.getint('REDIS', 'port')
+        else:
+            self._port = redis_port
+        try:
+            self._port = int(self._port)
+        except:
+            raise ValueError(f'Invalid redis port: {self._port}')
+        
+        if not (redis_password := os.getenv('REDIS_PASSWORD')):
+            if config.has_option('REDIS', 'password'):
+                self._password = config.get('REDIS', 'password')
+        else:
+            self._password = redis_password
 
     def get_subscriber(self, channel_name):
         while True:

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import configparser
 import logging
+import os
 from urllib.parse import quote_plus
 
 from sqlalchemy import create_engine
@@ -19,22 +20,34 @@ SeafBase = automap_base()
 
 
 def create_engine_from_conf(config):
-    backend = config.get('DATABASE', 'type')
+    backend = config.get('DATABASE', 'type') if config.has_section('DATABASE') and config.has_option('DATABASE', 'type') else 'mysql'
 
     if backend == 'mysql':
-        if config.has_option('DATABASE', 'host'):
-            host = config.get('DATABASE', 'host').lower()
-        else:
-            host = 'localhost'
+        if not (host := os.getenv('SEATABLE_MYSQL_DB_HOST')):
+            if config.has_option('DATABASE', 'host'):
+                host = config.get('DATABASE', 'host').lower()
+            else:
+                host = 'localhost'
 
-        if config.has_option('DATABASE', 'port'):
-            port = config.getint('DATABASE', 'port')
-        else:
-            port = 3306
+        if not (port := os.getenv('SEATABLE_MYSQL_DB_PORT')):
+            if config.has_option('DATABASE', 'port'):
+                port = config.getint('DATABASE', 'port')
+            else:
+                port = 3306
 
-        username = config.get('DATABASE', 'username')
-        password = config.get('DATABASE', 'password')
-        db_name = config.get('DATABASE', 'db_name')
+        try:
+            port = int(port)
+        except:
+            raise ValueError(f'Invalid database port: {port}')
+
+        if not (username := os.getenv('SEATABLE_MYSQL_DB_USER')):
+            username = config.get('DATABASE', 'username')
+
+        if not (password := os.getenv('SEATABLE_MYSQL_DB_PASSWORD')):
+            password = config.get('DATABASE', 'password')
+
+        if not (db_name := os.getenv('SEATABLE_MYSQL_DB_DTABLE_DB_NAME')):
+            db_name = config.get('DATABASE', 'db_name')
 
         db_url = "mysql+mysqldb://%s:%s@%s:%s/%s?charset=utf8" % \
                  (username, quote_plus(password), host, port, db_name)
@@ -57,22 +70,34 @@ def create_engine_from_conf(config):
 
 
 def create_seafile_engine_from_conf(config):
-    backend = config.get('database', 'type')
+    backend = config.get('DATABASE', 'type') if config.has_section('DATABASE') and config.has_option('DATABASE', 'type') else 'mysql'
 
     if backend == 'mysql':
-        if config.has_option('database', 'host'):
-            host = config.get('database', 'host').lower()
-        else:
-            host = 'localhost'
+        if not (host := os.getenv('SEATABLE_MYSQL_DB_HOST')):
+            if config.has_option('database', 'host'):
+                host = config.get('database', 'host').lower()
+            else:
+                host = 'localhost'
 
-        if config.has_option('database', 'port'):
-            port = config.getint('database', 'port')
-        else:
-            port = 3306
+        if not (port := os.getenv('SEATABLE_MYSQL_DB_PORT')):
+            if config.has_option('database', 'port'):
+                port = config.getint('database', 'port')
+            else:
+                port = 3306
 
-        username = config.get('database', 'user')
-        password = config.get('database', 'password')
-        db_name = config.get('database', 'db_name')
+        try:
+            port = int(port)
+        except:
+            raise ValueError(f'Invalid database port: {port}')
+
+        if not (username := os.getenv('SEATABLE_MYSQL_DB_USER')):
+            username = config.get('database', 'user')
+
+        if not (password := os.getenv('SEATABLE_MYSQL_DB_PASSWORD')):
+            password = config.get('database', 'password')
+
+        if not (db_name := os.getenv('SEATABLE_MYSQL_DB_SEAFILE_DB_NAME')):
+            db_name = config.get('database', 'db_name')
 
         db_url = "mysql+mysqldb://%s:%s@%s:%s/%s?charset=utf8" % \
                  (username, quote_plus(password), host, port, db_name)
