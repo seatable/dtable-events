@@ -47,6 +47,8 @@ try:
     LICENSE_PATH = getattr(seahub_settings, 'LICENSE_PATH', '/shared/seatable-license.txt')
     IS_PRO_VERSION = getattr(seahub_settings, 'IS_PRO_VERSION', False)
     ENABLE_OPERATION_LOG_DB = getattr(seahub_settings, 'ENABLE_OPERATION_LOG_DB', False)
+    AI_PRICES = getattr(seahub_settings, 'AI_PRICES', {})
+    BAIDU_OCR_TOKENS = getattr(seahub_settings, 'BAIDU_OCR_TOKENS', {})
 except Exception as e:
     logger.critical("Can not import dtable_web settings: %s." % e)
     raise RuntimeError("Can not import dtable_web settings: %s" % e)
