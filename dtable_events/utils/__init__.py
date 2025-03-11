@@ -89,7 +89,7 @@ def get_opt_from_conf_or_env(config, section, key, env_key=None, default=None):
     # If not specified in events.conf, check the environment variable.
     try:
         return config.get(section, key)
-    except configparser.NoOptionError:
+    except (configparser.NoSectionError, configparser.NoOptionError):
         if env_key is None:
             return default
         else:
