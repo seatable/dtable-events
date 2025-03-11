@@ -3586,18 +3586,18 @@ class AutomationRule:
             if self.data.get('op_type') not in ['modify_row', 'modify_rows', 'add_link', 'update_links', 'update_rows_links', 'remove_link', 'move_group_rows']:
                 return False
 
-        if self.run_condition == PER_UPDATE:
-            # automation rule triggered by human or code, perhaps triggered quite quickly
-            if self.per_minute_trigger_limit <= 0:
-                return True
-            trigger_times = redis_cache.get(self.cache_key)
-            if not trigger_times:
-                return True
-            trigger_times = trigger_times.split(',')
-            if len(trigger_times) >= self.per_minute_trigger_limit and time.time() - int(trigger_times[0]) < 60:
-                logger.warning('automation rule: %s exceed the trigger limit (%s times) within 1 minute', self.rule_id, self.per_minute_trigger_limit)
-                return False
-            return True
+        # if self.run_condition == PER_UPDATE:
+        #     # automation rule triggered by human or code, perhaps triggered quite quickly
+        #     if self.per_minute_trigger_limit <= 0:
+        #         return True
+        #     trigger_times = redis_cache.get(self.cache_key)
+        #     if not trigger_times:
+        #         return True
+        #     trigger_times = trigger_times.split(',')
+        #     if len(trigger_times) >= self.per_minute_trigger_limit and time.time() - int(trigger_times[0]) < 60:
+        #         logger.warning('automation rule: %s exceed the trigger limit (%s times) within 1 minute', self.rule_id, self.per_minute_trigger_limit)
+        #         return False
+        #     return True
 
         elif self.run_condition in CRON_CONDITIONS:
             cur_datetime = datetime.now()

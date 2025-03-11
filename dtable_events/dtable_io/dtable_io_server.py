@@ -1,6 +1,5 @@
 from threading import Thread
-
-from gevent.pywsgi import WSGIServer
+from waitress import serve
 
 from dtable_events.dtable_io.request_handler import app as application
 from dtable_events.dtable_io.task_big_data_manager import big_data_task_manager
@@ -28,7 +27,7 @@ class DTableIOServer(Thread):
         plugin_email_task_manager.run()
         big_data_task_manager.run()
 
-        self._server = WSGIServer((self._host, int(self._port)), application, log=None)
+        # self._server = WSGIServer((self._host, int(self._port)), application, log=None)
 
     def _parse_config(self, config):
         if config.has_option('DTABLE-IO', 'host'):
@@ -57,4 +56,4 @@ class DTableIOServer(Thread):
             self._file_server_port = 8082
 
     def run(self):
-        self._server.serve_forever()
+        serve(application, host=self._host, port=int(self._port))

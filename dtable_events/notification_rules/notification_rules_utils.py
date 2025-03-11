@@ -246,7 +246,7 @@ def get_column_by_key(dtable_metadata, table_id, column_key):
     return None
 
 
-def trigger_notification_rule(rule, message_table_id, row, db_session, op_type, rule_instant_metadata_cache_manager: RuleInstantMetadataCacheManger):
+def trigger_notification_rule(rule, message_table_id, row_id, db_session, op_type, rule_instant_metadata_cache_manager: RuleInstantMetadataCacheManger):
     rule_id = rule[0]
     trigger = rule[1]
     action = rule[2]
@@ -306,7 +306,6 @@ def trigger_notification_rule(rule, message_table_id, row, db_session, op_type, 
         if not is_trigger_time_satisfy(last_trigger_time):
             return
 
-        row_id = row['_id']
         sql = f"SELECT * FROM `{target_table['name']}` WHERE _id='{row_id}'"
         rows, _ = dtable_db_api.query(sql, convert=False)
         if not rows:
@@ -320,7 +319,7 @@ def trigger_notification_rule(rule, message_table_id, row, db_session, op_type, 
             'rule_id': rule.id,
             'rule_name': rule_name,
             'msg': gen_noti_msg_with_sql_row(msg, sql_row, column_blanks, col_name_dict, db_session),
-            'row_id_list': [row['_id']],
+            'row_id_list': [row_id],
         }
 
         if users_column_key:
@@ -348,7 +347,6 @@ def trigger_notification_rule(rule, message_table_id, row, db_session, op_type, 
     elif (op_type in ('modify_row', 'modify_rows', 'add_link', 'update_links', 'update_rows_links') and trigger['condition'] == CONDITION_FILTERS_SATISFY) or \
          (op_type in ('insert_row', 'append_rows', 'insert_rows') and trigger['condition'] == CONDITION_ROWS_ADDED):
 
-        row_id = row['_id']
         sql = f"SELECT * FROM `{target_table['name']}` WHERE _id='{row_id}'"
         rows, _ = dtable_db_api.query(sql, convert=False)
         if not rows:
@@ -362,7 +360,7 @@ def trigger_notification_rule(rule, message_table_id, row, db_session, op_type, 
             'rule_id': rule.id,
             'rule_name': rule_name,
             'msg': gen_noti_msg_with_sql_row(msg, sql_row, column_blanks, col_name_dict, db_session),
-            'row_id_list': [row['_id']],
+            'row_id_list': row_id,
         }
         if users_column_key:
             user_column = get_column_by_key(dtable_metadata, table_id, users_column_key)
