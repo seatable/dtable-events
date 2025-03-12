@@ -43,12 +43,12 @@ def update_rule_last_trigger_time(rule_id, db_session):
 
 
 def scan_triggered_notification_rules(event_data, db_session):
-    row = event_data.get('row')
+    row_id = event_data.get('row_id')
     message_dtable_uuid = event_data.get('dtable_uuid', '')
     table_id = event_data.get('table_id', '')
     rule_id = event_data.get('notification_rule_id')
     op_type = event_data.get('op_type')
-    if not row or not message_dtable_uuid or not table_id or not rule_id:
+    if not row_id or not message_dtable_uuid or not table_id or not rule_id:
         logger.error(f'redis event data not valid, event_data = {event_data}')
         return
 
@@ -59,7 +59,7 @@ def scan_triggered_notification_rules(event_data, db_session):
     rule_instant_metadata_cache_manager = RuleInstantMetadataCacheManger()
     for rule in rules:
         try:
-            trigger_notification_rule(rule, table_id, row, db_session, op_type, rule_instant_metadata_cache_manager)
+            trigger_notification_rule(rule, table_id, row_id, db_session, op_type, rule_instant_metadata_cache_manager)
         except Exception as e:
             logger.exception(e)
             logger.error(f'check rule failed. {rule}, error: {e}')

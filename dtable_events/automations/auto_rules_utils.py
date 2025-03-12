@@ -9,7 +9,7 @@ from dtable_events.automations.actions import AutomationRule, auto_rule_logger
 logger = logging.getLogger(__name__)
 
 
-def scan_triggered_automation_rules(event_data, db_session, per_minute_trigger_limit):
+def scan_triggered_automation_rules(event_data, db_session):
     dtable_uuid = event_data.get('dtable_uuid')
     automation_rule_id = event_data.get('automation_rule_id')
     sql = """
@@ -38,7 +38,7 @@ def scan_triggered_automation_rules(event_data, db_session, per_minute_trigger_l
     }
     try:
         auto_rule_logger.info('run auto rule %s', rule.id)
-        auto_rule = AutomationRule(event_data, db_session, rule.trigger, rule.actions, options, rule_instant_metadata_cache_manager, per_minute_trigger_limit=per_minute_trigger_limit)
+        auto_rule = AutomationRule(event_data, db_session, rule.trigger, rule.actions, options, rule_instant_metadata_cache_manager)
         auto_rule.do_actions()
     except Exception as e:
         logger.exception('auto rule: %s do actions error: %s', rule.id, e)

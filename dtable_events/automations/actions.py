@@ -3344,7 +3344,7 @@ class RuleInvalidException(Exception):
 
 class AutomationRule:
 
-    def __init__(self, data, db_session, raw_trigger, raw_actions, options, metadata_cache_manager: BaseMetadataCacheManager, per_minute_trigger_limit=None):
+    def __init__(self, data, db_session, raw_trigger, raw_actions, options, metadata_cache_manager: BaseMetadataCacheManager):
         self.rule_id = options.get('rule_id', None)
         self.rule_name = ''
         self.run_condition = options.get('run_condition', None)
@@ -3379,6 +3379,8 @@ class AutomationRule:
         self._trigger_conditions_rows = None
 
         self._sql_row = None
+        self._sql_query_count = 0
+        self._sql_query_max = 3
 
         self.metadata_cache_manager = metadata_cache_manager
 
@@ -3389,8 +3391,6 @@ class AutomationRule:
         self.load_trigger_and_actions(raw_trigger, raw_actions)
 
         self.current_valid = True
-
-        self.per_minute_trigger_limit = per_minute_trigger_limit or 50
 
         self.warnings = []
 
@@ -3483,18 +3483,22 @@ class AutomationRule:
         return self._related_users_dict
 
     def get_sql_row(self):
-        if self._sql_row is not None:
+        if self._sql_row is not None or self._sql_query_count >= self._sql_query_max:
             return self._sql_row
         if not self.data:
             return None
-        if not self.data.get('row'):
+        if 'row_id' not in self.data:
             return None
-        row_id = self.data['row']['_id']
-        sql = f"SELECT * FROM `{self.table_info['name']}` WHERE _id='{row_id}'"
-        sql_rows, _ = self.dtable_db_api.query(sql, convert=False)
-        if not sql_rows:
-            return None
-        self._sql_row = sql_rows[0]
+        row_id = self.data['row_id']
+        while not self._sql_row and self._sql_query_count < self._sql_query_max:
+            sql = f"SELECT * FROM `{self.table_info['name']}` WHERE _id='{row_id}'"
+            sql_rows, _ = self.dtable_db_api.query(sql, convert=False)
+            if not sql_rows:
+                self._sql_query_count += 1
+                logger.warning('auto-rule %s query dtable %s table %s row %s not found, query count %s', self.rule_id, self.dtable_uuid, self.table_id, row_id, self._sql_query_count)
+                time.sleep(0.1)
+                continue
+            self._sql_row = sql_rows[0]
         return self._sql_row
 
     def get_trigger_conditions_rows(self, action: BaseAction, warning_rows=50):
@@ -3586,20 +3590,10 @@ class AutomationRule:
             if self.data.get('op_type') not in ['modify_row', 'modify_rows', 'add_link', 'update_links', 'update_rows_links', 'remove_link', 'move_group_rows']:
                 return False
 
-        # if self.run_condition == PER_UPDATE:
-        #     # automation rule triggered by human or code, perhaps triggered quite quickly
-        #     if self.per_minute_trigger_limit <= 0:
-        #         return True
-        #     trigger_times = redis_cache.get(self.cache_key)
-        #     if not trigger_times:
-        #         return True
-        #     trigger_times = trigger_times.split(',')
-        #     if len(trigger_times) >= self.per_minute_trigger_limit and time.time() - int(trigger_times[0]) < 60:
-        #         logger.warning('automation rule: %s exceed the trigger limit (%s times) within 1 minute', self.rule_id, self.per_minute_trigger_limit)
-        #         return False
-        #     return True
+        if self.run_condition == PER_UPDATE:
+            return True
 
-        elif self.run_condition in CRON_CONDITIONS:
+        if self.run_condition in CRON_CONDITIONS:
             cur_datetime = datetime.now()
             cur_hour = cur_datetime.hour
             cur_week_day = cur_datetime.isoweekday()
@@ -3956,16 +3950,6 @@ class AutomationRule:
         except Exception as e:
             auto_rule_logger.exception('set rule: %s error: %s', self.rule_id, e)
             logger.exception('set rule: %s error: %s', self.rule_id, e)
-
-        if self.run_condition == PER_UPDATE and self.per_minute_trigger_limit > 0:
-            trigger_times = redis_cache.get(self.cache_key)
-            if not trigger_times:
-                redis_cache.set(self.cache_key, int(time.time()), timeout=MINUTE_TIMEOUT)
-            else:
-                trigger_times = trigger_times.split(',')
-                trigger_times.append(str(int(time.time())))
-                trigger_times = trigger_times[-self.per_minute_trigger_limit:]
-                redis_cache.set(self.cache_key, ','.join([t for t in trigger_times]), timeout=MINUTE_TIMEOUT)
 
     def set_invalid(self, e: RuleInvalidException):
         try:

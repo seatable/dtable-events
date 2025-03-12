@@ -20,7 +20,6 @@ class AutomationRuleHandler(Thread):
         self._db_session_class = init_db_session_class(config)
         self._redis_client = RedisClient(config)
 
-        self.per_minute_trigger_limit = 50
         self.per_update_auto_rule_workers = 3
 
         self.queues = []
@@ -33,19 +32,9 @@ class AutomationRuleHandler(Thread):
         """parse send email related options from config file
         """
         section_name = 'AUTOMATION'
-        key_per_minute_trigger_limit = 'per_minute_trigger_limit'
 
         if not config.has_section(section_name):
             return
-
-        per_minute_trigger_limit = get_opt_from_conf_or_env(config, section_name, key_per_minute_trigger_limit, default=50)
-        try:
-            per_minute_trigger_limit = int(per_minute_trigger_limit)
-        except Exception as e:
-            logger.error('parse section: %s key: %s error: %s', section_name, key_per_minute_trigger_limit, e)
-            per_minute_trigger_limit = 50
-
-        self.per_minute_trigger_limit = per_minute_trigger_limit
 
         key_per_update_auto_rule_workers = 'per_update_auto_rule_workers'
         per_update_auto_rule_workers = get_opt_from_conf_or_env(config, section_name, key_per_update_auto_rule_workers, default=3)
@@ -66,7 +55,7 @@ class AutomationRuleHandler(Thread):
             logger.info("Start to trigger rule %s in thread %s", event, current_thread().name)
             session = self._db_session_class()
             try:
-                scan_triggered_automation_rules(event, session, self.per_minute_trigger_limit)
+                scan_triggered_automation_rules(event, session)
             except Exception as e:
                 logger.exception('Handle automation rules failed: %s' % e)
             finally:
@@ -91,9 +80,9 @@ class AutomationRuleHandler(Thread):
                     dtable_uuid = event.get('dtable_uuid')
                     logger.info('get per_update auto-rule message %s', event)
                     index = ord(dtable_uuid[0]) % self.per_update_auto_rule_workers
-                    self.queues[index].push(event)
+                    self.queues[index].put(event)
                 else:
                     time.sleep(0.5)
             except Exception as e:
-                logger.error('Failed get automation rules message from redis: %s' % e)
+                logger.exception('Failed get automation rules message from redis: %s' % e)
                 subscriber = self._redis_client.get_subscriber('automation-rule-triggered')
