@@ -1958,7 +1958,7 @@ class LinkRecordsAction(BaseAction):
             query_clause = ",".join(["`%s`" % n for n in column_names])
         sql = sql.replace("*", query_clause, 1)
         try:
-            rows_data, _ = self.auto_rule.dtable_db_api.query(sql, convert=False)
+            rows_data, _ = self.auto_rule.query(sql, convert=False)
         except RowsQueryError:
             raise RuleInvalidException('wrong filter in filters in link-records', 'linked_table_sql_query_failed')
         except Request429Error:
@@ -2043,7 +2043,7 @@ class LinkRecordsAction(BaseAction):
         while True:
             sql = f"select {query_clause} from `{table_name}` {filter_clause} limit {start}, {step}"
             try:
-                results, _ = self.auto_rule.dtable_db_api.query(sql)
+                results, _ = self.auto_rule.query(sql)
             except Exception as e:
                 logger.exception(e)
                 logger.error('query dtable: %s, sql: %s, filters: %s, error: %s', self.auto_rule.dtable_uuid, sql, filter_conditions, e)
@@ -2612,7 +2612,7 @@ class CalculateAction(BaseAction):
 
             sql = filter2sql(table_name, columns, filter_conditions, by_group=False)
             sql = sql.replace("*", query_clause, 1)
-            response_rows, _ = self.auto_rule.dtable_db_api.query(sql)
+            response_rows, _ = self.auto_rule.query(sql)
             rows.extend(response_rows)
 
             start += offset
@@ -2787,7 +2787,7 @@ class LookupAndCopyAction(BaseAction):
         while True:
             sql = f"select {query_clause} from `{table_name}` limit {start}, {step}"
             try:
-                results, _ = self.auto_rule.dtable_db_api.query(sql)
+                results, _ = self.auto_rule.query(sql)
             except Exception as e:
                 logger.exception(e)
                 logger.error('query dtable: %s, table name: %s, error: %s', self.auto_rule.dtable_uuid, table_name, e)
@@ -2953,7 +2953,7 @@ class ExtractUserNameAction(BaseAction):
         while True:
             sql = f"select `_id`, `{extract_column_name}`, `{result_column_name}` from `{table_name}` limit {start},{step}"
             try:
-                results, _ = self.auto_rule.dtable_db_api.query(sql)
+                results, _ = self.auto_rule.query(sql)
             except Exception as e:
                 logger.error('query dtable: %s, table name: %s, error: %s', self.auto_rule.dtable_uuid, table_name, e)
                 return []
@@ -3120,8 +3120,7 @@ class ConvertPageToPDFAction(BaseAction):
         try:
             row_ids_str = ', '.join(map(lambda row_id: f"'{row_id}'", self.row_pdfs.keys()))
             sql = f"SELECT _id, `{target_column['name']}` FROM `{table['name']}` WHERE _id IN ({row_ids_str}) LIMIT {len(self.row_pdfs)}"
-            dtable_db_api = DTableDBAPI('dtable-events', self.auto_rule.dtable_uuid, INNER_DTABLE_DB_URL)
-            rows, _ = dtable_db_api.query(sql)
+            rows, _ = self.auto_rule.query(sql)
             updates = []
             for row in rows:
                 row_id = row['_id']
@@ -3364,6 +3363,8 @@ class AutomationRule:
         self.dtable_db_api = DTableDBAPI(self.username, str(UUID(self.dtable_uuid)), INNER_DTABLE_DB_URL)
         self.dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
 
+        self.query_stats = []
+
         self.table_id = None
         self.view_id = None
 
@@ -3492,7 +3493,7 @@ class AutomationRule:
         row_id = self.data['row_id']
         while not self._sql_row and self._sql_query_count < self._sql_query_max:
             sql = f"SELECT * FROM `{self.table_info['name']}` WHERE _id='{row_id}'"
-            sql_rows, _ = self.dtable_db_api.query(sql, convert=False)
+            sql_rows, _ = self.query(sql, convert=False)
             if not sql_rows:
                 self._sql_query_count += 1
                 logger.warning('auto-rule %s query dtable %s table %s row %s not found, query count %s', self.rule_id, self.dtable_uuid, self.table_id, row_id, self._sql_query_count)
@@ -3553,7 +3554,7 @@ class AutomationRule:
             self._trigger_conditions_rows = []
             return self._trigger_conditions_rows
         try:
-            rows_data, _ = self.dtable_db_api.query(sql, convert=False)
+            rows_data, _ = self.query(sql, convert=False)
         except RowsQueryError:
             raise RuleInvalidException('wrong filter in rule: %s trigger filters' % self.rule_id, 'rule_trigger_sql_query_failed')
         except Exception as e:
@@ -3577,6 +3578,18 @@ class AutomationRule:
 
     def append_warning(self, warning_detail):
         self.warnings.append(warning_detail)
+
+    def query(self, sql, dtable_uuid=None, **kwargs):
+        if dtable_uuid and uuid_str_to_36_chars(dtable_uuid) != uuid_str_to_36_chars(self.dtable_uuid):
+            dtable_uuid = dtable_uuid
+            dtable_db_api = DTableDBAPI(self.username, dtable_uuid, INNER_DTABLE_DB_URL)
+        else:
+            dtable_uuid = self.dtable_uuid
+            dtable_db_api = self.dtable_db_api
+        query_start = datetime.now()
+        resp = dtable_db_api.query(sql, **kwargs)
+        self.query_stats.append(f"{dtable_uuid} - SQL:[{sql}] - {datetime.now() - query_start}")
+        return resp
 
     def can_do_actions(self):
         if self.trigger.get('condition') not in (CONDITION_FILTERS_SATISFY, CONDITION_PERIODICALLY, CONDITION_ROWS_ADDED, CONDITION_PERIODICALLY_BY_CONDITION):
@@ -3694,6 +3707,7 @@ class AutomationRule:
             auto_rule_logger.info('rule: %s can not do actions', self.rule_id)
             return
 
+        do_actions_start = datetime.now()
         for action_info in self.action_infos:
             if not self.current_valid:
                 break
@@ -3872,6 +3886,10 @@ class AutomationRule:
                 logger.exception('rule: %s, do action: %s error: %s', self.rule_id, action_info, e)
 
         auto_rule_logger.info('rule: %s all actions finished done_actions: %s', self.rule_id, self.done_actions)
+
+        duration = datetime.now() - do_actions_start
+        if duration.seconds >= 5:
+            auto_rule_logger.warning('the running time of rule %s is too long, for %s. SQL queries are %s', self.rule_id, duration, f"\n{'\n'.join(self.query_stats)}")
 
         if self.done_actions and not with_test:
             self.update_last_trigger_time()
