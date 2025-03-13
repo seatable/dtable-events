@@ -1,4 +1,5 @@
 import logging
+from threading import current_thread
 
 from sqlalchemy import text
 
@@ -58,7 +59,7 @@ def run_regular_execution_rule(rule, db_session, metadata_cache_manager):
     options['org_id'] = rule[7]
     options['creator'] = rule[8]
     try:
-        auto_rule_logger.info('start to run regular auto rule: %s', options['rule_id'])
+        auto_rule_logger.info('start to run regular auto rule: %s in thread %s', options['rule_id'], current_thread().name)
         auto_rule = AutomationRule(None, db_session, trigger, actions, options, metadata_cache_manager)
         auto_rule.do_actions()
     except Exception as e:

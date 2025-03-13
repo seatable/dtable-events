@@ -64,13 +64,16 @@ class AutomationRuleHandler(Thread):
     def init_workers(self):
         for i in range(self.per_update_auto_rule_workers):
             self.queues.append(Queue())
-            t = Thread(target=self.scan, args=(i,), daemon=True, name=f'automation-rule-worker-{i}')
-            t.start()
+            t = Thread(target=self.scan, args=(i,), name=f'automation-rule-worker-{i}')
             self.threads.append(t)
 
     def run(self):
         logger.info('Starting handle automation rules...')
         subscriber = self._redis_client.get_subscriber('automation-rule-triggered')
+
+        for t in self.threads:
+            t.start()
+            logger.info('thread %s start', t.name)
 
         while not self._finished.is_set() and self.is_enabled():
             try:
