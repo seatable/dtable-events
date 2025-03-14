@@ -539,7 +539,7 @@ class UpdateAction(BaseAction):
             if key in to_update_keys:
                 return False
         return True
-    
+
     def per_update(self):
         table_name = self.auto_rule.table_info['name']
         try:
@@ -580,7 +580,7 @@ class UpdateAction(BaseAction):
         elif self.auto_rule.run_condition in CRON_CONDITIONS:
             if self.auto_rule.trigger.get('condition') == CONDITION_PERIODICALLY_BY_CONDITION:
                 self.condition_cron_update()
-            
+
         self.auto_rule.set_done_actions()
 
 class LockRowAction(BaseAction):
@@ -2310,7 +2310,7 @@ class AddRecordToOtherTableAction(BaseAction):
                         else:
                             value = data_dict # compatible with the old data strcture
                             filtered_updates[col_name] = self.parse_column_value(col, value)
-                
+
                     except Exception as e:
                         logger.error(e)
                         filtered_updates[col_name] = self.row.get(col_key)
@@ -2335,7 +2335,7 @@ class AddRecordToOtherTableAction(BaseAction):
                         else:
                             value = data_dict # compatible with the old data strcture
                             filtered_updates[col_name] = self.parse_column_value(col, value)
-                
+
                     except Exception as e:
                         logger.error(e)
                         filtered_updates[col_name] = self.row.get(col_key)
@@ -2376,7 +2376,7 @@ class AddRecordToOtherTableAction(BaseAction):
                                 column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
                                 value = self.fill_msg_blanks_with_sql(sql_row, value, column_blanks)
                             filtered_updates[col_name] = self.parse_column_value(col, value)
-                
+
                     except Exception as e:
                         logger.exception(e)
                         filtered_updates[col_name] = self.row.get(col_key)
@@ -2630,7 +2630,7 @@ class CalculateAction(BaseAction):
             return True
         return False
 
-    
+
     def get_columns(self, table_name):
         dtable_metadata = self.auto_rule.dtable_metadata
         for table in dtable_metadata.get('tables', []):
@@ -2783,7 +2783,7 @@ class LookupAndCopyAction(BaseAction):
             if "_id" not in query_columns:
                 query_columns.append("_id")
             query_clause = ",".join(["`%s`" % cn for cn in query_columns])
-            
+
         while True:
             sql = f"select {query_clause} from `{table_name}` limit {start}, {step}"
             try:
@@ -3154,7 +3154,7 @@ class ConvertPageToPDFAction(BaseAction):
             'dtable_uuid': self.auto_rule.dtable_uuid,
             'page_id': self.page_id,
             'row_ids': [row['_id'] for row in rows],
-            # 'repo_id': self.repo_id,
+            'repo_id': self.repo_id,
             # 'workspace_id': self.workspace_id,
             # 'file_names_dict': file_names_dict,
             'target_column_key': self.target_column_key,
@@ -3316,6 +3316,7 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
         if not self.can_do_action():
             return
         task_info = {
+            'repo_id': self.repo_id,
             'dtable_uuid': self.auto_rule.dtable_uuid,
             'page_id': self.page_id,
             'plugin_type': self.plugin_type,
@@ -3407,7 +3408,7 @@ class AutomationRule:
     @property
     def headers(self):
         return self.dtable_server_api.headers
-    
+
 
     def cache_clean(self):
         # when some attribute changes, such as option added in single-select column

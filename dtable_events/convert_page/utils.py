@@ -4,6 +4,8 @@ import json
 import logging
 import time
 import os
+import requests
+import posixpath
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -11,10 +13,15 @@ from selenium.webdriver.support.ui import WebDriverWait
 
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL
 from dtable_events.utils import uuid_str_to_36_chars
+from dtable_events.dtable_io.utils import gen_inner_file_get_url
+
+from seaserv import seafile_api
 
 logger = logging.getLogger(__name__)
 
 CHROME_DATA_DIR = '/tmp/chrome-user-datas'
+DOCUMNET_PLUGIN_FILE_RELATIVE_PATH = 'files/plugins/document'
+DOCUMENT_CONFIG_FILE_NAME = 'documents.json'
 
 
 def get_chrome_data_dir(dir_name='tmp'):
@@ -153,3 +160,20 @@ def wait_page_view(driver: webdriver.Chrome, session_id, plugin_type, row_id, ou
 def convert_page_to_pdf(driver: webdriver.Chrome, dtable_uuid, plugin_type, page_id, row_id, access_token, output):
     session_id = open_page_view(driver, dtable_uuid, plugin_type, page_id, row_id, access_token)
     wait_page_view(driver, session_id, plugin_type, row_id, output)
+
+
+def gen_document_base_dir(dtable_uuid):
+    return posixpath.join('/asset', dtable_uuid, DOCUMNET_PLUGIN_FILE_RELATIVE_PATH)
+
+
+def get_documents_config(repo_id, dtable_uuid, username):
+    document_plugin_dir = gen_document_base_dir(uuid_str_to_36_chars(dtable_uuid))
+    config_path = posixpath.join(document_plugin_dir, DOCUMENT_CONFIG_FILE_NAME)
+    file_id = seafile_api.get_file_id_by_path(repo_id, config_path)
+    if not file_id:
+        return []
+    token = seafile_api.get_fileserver_access_token(repo_id, file_id, 'download', username, use_onetime=True)
+    url = gen_inner_file_get_url(token, DOCUMENT_CONFIG_FILE_NAME)
+    resp = requests.get(url)
+    documents_config = json.loads(resp.content)
+    return documents_config
