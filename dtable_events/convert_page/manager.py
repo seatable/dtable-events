@@ -5,7 +5,7 @@ from queue import Queue, Full
 from threading import Thread
 
 from dtable_events.app.config import INNER_DTABLE_DB_URL
-from dtable_events.convert_page.utils import get_chrome_data_dir, get_driver, open_page_view, wait_page_view
+from dtable_events.convert_page.utils import get_chrome_data_dir, get_driver, open_page_view, wait_page_view, get_documents_config
 from dtable_events.utils import get_inner_dtable_server_url, get_opt_from_conf_or_env
 from dtable_events.utils.dtable_server_api import DTableServerAPI, NotFoundException
 from dtable_events.utils.dtable_db_api import DTableDBAPI
@@ -178,7 +178,7 @@ class ConvertPageToPDFWorker:
                 except Exception as e:
                     logging.exception(e)
 
-    def check_resources(self, dtable_uuid, plugin_type, page_id, table_id, target_column_key, row_ids):
+    def check_resources(self, repo_id, dtable_uuid, plugin_type, page_id, table_id, target_column_key, row_ids):
         """
         :return: resources -> dict or None, error_msg -> str or None
         """
@@ -205,6 +205,9 @@ class ConvertPageToPDFWorker:
         # plugin
         plugin_settings = metadata.get('plugin_settings') or {}
         plugin = plugin_settings.get(plugin_type) or []
+        if not plugin and plugin_type == 'document':
+            plugin = get_documents_config(repo_id, dtable_uuid, 'dtable-events')
+
         if not plugin:
             return None, 'plugin not found'
         page = next(filter(lambda page: page.get('page_id') == page_id, plugin), None)
@@ -246,11 +249,12 @@ class ConvertPageToPDFWorker:
         table_id = self.task_info.get('table_id')
         target_column_key = self.task_info.get('target_column_key')
         row_ids = self.task_info.get('row_ids')
+        repo_id = self.task_info.get('repo_id')
 
         # resource check
         # Rather than wait one minute to render a wrong page, a resources check is more effective
         try:
-            resources, error_msg = self.check_resources(dtable_uuid, plugin_type, page_id, table_id, target_column_key, row_ids)
+            resources, error_msg = self.check_resources(repo_id, dtable_uuid, plugin_type, page_id, table_id, target_column_key, row_ids)
             if not resources:
                 logger.warning('plugin: %s dtable: %s page: %s task_info: %s error: %s', plugin_type, dtable_uuid, page_id, self.task_info, error_msg)
                 return
