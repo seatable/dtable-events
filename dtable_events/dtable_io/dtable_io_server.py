@@ -27,8 +27,6 @@ class DTableIOServer(Thread):
         plugin_email_task_manager.run()
         big_data_task_manager.run()
 
-        # self._server = WSGIServer((self._host, int(self._port)), application, log=None)
-
     def _parse_config(self, config):
         if config.has_option('DTABLE-IO', 'host'):
             self._host = config.get('DTABLE-IO', 'host')
