@@ -1,7 +1,4 @@
 # -*- coding: utf-8 -*-
-from gevent import monkey
-monkey.patch_all()
-
 import argparse
 import logging
 import os

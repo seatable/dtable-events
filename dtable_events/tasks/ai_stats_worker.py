@@ -219,7 +219,7 @@ class AIStatsWorker:
     def stats(self):
         sched = BlockingScheduler()
         # fire per 5 mins
-        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='*/5', misfire_grace_time=600)
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='*/5', misfire_grace_time=120)
         def timed_job():
             logger.info('Starts to stats ai calls in memory...')
             self.stats_worker()
