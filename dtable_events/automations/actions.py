@@ -543,7 +543,7 @@ class UpdateAction(BaseAction):
     def per_update(self):
         table_name = self.auto_rule.table_info['name']
         try:
-            self.auto_rule.dtable_server_api.update_row(table_name, self.data['row']['_id'], self.update_data['row'])
+            self.auto_rule.dtable_server_api.update_row(table_name, self.data['row_id'], self.update_data['row'])
         except Exception as e:
             logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
@@ -603,7 +603,7 @@ class LockRowAction(BaseAction):
     def init_updates(self):
         # filter columns in view and type of column is in VALID_COLUMN_TYPES
         if self.auto_rule.run_condition == PER_UPDATE:
-            row_id = self.data['row']['_id']
+            row_id = self.data['row_id']
             self.update_data['row_ids'].append(row_id)
 
         if self.auto_rule.run_condition in CRON_CONDITIONS:
@@ -1375,7 +1375,7 @@ class SendEmailAction(BaseAction):
             reply_to_list = list(set([item.strip() for sublist in temp for item in sublist.split(',')]))
             reply_to = next(filter(lambda temp_reply_to: is_valid_email(temp_reply_to), reply_to_list), '')
 
-        file_download_urls = self.get_file_download_urls(attachment_list, self.data['row'])
+        file_download_urls = self.get_file_download_urls(attachment_list, self.auto_rule.get_sql_row())
 
         if self.column_blanks_subject:
             subject = self.fill_msg_blanks_with_sql(sql_row, subject, self.column_blanks_subject)
@@ -2015,7 +2015,7 @@ class LinkRecordsAction(BaseAction):
             return
 
         try:
-            self.auto_rule.dtable_server_api.update_link(self.link_id, self.auto_rule.table_id, self.linked_table_id, self.data['row']['_id'], self.linked_row_ids)
+            self.auto_rule.dtable_server_api.update_link(self.link_id, self.auto_rule.table_id, self.linked_table_id, self.data['row_id'], self.linked_row_ids)
         except Exception as e:
             logger.error('link dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return

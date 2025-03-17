@@ -360,7 +360,7 @@ def trigger_notification_rule(rule, message_table_id, row_id, db_session, op_typ
             'rule_id': rule.id,
             'rule_name': rule_name,
             'msg': gen_noti_msg_with_sql_row(msg, sql_row, column_blanks, col_name_dict, db_session),
-            'row_id_list': row_id,
+            'row_id_list': [row_id],
         }
         if users_column_key:
             user_column = get_column_by_key(dtable_metadata, table_id, users_column_key)

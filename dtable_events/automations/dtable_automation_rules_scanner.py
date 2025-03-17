@@ -92,6 +92,7 @@ class DTableAutomationRulesScannerTimer(Thread):
             })
         except Exception as e:
             logging.exception('query regular automation rules error: %s', e)
+            return
         finally:
             db_session.close()
 

@@ -27,7 +27,6 @@ def scan_triggered_automation_rules(event_data, db_session):
         return
 
     rule_instant_metadata_cache_manager = RuleInstantMetadataCacheManger()
-    # for rule_id, run_condition, trigger, actions, last_trigger_time, dtable_uuid, trigger_count, org_id, creator in rules:
     options = {
         'rule_id': rule.id,
         'run_condition': rule.run_condition,
