@@ -543,7 +543,7 @@ class UpdateAction(BaseAction):
     def per_update(self):
         table_name = self.auto_rule.table_info['name']
         try:
-            self.auto_rule.dtable_server_api.update_row(table_name, self.data['row']['_id'], self.update_data['row'])
+            self.auto_rule.dtable_server_api.update_row(table_name, self.data['row_id'], self.update_data['row'])
         except Exception as e:
             logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
@@ -603,7 +603,7 @@ class LockRowAction(BaseAction):
     def init_updates(self):
         # filter columns in view and type of column is in VALID_COLUMN_TYPES
         if self.auto_rule.run_condition == PER_UPDATE:
-            row_id = self.data['row']['_id']
+            row_id = self.data['row_id']
             self.update_data['row_ids'].append(row_id)
 
         if self.auto_rule.run_condition in CRON_CONDITIONS:
@@ -1375,7 +1375,7 @@ class SendEmailAction(BaseAction):
             reply_to_list = list(set([item.strip() for sublist in temp for item in sublist.split(',')]))
             reply_to = next(filter(lambda temp_reply_to: is_valid_email(temp_reply_to), reply_to_list), '')
 
-        file_download_urls = self.get_file_download_urls(attachment_list, self.data['row'])
+        file_download_urls = self.get_file_download_urls(attachment_list, self.auto_rule.get_sql_row())
 
         if self.column_blanks_subject:
             subject = self.fill_msg_blanks_with_sql(sql_row, subject, self.column_blanks_subject)
@@ -1958,7 +1958,7 @@ class LinkRecordsAction(BaseAction):
             query_clause = ",".join(["`%s`" % n for n in column_names])
         sql = sql.replace("*", query_clause, 1)
         try:
-            rows_data, _ = self.auto_rule.dtable_db_api.query(sql, convert=False)
+            rows_data, _ = self.auto_rule.query(sql, convert=False)
         except RowsQueryError:
             raise RuleInvalidException('wrong filter in filters in link-records', 'linked_table_sql_query_failed')
         except Request429Error:
@@ -2015,7 +2015,7 @@ class LinkRecordsAction(BaseAction):
             return
 
         try:
-            self.auto_rule.dtable_server_api.update_link(self.link_id, self.auto_rule.table_id, self.linked_table_id, self.data['row']['_id'], self.linked_row_ids)
+            self.auto_rule.dtable_server_api.update_link(self.link_id, self.auto_rule.table_id, self.linked_table_id, self.data['row_id'], self.linked_row_ids)
         except Exception as e:
             logger.error('link dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
@@ -2043,7 +2043,7 @@ class LinkRecordsAction(BaseAction):
         while True:
             sql = f"select {query_clause} from `{table_name}` {filter_clause} limit {start}, {step}"
             try:
-                results, _ = self.auto_rule.dtable_db_api.query(sql)
+                results, _ = self.auto_rule.query(sql)
             except Exception as e:
                 logger.exception(e)
                 logger.error('query dtable: %s, sql: %s, filters: %s, error: %s', self.auto_rule.dtable_uuid, sql, filter_conditions, e)
@@ -2612,7 +2612,7 @@ class CalculateAction(BaseAction):
 
             sql = filter2sql(table_name, columns, filter_conditions, by_group=False)
             sql = sql.replace("*", query_clause, 1)
-            response_rows, _ = self.auto_rule.dtable_db_api.query(sql)
+            response_rows, _ = self.auto_rule.query(sql)
             rows.extend(response_rows)
 
             start += offset
@@ -2787,7 +2787,7 @@ class LookupAndCopyAction(BaseAction):
         while True:
             sql = f"select {query_clause} from `{table_name}` limit {start}, {step}"
             try:
-                results, _ = self.auto_rule.dtable_db_api.query(sql)
+                results, _ = self.auto_rule.query(sql)
             except Exception as e:
                 logger.exception(e)
                 logger.error('query dtable: %s, table name: %s, error: %s', self.auto_rule.dtable_uuid, table_name, e)
@@ -2953,7 +2953,7 @@ class ExtractUserNameAction(BaseAction):
         while True:
             sql = f"select `_id`, `{extract_column_name}`, `{result_column_name}` from `{table_name}` limit {start},{step}"
             try:
-                results, _ = self.auto_rule.dtable_db_api.query(sql)
+                results, _ = self.auto_rule.query(sql)
             except Exception as e:
                 logger.error('query dtable: %s, table name: %s, error: %s', self.auto_rule.dtable_uuid, table_name, e)
                 return []
@@ -3120,8 +3120,7 @@ class ConvertPageToPDFAction(BaseAction):
         try:
             row_ids_str = ', '.join(map(lambda row_id: f"'{row_id}'", self.row_pdfs.keys()))
             sql = f"SELECT _id, `{target_column['name']}` FROM `{table['name']}` WHERE _id IN ({row_ids_str}) LIMIT {len(self.row_pdfs)}"
-            dtable_db_api = DTableDBAPI('dtable-events', self.auto_rule.dtable_uuid, INNER_DTABLE_DB_URL)
-            rows, _ = dtable_db_api.query(sql)
+            rows, _ = self.auto_rule.query(sql)
             updates = []
             for row in rows:
                 row_id = row['_id']
@@ -3344,7 +3343,7 @@ class RuleInvalidException(Exception):
 
 class AutomationRule:
 
-    def __init__(self, data, db_session, raw_trigger, raw_actions, options, metadata_cache_manager: BaseMetadataCacheManager, per_minute_trigger_limit=None):
+    def __init__(self, data, db_session, raw_trigger, raw_actions, options, metadata_cache_manager: BaseMetadataCacheManager):
         self.rule_id = options.get('rule_id', None)
         self.rule_name = ''
         self.run_condition = options.get('run_condition', None)
@@ -3364,6 +3363,8 @@ class AutomationRule:
         self.dtable_db_api = DTableDBAPI(self.username, str(UUID(self.dtable_uuid)), INNER_DTABLE_DB_URL)
         self.dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
 
+        self.query_stats = []
+
         self.table_id = None
         self.view_id = None
 
@@ -3379,6 +3380,8 @@ class AutomationRule:
         self._trigger_conditions_rows = None
 
         self._sql_row = None
+        self._sql_query_count = 0
+        self._sql_query_max = 3
 
         self.metadata_cache_manager = metadata_cache_manager
 
@@ -3389,8 +3392,6 @@ class AutomationRule:
         self.load_trigger_and_actions(raw_trigger, raw_actions)
 
         self.current_valid = True
-
-        self.per_minute_trigger_limit = per_minute_trigger_limit or 50
 
         self.warnings = []
 
@@ -3483,18 +3484,22 @@ class AutomationRule:
         return self._related_users_dict
 
     def get_sql_row(self):
-        if self._sql_row is not None:
+        if self._sql_row is not None or self._sql_query_count >= self._sql_query_max:
             return self._sql_row
         if not self.data:
             return None
-        if not self.data.get('row'):
+        if 'row_id' not in self.data:
             return None
-        row_id = self.data['row']['_id']
-        sql = f"SELECT * FROM `{self.table_info['name']}` WHERE _id='{row_id}'"
-        sql_rows, _ = self.dtable_db_api.query(sql, convert=False)
-        if not sql_rows:
-            return None
-        self._sql_row = sql_rows[0]
+        row_id = self.data['row_id']
+        while not self._sql_row and self._sql_query_count < self._sql_query_max:
+            sql = f"SELECT * FROM `{self.table_info['name']}` WHERE _id='{row_id}'"
+            sql_rows, _ = self.query(sql, convert=False)
+            if not sql_rows:
+                self._sql_query_count += 1
+                logger.warning('auto-rule %s query dtable %s table %s row %s not found, query count %s', self.rule_id, self.dtable_uuid, self.table_id, row_id, self._sql_query_count)
+                time.sleep(0.1)
+                continue
+            self._sql_row = sql_rows[0]
         return self._sql_row
 
     def get_trigger_conditions_rows(self, action: BaseAction, warning_rows=50):
@@ -3549,7 +3554,7 @@ class AutomationRule:
             self._trigger_conditions_rows = []
             return self._trigger_conditions_rows
         try:
-            rows_data, _ = self.dtable_db_api.query(sql, convert=False)
+            rows_data, _ = self.query(sql, convert=False)
         except RowsQueryError:
             raise RuleInvalidException('wrong filter in rule: %s trigger filters' % self.rule_id, 'rule_trigger_sql_query_failed')
         except Exception as e:
@@ -3574,6 +3579,18 @@ class AutomationRule:
     def append_warning(self, warning_detail):
         self.warnings.append(warning_detail)
 
+    def query(self, sql, dtable_uuid=None, **kwargs):
+        if dtable_uuid and uuid_str_to_36_chars(dtable_uuid) != uuid_str_to_36_chars(self.dtable_uuid):
+            dtable_uuid = dtable_uuid
+            dtable_db_api = DTableDBAPI(self.username, dtable_uuid, INNER_DTABLE_DB_URL)
+        else:
+            dtable_uuid = self.dtable_uuid
+            dtable_db_api = self.dtable_db_api
+        query_start = datetime.now()
+        resp = dtable_db_api.query(sql, **kwargs)
+        self.query_stats.append(f"{dtable_uuid} - SQL:[{sql}] - {datetime.now() - query_start}")
+        return resp
+
     def can_do_actions(self):
         if self.trigger.get('condition') not in (CONDITION_FILTERS_SATISFY, CONDITION_PERIODICALLY, CONDITION_ROWS_ADDED, CONDITION_PERIODICALLY_BY_CONDITION):
             return False
@@ -3587,19 +3604,9 @@ class AutomationRule:
                 return False
 
         if self.run_condition == PER_UPDATE:
-            # automation rule triggered by human or code, perhaps triggered quite quickly
-            if self.per_minute_trigger_limit <= 0:
-                return True
-            trigger_times = redis_cache.get(self.cache_key)
-            if not trigger_times:
-                return True
-            trigger_times = trigger_times.split(',')
-            if len(trigger_times) >= self.per_minute_trigger_limit and time.time() - int(trigger_times[0]) < 60:
-                logger.warning('automation rule: %s exceed the trigger limit (%s times) within 1 minute', self.rule_id, self.per_minute_trigger_limit)
-                return False
             return True
 
-        elif self.run_condition in CRON_CONDITIONS:
+        if self.run_condition in CRON_CONDITIONS:
             cur_datetime = datetime.now()
             cur_hour = cur_datetime.hour
             cur_week_day = cur_datetime.isoweekday()
@@ -3700,6 +3707,7 @@ class AutomationRule:
             auto_rule_logger.info('rule: %s can not do actions', self.rule_id)
             return
 
+        do_actions_start = datetime.now()
         for action_info in self.action_infos:
             if not self.current_valid:
                 break
@@ -3856,8 +3864,8 @@ class AutomationRule:
                     ConvertDocumentToPDFAndSendAction(self, action_info.get('type'), plugin_type, page_id, file_name, save_config, send_wechat_robot_config, send_email_config, repo_id, workspace_id).do_action()
 
             except RuleInvalidException as e:
-                auto_rule_logger.warning('auto rule: %s, invalid error: %s', self.rule_id, e)
-                logger.warning('auto rule: %s, invalid error: %s', self.rule_id, e)
+                auto_rule_logger.warning('auto rule %s with data %s, invalid error: %s', self.rule_id, self.data, e)
+                logger.warning('auto rule %s with data %s, invalid error: %s', self.rule_id, self.data, e)
                 self.task_run_success = False
                 if not with_test:
                     self.set_invalid(e)
@@ -3874,10 +3882,14 @@ class AutomationRule:
                 break
             except Exception as e:
                 self.task_run_success = False
-                auto_rule_logger.exception('rule: %s, do action: %s error: %s', self.rule_id, action_info, e)
-                logger.exception('rule: %s, do action: %s error: %s', self.rule_id, action_info, e)
+                auto_rule_logger.exception('rule %s do action %s with data %s error: %s', self.rule_id, action_info, self.data, e)
+                logger.exception('rule %s do action %s with data %s error: %s', self.rule_id, action_info, self.data, e)
 
         auto_rule_logger.info('rule: %s all actions finished done_actions: %s', self.rule_id, self.done_actions)
+
+        duration = datetime.now() - do_actions_start
+        if duration.seconds >= 5:
+            auto_rule_logger.warning('the running time of rule %s is too long, for %s. SQL queries are %s', self.rule_id, duration, f"\n{'\n'.join(self.query_stats)}")
 
         if self.done_actions and not with_test:
             self.update_last_trigger_time()
@@ -3956,16 +3968,6 @@ class AutomationRule:
         except Exception as e:
             auto_rule_logger.exception('set rule: %s error: %s', self.rule_id, e)
             logger.exception('set rule: %s error: %s', self.rule_id, e)
-
-        if self.run_condition == PER_UPDATE and self.per_minute_trigger_limit > 0:
-            trigger_times = redis_cache.get(self.cache_key)
-            if not trigger_times:
-                redis_cache.set(self.cache_key, int(time.time()), timeout=MINUTE_TIMEOUT)
-            else:
-                trigger_times = trigger_times.split(',')
-                trigger_times.append(str(int(time.time())))
-                trigger_times = trigger_times[-self.per_minute_trigger_limit:]
-                redis_cache.set(self.cache_key, ','.join([t for t in trigger_times]), timeout=MINUTE_TIMEOUT)
 
     def set_invalid(self, e: RuleInvalidException):
         try:

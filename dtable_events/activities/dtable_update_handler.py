@@ -68,7 +68,7 @@ class DTableUpdateTimer(Thread):
     def run(self):
         sched = BlockingScheduler()
         # fire at every hour in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', minute="*/10")
+        @sched.scheduled_job('cron', day_of_week='*', minute="*/10", misfire_grace_time=120)
         def timed_job():
             logging.info('Starts to scan updated bases')
             db_session = self.db_session_class()
