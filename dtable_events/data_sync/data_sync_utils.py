@@ -437,13 +437,12 @@ def send_data_sync_notification(dtable_uuid, db_session, error_type, account_id)
     send_notification_to_admin(dtable_uuid, db_session, formated_msg)
 
 
-def sync_emails(context):
+def sync_emails(context, db_session):
     data_sync_id = context['data_sync_id']
     dtable_uuid = context['dtable_uuid']
     detail = context['detail']
     repo_id = context['repo_id']
     workspace_id = context['workspace_id']
-    db_session = context['db_session']
 
     send_date = context.get('send_date')
     username = context.get('username', 'Data Sync')
@@ -552,25 +551,24 @@ def run_sync_emails(context):
     data_sync_id = context['data_sync_id']
     dtable_uuid = context['dtable_uuid']
     detail = context['detail']
-    db_session = context['db_session']
+    db_session_class = context['db_session_class']
     consecutive_errors_times = context['consecutive_errors_times']
     pre_error_type = context['error_type']
     account_id = detail.get('third_account_id')
 
-    error_type = sync_emails(context)
+    with db_session_class() as db_session:
+        error_type = sync_emails(context, db_session)
+        if not error_type:
+            update_sync_time(data_sync_id, db_session)
+            return
 
-    if not error_type:
-        update_sync_time(data_sync_id, db_session)
-        return
-
-    if error_type == 'third_party_account_login_error':
-        if pre_error_type and consecutive_errors_times >= 4:
+        if error_type == 'third_party_account_login_error':
+            if pre_error_type and consecutive_errors_times >= 4:
+                set_data_sync_invalid(data_sync_id, db_session, error_type)
+                send_data_sync_notification(dtable_uuid, db_session, error_type, account_id)
+            else:
+                increase_data_sync_consecutive_errors_times(data_sync_id, db_session, consecutive_errors_times, pre_error_type, error_type)
+            return
+        else:
             set_data_sync_invalid(data_sync_id, db_session, error_type)
             send_data_sync_notification(dtable_uuid, db_session, error_type, account_id)
-        else:
-            increase_data_sync_consecutive_errors_times(data_sync_id, db_session, consecutive_errors_times, pre_error_type, error_type)
-        return
-    else:
-        set_data_sync_invalid(data_sync_id, db_session, error_type)
-        send_data_sync_notification(dtable_uuid, db_session, error_type, account_id)
-        return

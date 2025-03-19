@@ -50,17 +50,18 @@ class DataSyncer(object):
         return self._enabled
 
 
-def list_pending_data_syncs(db_session):
-    sql = '''
-            SELECT das.id, das.dtable_uuid, das.sync_type, das.detail, w.repo_id, w.id, das.consecutive_errors_times, 
-            das.error_type FROM dtable_data_syncs das
-            INNER JOIN dtables d ON das.dtable_uuid=d.uuid AND d.deleted=0
-            INNER JOIN workspaces w ON w.id=d.workspace_id
-            WHERE das.is_valid=1
-        '''
+def list_pending_data_syncs(db_session_class):
+    with db_session_class() as db_session:
+        sql = '''
+                SELECT das.id, das.dtable_uuid, das.sync_type, das.detail, w.repo_id, w.id, das.consecutive_errors_times, 
+                das.error_type FROM dtable_data_syncs das
+                INNER JOIN dtables d ON das.dtable_uuid=d.uuid AND d.deleted=0
+                INNER JOIN workspaces w ON w.id=d.workspace_id
+                WHERE das.is_valid=1
+            '''
 
-    dataset_list = db_session.execute(text(sql))
-    return dataset_list
+        dataset_list = db_session.execute(text(sql))
+        return dataset_list
 
 
 def run_sync_task(context):
@@ -72,8 +73,8 @@ def run_sync_task(context):
         logging.error('run sync task error context: %s', context)
 
 
-def check_data_syncs(db_session, max_workers):
-    data_sync_list = list_pending_data_syncs(db_session)
+def check_data_syncs(db_session_class, max_workers):
+    data_sync_list = list_pending_data_syncs(db_session_class)
 
     executor = ThreadPoolExecutor(max_workers=max_workers)
 
@@ -94,7 +95,7 @@ def check_data_syncs(db_session, max_workers):
             'workspace_id': data_sync[5],
             'consecutive_errors_times': data_sync[6],
             'error_type': data_sync[7],
-            'db_session': db_session
+            'db_session_class': db_session_class
         }
         tasks.append(executor.submit(run_sync_task, sync_info))
         if len(tasks) == step:
@@ -115,12 +116,9 @@ class DataSyncerTimer(Thread):
         @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='30', misfire_grace_time=600)
         def timed_job():
             logging.info('Starts to scan data syncs...')
-            db_session = self.db_session_class()
             try:
-                check_data_syncs(db_session, self.max_workers)
+                check_data_syncs(self.db_session_class, self.max_workers)
             except Exception as e:
                 logging.exception('check periodical data syncs error: %s', e)
-            finally:
-                db_session.close()
 
         sched.start()
