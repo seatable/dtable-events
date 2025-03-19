@@ -57,7 +57,7 @@ class AutomationRuleHandler(Thread):
             try:
                 scan_triggered_automation_rules(event, session)
             except Exception as e:
-                logger.exception('Handle automation rules failed: %s' % e)
+                logger.exception('Handle automation rule with data %s failed: %s', event, e)
             finally:
                 session.close()
 
@@ -81,7 +81,7 @@ class AutomationRuleHandler(Thread):
                 if message is not None:
                     event = json.loads(message['data'])
                     dtable_uuid = event.get('dtable_uuid')
-                    logger.info('get per_update auto-rule message %s', event)
+                    logger.debug('get per_update auto-rule message %s', event)
                     index = ord(dtable_uuid[0]) % self.per_update_auto_rule_workers
                     self.queues[index].put(event)
                 else:

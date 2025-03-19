@@ -3864,8 +3864,8 @@ class AutomationRule:
                     ConvertDocumentToPDFAndSendAction(self, action_info.get('type'), plugin_type, page_id, file_name, save_config, send_wechat_robot_config, send_email_config, repo_id, workspace_id).do_action()
 
             except RuleInvalidException as e:
-                auto_rule_logger.warning('auto rule: %s, invalid error: %s', self.rule_id, e)
-                logger.warning('auto rule: %s, invalid error: %s', self.rule_id, e)
+                auto_rule_logger.warning('auto rule %s with data %s, invalid error: %s', self.rule_id, self.data, e)
+                logger.warning('auto rule %s with data %s, invalid error: %s', self.rule_id, self.data, e)
                 self.task_run_success = False
                 if not with_test:
                     self.set_invalid(e)
@@ -3882,8 +3882,8 @@ class AutomationRule:
                 break
             except Exception as e:
                 self.task_run_success = False
-                auto_rule_logger.exception('rule: %s, do action: %s error: %s', self.rule_id, action_info, e)
-                logger.exception('rule: %s, do action: %s error: %s', self.rule_id, action_info, e)
+                auto_rule_logger.exception('rule %s do action %s with data %s error: %s', self.rule_id, action_info, self.data, e)
+                logger.exception('rule %s do action %s with data %s error: %s', self.rule_id, action_info, self.data, e)
 
         auto_rule_logger.info('rule: %s all actions finished done_actions: %s', self.rule_id, self.done_actions)
 
