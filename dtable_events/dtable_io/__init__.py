@@ -863,8 +863,7 @@ def app_user_sync(dtable_uuid, app_name, app_id, table_name, table_id, username,
 
 def email_sync(context, config):
     dtable_data_sync_logger.info('Start sync email to dtable %s, email table %s.' % (context.get('dtable_uuid'), context.get('detail',{}).get('email_table_id')))
-    db_session = init_db_session_class(config)()
-    context['db_session'] = db_session
+    context['db_session_class'] = init_db_session_class(config)
 
     try:
         run_sync_emails(context)
@@ -872,9 +871,6 @@ def email_sync(context, config):
         dtable_data_sync_logger.exception('sync email ERROR: {}'.format(e))
     else:
         dtable_data_sync_logger.info('sync email success, sync_id: %s' % context.get('data_sync_id'))
-    finally:
-        if db_session:
-            db_session.close()
 
 
 def plugin_email_send_email(context, config=None):
