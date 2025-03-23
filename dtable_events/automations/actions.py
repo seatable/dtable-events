@@ -212,7 +212,7 @@ class BaseAction:
                     if user not in notify_users:
                         notify_users.append(user)
         elif self.action_type == 'update_record':
-            converted_row = self.auto_rule.data.get('converted_row')
+            converted_row = self.auto_rule.get_convert_sql_row()
             row_id = converted_row['_id']
             for column_name, value in row_data.items():
                 if column_name not in notify_column_names:
@@ -1564,7 +1564,7 @@ class RunPythonScriptAction(BaseAction):
 
         context_data = {'table': self.auto_rule.table_info['name']}
         if self.auto_rule.run_condition == PER_UPDATE:
-            context_data['row'] = self.data['converted_row']
+            context_data['row'] = self.auto_rule.get_convert_sql_row()
         scripts_running_limit = self.get_scripts_running_limit()
 
         # request faas url
@@ -1882,7 +1882,7 @@ class LinkRecordsAction(BaseAction):
             column = self.get_column(self.auto_rule.table_id, column_key)
             if not column:
                 raise RuleInvalidException('match column not found', 'match_column_not_found')
-            row_value = self.data['converted_row'].get(column.get('name'))
+            row_value = self.auto_rule.get_convert_sql_row().get(column.get('name'))
             if row_value is None:
                 return [], []
             other_column_key = match_condition.get("other_column_key")
@@ -2001,7 +2001,7 @@ class LinkRecordsAction(BaseAction):
             if col.get('type') == 'link' and col.get('data', {}).get('link_id') == self.link_id:
                 link_col_name = col.get('name')
         if link_col_name:
-            linked_rows = self.data.get('converted_row', {}).get(link_col_name, {})
+            linked_rows = self.auto_rule.get_convert_sql_row().get(link_col_name, {})
             table_linked_rows = {row.get('row_id'): True for row in linked_rows}
             if len(self.linked_row_ids) == len(table_linked_rows):
                 for row_id in self.linked_row_ids:
@@ -2242,7 +2242,7 @@ class AddRecordToOtherTableAction(BaseAction):
 
     def init_append_rows(self):
         sql_row = self.auto_rule.get_sql_row()
-        src_row = self.data['converted_row']
+        src_row = self.auto_rule.get_convert_sql_row()
         src_columns = self.auto_rule.table_info['columns']
         self.col_name_dict = {col.get('name'): col for col in src_columns}
         self.col_key_dict = {col.get('key'): col for col in src_columns}
@@ -3381,6 +3381,10 @@ class AutomationRule:
 
         self._sql_row = None
         self._sql_query_count = 0
+
+        self._convert_sql_row = None
+        self._convert_sql_query_count = 0
+
         self._sql_query_max = 3
 
         self.metadata_cache_manager = metadata_cache_manager
@@ -3482,6 +3486,25 @@ class AutomationRule:
         if not self._related_users_dict:
             self._related_users_dict = {user['email']: user for user in self.related_users}
         return self._related_users_dict
+
+    def get_convert_sql_row(self):
+        if self._convert_sql_row is not None or self._convert_sql_query_count >= self._sql_query_max:
+            return self._convert_sql_row
+        if not self.data:
+            return None
+        if 'row_id' not in self.data:
+            return None
+        row_id = self.data['row_id']
+        while not self._convert_sql_row and self._convert_sql_query_count < self._sql_query_max:
+            sql = f"SELECT * FROM `{self.table_info['name']}` WHERE _id='{row_id}'"
+            sql_rows, _ = self.query(sql, convert=True)
+            if not sql_rows:
+                self._convert_sql_query_count += 1
+                logger.warning('auto-rule %s query dtable %s table %s convert row %s not found, query count %s', self.rule_id, self.dtable_uuid, self.table_id, row_id, self._convert_sql_query_count)
+                time.sleep(0.1)
+                continue
+            self._convert_sql_row = sql_rows[0]
+        return self._convert_sql_row
 
     def get_sql_row(self):
         if self._sql_row is not None or self._sql_query_count >= self._sql_query_max:
@@ -3588,7 +3611,7 @@ class AutomationRule:
             dtable_db_api = self.dtable_db_api
         query_start = datetime.now()
         resp = dtable_db_api.query(sql, **kwargs)
-        self.query_stats.append(f"{dtable_uuid} - SQL:[{sql}] - {datetime.now() - query_start}")
+        self.query_stats.append(f"{dtable_uuid} - SQL:[{sql}] - {datetime.now() - query_start} args: [{kwargs}]")
         return resp
 
     def can_do_actions(self):

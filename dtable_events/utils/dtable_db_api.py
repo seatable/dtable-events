@@ -178,7 +178,7 @@ class DTableDBAPI(object):
         if not sql:
             raise ValueError('sql can not be empty.')
         url = self.dtable_db_url + '/api/v1/query/' + self.dtable_uuid + '/?from=dtable_events'
-        json_data = {'sql': sql, 'server_only': server_only, 'convert_keys': convert}
+        json_data = {'sql': sql, 'server_only': server_only, 'convert_keys': convert, 'convert_date': convert}
         response = requests.post(url, json=json_data, headers=self.headers, timeout=TIMEOUT)
         data = parse_response(response)
         if not data.get('success'):
