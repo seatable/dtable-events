@@ -110,7 +110,8 @@ class FormulaCellConverter(BaseCellConverter):
                 ColumnTypes.COLLABORATOR
             ] and isinstance(value, list):
                 return FormulaMessageFormatter(self.column).format_message(value, db_session)
-            return fill_cell_with_sql_row(value, {'data': array_data}, db_session)
+            # if find bugs in fill_cell_with_sql_row, do not modify message-formatter, fix in this file
+            return fill_cell_with_sql_row(value, {'type': array_type, 'data': array_data}, db_session)
         return value
 
 
