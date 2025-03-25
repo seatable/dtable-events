@@ -213,12 +213,15 @@ class BaseAction:
                     if user not in notify_users:
                         notify_users.append(user)
         elif self.action_type == 'update_record':
-            converted_row = self.auto_rule.get_convert_sql_row()
-            row_id = converted_row['_id']
+            sql_row = self.auto_rule.get_sql_row()
+            row_id = sql_row['_id']
             for column_name, value in row_data.items():
                 if column_name not in notify_column_names:
                     continue
-                old_value = converted_row.get(column_name) or []
+                column = next(filter(lambda column: column['name'] == column_name, self.auto_rule.table_info['columns']), None)
+                if not column:
+                    continue
+                old_value = sql_row.get(column['key']) or []
                 for user in (set(value) - set(old_value)):
                     if user not in notify_users:
                         notify_users.append(user)
@@ -1604,7 +1607,8 @@ class LinkRecordsAction(BaseAction):
         ColumnTypes.COLLABORATOR: "is_exactly",
         ColumnTypes.EMAIL: "is",
         ColumnTypes.RATE: "equal",
-        ColumnTypes.AUTO_NUMBER: "is"
+        ColumnTypes.AUTO_NUMBER: "is",
+        ColumnTypes.DEPARTMENT_SINGLE_SELECT: "is"
     }
 
     VALID_COLUMN_TYPES = [
