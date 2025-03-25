@@ -17,7 +17,7 @@ from dtable_events.utils.constants import ColumnTypes, FormulaResultType
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 from dtable_events.utils.dtable_db_api import DTableDBAPI
-from dtable_events.notification_rules.message_formatters import create_formatter_params, formatter_map
+from dtable_events.utils.message_formatters import create_formatter_params, formatter_map
 
 logger = logging.getLogger(__name__)
 
@@ -187,24 +187,29 @@ def convert_zero_in_value(value):
     return value
 
 
+def fill_cell_with_sql_row(value, column, db_session, convert_to_html=False):
+    column_type = column['type']
+    formatter_class = formatter_map.get(column_type)
+    if not formatter_class:
+        return None
+    params = create_formatter_params(column_type, value=value, db_session=db_session, convert_to_html=convert_to_html)
+    if value is None:
+        message = formatter_class(column).format_empty_message()
+        return message
+    try:
+        message = formatter_class(column).format_message(**params)
+        return message
+    except Exception as e:
+        logger.exception('value %s for filling column %s error %s', value, column)
+        return ''
+
+
 def fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, row, db_session, convert_to_html=False):
     for blank in column_blanks:
-        value = row.get(col_name_dict[blank]['key'])
-        column_type = col_name_dict[blank]['type']
-        formatter_class = formatter_map.get(column_type)
-        if not formatter_class:
+        cell_message = fill_cell_with_sql_row(row.get(col_name_dict[blank]['key']), col_name_dict[blank], db_session, convert_to_html=False)
+        if cell_message is None:
             continue
-        params = create_formatter_params(column_type, value=value, db_session=db_session, convert_to_html=convert_to_html)
-        if value is None:
-            message = formatter_class(col_name_dict[blank]).format_empty_message()
-            msg = msg.replace('{' + blank + '}', str(message))
-            continue
-        try:
-            message = formatter_class(col_name_dict[blank]).format_message(**params)
-            msg = msg.replace('{' + blank + '}', str(message))
-        except Exception as e:
-            logger.exception(e)
-            msg = msg.replace('{' + blank + '}', '')
+        msg = msg.replace('{' + blank + '}', str(cell_message))
 
     return msg
 
