@@ -12,6 +12,10 @@ class SqlTest(unittest.TestCase):
 
     table_name = 'Table1'
 
+    def __init__(self, methodName = "runTest"):
+        super().__init__(methodName)
+        self.maxDiff = None
+
     def _toSql(self, filter_conditions, by_group=False):
         sql = filter2sql(
             self.table_name,
