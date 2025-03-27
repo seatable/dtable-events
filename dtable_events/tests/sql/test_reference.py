@@ -1,4 +1,11 @@
+import os
+import time
 from datetime import timedelta, datetime
+
+# set timezone
+os.environ['TZ'] = 'UTC'
+time.tzset()  # 在Unix-like系统上生效
+
 def get_expected_sql_for_modifier(filter_modifier, column_name):
     today = datetime.today()
     week_day = today.isoweekday()
@@ -594,7 +601,7 @@ TEST_CONDITIONS = [
             "limit": 500
         },
         "by_group": True,
-        "expected_sql":"SELECT * FROM `Table1` WHERE (`名称` = 'LINK' And `AutoNo` ilike '%NO%') Or (`rate` > 6 Or `Mul` in ('aa', 'bb', 'cc', 'dd') Or (`modifyTime` >= '2021-12-21T00:00:00.000000+00:00' and `modifyTime` is not null)) ORDER BY `名称` DESC, `AutoNo` ASC LIMIT 0, 500"
+        "expected_sql":"SELECT * FROM `Table1` WHERE ((`名称` = 'LINK') And (`AutoNo` ilike '%NO%')) Or ((`rate` > 6) Or (`Mul` in ('aa', 'bb', 'cc', 'dd')) Or ((`modifyTime` >= '2021-12-21T00:00:00.000000+00:00' and `modifyTime` is not null))) ORDER BY `名称` DESC, `AutoNo` ASC LIMIT 0, 500"
     },
 
     # Not group, column not found raise Exception
@@ -636,6 +643,6 @@ TEST_CONDITIONS = [
 TEST_CONDITIONS_LINK = [
     {
         'row_ids': ["ZBdik2Q2RlWu0BeKVyBtWQ"],
-        "expected_sql": "SELECT * FROM `Table2` WHERE (`_id` in ('ZBdik2Q2RlWu0BeKVyBtWQ'))"
+        "expected_sql": "SELECT * FROM `Table2` WHERE `_id` in ('ZBdik2Q2RlWu0BeKVyBtWQ')"
     }
 ]
