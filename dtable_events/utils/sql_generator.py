@@ -2599,7 +2599,7 @@ class BaseSQLGenerator(object):
         sql_condition = _filter2sqlslice(operator)
         if not sql_condition:
             return
-        return sql_condition
+        return f'({sql_condition})'
 
     def _filter2sql(self):
         filter_conditions = self.filter_conditions
