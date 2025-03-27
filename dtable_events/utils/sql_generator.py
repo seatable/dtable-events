@@ -811,7 +811,7 @@ class DateOperator(Operator):
         else:
             next_date = self._format_date(date + timedelta(days=1))
             target_date = self._format_date(date)
-        return "`%(column_name)s` >= '%(target_date)s' and `%(column_name)s` < '%(next_date)s'" % ({
+        return "(`%(column_name)s` >= '%(target_date)s' and `%(column_name)s` < '%(next_date)s')" % ({
             "column_name": self.column_name,
             "target_date": target_date,
             "next_date": next_date
@@ -832,7 +832,7 @@ class DateOperator(Operator):
             formatted_start_date = self._format_date(start_date)
             formatted_end_date = self._format_date(end_date)
 
-        return "`%(column_name)s` >= '%(start_date)s' and `%(column_name)s` < '%(end_date)s'" % ({
+        return "(`%(column_name)s` >= '%(start_date)s' and `%(column_name)s` < '%(end_date)s')" % ({
             "column_name": self.column_name,
             "start_date": formatted_start_date,
             "end_date": formatted_end_date
@@ -850,7 +850,7 @@ class DateOperator(Operator):
         else:
             formatted_target_date = self._format_date(target_date)
 
-        return "`%(column_name)s` < '%(target_date)s' and `%(column_name)s` is not null" % ({
+        return "(`%(column_name)s` < '%(target_date)s' and `%(column_name)s` is not null)" % ({
             "column_name": self.column_name,
             "target_date": formatted_target_date
         })
@@ -865,7 +865,7 @@ class DateOperator(Operator):
             next_date = self._format_to_utc_date(target_date + timedelta(days=1))
         else:
             next_date = self._format_date(target_date + timedelta(days=1))
-        return "`%(column_name)s` >= '%(target_date)s' and `%(column_name)s` is not null" % ({
+        return "(`%(column_name)s` >= '%(target_date)s' and `%(column_name)s` is not null)" % ({
             "column_name": self.column_name,
             "target_date": next_date,
         })
@@ -881,7 +881,7 @@ class DateOperator(Operator):
             next_date = self._format_to_utc_date(target_date + timedelta(days=1))
         else:
             next_date = self._format_date(target_date + timedelta(days=1))
-        return "`%(column_name)s` < '%(target_date)s' and `%(column_name)s` is not null" % ({
+        return "(`%(column_name)s` < '%(target_date)s' and `%(column_name)s` is not null)" % ({
             "column_name": self.column_name,
             "target_date": next_date
         })
@@ -897,7 +897,7 @@ class DateOperator(Operator):
         else:
             target_date = self._format_date(target_date)
 
-        return "`%(column_name)s` >= '%(target_date)s' and `%(column_name)s` is not null" % ({
+        return "(`%(column_name)s` >= '%(target_date)s' and `%(column_name)s` is not null)" % ({
             "column_name": self.column_name,
             "target_date": target_date
         })
