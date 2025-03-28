@@ -3179,18 +3179,16 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
 
     WECHAT_FILE_SIZE_LIMIT = 20 << 20
 
-    def __init__(self, auto_rule, action_type, plugin_type, page_id, file_name, save_config, send_wechat_robot_config, send_email_config, repo_id, workspace_id):
+    def __init__(self, auto_rule, action_type, plugin_type, doc_uuid, file_name, save_config, send_wechat_robot_config, send_email_config, repo_id, workspace_id):
         super().__init__(auto_rule, action_type)
         self.plugin_type = plugin_type
-        self.page_id = page_id
+        self.doc_uuid = doc_uuid
         self.file_name = file_name
         self.save_config = save_config
         self.send_wechat_robot_config = send_wechat_robot_config
         self.send_email_config = send_email_config
         self.repo_id = repo_id
         self.workspace_id = workspace_id
-
-        self.page = None
 
     def can_do_action(self):
         if not self.auto_rule.current_valid:
@@ -3237,7 +3235,7 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
         try:
             dtable_server_api.upload_bytes_file(file_name, pdf_content, relative_path)
         except Exception as e:
-            logger.exception('rule: %s dtable: %s page: %s upload pdf to custom: %s error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.page_id, relative_path, e)
+            logger.exception('rule: %s dtable: %s doc: %s upload pdf to custom: %s error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.doc_uuid, relative_path, e)
 
     def send_email_cb(self, pdf_content):
         logger.debug('rule: %s convert-and-send start check send email can_do: %s', self.auto_rule.rule_id, self.send_email_config.get('can_do'))
@@ -3269,7 +3267,7 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
             sender = EmailSender(account_id, 'automation-rules', conver_page_to_pdf_manager.config)
             sender.send(send_info)
         except Exception as e:
-            logger.exception('rule: %s dtable: %s page: %s send email: %s error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.page_id, send_info, e)
+            logger.exception('rule: %s dtable: %s doc: %s send email: %s error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.doc_uuid, send_info, e)
 
     def send_wechat_robot_cb(self, pdf_content):
         logger.debug('rule: %s convert-and-send start check send wechat robot can_do: %s', self.auto_rule.rule_id, self.send_wechat_robot_config.get('can_do'))
@@ -3290,7 +3288,7 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
         upload_url = f'{parsed_url.scheme}://{parsed_url.netloc}/cgi-bin/webhook/upload_media?key={key}&type=file'
         resp = requests.post(upload_url, files={'file': (file_name, io.BytesIO(pdf_content))})
         if not resp.ok:
-            logger.error('rule: %s dtable: %s page: %s send wechat: %s upload error status: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.page_id, auth_info, resp.status_code)
+            logger.error('rule: %s dtable: %s doc: %s send wechat: %s upload error status: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.doc_uuid, auth_info, resp.status_code)
             return
         media_id = resp.json().get('media_id')
         msg_resp = requests.post(webhook_url, json={
@@ -3300,7 +3298,7 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
             }
         })
         if not msg_resp.ok:
-            logger.error('rule: %s dtable: %s page: %s send wechat: %s error status: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.page_id, auth_info, msg_resp.status_code)
+            logger.error('rule: %s dtable: %s doc: %s send wechat: %s error status: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.doc_uuid, auth_info, msg_resp.status_code)
         # send msg
         wechat_robot_msg = self.send_wechat_robot_config.get('message') or ''
         wechat_robot_msg_type = self.send_wechat_robot_config.get('message_type') or 'text'
@@ -3317,19 +3315,19 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
         task_info = {
             'repo_id': self.repo_id,
             'dtable_uuid': self.auto_rule.dtable_uuid,
-            'page_id': self.page_id,
+            'doc_uuid': self.doc_uuid,
             'plugin_type': self.plugin_type,
             'action_type': self.action_type,
             'per_converted_callbacks': [self.save_to_custom_cb, self.send_email_cb, self.send_wechat_robot_cb]
         }
         try:
-            # put resources check to the place before convert page,
-            # because there is a distance between putting task to queue and converting page
+            # put resources check to the place before convert doc,
+            # because there is a distance between putting task to queue and converting doc
             conver_page_to_pdf_manager.add_task(task_info)
         except Full:
             self.auto_rule.append_warning({
-                'type': 'convert_page_to_pdf_server_busy',
-                'page_id': self.page_id
+                'type': 'convert_document_to_pdf_server_busy',
+                'doc_uuid': self.doc_uuid
             })
         self.auto_rule.set_done_actions()
 
@@ -3854,7 +3852,7 @@ class AutomationRule:
 
                 elif action_info.get('type') == 'convert_document_to_pdf_and_send':
                     plugin_type = action_info.get('plugin_type')
-                    page_id = action_info.get('page_id')
+                    doc_uuid = action_info.get('doc_uuid')
                     file_name = action_info.get('file_name')
                     repo_id = action_info.get('repo_id')
                     workspace_id = action_info.get('workspace_id')
@@ -3884,7 +3882,7 @@ class AutomationRule:
                         'reply_to': action_info.get('email_reply_to', '')
                     }
 
-                    ConvertDocumentToPDFAndSendAction(self, action_info.get('type'), plugin_type, page_id, file_name, save_config, send_wechat_robot_config, send_email_config, repo_id, workspace_id).do_action()
+                    ConvertDocumentToPDFAndSendAction(self, action_info.get('type'), plugin_type, doc_uuid, file_name, save_config, send_wechat_robot_config, send_email_config, repo_id, workspace_id).do_action()
 
             except RuleInvalidException as e:
                 auto_rule_logger.warning('auto rule %s with data %s, invalid error: %s', self.rule_id, self.data, e)

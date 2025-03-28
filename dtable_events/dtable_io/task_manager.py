@@ -318,12 +318,23 @@ class TaskManager(object):
             return False, None
         return True, task_result
 
-    def convert_page_to_pdf(self, dtable_uuid, plugin_type, page_id, row_id, username):
-        from dtable_events.dtable_io import convert_page_to_pdf
+    def convert_page_design_to_pdf(self, dtable_uuid, page_id, row_id, username):
+        from dtable_events.dtable_io import convert_page_design_to_pdf
 
         task_id = str(uuid.uuid4())
-        task = (convert_page_to_pdf,
-                (dtable_uuid, plugin_type, page_id, row_id, username))
+        task = (convert_page_design_to_pdf,
+                (dtable_uuid, page_id, row_id, username))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+
+        return task_id
+
+    def convert_document_to_pdf(self, dtable_uuid, doc_uuid, row_id, username):
+        from dtable_events.dtable_io import convert_document_to_pdf
+
+        task_id = str(uuid.uuid4())
+        task = (convert_document_to_pdf,
+                (dtable_uuid, doc_uuid, row_id, username))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
 

@@ -448,8 +448,8 @@ def cancel_message_send_status():
     return make_response(({'success': True}, 200))
 
 
-@app.route('/convert-page-to-pdf', methods=['GET'])
-def convert_page_to_pdf():
+@app.route('/convert-page-design-to-pdf', methods=['GET'])
+def convert_page_design_to_pdf():
     is_valid, error = check_auth_token(request)
     if not is_valid:
         return make_response((error, 403))
@@ -461,14 +461,39 @@ def convert_page_to_pdf():
         return make_response(('dtable io server busy.', 400))
 
     dtable_uuid = request.args.get('dtable_uuid')
-    plugin_type = request.args.get('plugin_type')
     page_id = request.args.get('page_id')
     row_id = request.args.get('row_id')
     username = request.args.get('username')
 
     try:
-        task_id = task_manager.convert_page_to_pdf(
-            dtable_uuid, plugin_type, page_id, row_id, username)
+        task_id = task_manager.convert_page_design_to_pdf(
+            dtable_uuid, page_id, row_id, username)
+    except Exception as e:
+        dtable_io_logger.error(e)
+        return make_response((e, 500))
+
+    return make_response(({'task_id': task_id}, 200))
+
+
+@app.route('/convert-document-to-pdf', methods=['GET'])
+def convert_document_to_pdf():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    if task_manager.tasks_queue.full():
+        dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
+                                 % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
+                                    task_manager.threads_is_alive()))
+        return make_response(('dtable io server busy.', 400))
+
+    dtable_uuid = request.args.get('dtable_uuid')
+    doc_uuid = request.args.get('doc_uuid')
+    row_id = request.args.get('row_id')
+    username = request.args.get('username')
+
+    try:
+        task_id = task_manager.convert_document_to_pdf(dtable_uuid, doc_uuid, row_id, username)
     except Exception as e:
         dtable_io_logger.error(e)
         return make_response((e, 500))
