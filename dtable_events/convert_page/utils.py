@@ -43,21 +43,28 @@ def get_driver(user_data_path):
     return driver
 
 
-def open_page_view(driver: webdriver.Chrome, dtable_uuid, plugin_type, page_id, row_id, access_token):
-    if plugin_type == 'page-design':
-        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id)
-        if row_id:
-            url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/row/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id, row_id)
-    elif plugin_type == 'document':
-        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/document/%s/row/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id, row_id)
+def gen_page_design_pdf_view_url(dtable_uuid, page_id, access_token, row_id=None):
+    url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id)
+    if row_id:
+        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/row/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id, row_id)
 
     url += '?access-token=%s&need_convert=%s' % (access_token, 0)
-    logger.debug('check url: %s', url)
+    return url
+
+
+def gen_document_pdf_view_url(dtable_uuid, doc_uuid, access_token, row_id):
+    # row_id maybe None
+    url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/document/%s/row/%s/' % (uuid_str_to_36_chars(dtable_uuid), doc_uuid, row_id)
+    url += '?access-token=%s&need_convert=%s' % (access_token, 0)
+    return url
+
+
+def open_page_view(driver: webdriver.Chrome, url):
     driver.execute_script(f"window.open('{url}')")
     return driver.window_handles[-1]
 
 
-def wait_page_view(driver: webdriver.Chrome, session_id, plugin_type, row_id, output):
+def wait_page_view(driver: webdriver.Chrome, session_id, monitor_dom_id, row_id, output):
     def check_images_and_networks(driver, frequency=0.5):
         """
         make sure all images complete
@@ -98,12 +105,6 @@ def wait_page_view(driver: webdriver.Chrome, session_id, plugin_type, row_id, ou
     #     sleep_time = 6
 
     driver.switch_to.window(session_id)
-
-    monitor_dom_id = ''
-    if plugin_type == 'page-design':
-        monitor_dom_id = 'page-design-render-complete'
-    elif plugin_type == 'document':
-        monitor_dom_id = 'document-render-complete'
 
     try:
         logger.debug('check to wait render')
@@ -155,11 +156,6 @@ def wait_page_view(driver: webdriver.Chrome, session_id, plugin_type, row_id, ou
             logger.debug('check name: %s start: %s duration: %s end: %s', item.get('name'), item.get('startTime'), item.get('duration'), item.get('responseEnd'))
             logger.debug(item)
         logger.debug('network logs end')
-
-
-def convert_page_to_pdf(driver: webdriver.Chrome, dtable_uuid, plugin_type, page_id, row_id, access_token, output):
-    session_id = open_page_view(driver, dtable_uuid, plugin_type, page_id, row_id, access_token)
-    wait_page_view(driver, session_id, plugin_type, row_id, output)
 
 
 def gen_document_base_dir(dtable_uuid):

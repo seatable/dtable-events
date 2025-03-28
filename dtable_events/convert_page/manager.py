@@ -5,7 +5,8 @@ from queue import Queue, Full
 from threading import Thread
 
 from dtable_events.app.config import INNER_DTABLE_DB_URL
-from dtable_events.convert_page.utils import get_chrome_data_dir, get_driver, open_page_view, wait_page_view, get_documents_config
+from dtable_events.convert_page.utils import get_chrome_data_dir, get_driver, open_page_view, wait_page_view, \
+    get_documents_config, gen_page_design_pdf_view_url, gen_document_pdf_view_url
 from dtable_events.utils import get_inner_dtable_server_url, get_opt_from_conf_or_env
 from dtable_events.utils.dtable_server_api import DTableServerAPI, NotFoundException
 from dtable_events.utils.dtable_db_api import DTableDBAPI
@@ -102,9 +103,8 @@ class ConvertPageToPDFWorker:
         self.index = index
         self.manager = manager
 
-    def convert_with_rows(self, driver, resources):
+    def convert_page_design_pdf(self, driver, resources):
         dtable_uuid = self.task_info.get('dtable_uuid')
-        plugin_type = self.task_info.get('plugin_type')
         page_id = self.task_info.get('page_id')
         action_type = self.task_info.get('action_type')
         per_converted_callbacks = self.task_info.get('per_converted_callbacks') or []
@@ -114,6 +114,8 @@ class ConvertPageToPDFWorker:
         # resources in convert-page-to-pdf action
         table = resources.get('table')
         target_column = resources.get('target_column')
+
+        monitor_dom_id = 'page-design-render-complete'
 
         dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, dtable_server_url)
 
@@ -127,14 +129,16 @@ class ConvertPageToPDFWorker:
                 row_session_dict = {}
                 # open rows
                 for row_id in step_row_ids:
-                    session_id = open_page_view(driver, dtable_uuid, plugin_type, page_id, row_id, dtable_server_api.internal_access_token)
+                    url = gen_page_design_pdf_view_url(dtable_uuid, page_id, dtable_server_api.internal_access_token, row_id)
+                    logger.debug('check page design url: %s', url)
+                    session_id = open_page_view(driver, url)
                     row_session_dict[row_id] = session_id
 
                 # wait for chrome windows rendering
                 for row_id in step_row_ids:
                     output = io.BytesIO()  # receive pdf content
                     session_id = row_session_dict[row_id]
-                    wait_page_view(driver, session_id, plugin_type, row_id, output)
+                    wait_page_view(driver, session_id, monitor_dom_id, row_id, output)
                     # per converted callbacks
                     pdf_content = output.getvalue()
                     if action_type == 'convert_page_to_pdf':
@@ -157,18 +161,23 @@ class ConvertPageToPDFWorker:
                 except Exception as e:
                     logging.exception(e)
 
-    def convert_without_rows(self, driver):
+    def convert_document_pdf(self, driver):
         dtable_uuid = self.task_info.get('dtable_uuid')
-        plugin_type = self.task_info.get('plugin_type')
-        page_id = self.task_info.get('page_id')
+        doc_uuid = self.task_info.get('doc_uuid')
         action_type = self.task_info.get('action_type')
         per_converted_callbacks = self.task_info.get('per_converted_callbacks') or []
 
         dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, dtable_server_url)
+        monitor_dom_id = 'document-render-complete'
 
         output = io.BytesIO()  # receive pdf content
-        session_id = open_page_view(driver, dtable_uuid, plugin_type, page_id, None, dtable_server_api.internal_access_token)
-        wait_page_view(driver, session_id, plugin_type, None, output)
+
+        row_id = None
+        url = gen_document_pdf_view_url(dtable_uuid, doc_uuid, dtable_server_api.internal_access_token, row_id)
+        logger.debug('check document url: %s', url)
+
+        session_id = open_page_view(driver, url)
+        wait_page_view(driver, session_id, monitor_dom_id, None, output)
         # per converted callback
         pdf_content = output.getvalue()
         if action_type == 'convert_document_to_pdf_and_send':
@@ -178,12 +187,29 @@ class ConvertPageToPDFWorker:
                 except Exception as e:
                     logging.exception(e)
 
-    def check_resources(self, repo_id, dtable_uuid, plugin_type, page_id, table_id, target_column_key, row_ids):
+    def check_document_resources(self, repo_id, dtable_uuid, doc_uuid):
+        """
+        :return: resources -> dict or None, error_msg -> str or None
+        """
+        document = get_documents_config(repo_id, dtable_uuid, 'dtable-events')
+        if not document:
+            return None, 'document not found'
+        doc = next(filter(lambda doc: doc.get('doc_uuid') == doc_uuid, document), None)
+        if not doc:
+            return None, 'doc %s not found' % doc_uuid
+
+        return {
+                   'doc': doc,
+               }, None
+
+    def check_page_design_resources(self, dtable_uuid, page_id, table_id, target_column_key, row_ids):
         """
         :return: resources -> dict or None, error_msg -> str or None
         """
         dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, dtable_server_url)
         dtable_db_api = DTableDBAPI('dtable-events', dtable_uuid, INNER_DTABLE_DB_URL)
+
+        plugin_type = 'page-design'
 
         # metdata with plugin
         try:
@@ -195,19 +221,13 @@ class ConvertPageToPDFWorker:
             return None, 'get metadata error %s' % e
 
         # table
-        if table_id:
-            table = next(filter(lambda t: t['_id'] == table_id, metadata.get('tables', [])), None)
-            if not table:
-                return None, 'table not found'
-        else:
-            table = None
+        table = next(filter(lambda t: t['_id'] == table_id, metadata.get('tables', [])), None)
+        if not table:
+            return None, 'table not found'
 
         # plugin
         plugin_settings = metadata.get('plugin_settings') or {}
         plugin = plugin_settings.get(plugin_type) or []
-        if not plugin and plugin_type == 'document':
-            plugin = get_documents_config(repo_id, dtable_uuid, 'dtable-events')
-
         if not plugin:
             return None, 'plugin not found'
         page = next(filter(lambda page: page.get('page_id') == page_id, plugin), None)
@@ -215,69 +235,86 @@ class ConvertPageToPDFWorker:
             return None, 'page %s not found' % page_id
 
         # column
-        if target_column_key:
-            target_column = next(filter(lambda col: col['key'] == target_column_key, table.get('columns', [])), None)
-            if not target_column:
-                return None, 'column %s not found' % target_column_key
-        else:
-            target_column = None
+        target_column = next(filter(lambda col: col['key'] == target_column_key, table.get('columns', [])), None)
+        if not target_column:
+            return None, 'column %s not found' % target_column_key
 
         # rows
-        if row_ids:
-            row_ids_str = ', '.join(map(lambda row_id: f"'{row_id}'", row_ids))
-            sql = f"SELECT _id FROM `{table['name']}` WHERE _id IN ({row_ids_str}) LIMIT {len(row_ids)}"
-            try:
-                rows, _ = dtable_db_api.query(sql)
-            except Exception as e:
-                logger.error('plugin: %s dtable: %s query rows error: %s', plugin_type, dtable_uuid, e)
-                return None, 'query rows error'
-            row_ids = [row['_id'] for row in rows]
-        else:
-            row_ids = None
+        row_ids_str = ', '.join(map(lambda row_id: f"'{row_id}'", row_ids))
+        sql = f"SELECT _id FROM `{table['name']}` WHERE _id IN ({row_ids_str}) LIMIT {len(row_ids)}"
+        try:
+            rows, _ = dtable_db_api.query(sql)
+        except Exception as e:
+            logger.error('plugin: %s dtable: %s query rows error: %s', plugin_type, dtable_uuid, e)
+            return None, 'query rows error'
+        row_ids = [row['_id'] for row in rows]
 
         return {
-            'table': table,
-            'target_column': target_column,
-            'page': page,
-            'row_ids': row_ids
-        }, None
+                   'table': table,
+                   'target_column': target_column,
+                   'page': page,
+                   'row_ids': row_ids
+               }, None
 
     def work(self):
         dtable_uuid = self.task_info.get('dtable_uuid')
         plugin_type = self.task_info.get('plugin_type')
+        # when convert page-design to pdf page_id is not None
         page_id = self.task_info.get('page_id')
+        # when convert document to pdf doc_uuid is not None
+        doc_uuid = self.task_info.get('doc_uuid')
         table_id = self.task_info.get('table_id')
         target_column_key = self.task_info.get('target_column_key')
         row_ids = self.task_info.get('row_ids')
         repo_id = self.task_info.get('repo_id')
 
-        # resource check
-        # Rather than wait one minute to render a wrong page, a resources check is more effective
-        try:
-            resources, error_msg = self.check_resources(repo_id, dtable_uuid, plugin_type, page_id, table_id, target_column_key, row_ids)
-            if not resources:
-                logger.warning('plugin: %s dtable: %s page: %s task_info: %s error: %s', plugin_type, dtable_uuid, page_id, self.task_info, error_msg)
+        if plugin_type == 'page-design':
+            try:
+                resources, error_msg = self.check_page_design_resources(dtable_uuid, page_id, table_id, target_column_key, row_ids)
+                if not resources:
+                    logger.warning('plugin: %s dtable: %s page: %s task_info: %s error: %s', plugin_type, dtable_uuid, page_id, self.task_info, error_msg)
+                    return
+            except Exception as e:
+                logger.exception('plugin: %s dtable: %s page: %s task_info: %s resource check error: %s', plugin_type, dtable_uuid, page_id, self.task_info, e)
                 return
-            row_ids = resources.get('row_ids')
-        except Exception as e:
-            logger.exception('plugin: %s dtable: %s page: %s task_info: %s resource check error: %s', plugin_type, dtable_uuid, page_id, self.task_info, e)
-            return
 
-        try:
-            driver = self.manager.get_driver(self.index)
-        except Exception as e:
-            logger.exception('get driver: %s error: %s', self.index, e)
-            return
+            try:
+                driver = self.manager.get_driver(self.index)
+            except Exception as e:
+                logger.exception('get driver: %s error: %s', self.index, e)
+                return
 
-        try:
-            if row_ids is not None:  # rows
-                self.convert_with_rows(driver, resources)
-            else:  # no rows
-                self.convert_without_rows(driver)
-        except Exception as e:
-            logger.exception(e)
-        finally:
-            self.manager.clear_chrome(self.index)
+            try:
+                self.convert_page_design_pdf(driver, resources)
+            except Exception as e:
+                logger.exception(e)
+            finally:
+                self.manager.clear_chrome(self.index)
+
+        elif plugin_type == 'document':
+            try:
+                resources, error_msg = self.check_document_resources(repo_id, dtable_uuid, doc_uuid)
+                if not resources:
+                    logger.warning('plugin: %s dtable: %s document: %s task_info: %s error: %s', plugin_type, dtable_uuid,
+                                   doc_uuid, self.task_info, error_msg)
+                    return
+            except Exception as e:
+                logger.exception('plugin: %s dtable: %s document: %s task_info: %s resource check error: %s', plugin_type,
+                                 dtable_uuid, doc_uuid, self.task_info, e)
+                return
+
+            try:
+                driver = self.manager.get_driver(self.index)
+            except Exception as e:
+                logger.exception('get driver: %s error: %s', self.index, e)
+                return
+
+            try:
+                self.convert_document_pdf(driver)
+            except Exception as e:
+                logger.exception(e)
+            finally:
+                self.manager.clear_chrome(self.index)
 
 
 conver_page_to_pdf_manager = ConvertPageTOPDFManager()
