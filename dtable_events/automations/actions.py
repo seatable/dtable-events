@@ -30,6 +30,7 @@ from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 from dtable_events.utils.dtable_db_api import DTableDBAPI, RowsQueryError, Request429Error
+from dtable_events.utils.row_converter import convert_row_with_sql_row
 from dtable_events.notification_rules.utils import get_nickname_by_usernames
 from dtable_events.utils.sql_generator import filter2sql, BaseSQLGenerator, ColumnFilterInvalidError, \
     has_user_filter, is_user_filter
@@ -212,12 +213,15 @@ class BaseAction:
                     if user not in notify_users:
                         notify_users.append(user)
         elif self.action_type == 'update_record':
-            converted_row = self.auto_rule.get_convert_sql_row()
-            row_id = converted_row['_id']
+            sql_row = self.auto_rule.get_sql_row()
+            row_id = sql_row['_id']
             for column_name, value in row_data.items():
                 if column_name not in notify_column_names:
                     continue
-                old_value = converted_row.get(column_name) or []
+                column = next(filter(lambda column: column['name'] == column_name, self.auto_rule.table_info['columns']), None)
+                if not column:
+                    continue
+                old_value = sql_row.get(column['key']) or []
                 for user in (set(value) - set(old_value)):
                     if user not in notify_users:
                         notify_users.append(user)
@@ -1603,7 +1607,8 @@ class LinkRecordsAction(BaseAction):
         ColumnTypes.COLLABORATOR: "is_exactly",
         ColumnTypes.EMAIL: "is",
         ColumnTypes.RATE: "equal",
-        ColumnTypes.AUTO_NUMBER: "is"
+        ColumnTypes.AUTO_NUMBER: "is",
+        ColumnTypes.DEPARTMENT_SINGLE_SELECT: "is"
     }
 
     VALID_COLUMN_TYPES = [
@@ -3381,7 +3386,6 @@ class AutomationRule:
         self._sql_query_count = 0
 
         self._convert_sql_row = None
-        self._convert_sql_query_count = 0
 
         self._sql_query_max = 3
 
@@ -3486,22 +3490,9 @@ class AutomationRule:
         return self._related_users_dict
 
     def get_convert_sql_row(self):
-        if self._convert_sql_row is not None or self._convert_sql_query_count >= self._sql_query_max:
+        if self._convert_sql_row is not None:
             return self._convert_sql_row
-        if not self.data:
-            return None
-        if 'row_id' not in self.data:
-            return None
-        row_id = self.data['row_id']
-        while not self._convert_sql_row and self._convert_sql_query_count < self._sql_query_max:
-            sql = f"SELECT * FROM `{self.table_info['name']}` WHERE _id='{row_id}'"
-            sql_rows, _ = self.query(sql, convert=True)
-            if not sql_rows:
-                self._convert_sql_query_count += 1
-                logger.warning('auto-rule %s query dtable %s table %s convert row %s not found, query count %s', self.rule_id, self.dtable_uuid, self.table_id, row_id, self._convert_sql_query_count)
-                time.sleep(0.1)
-                continue
-            self._convert_sql_row = sql_rows[0]
+        self._convert_sql_row = convert_row_with_sql_row(self.get_sql_row(), self.table_info['columns'], self.db_session)
         return self._convert_sql_row
 
     def get_sql_row(self):

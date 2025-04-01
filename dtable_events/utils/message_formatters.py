@@ -288,7 +288,7 @@ class CTimeMessageFormatter(BaseMessageFormatter):
         except Exception as e:
             logger.warning('parse value: %s to datetime error: %s', value, e)
             return self.format_empty_message()
-        value = datetime_obj.strftime('%Y-%m-%d %H:%M')
+        value = datetime_obj.strftime('%Y-%m-%d %H:%M:%S')
         return value
 
 
@@ -436,11 +436,11 @@ class DurationMessageFormatter(BaseMessageFormatter):
         minutes = (abs(value) % 3600) // 60
         seconds = abs(value) % 60
         if duration_format == 'h:mm':
-            value = '%s%d:%2d' % (prefix, hours, minutes)
+            value = '%s%d:%02d' % (prefix, hours, minutes)
         elif duration_format == 'h:mm:ss':
             value = '%s%d:%02d:%02d' % (prefix, hours, minutes, seconds)
         else:
-            value = '%s%d:%2d' % (prefix, hours, minutes)
+            value = '%s%d:%02d' % (prefix, hours, minutes)
         return value
 
 
