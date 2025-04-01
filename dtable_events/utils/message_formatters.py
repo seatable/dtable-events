@@ -288,7 +288,7 @@ class CTimeMessageFormatter(BaseMessageFormatter):
         except Exception as e:
             logger.warning('parse value: %s to datetime error: %s', value, e)
             return self.format_empty_message()
-        value = datetime_obj.strftime('%Y-%m-%d %H:%M')
+        value = datetime_obj.strftime('%Y-%m-%d %H:%M:%S')
         return value
 
 
