@@ -27,7 +27,7 @@ class RedisClient(object):
 
     def _parse_config(self, config):
 
-        if not (redis_host := os.getenv('REDIS_SERVER')):
+        if not (redis_host := os.getenv('REDIS_HOST')):
             if config.has_option('REDIS', 'host'):
                 self._host = config.get('REDIS', 'host')
         else:
