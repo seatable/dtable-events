@@ -19,69 +19,72 @@ service_url = DTABLE_WEB_SERVICE_URL.strip()
 dtable_server_url = get_inner_dtable_server_url().rstrip('/')
 
 
-def _trans_url(url, workspace_id, dtable_uuid):
-    if url.startswith(service_url):
+def _trans_url(url, src_dtable_uuid, workspace_id, dtable_uuid):
+    if url.startswith(service_url) and f'/asset/{src_dtable_uuid}' in url:
         return re.sub(r'\d+/asset/[-\w]{36}', workspace_id + '/asset/' + dtable_uuid, url)
     return url
 
 
-def _trans_file_url(file, workspace_id, dtable_uuid):
-    file['url'] = _trans_url(file['url'], workspace_id, dtable_uuid)
+def _trans_file_url(file, src_dtable_uuid, workspace_id, dtable_uuid):
+    file['url'] = _trans_url(file['url'], src_dtable_uuid, workspace_id, dtable_uuid)
     return file
 
 
-def _trans_image_url(image_url, workspace_id, dtable_uuid):
-    return _trans_url(image_url, workspace_id, dtable_uuid)
+def _trans_image_url(image_url, src_dtable_uuid, workspace_id, dtable_uuid):
+    return _trans_url(image_url, src_dtable_uuid, workspace_id, dtable_uuid)
 
-def trans_page_content_url(content_url, workspace_id, dtable_uuid):
-    return _trans_url(content_url, workspace_id, dtable_uuid)
+def trans_page_content_url(content_url, src_dtable_uuid, workspace_id, dtable_uuid):
+    return _trans_url(content_url, src_dtable_uuid, workspace_id, dtable_uuid)
 
 
-def _trans_long_text(long_text, workspace_id, dtable_uuid):
+def _trans_long_text(long_text, src_dtable_uuid, workspace_id, dtable_uuid):
     new_images = []
     for image_url in long_text['images']:
-        new_image_url = _trans_url(image_url, workspace_id, dtable_uuid)
+        new_image_url = _trans_url(image_url, src_dtable_uuid, workspace_id, dtable_uuid)
         long_text['text'] = long_text['text'].replace(image_url, new_image_url)
         new_images.append(new_image_url)
     long_text['images'] = new_images
     return long_text
 
 
-def _parse_asset_path(url):
+def _parse_asset_path(url, dst_dtable_uuid):
     asset_path = ''
-    if url.startswith(service_url):
+    if url.startswith(service_url) and f'/asset/{dst_dtable_uuid}' in url:
         url = unquote(url)
         asset_path = url[url.find('/asset/')+44:]
     return asset_path
 
 
-def _trans_rows_content(dst_workspace_id, dst_dtable_uuid, row, img_cols, file_cols, long_text_cols):
+def _trans_rows_content(src_dtable_uuid, dst_workspace_id, dst_dtable_uuid, row, img_cols, file_cols, long_text_cols):
     for img_col in img_cols:
         if img_col in row and isinstance(row[img_col], list):
-            row[img_col] = [_trans_image_url(img, dst_workspace_id, dst_dtable_uuid) for img in row.get(img_col, [])]
+            row[img_col] = [_trans_image_url(img, src_dtable_uuid, dst_workspace_id, dst_dtable_uuid) for img in row.get(img_col, [])]
     for file_col in file_cols:
         if file_col in row and isinstance(row[file_col], list):
-            row[file_col] = [_trans_file_url(f, dst_workspace_id, dst_dtable_uuid) for f in row.get(file_col, [])]
+            row[file_col] = [_trans_file_url(f, src_dtable_uuid, dst_workspace_id, dst_dtable_uuid) for f in row.get(file_col, [])]
     for long_text_col in long_text_cols:
         if row.get(long_text_col) and isinstance(row[long_text_col], dict) \
                 and row[long_text_col].get('text') and row[long_text_col].get('images'):
-            row[long_text_col] = _trans_long_text(row[long_text_col], dst_workspace_id, dst_dtable_uuid)
+            row[long_text_col] = _trans_long_text(row[long_text_col], src_dtable_uuid, dst_workspace_id, dst_dtable_uuid)
 
 
-def _get_asset_path_list(row, img_cols, file_cols, long_text_cols):
-    asset_path_list = set()
+def _get_asset_path_set(row, dst_dtable_uuid, img_cols, file_cols, long_text_cols):
+    asset_path_set = set()
     for img_col in img_cols:
         if img_col in row and isinstance(row[img_col], list):
-            [asset_path_list.add(_parse_asset_path(img)) for img in row.get(img_col, [])]
+            tmp_asset_path_set = {_parse_asset_path(img, dst_dtable_uuid) for img in row.get(img_col, [])}
+            asset_path_set |= tmp_asset_path_set
     for file_col in file_cols:
         if file_col in row and isinstance(row[file_col], list):
-            [asset_path_list.add(_parse_asset_path(f['url'])) for f in row.get(file_col, [])]
+            tmp_asset_path_set = {_parse_asset_path(f['url'], dst_dtable_uuid) for f in row.get(file_col, [])}
+            asset_path_set |= tmp_asset_path_set
     for long_text_col in long_text_cols:
         if row.get(long_text_col) and isinstance(row[long_text_col], dict) \
                 and row[long_text_col].get('text') and row[long_text_col].get('images'):
-            [asset_path_list.add(_parse_asset_path(image_url)) for image_url in row[long_text_col]['images']]
+            tmp_asset_path_set = {_parse_asset_path(image_url, dst_dtable_uuid) for image_url in row[long_text_col]['images']}
+            asset_path_set |= tmp_asset_path_set
 
-    return asset_path_list
+    return asset_path_set - {''}  # remove empty path
 
 
 def _copy_table_assets(asset_path_list, src_repo_id, src_dtable_uuid, dst_repo_id, dst_dtable_uuid, username):
@@ -92,11 +95,14 @@ def _copy_table_assets(asset_path_list, src_repo_id, src_dtable_uuid, dst_repo_i
         if not seafile_api.get_dir_id_by_path(dst_repo_id, dst_asset_dir):
             seafile_api.mkdir_with_parents(dst_repo_id, '/', dst_asset_dir[1:], username)
         for asset_path in list(asset_path_list):
-            src_full_path = os.path.dirname(os.path.join('/asset', src_dtable_uuid, asset_path))
+            src_file_path = os.path.join('/asset', src_dtable_uuid, asset_path)
+            src_full_path = os.path.dirname(src_file_path)
             dst_full_path = os.path.dirname(os.path.join('/asset', dst_dtable_uuid, asset_path))
             if not seafile_api.get_dir_id_by_path(dst_repo_id, dst_full_path):
                 seafile_api.mkdir_with_parents(dst_repo_id, '/', dst_full_path[1:], username)
             file_name = os.path.basename(asset_path)
+            if not seafile_api.get_file_id_by_path(src_repo_id, src_file_path):
+                continue
             seafile_api.copy_file(src_repo_id, src_full_path, json.dumps([file_name]),
                                   dst_repo_id, dst_full_path, json.dumps([file_name]),
                                   username, need_progress=1)
@@ -108,15 +114,15 @@ def trans_and_copy_asset(table, src_repo_id, src_dtable_uuid, dst_workspace_id, 
         file_cols = [col['key'] for col in table['columns'] if col['type'] == 'file']
         long_text_cols = [col['key'] for col in table['columns'] if col['type'] == 'long-text']
 
-        asset_path_list = set()
+        asset_path_set = set()
         for row in table['rows']:
-            _trans_rows_content(dst_workspace_id, dst_dtable_uuid, row, img_cols, file_cols, long_text_cols)
-            asset_path_list = asset_path_list | _get_asset_path_list(row, img_cols, file_cols, long_text_cols)
+            _trans_rows_content(src_dtable_uuid, dst_workspace_id, dst_dtable_uuid, row, img_cols, file_cols, long_text_cols)
+            asset_path_set = asset_path_set | _get_asset_path_set(row, dst_dtable_uuid, img_cols, file_cols, long_text_cols)
 
-        _copy_table_assets(list(asset_path_list), src_repo_id, src_dtable_uuid,
+        _copy_table_assets(list(asset_path_set), src_repo_id, src_dtable_uuid,
                            dst_repo_id, dst_dtable_uuid, username)
     except Exception as e:
-        dtable_io_logger.error('trans_and_copy_asset: %s' % e)
+        dtable_io_logger.exception('trans_and_copy_asset: %s' % e)
         return False, None
     return True, table
 
