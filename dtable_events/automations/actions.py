@@ -3392,7 +3392,6 @@ class AutomationRule:
 
         self.done_actions = False  # indicate at least 1 action be done
         self.load_trigger_and_actions(raw_trigger, raw_actions)
-        self.load_row()
 
         self.current_valid = True
 
@@ -3727,6 +3726,13 @@ class AutomationRule:
         if (not self.can_do_actions()) and (not with_test):
             auto_rule_logger.info('rule: %s can not do actions', self.rule_id)
             return
+
+        if self.run_condition == PER_UPDATE:
+            try:
+                self.load_row()
+            except Exception as e:
+                auto_rule_logger.exception('rule %s sql query row %s error %s', self.rule_id, self.data['row_id'], e)
+                return
 
         do_actions_start = datetime.now()
         for action_info in self.action_infos:
