@@ -3392,6 +3392,7 @@ class AutomationRule:
 
         self.done_actions = False  # indicate at least 1 action be done
         self.load_trigger_and_actions(raw_trigger, raw_actions)
+        self.load_row()
 
         self.current_valid = True
 
@@ -3408,10 +3409,9 @@ class AutomationRule:
         self.rule_name = self.trigger.get('rule_name', '')
         self.action_infos = json.loads(raw_actions)
 
-    @property
-    def headers(self):
-        return self.dtable_server_api.headers
-
+    def load_row(self):
+        self.get_convert_sql_row()
+        self.get_sql_row()
 
     def cache_clean(self):
         # when some attribute changes, such as option added in single-select column
