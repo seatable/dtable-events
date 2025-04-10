@@ -37,11 +37,11 @@ class DTableNofiticationRulesScanner(object):
     def _parse_config(self, config):
         """parse send email related options from config file
         """
-        section_name = 'NOTIFY-SCANNER'
+        section_name = 'NOTIFY SCANNER'
         key_enabled = 'enabled'
 
         if not config.has_section(section_name):
-            section_name = 'NOTIFY SCANNER'
+            section_name = 'NOTIFY-SCANNER'
             if not config.has_section(section_name):
                 return
 

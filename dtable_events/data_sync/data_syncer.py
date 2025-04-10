@@ -21,12 +21,14 @@ class DataSyncer(object):
         self._db_session_class = init_db_session_class(config)
 
     def _prepara_config(self, config):
-        section_name = 'EMAIL-SYNCER'
+        section_name = 'EMAIL SYNCER'
         key_enabled = 'enabled'
         key_max_workers = 'max_workers'
 
         if not config.has_section(section_name):
-            return
+            section_name = 'EMAIL-SYNCER'
+            if not config.has_section(section_name):
+                return
 
         # enabled
         enabled = get_opt_from_conf_or_env(config, section_name, key_enabled, default=True)
