@@ -5,7 +5,6 @@ import os
 import sys
 
 logger = logging.getLogger(__name__)
-_UNSET = object()
 
 
 # DTABLE_WEB_DIR
@@ -54,89 +53,8 @@ except Exception as e:
     logger.critical("Can not import dtable_web settings: %s." % e)
     raise RuntimeError("Can not import dtable_web settings: %s" % e)
 
-class DTableEventsConfigParser(configparser.ConfigParser):
-    """
-    Rewrite config parser to complicate the lower and upper section name, as the `configparser.ConfigParser` only supports the specific section name. In this module, a hash table will store historical query records (to lower) to map the real section name.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._section_map = {}
-
-    def _get_real_section_name(self, section):
-        section = section.lower()
-        current_sections = self.sections()
-        
-        if section in self._section_map:
-            if self._section_map[section] not in current_sections:
-                del self._section_map[section]
-                raise configparser.NoSectionError(section) from None
-            return self._section_map[section]
-        
-        for cfg_section in current_sections:
-            if cfg_section.lower() == section:
-                self._section_map[section] = cfg_section
-        
-        raise configparser.NoSectionError(section) from None
-    
-    # Rewrite RawConfigParser
-    def read(self, filenames, encoding=None):
-        read_ok = super().read(filenames, encoding)
-        if read_ok:
-            self._section_map = {
-                cfg_section.lower(): cfg_section
-                for cfg_section in self._sections
-            }
-        return read_ok
-
-    def has_section(self, section):
-        try:
-            self._get_real_section_name(section)
-            return True
-        except configparser.NoSectionError:
-            return False
-    
-    def options(self, section):
-        return super().options(self._get_real_section_name(section))
-    
-    def get(self, section, option, *, raw=False, vars=None, fallback=_UNSET):
-        return super().get(self._get_real_section_name(section), option, raw=raw, vars=vars, fallback=fallback)
-
-    def getint(self, section, option, raw=False, vars=None, fallback=_UNSET):
-        return super().getint(self._get_real_section_name(section), option, raw=raw, vars=vars, fallback=fallback)
-    
-    def getfloat(self, section, option, raw=False, vars=None, fallback=_UNSET):
-        return super().getfloat(self._get_real_section_name(section), option, raw=raw, vars=vars, fallback=fallback)
-    
-    def getboolean(self, section, option, raw=False, vars=None, fallback=_UNSET):
-        return super().getboolean(self._get_real_section_name(section), option, raw=raw, vars=vars, fallback=fallback)
-    
-    def getboolean(self, section, option, raw=False, vars=None, fallback=_UNSET):
-        return super().getboolean(self._get_real_section_name(section), option, raw=raw, vars=vars, fallback=fallback)
-    
-    def items(self, section, raw=False, vars=None):
-        return super().items(self._get_real_section_name(section), raw=raw, vars=vars)
-    
-    def has_option(self, section, option):
-        try:
-            return super().has_option(self._get_real_section_name(section), option)
-        except configparser.NoSectionError:
-            return False
-    
-    def set(self, section, option, value=None):
-        return super().set(self._get_real_section_name(section), option, value=value)
-    
-    def remove_option(self, section, option):
-        return super().remove_option(self._get_real_section_name(section), option)
-
-    def remove_section(self, section):
-        result =  super().remove_section(self._get_real_section_name(section))
-        if result:
-            del self._section_map[section.lower()]
-        return result
-
 def get_config(config_file):
-    config = DTableEventsConfigParser()
+    config = configparser.ConfigParser()
     try:
         config.read(config_file)
     except Exception as e:
