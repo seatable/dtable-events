@@ -22,11 +22,13 @@ class CommonDatasetSyncer(object):
         self._db_session_class = init_db_session_class(config)
 
     def _prepara_config(self, config):
-        section_name = 'COMMON-DATASET-SYNCER'
+        section_name = 'COMMON DATASET SYNCER'
         key_enabled = 'enabled'
 
         if not config.has_section(section_name):
-            return
+            section_name = 'COMMON-DATASET-SYNCER'
+            if not config.has_section(section_name):
+                return
 
         # enabled
         enabled = get_opt_from_conf_or_env(config, section_name, key_enabled, default=True)
