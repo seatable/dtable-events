@@ -100,10 +100,11 @@ class APICallsCounter:
 
         # update exceed status
         org_ids = list(org_counts_dict.keys())
-        if org_ids:
+        owner_ids = list(owner_ids_dict.keys())
+        if org_ids or owner_ids_dict:
             dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
             try:
-                dtable_web_api.internal_update_exceed_api_quota(month, org_ids)
+                dtable_web_api.internal_update_exceed_api_quota(month, org_ids, owner_ids)
             except Exception as e:
                 logger.exception('update exceed api quota error: %s', e)
 
