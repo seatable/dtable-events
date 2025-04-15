@@ -233,8 +233,8 @@ class AIStatsWorker:
         def timed_job():
             logger.info('Starts to clean old stats ai...')
             session = self._db_session_class()
-            sql1 = "DELETE FORM `stats_ai_by_team` WHERE `month` < :clean_month"
-            sql2 = "DELETE FORM `stats_ai_by_owner` WHERE `month` < :clean_month"
+            sql1 = "DELETE FROM `stats_ai_by_team` WHERE `month` < :clean_month"
+            sql2 = "DELETE FROM `stats_ai_by_owner` WHERE `month` < :clean_month"
             clean_month = (datetime.now() - relativedelta.relativedelta(months=self.keep_months)).strftime('%Y-%m-01')
             try:
                 session.execute(text(sql1), {'clean_month': clean_month})
