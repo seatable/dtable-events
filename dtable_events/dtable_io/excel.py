@@ -1417,12 +1417,15 @@ def email_to_nickname(email2nickname, cell):
         return ''
     return email2nickname.get(cell.get('display_value'), '')
 
-def parse_link(column, cell_data, email2nickname):
+def parse_link(column, cell_data, email2nickname, is_big_data_view):
     if isinstance(cell_data, list):
         if column.get('data').get('array_type') == ColumnTypes.SINGLE_SELECT:
-            options = column.get('data').get('array_data', {}).get('options')
-            id2name = {op.get('id'): op.get('name') for op in options}
-            return ', '.join([select_option_to_name(id2name, cell) for cell in cell_data])
+            if is_big_data_view:
+                return ', '.join(cell_data)
+            else:
+                options = column.get('data').get('array_data', {}).get('options')
+                id2name = {op.get('id'): op.get('name') for op in options}
+                return ', '.join([select_option_to_name(id2name, cell) for cell in cell_data])
         elif column.get('data').get('array_type') in (ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER):
             return ', '.join([email_to_nickname(email2nickname, cell) for cell in cell_data])
         elif column.get('data').get('array_type') in (ColumnTypes.CTIME, ColumnTypes.MTIME):
@@ -1749,7 +1752,7 @@ def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_
             elif col_type == ColumnTypes.MULTIPLE_SELECT:
                 cell_value = parse_multiple_select_formula(cell_value)
             elif col_type == ColumnTypes.LINK:
-                cell_value = parse_link(column, cell_value, email2nickname)
+                cell_value = parse_link(column, cell_value, email2nickname, is_big_data_view)
             elif col_type == ColumnTypes.LONG_TEXT:
                 cell_value = parse_dtable_long_text(cell_value)
                 cell_value = cell_value.strip()
