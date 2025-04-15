@@ -51,7 +51,7 @@ class AIStatsWorker:
         usage = usage_info.get('usage')
 
         if model not in AI_PRICES:
-            logger.warning('model %s price not defined')
+            logger.warning('model %s price not defined', model)
             return
 
         if 'prompt_tokens' in usage:

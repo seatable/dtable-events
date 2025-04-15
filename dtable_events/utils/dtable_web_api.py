@@ -212,13 +212,14 @@ class DTableWebAPI:
         resp = requests.post(url, data=data, headers={'Authorization': header_token}, timeout=30)
         return parse_response(resp)
 
-    def internal_update_exceed_api_quota(self, month, org_ids):
+    def internal_update_exceed_api_quota(self, month, org_ids, owner_ids):
         logger.debug('internal update exeed api quota for month %s, org_ids are %s', month, org_ids)
         url = '%(server_url)s/api/v2.1/internal/update-exceed-api-quota/' % {
             'server_url': self.dtable_web_service_url
         }
         data = {
             'org_ids': org_ids,
+            'owner_ids': owner_ids,
             'month': month
         }
         payload = {
