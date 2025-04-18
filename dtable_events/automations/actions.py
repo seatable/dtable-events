@@ -167,82 +167,6 @@ class BaseAction:
     def do_action(self):
         pass
 
-    def get_need_notify_columns(self, table_id):
-        # columns = self.auto_rule.table_info['columns']
-        tables = self.auto_rule.dtable_metadata.get('tables') or []
-        table = None
-        for tmp_table in tables:
-            if tmp_table['_id'] == table_id:
-                table = tmp_table
-                break
-        if not table:
-            return []
-        results = []
-        for column in table['columns']:
-            if column['type'] != ColumnTypes.COLLABORATOR:
-                continue
-            data = column.get('data') or {}
-            if data.get('enable_send_notification'):
-                results.append(column)
-        return results
-
-    def send_selected_collaborator_notis(self, row_data):
-        """only some kinds of actions can call this
-        """
-        if self.action_type not in ['update_record', 'add_record', 'add_record_to_other_table']:
-            return
-        table_id = None
-        notify_column_names = []
-        if self.action_type in ['update_record', 'add_record']:
-            table_id = self.auto_rule.table_info['_id']
-            notify_column_names = [column['name'] for column in self.get_need_notify_columns(table_id)]
-        elif self.action_type == 'add_record_to_other_table':
-            table_id = self.dst_table_id
-            notify_column_names = [column['name'] for column in self.get_need_notify_columns(table_id)]
-        if not notify_column_names:
-            return
-        notify_users = []
-        row_id = None
-        if self.action_type == 'add_record':
-            row_id = row_data['_id']
-            for column_name, value in row_data.items():
-                if column_name not in notify_column_names:
-                     continue
-                for user in value:
-                    if user not in notify_users:
-                        notify_users.append(user)
-        elif self.action_type == 'update_record':
-            converted_row = self.auto_rule.get_convert_sql_row()
-            row_id = converted_row['_id']
-            for column_name, value in row_data.items():
-                if column_name not in notify_column_names:
-                    continue
-                old_value = converted_row.get(column_name) or []
-                for user in (set(value) - set(old_value)):
-                    if user not in notify_users:
-                        notify_users.append(user)
-        elif self.action_type == 'add_record_to_other_table':
-            row_id = row_data['_id']
-            for column_name, value in row_data.items():
-                if column_name not in notify_column_names:
-                     continue
-                for user in value:
-                    if user not in notify_users:
-                        notify_users.append(user)
-        detail = {
-            'author': 'Automation Rule',
-            'row_id': row_id,
-            'table_id': table_id
-        }
-        user_msg_list = []
-        for user in notify_users:
-            user_msg_list.append({
-                'to_user': user,
-                'msg_type': 'selected_collaborator',
-                'detail': detail,
-            })
-        send_notification(self.auto_rule.dtable_uuid, user_msg_list, self.auto_rule.username)
-
     def parse_column_value(self, column, value):
         if column.get('type') == ColumnTypes.SINGLE_SELECT:
             column_data = column.get('data') or {}
@@ -548,10 +472,6 @@ class UpdateAction(BaseAction):
             logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
         self.auto_rule.set_done_actions()
-        try:
-            self.send_selected_collaborator_notis(self.update_data['row'])
-        except Exception as e:
-            logger.exception('send selected notifications error: %s', e)
 
 
     def condition_cron_update(self):
@@ -716,7 +636,6 @@ class AddRowAction(BaseAction):
         self.auto_rule.set_done_actions()
         try:
             self.row_data['row']['_id'] = row['_id']
-            self.send_selected_collaborator_notis(self.row_data['row'])
         except Exception as e:
             logger.exception('send selected notifications error: %s', e)
 
@@ -2404,7 +2323,6 @@ class AddRecordToOtherTableAction(BaseAction):
 
         try:
             self.row_data['row']['_id'] = row['_id']
-            self.send_selected_collaborator_notis(self.row_data['row'])
         except Exception as e:
             logger.exception('send selected notifications error: %s', e)
 
