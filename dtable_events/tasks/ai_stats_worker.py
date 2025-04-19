@@ -48,7 +48,7 @@ class AIStatsWorker:
 
         assistant_uuid = uuid_str_to_36_chars(usage_info.get('assistant_uuid'))
         model = usage_info['model']
-        usage = usage_info.get('usage')
+        usage = usage_info.get('usage') or {}
 
         if model not in AI_PRICES:
             logger.warning('model %s price not defined', model)
