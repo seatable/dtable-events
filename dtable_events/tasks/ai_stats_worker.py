@@ -24,12 +24,11 @@ class AIStatsWorker:
         self._db_session_class = init_db_session_class(config)
         self._redis_client = RedisClient(config)
         self.stats_lock = Lock()
-        self.org_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
-        self.owner_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
         self.channel = 'log_ai_model_usage'
         self.keep_months = 3
         self.owner_info_cache_timeout = 24 * 60 * 60
         self._parse_config(config)
+        self.reset_stats()
 
     def _parse_config(self, config):
         """parse send email related options from config file
@@ -41,6 +40,10 @@ class AIStatsWorker:
         enabled = get_opt_from_conf_or_env(config, section_name, key_enabled, default=False)
         enabled = parse_bool(enabled)
         self._enabled = enabled
+
+    def reset_stats(self):
+        self.org_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
+        self.owner_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
 
     def save_to_memory(self, usage_info, session):
         if not usage_info.get('model') or not usage_info.get('assistant_uuid'):
@@ -134,6 +137,7 @@ class AIStatsWorker:
         with self.stats_lock:
             org_stats = deepcopy(self.org_stats)
             owner_stats = deepcopy(self.owner_stats)
+            self.reset_stats()
 
         logger.info('There are %s org stats', len(org_stats))
         logger.info('There are %s owner stats (including groups with -1 org_id)', len(owner_stats))
