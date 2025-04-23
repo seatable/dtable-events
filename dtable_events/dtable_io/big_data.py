@@ -552,6 +552,10 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
         filter_conditions['start'] = start
         filter_conditions['limit'] = offset
         sql = filter2sql(table_name, cols, filter_conditions, by_group=False)
+
+        query_column_names = ['_id'] + [col['name'] for col in cols_without_hidden]
+        sql = sql.replace('*', ', '.join(map(lambda column_name: f"`{column_name}`", query_column_names)), 1)
+
         response_rows, db_metadata = dtable_db_api.query(sql, convert=True, server_only=False)
 
         row_num = start
@@ -668,6 +672,9 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
 
         try:
             sql = filter2sql(table_name, cols, filter_condition_groups, by_group=True)
+
+            query_column_names = ['_id'] + [col['name'] for col in cols_without_hidden]
+            sql = sql.replace('*', ', '.join(map(lambda column_name: f"`{column_name}`", query_column_names)), 1)
 
             response_rows, _ = dtable_db_api.query(sql, convert=True, server_only=False)
         except ConnectionError as e:
