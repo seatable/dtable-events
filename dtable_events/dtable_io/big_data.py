@@ -542,6 +542,9 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
     filter_conditions['filters'] = target_view.get('filters')
     filter_conditions['filter_conjunction'] = target_view.get('filter_conjunction')
 
+    query_column_names = ['_id'] + [col['name'] for col in cols_without_hidden]
+    query_column_names_str = ', '.join(map(lambda column_name: f"`{column_name}`", query_column_names))
+
     offset = 10000
     start = 0
     while True:
@@ -552,6 +555,9 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
         filter_conditions['start'] = start
         filter_conditions['limit'] = offset
         sql = filter2sql(table_name, cols, filter_conditions, by_group=False)
+
+        sql = sql.replace('*', query_column_names_str, 1)
+
         response_rows, db_metadata = dtable_db_api.query(sql, convert=True, server_only=False)
 
         row_num = start
@@ -653,6 +659,9 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
 
     tasks_status_map[task_id]['total_row_count'] = total_row_count
 
+    query_column_names = ['_id'] + [col['name'] for col in cols_without_hidden]
+    query_column_names_str = ', '.join(map(lambda column_name: f"`{column_name}`", query_column_names))
+
     limit = 10000
     start = 0
     while True:
@@ -668,6 +677,8 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
 
         try:
             sql = filter2sql(table_name, cols, filter_condition_groups, by_group=True)
+
+            sql = sql.replace('*', query_column_names_str, 1)
 
             response_rows, _ = dtable_db_api.query(sql, convert=True, server_only=False)
         except ConnectionError as e:
