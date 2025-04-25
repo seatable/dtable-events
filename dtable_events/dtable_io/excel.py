@@ -1520,6 +1520,7 @@ def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, i
     from urllib.parse import unquote, urljoin, urlparse
     from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, TwoCellAnchor
     from dtable_events.dtable_io.utils import image_column_offset_transfer, image_row_offset_transfer
+    from dtable_events.dtable_io import dtable_io_logger
 
     images = cell_value
     col_width = column.get('width', 200)
@@ -1561,11 +1562,15 @@ def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, i
 
         # convert webp to png
         if image_format in ('webp', ):
-            img = PILImage.open(tmp_image_path)
-            img.load()
-            image_name = image_name.split('.')[0] + '.png'
-            new_tmp_image_path = os.path.join(image_dir, image_name)
-            img.save(new_tmp_image_path, format='png')
+            new_tmp_image_name = image_name.split('.')[0] + '_tmp' + '.png'
+            new_tmp_image_path = os.path.join(image_dir, new_tmp_image_name)
+            try:
+                img = PILImage.open(tmp_image_path)
+                img.load()
+                img.save(new_tmp_image_path, format='png')
+            except Exception as e:
+                dtable_io_logger.warning('convert webp image: %s, to png image failed, error: %s', new_tmp_image_path, e)
+                continue
             # remove webp image
             os.remove(tmp_image_path)
             img = Image(new_tmp_image_path)
