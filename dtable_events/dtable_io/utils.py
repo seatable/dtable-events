@@ -180,7 +180,9 @@ def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id, task
             failed_reason = progress.get('failed_reason')
             if failed_reason:
                 raise Exception(failed_reason)
-    dtable_io_logger.info(add_task_id_to_log(f'export dtable: {dtable_uuid} username: {username} zip assets done'))
+    dtable_io_logger.info(add_task_id_to_log(f'export dtable: {dtable_uuid} username: {username} zip assets done', task_id))
+
+    dtable_io_logger.info(add_task_id_to_log(f'export dtable: {dtable_uuid} username: {username} start to download asset zip', task_id))
 
     asset_url = gen_dir_zip_download_url(token)
     try:
@@ -191,6 +193,7 @@ def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id, task
     file_obj = io.BytesIO(resp.content)
     if is_zipfile(file_obj):
         with ZipFile(file_obj) as zp:
+            dtable_io_logger.info(add_task_id_to_log(f'export dtable user: {username} dtable: {dtable_uuid} start to extractall', task_id))
             zp.extractall(os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_asset'))
 
 
