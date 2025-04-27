@@ -56,7 +56,7 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
         'warnings': []
     }
 
-    dtable_io_logger.info('Start prepare /tmp/dtable-io/{}/zip_file.zip for export DTable.'.format(dtable_uuid))
+    dtable_io_logger.info(add_task_id_to_log('Start prepare /tmp/dtable-io/{}/zip_file.zip for export DTable.'.format(dtable_uuid), task_id))
 
     tmp_file_path = os.path.join('/tmp/dtable-io', dtable_uuid,
                                  'dtable_asset/')  # used to store asset files and json from file_server
