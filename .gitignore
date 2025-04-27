@@ -14,3 +14,4 @@ stats-logs/
 /.idea
 .DS_Store
 /.vscode
+.python-version

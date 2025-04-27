@@ -42,7 +42,11 @@ dtable_data_sync_logger = setup_logger('dtable_events_data_sync', propagate=Fals
 dtable_plugin_email_logger = setup_logger('dtable_events_plugin_email', propagate=False)
 
 
-def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asset_dir_id, config):
+def opt_task_id_log(log_msg, task_id=None):
+    return f'task [{task_id}] - {log_msg}' if task_id else log_msg
+
+
+def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asset_dir_id, config, task_id):
     """
     1. prepare file content at /tmp/dtable-io/<dtable_id>/dtable_asset/...
     2. make zip file
@@ -62,29 +66,32 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
         db_session = init_db_session_class(config)()
     except Exception as e:
         db_session = None
-        dtable_io_logger.error('create db session failed. ERROR: {}'.format(e))
-        raise Exception('create db session failed. ERROR: {}'.format(e))
+        error_msg = 'create db session failed. ERROR: {}'.format(e)
+        dtable_io_logger.error(opt_task_id_log(error_msg, task_id))
+        raise Exception(error_msg)
 
-    dtable_io_logger.info('Clear tmp dirs and files before prepare.')
+    dtable_io_logger.info(opt_task_id_log('Clear tmp dirs and files before prepare.', task_id))
     clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path)
     os.makedirs(tmp_file_path, exist_ok=True)
     # import here to avoid circular dependency
 
     # 1. create 'content.json' from 'xxx.dtable'
-    dtable_io_logger.info('Create content.json file.')
+    dtable_io_logger.info(opt_task_id_log('Create content.json file.', task_id))
     try:
         prepare_dtable_json_from_memory(workspace_id, dtable_uuid, username)
     except Exception as e:
-        dtable_io_logger.error('prepare dtable json failed. ERROR: {}'.format(e))
-        raise Exception('prepare dtable json failed. ERROR: {}'.format(e))
+        error_msg = 'prepare dtable json failed. ERROR: {}'.format(e)
+        dtable_io_logger.error(opt_task_id_log(error_msg, task_id))
+        raise Exception(error_msg)
 
     # 2. get asset file folder, asset could be empty
     if asset_dir_id:
-        dtable_io_logger.info('Create asset dir.')
+        dtable_io_logger.info(opt_task_id_log('Create asset dir.', task_id))
         try:
             prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id)
         except Exception as e:
-            dtable_io_logger.exception('dtable: {} create asset folder failed. ERROR: {}'.format(dtable_uuid, e))
+            error_msg = 'dtable: {} create asset folder failed. ERROR: {}'.format(dtable_uuid, e)
+            dtable_io_logger.exception(opt_task_id_log(error_msg, task_id))
             if e.args and e.args[0] == 'size too large':
                 task_result['warnings'].append({'type': 'asset_size_too_large'})
 
@@ -92,8 +99,9 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
     try:
         copy_src_forms_to_json(dtable_uuid, tmp_file_path, db_session)
     except Exception as e:
-        dtable_io_logger.error('copy forms failed. ERROR: {}'.format(e))
-        raise Exception('copy forms failed. ERROR: {}'.format(e))
+        error_msg = 'copy forms failed. ERROR: {}'.format(e)
+        dtable_io_logger.error(opt_task_id_log(error_msg, task_id))
+        raise Exception(error_msg)
     finally:
         if db_session:
             db_session.close()
@@ -102,8 +110,9 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
     try:
         copy_src_auto_rules_to_json(dtable_uuid, tmp_file_path, db_session)
     except Exception as e:
-        dtable_io_logger.error('copy automation rules failed. ERROR: {}'.format(e))
-        raise Exception('copy automation rules failed. ERROR: {}'.format(e))
+        error_msg = 'copy automation rules failed. ERROR: {}'.format(e)
+        dtable_io_logger.error(opt_task_id_log(error_msg, task_id))
+        raise Exception(error_msg)
     finally:
         if db_session:
             db_session.close()
@@ -112,8 +121,9 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
     try:
         copy_src_workflows_to_json(dtable_uuid, tmp_file_path, db_session)
     except Exception as e:
-        dtable_io_logger.error('copy workflows failed. ERROR: {}'.format(e))
-        raise Exception('copy workflows failed. ERROR: {}'.format(e))
+        error_msg = 'copy workflows failed. ERROR: {}'.format(e)
+        dtable_io_logger.error(opt_task_id_log(error_msg, task_id))
+        raise Exception(error_msg)
     finally:
         if db_session:
             db_session.close()
@@ -122,8 +132,9 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
     try:
         copy_src_external_app_to_json(dtable_uuid, tmp_file_path, db_session)
     except Exception as e:
-        dtable_io_logger.error('copy external apps failed. ERROR: {}'.format(e))
-        raise Exception('copy external apps failed. ERROR: {}'.format(e))
+        error_msg = 'copy external apps failed. ERROR: {}'.format(e)
+        dtable_io_logger.error(opt_task_id_log(error_msg, task_id))
+        raise Exception(error_msg)
     finally:
         if db_session:
             db_session.close()
@@ -136,14 +147,15 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
     we zip /tmp/dtable-io/<dtable_uuid>/dtable_asset/ to /tmp/dtable-io/<dtable_id>/zip_file.zip and download it
     notice than make_archive will auto add .zip suffix to /tmp/dtable-io/<dtable_id>/zip_file
     """
-    dtable_io_logger.info('Make zip file for download...')
+    dtable_io_logger.info(opt_task_id_log('Make zip file for download...', task_id))
     try:
         shutil.make_archive('/tmp/dtable-io/' + dtable_uuid + '/zip_file', "zip", root_dir=tmp_file_path)
     except Exception as e:
-        dtable_io_logger.error('make zip failed. ERROR: {}'.format(e))
-        raise Exception('make zip failed. ERROR: {}'.format(e))
+        error_msg = 'make zip failed. ERROR: {}'.format(e)
+        dtable_io_logger.error(opt_task_id_log(error_msg, task_id))
+        raise Exception(error_msg)
 
-    dtable_io_logger.info('Create /tmp/dtable-io/{}/zip_file.zip success!'.format(dtable_uuid))
+    dtable_io_logger.info(opt_task_id_log('Create /tmp/dtable-io/{}/zip_file.zip success!'.format(dtable_uuid), task_id))
     # we remove '/tmp/dtable-io/<dtable_uuid>' in dtable web api
 
     return task_result
