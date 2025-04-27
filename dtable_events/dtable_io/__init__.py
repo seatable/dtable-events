@@ -88,7 +88,7 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
     if asset_dir_id:
         dtable_io_logger.info(opt_task_id_log('Create asset dir.', task_id))
         try:
-            prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id)
+            prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id, task_id)
         except Exception as e:
             error_msg = 'dtable: {} create asset folder failed. ERROR: {}'.format(dtable_uuid, e)
             dtable_io_logger.exception(opt_task_id_log(error_msg, task_id))

@@ -138,7 +138,7 @@ def prepare_dtable_json_from_memory(workspace_id, dtable_uuid, username):
         f.write(content_json)
 
 
-def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id):
+def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id, task_id):
     """
     used in export dtable
     create asset folder at /tmp/dtable-io/<dtable_uuid>/dtable_asset
@@ -152,7 +152,7 @@ def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id):
     :param asset_dir_id:
     :return:
     """
-    from dtable_events.dtable_io import dtable_io_logger
+    from dtable_events.dtable_io import dtable_io_logger, opt_task_id_log
 
     # get file server access token
     fake_obj_id = {
@@ -168,7 +168,7 @@ def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id):
         raise e
 
     progress = {'zipped': 0, 'total': 1}
-    dtable_io_logger.info('export dtable: %s username: %s start to zip assets', dtable_uuid, username)
+    dtable_io_logger.info(opt_task_id_log(f'export dtable: {dtable_uuid} username: {username} start to zip assets', task_id))
     while progress['zipped'] != progress['total']:
         time.sleep(0.5)   # sleep 0.5 second
         try:
@@ -176,17 +176,18 @@ def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id):
         except Exception as e:
             raise e
         else:
+            dtable_io_logger.info(opt_task_id_log(f'progress {progress}', task_id))
             failed_reason = progress.get('failed_reason')
             if failed_reason:
                 raise Exception(failed_reason)
-    dtable_io_logger.info('export dtable: %s username: %s zip assets done', dtable_uuid, username)
+    dtable_io_logger.info(opt_task_id_log(f'export dtable: {dtable_uuid} username: {username} zip assets done'))
 
     asset_url = gen_dir_zip_download_url(token)
     try:
         resp = requests.get(asset_url)
     except Exception as e:
         raise e
-    dtable_io_logger.info('export dtable user: %s dtable: %s asset size: %.2f MB', username, dtable_uuid, len(resp.content) / 1024 / 1024)
+    dtable_io_logger.info(opt_task_id_log(f'export dtable user: {username} dtable: {dtable_uuid} asset size: {len(resp.content) / 1024 / 1024} MB', task_id))
     file_obj = io.BytesIO(resp.content)
     if is_zipfile(file_obj):
         with ZipFile(file_obj) as zp:
