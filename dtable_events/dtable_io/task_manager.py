@@ -75,7 +75,7 @@ class TaskManager(object):
 
         task_id = str(uuid.uuid4())
         task = (get_dtable_export_content,
-                (username, repo_id, workspace_id, dtable_uuid, asset_dir_id, self.config))
+                (username, repo_id, workspace_id, dtable_uuid, asset_dir_id, self.config, task_id))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
 
