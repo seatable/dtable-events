@@ -21,12 +21,14 @@ class LDAPSyncer(object):
         self._logfile = os.path.join(logdir, 'ldap_syncer.log')
 
     def _prepara_config(self, config):
-        section_name = 'LDAP_SYNC'
+        section_name = 'LDAP SYNC'
         key_enabled = 'enabled'
         key_sync_interval = 'sync_interval'
 
         if not config.has_section(section_name):
-            return
+            section_name = 'LDAP_SYNC'
+            if not config.has_section(section_name):
+                return
 
         # enabled
         enabled = get_opt_from_conf_or_env(config, section_name, key_enabled, default=False)
