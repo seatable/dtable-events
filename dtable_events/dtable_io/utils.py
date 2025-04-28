@@ -168,6 +168,7 @@ def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id, task
         raise e
 
     progress = {'zipped': 0, 'total': 1}
+    last_log_time = None
     dtable_io_logger.info(add_task_id_to_log(f'export dtable: {dtable_uuid} username: {username} start to zip assets', task_id))
     while progress['zipped'] != progress['total']:
         time.sleep(0.5)   # sleep 0.5 second
@@ -176,7 +177,10 @@ def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id, task
         except Exception as e:
             raise e
         else:
-            dtable_io_logger.info(add_task_id_to_log(f'progress {progress}', task_id))
+            # per 10s or zip progress done, log progress
+            if not last_log_time or time.time() - last_log_time > 10 or progress['zipped'] == progress['total']:
+                dtable_io_logger.info(add_task_id_to_log(f'progress {progress}', task_id))
+                last_log_time = time.time()
             failed_reason = progress.get('failed_reason')
             if failed_reason:
                 raise Exception(failed_reason)
