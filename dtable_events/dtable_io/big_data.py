@@ -577,8 +577,8 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
         if start >= total_row_count or len(response_rows) < offset:
             break
 
-    tasks_status_map[task_id]['status'] = 'success'
     wb.save(target_path)
+    tasks_status_map[task_id]['status'] = 'success'
     # remove tmp images
     try:
         shutil.rmtree(images_target_dir)
@@ -709,8 +709,8 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
         if start >= total_row_count or len(response_rows) < limit:
             break
 
-    tasks_status_map[task_id]['status'] = 'success'
     wb.save(target_path)
+    tasks_status_map[task_id]['status'] = 'success'
     # remove tmp images
     try:
         shutil.rmtree(images_target_dir)
