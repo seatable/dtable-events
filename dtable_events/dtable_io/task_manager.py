@@ -457,6 +457,29 @@ class TaskManager(object):
 
         return task_id
 
+    @log_function_call
+    def add_export_document_task(self,repo_id, dtable_uuid, doc_uuid, parent_path, filename, username):
+        from dtable_events.dtable_io import export_document
+
+        task_id = str(uuid.uuid4())
+        task = (export_document,
+                (repo_id, dtable_uuid, doc_uuid, parent_path, filename, username))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+
+        return task_id
+
+    @log_function_call
+    def add_import_document_task(self, repo_id, dtable_uuid, doc_uuid, view_id, table_id, username):
+        from dtable_events.dtable_io import import_document
+
+        task_id = str(uuid.uuid4())
+        task = (import_document,
+                (repo_id, dtable_uuid, doc_uuid, view_id, table_id, username))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+        return task_id
+
     def threads_is_alive(self):
         info = {}
         for t in self.threads:

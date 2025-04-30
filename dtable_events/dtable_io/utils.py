@@ -16,15 +16,17 @@ import shutil
 from zipfile import ZipFile, is_zipfile
 from uuid import UUID, uuid4
 from urllib.parse import quote as urlquote
+import posixpath
 
 from sqlalchemy import text
-from seaserv import seafile_api
+from seaserv import seafile_api, USE_GO_FILESERVER
 
 from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_FILE_SERVER_ROOT
 from dtable_events.dtable_io.external_app import APP_USERS_COUMNS_TYPE_MAP, match_user_info, update_app_sync, \
     get_row_ids_for_delete, get_app_users
 from dtable_events.dtable_io.task_manager import task_manager
-from dtable_events.utils import get_inner_dtable_server_url, uuid_str_to_36_chars
+from dtable_events.utils import get_inner_dtable_server_url, uuid_str_to_36_chars, get_inner_fileserver_root, \
+    gen_file_get_url, gen_file_upload_url
 
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.exception import BaseSizeExceedsLimitError
@@ -34,6 +36,10 @@ FILE_URL_PREFIX = 'file://dtable-bundle/asset/files/'
 IMG_URL_PREFIX = 'file://dtable-bundle/asset/images/'
 DTABLE_IO_DIR = '/tmp/dtable-io/'
 
+# image path: /${docUuid}/images/${filename}
+SDOC_IMAGES_DIR = '/images/'
+DOCUMENT_PLUGIN_FILE_RELATIVE_PATH = 'files/plugins/document'
+DOCUMENT_CONFIG_FILE_NAME = 'documents.json'
 
 def gen_inner_file_get_url(token, filename):
     FILE_SERVER_PORT = task_manager.conf['file_server_port']
@@ -1819,3 +1825,128 @@ def image_row_offset_transfer(row_height):
     col_offset = height_dict.get(row_height, 2) * 7700
 
     return col_offset
+
+
+def get_seadoc_download_link(repo_id, dtable_uuid, file_uuid, parent_path, filename,  is_inner=False):
+    base_dir = gen_seadoc_base_dir(dtable_uuid, file_uuid)
+
+    real_file_path = posixpath.join(base_dir, parent_path, filename)
+    obj_id = seafile_api.get_file_id_by_path(repo_id, real_file_path)
+    if not obj_id:
+        return None
+    token = seafile_api.get_fileserver_access_token(
+        repo_id, obj_id, 'view', '', use_onetime=False)
+    if not token:
+        return None
+
+    if is_inner:
+        download_link = gen_inner_file_get_url(token, filename)
+    else:
+        download_link = gen_file_get_url(token, filename)
+
+    return download_link
+
+
+def gen_seadoc_base_dir(dtable_uuid, file_uuid):
+    return posixpath.join('/asset', dtable_uuid, DOCUMENT_PLUGIN_FILE_RELATIVE_PATH, str(file_uuid))
+
+
+def export_sdoc_prepare_images_folder(repo_id, images_dir_id, username, tmp_file_path):
+    fake_obj_id = {
+        'obj_id': images_dir_id,
+        'dir_name': 'images',
+        'is_windows': 0
+    }
+
+    token = seafile_api.get_fileserver_access_token(repo_id, json.dumps(fake_obj_id), 'download-dir', username, use_onetime=False)
+
+    if not USE_GO_FILESERVER:
+        progress = {'zipped': 0, 'total': 1}
+        while progress['zipped'] != progress['total']:
+            time.sleep(0.5)
+            progress = json.loads(seafile_api.query_zip_progress(token))
+
+    asset_url = '%s/zip/%s' % (get_inner_fileserver_root(), token)
+    resp = requests.get(asset_url)
+    file_obj = io.BytesIO(resp.content)
+    if is_zipfile(file_obj):
+        with ZipFile(file_obj) as zp:
+            zp.extractall(tmp_file_path)
+
+
+def batch_upload_sdoc_images(dtable_uuid, doc_uuid, repo_id, username, tmp_image_dir):
+    from dtable_events.dtable_io import dtable_io_logger
+    parent_path = gen_seadoc_image_parent_path(dtable_uuid, doc_uuid, repo_id, username)
+    upload_link = get_seadoc_asset_upload_link(repo_id, parent_path, username)
+
+    file_list = os.listdir(tmp_image_dir)
+
+    for filename in file_list:
+        file_path = posixpath.join(parent_path, filename)
+        image_path = os.path.join(tmp_image_dir, filename)
+        image_file = open(image_path, 'rb')
+        files = {'file': image_file}
+        data = {'parent_dir': parent_path, 'filename': filename, 'target_file': file_path}
+        resp = requests.post(upload_link, files=files, data=data)
+        if not resp.ok:
+            dtable_io_logger.warning('upload sdoc image: %s failed: %s', filename, resp.text)
+
+
+def gen_seadoc_image_parent_path(dtable_uuid, doc_uuid, repo_id, username):
+    base_dir = gen_seadoc_base_dir(dtable_uuid, doc_uuid)
+
+    parent_path = os.path.join(base_dir + SDOC_IMAGES_DIR)
+    dir_id = seafile_api.get_dir_id_by_path(repo_id, parent_path)
+    if not dir_id:
+        seafile_api.mkdir_with_parents(repo_id, '/', parent_path[1:], username)
+    return parent_path
+
+
+def get_seadoc_asset_upload_link(repo_id, parent_path, username):
+    obj_id = json.dumps({'parent_dir': parent_path})
+    token = seafile_api.get_fileserver_access_token(repo_id, obj_id, 'upload-link', '', use_onetime=False)
+    if not token:
+        return None
+    upload_link = gen_file_upload_url(token, 'upload-api', True)
+    return upload_link
+
+
+def gen_document_base_dir(dtable_uuid):
+    return posixpath.join('/asset', dtable_uuid, DOCUMENT_PLUGIN_FILE_RELATIVE_PATH)
+
+
+def get_documents_config(repo_id, dtable_uuid, username):
+    document_plugin_dir = gen_document_base_dir(dtable_uuid)
+    config_path = posixpath.join(document_plugin_dir, DOCUMENT_CONFIG_FILE_NAME)
+    file_id = seafile_api.get_file_id_by_path(repo_id, config_path)
+    if not file_id:
+        return []
+    token = seafile_api.get_fileserver_access_token(repo_id, file_id, 'download', username, use_onetime=True)
+    url = gen_inner_file_get_url(token, DOCUMENT_CONFIG_FILE_NAME)
+    resp = requests.get(url)
+    documents_config = json.loads(resp.content)
+    return documents_config
+
+
+def save_documents_config(repo_id, dtable_uuid, username, documents_config):
+    document_plugin_dir = gen_document_base_dir(dtable_uuid)
+    obj_id = json.dumps({'parent_dir': document_plugin_dir})
+
+    dir_id = seafile_api.get_dir_id_by_path(repo_id, document_plugin_dir)
+    if not dir_id:
+        seafile_api.mkdir_with_parents(repo_id, '/', document_plugin_dir, username)
+
+    token = seafile_api.get_fileserver_access_token(repo_id, obj_id, 'upload-link', '', use_onetime=False)
+    if not token:
+        raise Exception('upload token invalid')
+
+    upload_link = gen_file_upload_url(token, 'upload-api')
+    upload_link = upload_link + '?replace=1'
+
+    files = {
+        'file': (DOCUMENT_CONFIG_FILE_NAME, documents_config)
+    }
+    data = {'parent_dir': document_plugin_dir, 'relative_path': '', 'replace': 1}
+    resp = requests.post(upload_link, files=files, data=data)
+    if not resp.ok:
+        raise Exception(resp.text)

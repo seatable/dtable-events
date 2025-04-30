@@ -268,6 +268,23 @@ def gen_file_get_url(token, filename):
     return '%s/files/%s/%s' % (file_server_root, token, quote(filename))
 
 
+def get_fileserver_root():
+    """ Construct seafile fileserver address and port.
+
+    Returns:
+    	Constructed fileserver root.
+    """
+    from dtable_events.app.config import FILE_SERVER_ROOT
+    return FILE_SERVER_ROOT.rstrip('/') if FILE_SERVER_ROOT else ''
+
+
+def gen_file_upload_url(token, op, replace=False):
+    url = '%s/%s/%s' % (get_fileserver_root(), op, token)
+    if replace is True:
+        url += '?replace=1'
+    return url
+
+
 def gen_random_option(option_name):
     from dtable_events.utils.constants import VALID_OPTION_TAGS
     import random

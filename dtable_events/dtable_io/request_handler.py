@@ -1431,3 +1431,60 @@ def convert_app_table_page_to_excel():
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
+
+
+@app.route('/add-export-document-task', methods=['GET'])
+def add_export_document_task():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    if task_manager.tasks_queue.full():
+        dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
+                                 % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
+                                    task_manager.threads_is_alive()))
+        return make_response(('dtable io server busy.', 400))
+
+    username = request.args.get('username')
+    repo_id = request.args.get('repo_id')
+    doc_uuid = request.args.get('doc_uuid')
+    parent_path = request.args.get('parent_path')
+    dtable_uuid = request.args.get('dtable_uuid')
+    filename = request.args.get('filename')
+
+    try:
+        task_id = task_manager.add_export_document_task(
+            repo_id, dtable_uuid, doc_uuid, parent_path, filename, username)
+    except Exception as e:
+        dtable_io_logger.error(e)
+        return make_response((e, 500))
+
+    return make_response(({'task_id': task_id}, 200))
+
+
+@app.route('/add-import-document-task', methods=['GET'])
+def add_import_document_task():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    if task_manager.tasks_queue.full():
+        dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
+                                 % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
+                                    task_manager.threads_is_alive()))
+        return make_response(('dtable io server busy.', 400))
+
+    username = request.args.get('username')
+    repo_id = request.args.get('repo_id')
+    dtable_uuid = request.args.get('dtable_uuid')
+    doc_uuid = request.args.get('doc_uuid')
+    table_id = request.args.get('table_id')
+    view_id = request.args.get('view_id')
+
+    try:
+        task_id = task_manager.add_import_document_task(repo_id, dtable_uuid, doc_uuid, view_id, table_id, username)
+    except Exception as e:
+        dtable_io_logger.error(e)
+        return make_response((e, 500))
+
+    return make_response(({'task_id': task_id}, 200))
