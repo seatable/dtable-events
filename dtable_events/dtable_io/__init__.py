@@ -1,6 +1,8 @@
 import os
 import shutil
 import uuid
+import io
+import json
 
 import requests
 from datetime import datetime
@@ -29,11 +31,13 @@ from dtable_events.convert_page.utils import get_chrome_data_dir, get_driver, op
     gen_page_design_pdf_view_url, gen_document_pdf_view_url
 from dtable_events.statistics.db import save_email_sending_records, batch_save_email_sending_records
 from dtable_events.data_sync.data_sync_utils import run_sync_emails
-from dtable_events.utils import get_inner_dtable_server_url, is_valid_email, uuid_str_to_36_chars
+from dtable_events.utils import get_inner_dtable_server_url, is_valid_email, uuid_str_to_36_chars, gen_file_upload_url
 from dtable_events.utils.dtable_server_api import DTableServerAPI, BaseExceedsException
 from dtable_events.utils.exception import ExcelFormatError
 from dtable_events.utils.email_sender import EmailSender
-from dtable_events.dtable_io.utils import clear_tmp_dir, clear_tmp_file, clear_tmp_files_and_dirs
+from dtable_events.dtable_io.utils import clear_tmp_dir, clear_tmp_file, clear_tmp_files_and_dirs, \
+    SDOC_IMAGES_DIR, get_seadoc_download_link, gen_seadoc_base_dir, export_sdoc_prepare_images_folder,\
+    batch_upload_sdoc_images, get_documents_config, save_documents_config
 from dtable_events.app.log import setup_logger
 
 dtable_io_logger = setup_logger('dtable_events_io', propagate=False)
@@ -1109,3 +1113,122 @@ def convert_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, ap
         dtable_io_logger.exception('export app table failed. ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('export app app_name: %s, page_name: %s success!', app_name, page_name)
+
+
+def export_document(repo_id, dtable_uuid, doc_uuid, parent_path, filename, username):
+    """
+    /tmp/document/<dtable_uuid>/<doc_uuid>/sdoc_asset/
+                                |- images/
+                                |- content.json
+                                |- document_config.json
+    zip /tmp/document/<dtable_uuid>/<doc_uuid>/sdoc_asset/ to /tmp/document/<dtable_uuid>/<doc_uuid>/zip_file.zip
+    """
+
+    tmp_base_dir = os.path.join('/tmp/document', dtable_uuid, doc_uuid)
+
+    tmp_file_path = os.path.join(tmp_base_dir, 'sdoc_asset/')  # used to store asset files and json from file_server
+    tmp_zip_path = os.path.join(tmp_base_dir, 'zip_file') + '.zip'  # zip path of zipped xxx.zip
+
+    dtable_io_logger.info('Start prepare %s for export sdoc.', tmp_zip_path)
+
+    dtable_io_logger.info('Clear tmp dirs and files before prepare.')
+    # clear tmp files and dirs
+    clear_tmp_dir(tmp_base_dir)
+    os.makedirs(tmp_file_path, exist_ok=True)
+
+    try:
+        download_link = get_seadoc_download_link(repo_id, dtable_uuid, doc_uuid, parent_path, filename, is_inner=True)
+        resp = requests.get(download_link)
+        file_obj = io.BytesIO(resp.content)
+        with open(os.path.join(tmp_file_path, 'content.json'), 'wb') as f:
+            f.write(file_obj.read())
+    except Exception as e:
+        raise Exception('prepare sdoc failed. ERROR: %s', e)
+
+    # export document config
+    documents_settings = get_documents_config(repo_id, dtable_uuid, username)
+    doc_info = next(filter(lambda t: t['doc_uuid'] == doc_uuid, documents_settings), {})
+    if not doc_info:
+        raise Exception('dtable_uuid: %s, doc_uuid: %s, document config file not found.', dtable_uuid, doc_uuid)
+
+    doc_info.pop('doc_uuid', None)
+    doc_info.pop('poster_url', None)
+    doc_info.pop('table_id', None)
+    doc_info.pop('view_id', None)
+
+    with open(os.path.join(tmp_file_path, 'document_config.json'), 'wb') as f:
+        f.write(json.dumps(doc_info).encode('utf-8'))
+
+    #  get images folder, images could be empty
+    base_dir = gen_seadoc_base_dir(dtable_uuid, doc_uuid)
+    image_parent_path = os.path.join(base_dir + SDOC_IMAGES_DIR)
+
+    images_dir_id = seafile_api.get_dir_id_by_path(repo_id, image_parent_path)
+    if images_dir_id:
+        dtable_io_logger.info('Create images folder.')
+        try:
+            export_sdoc_prepare_images_folder(repo_id, images_dir_id, username, tmp_file_path)
+        except Exception as e:
+            dtable_io_logger.warning('create images folder failed. ERROR: %s', e)
+
+    dtable_io_logger.info('Make zip file for download...')
+    try:
+        tmp_zip_dir = os.path.join('/tmp/document', dtable_uuid, doc_uuid, 'zip_file')
+        shutil.make_archive(tmp_zip_dir, 'zip', root_dir=tmp_file_path)
+    except Exception as e:
+        dtable_io_logger.error('make zip failed. ERROR: {}'.format(e))
+        raise Exception('make zip failed. ERROR: {}'.format(e))
+    dtable_io_logger.info('Create %s success!', tmp_zip_path)
+    return tmp_zip_path
+
+
+def import_document(repo_id, dtable_uuid, doc_uuid, view_id, table_id, username):
+    """
+    upload document to seaf-server
+    """
+    sdoc_file_name = doc_uuid + '.sdoc'
+    relative_path = ''
+    sdoc_parent_dir = gen_seadoc_base_dir(dtable_uuid, doc_uuid)
+    tmp_extracted_path = os.path.join('/tmp/document', dtable_uuid, doc_uuid)
+
+    seafile_api.mkdir_with_parents(repo_id, '/', sdoc_parent_dir[1:], username)
+
+    obj_id = json.dumps({'parent_dir': sdoc_parent_dir})
+    token = seafile_api.get_fileserver_access_token(repo_id, obj_id, 'upload', '', use_onetime=False)
+
+    upload_link = gen_file_upload_url(token, 'upload-api')
+    upload_link += '?ret-json=1&replace=1'
+
+    new_file_path = os.path.join(sdoc_parent_dir, relative_path, sdoc_file_name)
+    data = {'parent_dir': sdoc_parent_dir, 'target_file': new_file_path, 'relative_path': relative_path, 'replace': 1}
+
+    sdoc_file_path = os.path.join(tmp_extracted_path, 'content.json')
+    new_sdoc_file_path = os.path.join(tmp_extracted_path, sdoc_file_name)
+    os.rename(sdoc_file_path, new_sdoc_file_path)
+
+    files = {'file': open(new_sdoc_file_path, 'rb')}
+    resp = requests.post(upload_link, files=files, data=data)
+    if not resp.ok:
+        raise Exception('upload sdoc file: %s failed: %s' % (sdoc_file_name, resp.text))
+
+    # import document config
+    document_config_file_path = os.path.join(tmp_extracted_path, 'document_config.json')
+    with open(document_config_file_path, 'r') as f:
+        document_config = f.read()
+        doc_info = json.loads(document_config)
+    doc_info['doc_uuid'] = doc_uuid
+    doc_info['view_id'] = view_id
+    doc_info['table_id'] = table_id
+
+    documents_settings = get_documents_config(repo_id, dtable_uuid, username)
+    documents_settings.append(doc_info)
+    save_documents_config(repo_id, dtable_uuid, username, json.dumps(documents_settings))
+
+    # upload sdoc images
+    tmp_image_dir = os.path.join(tmp_extracted_path, 'images/')
+    if os.path.exists(tmp_image_dir):
+        batch_upload_sdoc_images(dtable_uuid, doc_uuid, repo_id, username, tmp_image_dir)
+
+    # remove tmp file
+    if os.path.exists(tmp_extracted_path):
+        shutil.rmtree(tmp_extracted_path)
