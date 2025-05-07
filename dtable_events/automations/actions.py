@@ -1801,7 +1801,7 @@ class LinkRecordsAction(BaseAction):
             column = self.get_column(self.auto_rule.table_id, column_key)
             if not column:
                 raise RuleInvalidException('match column not found', 'match_column_not_found')
-            row_value = self.auto_rule.get_convert_sql_row().get(column.get('name'))
+            row_value = self.auto_rule.get_sql_row().get(column.get('key'))
             if row_value is None:
                 return [], []
             other_column_key = match_condition.get("other_column_key")
@@ -1915,12 +1915,12 @@ class LinkRecordsAction(BaseAction):
             return
 
         table_columns = self.get_columns(self.auto_rule.table_id)
-        link_col_name = ''
+        link_col_key = ''
         for col in table_columns:
             if col.get('type') == 'link' and col.get('data', {}).get('link_id') == self.link_id:
-                link_col_name = col.get('name')
-        if link_col_name:
-            linked_rows = self.auto_rule.get_convert_sql_row().get(link_col_name, {})
+                link_col_key = col.get('key')
+        if link_col_key:
+            linked_rows = self.auto_rule.get_sql_row().get(link_col_key, {})
             table_linked_rows = {row.get('row_id'): True for row in linked_rows}
             if len(self.linked_row_ids) == len(table_linked_rows):
                 for row_id in self.linked_row_ids:
