@@ -1801,7 +1801,7 @@ class LinkRecordsAction(BaseAction):
             column = self.get_column(self.auto_rule.table_id, column_key)
             if not column:
                 raise RuleInvalidException('match column not found', 'match_column_not_found')
-            row_value = self.auto_rule.get_convert_sql_row().get(column.get('name'))
+            row_value = self.auto_rule.get_sql_row().get(column.get('key'))
             if row_value is None:
                 return [], []
             other_column_key = match_condition.get("other_column_key")
@@ -1853,8 +1853,8 @@ class LinkRecordsAction(BaseAction):
         return None, no need to update
         """
         filter_groups, column_names = self.format_filter_groups()
-        if not filter_groups:
-            return None
+        if not filter_groups:  # no valid filter_groups, means no invalid match conditions, means no rows matched
+            return []
 
         filter_conditions = {
             'filter_groups': filter_groups,
@@ -1915,12 +1915,12 @@ class LinkRecordsAction(BaseAction):
             return
 
         table_columns = self.get_columns(self.auto_rule.table_id)
-        link_col_name = ''
+        link_col_key = ''
         for col in table_columns:
             if col.get('type') == 'link' and col.get('data', {}).get('link_id') == self.link_id:
-                link_col_name = col.get('name')
-        if link_col_name:
-            linked_rows = self.auto_rule.get_convert_sql_row().get(link_col_name, {})
+                link_col_key = col.get('key')
+        if link_col_key:
+            linked_rows = self.auto_rule.get_sql_row().get(link_col_key, {})
             table_linked_rows = {row.get('row_id'): True for row in linked_rows}
             if len(self.linked_row_ids) == len(table_linked_rows):
                 for row_id in self.linked_row_ids:
@@ -2161,7 +2161,6 @@ class AddRecordToOtherTableAction(BaseAction):
 
     def init_append_rows(self):
         sql_row = self.auto_rule.get_sql_row()
-        src_row = self.auto_rule.get_convert_sql_row()
         src_columns = self.auto_rule.table_info['columns']
         self.col_name_dict = {col.get('name'): col for col in src_columns}
         self.col_key_dict = {col.get('key'): col for col in src_columns}
@@ -2202,10 +2201,11 @@ class AddRecordToOtherTableAction(BaseAction):
                         elif set_type == 'date_column':
                             date_column_key = time_dict.get('date_column_key')
                             src_col = self.col_key_dict.get(date_column_key)
-                            filtered_updates[col_name] = src_row.get(src_col['name'])
+                            if src_col.get('type') != ColumnTypes.DATE:
+                                continue
+                            filtered_updates[col_name] = sql_row.get(src_col['key'])
                     except Exception as e:
-                        logger.error(e)
-                        filtered_updates[col_name] = self.row.get(col_key)
+                        logger.error(f"rule: {self.auto_rule.rule_id} add record to {self.dst_table_id} for date column error {e}, col_key is {col_key} set_type is {set_type}, triggered row id {sql_row['_id']}")
 
                 elif col_type in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
                     try:
@@ -2220,12 +2220,20 @@ class AddRecordToOtherTableAction(BaseAction):
                             elif set_type == 'column':
                                 src_col_key = data_dict.get('value')
                                 src_col = self.col_key_dict.get(src_col_key)
-                                value = src_row.get(src_col['name'])
-                                if value:
-                                    if col_type == ColumnTypes.SINGLE_SELECT:
-                                        filtered_updates[col_name] = self.add_or_create_options(self.get_table_name(self.dst_table_id), col, value)
-                                    else:
-                                        filtered_updates[col_name] = self.add_or_create_options_for_multiple_select(self.get_table_name(self.dst_table_id), col, value)
+                                sql_value = sql_row.get(src_col_key)
+
+                                src_col_data = src_col.get('data') or {}
+                                src_col_data_options = src_col_data.get('options') or []
+                                if col_type == ColumnTypes.SINGLE_SELECT and isinstance(sql_value, str):
+                                    option = next(filter(lambda option: option.get('id') == sql_value, src_col_data_options), None)
+                                    if option:
+                                        filtered_updates[col_name] = self.add_or_create_options(self.get_table_name(self.dst_table_id), col, option['name'])
+                                elif col_type == ColumnTypes.MULTIPLE_SELECT and isinstance(sql_value, list):
+                                    option_names = []
+                                    for option in src_col_data_options:
+                                        if option.get('id') in sql_value:
+                                            option_names.append(option.get('name'))
+                                    filtered_updates[col_name] = self.add_or_create_options_for_multiple_select(self.get_table_name(self.dst_table_id), col, option_names)
                         else:
                             value = data_dict # compatible with the old data strcture
                             filtered_updates[col_name] = self.parse_column_value(col, value)
@@ -2247,7 +2255,9 @@ class AddRecordToOtherTableAction(BaseAction):
                             elif set_type == 'column':
                                 src_col_key = data_dict.get('value')
                                 src_col = self.col_key_dict.get(src_col_key)
-                                value = src_row.get(src_col['name'])
+                                if src_col.get('type') != ColumnTypes.COLLABORATOR:
+                                    continue
+                                value = sql_row.get(src_col['key'])
                                 if not isinstance(value, list):
                                     value = [value, ]
                                 filtered_updates[col_name] = value
@@ -2286,10 +2296,10 @@ class AddRecordToOtherTableAction(BaseAction):
                             elif set_type == 'column':
                                 src_col_key = data_dict.get('value')
                                 src_col = self.col_key_dict.get(src_col_key)
-                                value = src_row.get(src_col['name'])
+                                value = sql_row.get(src_col['key'])
                                 filtered_updates[col_name] = value
                         else:
-                            value = data_dict # compatible with the old data strcture
+                            value = data_dict # compatible with the old data strcture, some old rules don't have data_dict
                             if isinstance(value, str):
                                 blanks = set(re.findall(r'\{([^{]*?)\}', value))
                                 column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
