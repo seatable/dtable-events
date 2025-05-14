@@ -1854,7 +1854,7 @@ class LinkRecordsAction(BaseAction):
         """
         filter_groups, column_names = self.format_filter_groups()
         if not filter_groups:
-            return None
+            return []
 
         filter_conditions = {
             'filter_groups': filter_groups,
