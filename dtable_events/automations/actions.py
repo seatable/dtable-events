@@ -1853,7 +1853,7 @@ class LinkRecordsAction(BaseAction):
         return None, no need to update
         """
         filter_groups, column_names = self.format_filter_groups()
-        if not filter_groups:
+        if not filter_groups:  # no valid filter_groups, means no invalid match conditions, means no rows matched
             return []
 
         filter_conditions = {
