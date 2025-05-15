@@ -1,13 +1,7 @@
-import logging
-import os
 import queue
-import sys
 import threading
 import time
 import uuid
-
-from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, DTABLE_SERVER_URL
-
 
 class TaskMessageManager(object):
 

@@ -22,9 +22,7 @@ try:
     import seahub.settings as seahub_settings
     DTABLE_WEB_SERVICE_URL = getattr(seahub_settings, 'DTABLE_WEB_SERVICE_URL', 'http://127.0.0.1')
     DTABLE_PRIVATE_KEY = getattr(seahub_settings, 'DTABLE_PRIVATE_KEY', '')
-    DTABLE_SERVER_URL = getattr(seahub_settings, 'DTABLE_SERVER_URL', 'http://127.0.0.1')
     ENABLE_DTABLE_SERVER_CLUSTER = getattr(seahub_settings, 'ENABLE_DTABLE_SERVER_CLUSTER', False)
-    DTABLE_PROXY_SERVER_URL = getattr(seahub_settings, 'DTABLE_PROXY_SERVER_URL', '')
     FILE_SERVER_ROOT = getattr(seahub_settings, 'FILE_SERVER_ROOT', 'http://127.0.0.1:8082')
     INNER_FILE_SERVER_ROOT = getattr(seahub_settings, 'INNER_FILE_SERVER_ROOT', 'http://127.0.0.1:8082')
     SEATABLE_FAAS_AUTH_TOKEN = getattr(seahub_settings, 'SEATABLE_FAAS_AUTH_TOKEN', '')
@@ -33,7 +31,7 @@ try:
     SESSION_COOKIE_NAME = getattr(seahub_settings, 'SESSION_COOKIE_NAME', 'sessionid')
     EXPORT2EXCEL_DEFAULT_STRING = getattr(seahub_settings, 'EXPORT2EXCEL_DEFAULT_STRING', 'illegal character in excel')
     TIME_ZONE = getattr(seahub_settings, 'TIME_ZONE', 'UTC')
-    INNER_DTABLE_DB_URL = getattr(seahub_settings, 'INNER_DTABLE_DB_URL', '')
+    INNER_DTABLE_DB_URL = getattr(seahub_settings, 'INNER_DTABLE_DB_URL', 'http://127.0.0.1:7777')
     ENABLE_WEIXIN = getattr(seahub_settings, 'ENABLE_WEIXIN', False)
     ENABLE_WORK_WEIXIN = getattr(seahub_settings, 'ENABLE_WORK_WEIXIN', False)
     ENABLE_DINGTALK = getattr(seahub_settings, 'ENABLE_DINGTALK', False)

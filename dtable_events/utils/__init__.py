@@ -223,15 +223,9 @@ def is_valid_email(email):
 def get_inner_dtable_server_url():
     """ only for api
     """
-    from dtable_events.app.config import ENABLE_DTABLE_SERVER_CLUSTER, DTABLE_PROXY_SERVER_URL, USE_INNER_DTABLE_SERVER, \
-        INNER_DTABLE_SERVER_URL, DTABLE_SERVER_URL
+    from dtable_events.app.config import INNER_DTABLE_SERVER_URL
 
-    if ENABLE_DTABLE_SERVER_CLUSTER:
-        return DTABLE_PROXY_SERVER_URL
-    elif USE_INNER_DTABLE_SERVER:
-        return INNER_DTABLE_SERVER_URL
-    else:
-        return DTABLE_SERVER_URL
+    return INNER_DTABLE_SERVER_URL
 
 
 def get_location_tree_json():
