@@ -56,15 +56,15 @@ class Operator(object):
         self.init()
 
     def init(self):
-        self.column_name = self.column.get('name', '')
-        self.column_type = self.column.get('type', '')
-        self.column_data = self.column.get('data', {})
-        self.filter_predicate = self.filter_item.get('filter_predicate', '')
-        self.filter_term = self.filter_item.get('filter_term', '')
-        self.filter_term_modifier = self.filter_item.get('filter_term_modifier', '')
-        self.case_sensitive = self.filter_item.get('case_sensitive', False)
-        self.current_user_department = self.filter_item.get('current_user_department', [])
-        self.current_user_department_and_sub = self.filter_item.get('current_user_department_and_sub', [])
+        self.column_name = self.column.get('name') or ''
+        self.column_type = self.column.get('type') or ''
+        self.column_data = self.column.get('data') or {}
+        self.filter_predicate = self.filter_item.get('filter_predicate') or ''
+        self.filter_term = self.filter_item.get('filter_term') or ''
+        self.filter_term_modifier = self.filter_item.get('filter_term_modifier') or ''
+        self.case_sensitive = self.filter_item.get('case_sensitive') or False
+        self.current_user_department = self.filter_item.get('current_user_department') or []
+        self.current_user_department_and_sub = self.filter_item.get('current_user_department_and_sub') or []
 
     def escape_string(self, s: str):
         s = s.replace("'", "''")        # convert '
@@ -211,7 +211,7 @@ class NumberOperator(Operator):
 
     def _duration2number(self):
         filter_term = self.filter_term
-        column_data = self.column.get('data', {})
+        column_data = self.column.get('data') or {}
         if filter_term == 0 or filter_term == '0':
             return 0
         if not filter_term:
@@ -374,7 +374,8 @@ class SingleSelectOperator(Operator):
         super(SingleSelectOperator, self).__init__(column, filter_item)
 
     def _get_option_name_by_id(self, option_id):
-        options = self.column.get('data', {}).get('options', [])
+        column_data = self.column.get('data') or {}
+        options = column_data.get('options') or []
         for op in options:
             if op.get('id') == option_id:
                 return op.get('name')
@@ -546,7 +547,8 @@ class MultipleSelectOperator(Operator):
         super(MultipleSelectOperator, self).__init__(column, filter_item)
 
     def _get_option_name_by_id(self, option_id):
-        options = self.column.get('data', {}).get('options', [])
+        column_data = self.column.get('data') or {}
+        options = column_data.get('options') or []
         if not options:
             return option_id
         for op in options:
@@ -1091,9 +1093,9 @@ class FileOperator(Operator):
 class ArrayOperator(object):
 
     def __new__(cls, column, filter_item):
-        column_data = column.get('data', {})
-        column_name = column.get('name', '')
-        array_type, array_data = column_data.get('array_type', ''), column_data.get('array_data')
+        column_data = column.get('data') or {}
+        column_name = column.get('name') or ''
+        array_type, array_data = column_data.get('array_type') or '', column_data.get('array_data')
         linked_column = {
             'name': column_name,
             'type': array_type,
@@ -1129,8 +1131,8 @@ class ArrayOperator(object):
 
 class FormulaOperator(object):
     def __new__(cls, column, filter_item):
-        column_data = column.get('data', {})
-        column_name = column.get('name', '')
+        column_data = column.get('data') or {}
+        column_name = column.get('name') or ''
         result_type = column_data.get('result_type')
         if result_type == FormulaResultType.STRING:
             new_column = {
@@ -1299,16 +1301,16 @@ class StatisticSQLGenerator(object):
     def __init__(self, table, statistic_type, statistic, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids, detail_filter_conditions=None):
         self.error = None
         self.statistic_type = statistic_type
-        table_name = table.get('name', '')
+        table_name = table.get('name') or ''
         self.table_name = '`%s`' % table_name
         self.statistic = statistic
 
-        columns = table.get('columns', [])
+        columns = table.get('columns') or []
         column_keys = [column.get('key') for column in columns]
         if statistic_type == StatisticType.TABLE_ELEMENT:
-            shown_column_keys = statistic.get('shown_column_keys', column_keys)
+            shown_column_keys = statistic.get('shown_column_keys') or column_keys
             shown_colums = list(filter(lambda x: x['key'] in shown_column_keys, columns))
-            shown_column_names = ['`' + column.get('name', '') + '`' for column in shown_colums]
+            shown_column_names = ['`' + (column.get('name') or '') + '`' for column in shown_colums]
             shown_column_names.append('`_id`')
             shown_column_names.append('`_archived`')
             shown_column_names.append('`_locked`')
@@ -1324,7 +1326,7 @@ class StatisticSQLGenerator(object):
             self.column_key_map[column['key']] = column
 
         # filters
-        filters = statistic.get('filters', [])
+        filters = statistic.get('filters') or []
         if filters:
             for item in filters:
                 filter_term = item.get('filter_term')
@@ -1345,7 +1347,7 @@ class StatisticSQLGenerator(object):
                         item['current_user_department_and_sub'] = current_user_department_and_sub_ids
         self.filters = filters
 
-        filter_conjunction = statistic.get('filter_conjunction', 'and')
+        filter_conjunction = statistic.get('filter_conjunction') or 'and'
         self.filter_conjunction = filter_conjunction.upper()
 
         # sorts
@@ -1362,7 +1364,7 @@ class StatisticSQLGenerator(object):
         self.detail_filter_conditions = detail_filter_conditions
 
     def _get_column_by_key(self, column_key):
-        return self.column_key_map.get(column_key, None)
+        return self.column_key_map.get(column_key)
 
     def _filter_2_sql(self):
         filter_sql = ''
@@ -1398,7 +1400,7 @@ class StatisticSQLGenerator(object):
             column = self._get_column_by_key(column_key)
             if column:
                 column_name = column.get('name')
-                sort_type = 'ASC' if sort.get('sort_type', 'up') == 'up' else 'DESC'
+                sort_type = 'ASC' if (sort.get('sort_type') or 'up') == 'up' else 'DESC'
                 sort_sql.append(f'`{column_name}` {sort_type.upper()}')
         if not sort_sql:
             return ''
@@ -1409,7 +1411,7 @@ class StatisticSQLGenerator(object):
             if self.filter_sql:
                 self.filter_sql = 'WHERE %s' % self.filter_sql
         else:
-            column_name = x_axis_column.get('name', '')
+            column_name = x_axis_column.get('name') or ''
             not_include_empty_sql = '`%s` is not null' % column_name
             if self.filter_sql:
                 self.filter_sql = 'WHERE %s AND (%s)' % (not_include_empty_sql, self.filter_sql)
@@ -1417,11 +1419,11 @@ class StatisticSQLGenerator(object):
                 self.filter_sql = 'WHERE %s' % not_include_empty_sql
 
     def _statistic_column_name_to_sql(self, column, group_by):
-        column_name = column.get('name', '')
+        column_name = column.get('name') or ''
         valid_column_name = '`%s`' % column_name
-        type = column.get('type', '')
+        type = column.get('type') or ''
         if type == ColumnTypes.CTIME or type == ColumnTypes.MTIME or type == ColumnTypes.DATE:
-            date_granularity = group_by.get('date_granularity', '')
+            date_granularity = group_by.get('date_granularity') or ''
             date_granularity = date_granularity.upper()
             if date_granularity in ('DAY', 'DAYS_7','DAYS_30'):
                 return 'ISODATE(%s)' % valid_column_name
@@ -1439,7 +1441,7 @@ class StatisticSQLGenerator(object):
                 return 'MIN(%s)' % valid_column_name
             return 'ISOMONTH(%s)' % valid_column_name
         if type == ColumnTypes.GEOLOCATION:
-            geolocation_granularity = group_by.get('geolocation_granularity', '')
+            geolocation_granularity = group_by.get('geolocation_granularity') or ''
             geolocation_granularity = geolocation_granularity.upper()
             if geolocation_granularity == 'PROVINCE':
                 return 'PROVINCE(%s)' % (valid_column_name)
@@ -1452,7 +1454,7 @@ class StatisticSQLGenerator(object):
             return valid_column_name
 
     def _summary_column_2_sql(self, summary_method, column):
-        column_name = column.get('name', '')
+        column_name = column.get('name') or ''
         valid_column_name = '`%s`' % column_name
         if summary_method == 'DISTINCT_VALUES':
             return 'COUNT(DISTINCT %s)' % valid_column_name
@@ -1515,23 +1517,23 @@ class StatisticSQLGenerator(object):
 
     def _basic_statistic_2_sql(self):
         if self.statistic_type in [StatisticType.HORIZONTAL_BAR, StatisticType.HORIZONTAL_GROUP_BAR, StatisticType.STACKED_HORIZONTAL_BAR]:
-            x_axis_column_key = self.statistic.get('vertical_axis_column_key', '')
-            x_axis_date_granularity = self.statistic.get('vertical_axis_date_granularity', '')
-            x_axis_geolocation_granularity = self.statistic.get ('vertical_axis_geolocation_granularity', '')
-            x_axis_include_empty_cells = self.statistic.get('vertical_axis_include_empty', False) or False
+            x_axis_column_key = self.statistic.get('vertical_axis_column_key') or ''
+            x_axis_date_granularity = self.statistic.get('vertical_axis_date_granularity') or ''
+            x_axis_geolocation_granularity = self.statistic.get('vertical_axis_geolocation_granularity') or ''
+            x_axis_include_empty_cells = self.statistic.get('vertical_axis_include_empty') or False
 
-            y_axis_summary_type = self.statistic.get('horizontal_axis_summary_type', '')
-            y_axis_summary_method = self.statistic.get('horizontal_axis_summary_method', '')
-            y_axis_summary_column_key = self.statistic.get('horizontal_axis_column_key', '')
+            y_axis_summary_type = self.statistic.get('horizontal_axis_summary_type') or ''
+            y_axis_summary_method = self.statistic.get('horizontal_axis_summary_method') or ''
+            y_axis_summary_column_key = self.statistic.get('horizontal_axis_column_key') or ''
         else:
-            x_axis_column_key = self.statistic.get('x_axis_column_key', '')
-            x_axis_date_granularity = self.statistic.get('x_axis_date_granularity', '')
-            x_axis_geolocation_granularity = self.statistic.get('x_axis_geolocation_granularity', '')
-            x_axis_include_empty_cells = self.statistic.get('x_axis_include_empty_cells', False) or False
+            x_axis_column_key = self.statistic.get('x_axis_column_key') or ''
+            x_axis_date_granularity = self.statistic.get('x_axis_date_granularity') or ''
+            x_axis_geolocation_granularity = self.statistic.get('x_axis_geolocation_granularity') or ''
+            x_axis_include_empty_cells = self.statistic.get('x_axis_include_empty_cells') or False
 
-            y_axis_summary_type = self.statistic.get('y_axis_summary_type', '')
-            y_axis_summary_method = self.statistic.get('y_axis_summary_method', '')
-            y_axis_summary_column_key = self.statistic.get('y_axis_summary_column_key', '')
+            y_axis_summary_type = self.statistic.get('y_axis_summary_type') or ''
+            y_axis_summary_method = self.statistic.get('y_axis_summary_method') or ''
+            y_axis_summary_column_key = self.statistic.get('y_axis_summary_column_key') or ''
 
         groupby_column = self._get_column_by_key(x_axis_column_key)
         if not groupby_column:
@@ -1557,36 +1559,36 @@ class StatisticSQLGenerator(object):
             return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, summary_column_name, self.table_name, self.filter_sql, groupby_column_name)
         if self.detail_filter_conditions:
             return self._get_detail_sql({x_axis_column_key: {'groupby_name': groupby_column_name, 'group_by': {'date_granularity': x_axis_date_granularity, 'geolocation_granularity': x_axis_geolocation_granularity }}})
-        return 'SELECT %s FROM %s %s GROUP BY %s LIMIT 0, 5000`' % (groupby_column_name, self.table_name, self.filter_sql, groupby_column_name)
+        return 'SELECT %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, self.table_name, self.filter_sql, groupby_column_name)
 
     def _grouping_statistic_2_sql(self):
 
         if self.statistic_type in [StatisticType.HORIZONTAL_GROUP_BAR, StatisticType.STACKED_HORIZONTAL_BAR]:
-            x_axis_column_key = self.statistic.get('vertical_axis_column_key', '')
-            x_axis_date_granularity = self.statistic.get('vertical_axis_date_granularity','')
-            x_axis_geolocation_granularity = self.statistic.get ('vertical_axis_geolocation_granularity', '')
-            x_axis_include_empty_cells = self.statistic.get('vertical_axis_include_empty', False) or False
+            x_axis_column_key = self.statistic.get('vertical_axis_column_key') or ''
+            x_axis_date_granularity = self.statistic.get('vertical_axis_date_granularity') or ''
+            x_axis_geolocation_granularity = self.statistic.get('vertical_axis_geolocation_granularity') or ''
+            x_axis_include_empty_cells = self.statistic.get('vertical_axis_include_empty') or False
 
-            y_axis_summary_type = self.statistic.get('horizontal_axis_summary_type', '')
-            y_axis_summary_method = self.statistic.get('horizontal_axis_summary_method', '')
-            y_axis_summary_column_key = self.statistic.get('horizontal_axis_column_key', '')
+            y_axis_summary_type = self.statistic.get('horizontal_axis_summary_type') or ''
+            y_axis_summary_method = self.statistic.get('horizontal_axis_summary_method') or ''
+            y_axis_summary_column_key = self.statistic.get('horizontal_axis_column_key') or ''
         else:
-            x_axis_column_key = self.statistic.get('x_axis_column_key', '')
-            x_axis_date_granularity = self.statistic.get('x_axis_date_granularity', '')
-            x_axis_geolocation_granularity = self.statistic.get('x_axis_geolocation_granularity', '')
-            x_axis_include_empty_cells = self.statistic.get('x_axis_include_empty_cells', False) or False
+            x_axis_column_key = self.statistic.get('x_axis_column_key') or ''
+            x_axis_date_granularity = self.statistic.get('x_axis_date_granularity') or ''
+            x_axis_geolocation_granularity = self.statistic.get('x_axis_geolocation_granularity') or ''
+            x_axis_include_empty_cells = self.statistic.get('x_axis_include_empty_cells') or False
 
-            y_axis_summary_type = self.statistic.get('y_axis_summary_type', '')
-            y_axis_summary_method = self.statistic.get('y_axis_summary_method', '')
-            y_axis_summary_column_key = self.statistic.get('y_axis_summary_column_key', '')
+            y_axis_summary_type = self.statistic.get('y_axis_summary_type') or ''
+            y_axis_summary_method = self.statistic.get('y_axis_summary_method') or ''
+            y_axis_summary_column_key = self.statistic.get('y_axis_summary_column_key') or ''
 
 
-        column_groupby_column_key = self.statistic.get('column_groupby_column_key', '')
-        column_groupby_date_granularity = self.statistic.get('column_groupby_date_granularity', '')
-        column_groupby_geolocation_granularity = self.statistic.get('column_groupby_geolocation_granularity', '')
+        column_groupby_column_key = self.statistic.get('column_groupby_column_key') or ''
+        column_groupby_date_granularity = self.statistic.get('column_groupby_date_granularity') or ''
+        column_groupby_geolocation_granularity = self.statistic.get('column_groupby_geolocation_granularity') or ''
 
-        column_groupby_multiple_numeric_column = self.statistic.get('column_groupby_multiple_numeric_column', False) or False
-        summary_columns = self.statistic.get('summary_columns', []) or []
+        column_groupby_multiple_numeric_column = self.statistic.get('column_groupby_multiple_numeric_column') or False
+        summary_columns = self.statistic.get('summary_columns') or []
 
         groupby_column = self._get_column_by_key(x_axis_column_key)
         if not groupby_column:
@@ -1615,8 +1617,9 @@ class StatisticSQLGenerator(object):
             column_groupby_numeric_columns.insert(0, { 'column_key': y_axis_summary_column_key, 'summary_method': y_axis_summary_method })
             column_groupby_numeric_column_names = []
             for summary_column_obj in column_groupby_numeric_columns:
-                summary_column_key = summary_column_obj.get('column_key', '')
-                summary_method = summary_column_obj.get('summary_method', '').upper()
+                summary_column_key = summary_column_obj.get('column_key') or ''
+                summary_method = summary_column_obj.get('summary_method') or ''
+                summary_method = summary_method.upper()
                 if not summary_column_key:
                     continue
                 summary_column = self._get_column_by_key(summary_column_key)
@@ -1650,22 +1653,22 @@ class StatisticSQLGenerator(object):
         return 'SELECT %s, %s, %s FROM %s %s GROUP BY %s, %s LIMIT 0, 5000' % (groupby_column_name, column_groupby_column_name, summary_column_name, self.table_name, self.filter_sql, groupby_column_name, column_groupby_column_name)
 
     def _completeness_chart_statistic_2_sql(self):
-        groupby_column_key = self.statistic.get('groupby_column_key', '')
-        target_column_key = self.statistic.get('target_column_key', '')
-        completed_column_key = self.statistic.get('completed_column_key', '')
+        groupby_column_key = self.statistic.get('groupby_column_key') or ''
+        target_column_key = self.statistic.get('target_column_key') or ''
+        completed_column_key = self.statistic.get('completed_column_key') or ''
 
-        column_groupby_column_key = self.statistic.get('column_groupby_column_key', '')
-        date_granularity = self.statistic.get('date_granularity', '')
-        geolocation_granularity = self.statistic.get('geolocation_granularity', '')
+        column_groupby_column_key = self.statistic.get('column_groupby_column_key') or ''
+        date_granularity = self.statistic.get('date_granularity') or ''
+        geolocation_granularity = self.statistic.get('geolocation_granularity') or ''
 
         groupby_column = self._get_column_by_key(groupby_column_key)
         if not groupby_column:
             self.error = 'Group by column not found'
             return ''
 
-        x_axis_include_empty_cells = self.statistic.get('x_axis_include_empty_cells', False)
+        x_axis_include_empty_cells = self.statistic.get('x_axis_include_empty_cells') or False
         self._update_filter_sql(x_axis_include_empty_cells, groupby_column)
-        group_by_column_name = groupby_column.get('name', '')
+        group_by_column_name = groupby_column.get('name') or ''
 
         target_column = self._get_column_by_key(target_column_key)
         completed_column = self._get_column_by_key(completed_column_key)
@@ -1677,8 +1680,8 @@ class StatisticSQLGenerator(object):
             self.error = 'Completed column not found'
             return ''
 
-        target_column_name = target_column.get('name', '')
-        completed_column_name = completed_column.get('name', '')
+        target_column_name = target_column.get('name') or ''
+        completed_column_name = completed_column.get('name') or ''
         if column_groupby_column_key:
             column_groupby_column = self._get_column_by_key(column_groupby_column_key)
             if not column_groupby_column:
@@ -1702,12 +1705,12 @@ class StatisticSQLGenerator(object):
         return 'SELECT `%s`, `%s`, `%s` FROM %s %s GROUP BY `%s`, `%s`, `%s` LIMIT 0, 5000' % (group_by_column_name, target_column_name, completed_column_name, self.table_name, self.filter_sql, group_by_column_name, target_column_name, completed_column_name)
 
     def _scatter_statistic_2_sql(self):
-        x_axis_column_key = self.statistic.get('x_axis_column_key', '')
-        y_axis_column_key = self.statistic.get('y_axis_column_key', '')
-        column_groupby_column_key = self.statistic.get('column_groupby_column_key', '')
-        date_granularity = self.statistic.get('date_granularity', '')
-        geolocation_granularity = self.statistic.get('geolocation_granularity', '')
-        x_axis_include_empty_cells = self.statistic.get('x_axis_include_empty_cells', False)
+        x_axis_column_key = self.statistic.get('x_axis_column_key') or ''
+        y_axis_column_key = self.statistic.get('y_axis_column_key') or ''
+        column_groupby_column_key = self.statistic.get('column_groupby_column_key') or ''
+        date_granularity = self.statistic.get('date_granularity') or ''
+        geolocation_granularity = self.statistic.get('geolocation_granularity') or ''
+        x_axis_include_empty_cells = self.statistic.get('x_axis_include_empty_cells') or False
 
         x_axis_column = self._get_column_by_key(x_axis_column_key)
         if not x_axis_column:
@@ -1720,8 +1723,8 @@ class StatisticSQLGenerator(object):
             return ''
 
         self._update_filter_sql(x_axis_include_empty_cells, x_axis_column)
-        x_axis_column_name = x_axis_column.get('name', '')
-        y_axis_column_name = y_axis_column.get('name', '')
+        x_axis_column_name = x_axis_column.get('name') or ''
+        y_axis_column_name = y_axis_column.get('name') or ''
 
         if column_groupby_column_key:
             column_groupby_column = self._get_column_by_key(column_groupby_column_key)
@@ -1746,11 +1749,11 @@ class StatisticSQLGenerator(object):
         return 'SELECT `%s`, `%s` FROM %s %s GROUP BY `%s`, `%s` LIMIT 0, 5000' % (x_axis_column_name, y_axis_column_name, self.table_name, self.filter_sql, x_axis_column_name, y_axis_column_name)
 
     def _custom_statistic_2_sql(self):
-        x_axis_column_key = self.statistic.get('x_axis_column_key', '')
-        x_axis_date_granularity = self.statistic.get('x_axis_date_granularity', '')
-        x_axis_geolocation_granularity = self.statistic.get('x_axis_geolocation_granularity', '')
-        x_axis_include_empty_cells = self.statistic.get('x_axis_include_empty_cells', False)
-        y_axises = self.statistic.get('y_axises', [])
+        x_axis_column_key = self.statistic.get('x_axis_column_key') or ''
+        x_axis_date_granularity = self.statistic.get('x_axis_date_granularity') or ''
+        x_axis_geolocation_granularity = self.statistic.get('x_axis_geolocation_granularity') or ''
+        x_axis_include_empty_cells = self.statistic.get('x_axis_include_empty_cells') or False
+        y_axises = self.statistic.get('y_axises') or []
 
         group_by_column = self._get_column_by_key(x_axis_column_key)
         if not group_by_column:
@@ -1767,17 +1770,17 @@ class StatisticSQLGenerator(object):
         SQL_list = []
 
         for y_axis in y_axises:
-            yAxisType = y_axis.get('type', '')
-            column_groupby_numeric_columns = y_axis.get('column_groupby_numeric_columns', [])
+            yAxisType = y_axis.get('type') or ''
+            column_groupby_numeric_columns = y_axis.get('column_groupby_numeric_columns') or []
             sql = ''
             if yAxisType == StatisticType.BAR_STACK and column_groupby_numeric_columns:
                 group_methods = []
                 for group_item in column_groupby_numeric_columns:
-                    column_key = group_item.get('column_key', '')
+                    column_key = group_item.get('column_key') or ''
                     column = self._get_column_by_key(column_key)
                     if not column:
                         continue
-                    summary_method = group_item.get('summary_method', '')
+                    summary_method = group_item.get('summary_method') or ''
                     summary_method = summary_method.upper()
                     summary_method = self._summary_column_2_sql(summary_method, column)
                     group_methods.append(summary_method)
@@ -1795,12 +1798,12 @@ class StatisticSQLGenerator(object):
 
 
     def _compare_chart_statistic_2_sql(self):
-        x_axis_column_key = self.statistic.get('x_axis_column_key', '')
-        x_axis_date_granularity = self.statistic.get('x_axis_date_granularity', 'day')
-        x_axis_geolocation_granularity = self.statistic.get('x_axis_geolocation_granularity', '')
-        y_axis_summary_type = self.statistic.get('y_axis_summary_type', '')
-        y_axis_summary_column_key = self.statistic.get('y_axis_summary_column_key', '')
-        y_axis_summary_method = self.statistic.get('y_axis_summary_method', '')
+        x_axis_column_key = self.statistic.get('x_axis_column_key') or ''
+        x_axis_date_granularity = self.statistic.get('x_axis_date_granularity') or 'day'
+        x_axis_geolocation_granularity = self.statistic.get('x_axis_geolocation_granularity') or ''
+        y_axis_summary_type = self.statistic.get('y_axis_summary_type') or ''
+        y_axis_summary_column_key = self.statistic.get('y_axis_summary_column_key') or ''
+        y_axis_summary_method = self.statistic.get('y_axis_summary_method') or ''
 
         groupby_column = self._get_column_by_key(x_axis_column_key)
         if not groupby_column:
@@ -1827,19 +1830,19 @@ class StatisticSQLGenerator(object):
         return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, summary_column_name, self.table_name, self.filter_sql, groupby_column_name)
 
     def _combination_chart_statistic_2_sql(self):
-        x_axis_column_key = self.statistic.get('x_axis_column_key', '')
-        x_axis_date_granularity = self.statistic.get('x_axis_date_granularity', '')
-        x_axis_geolocation_granularity = self.statistic.get('x_axis_geolocation_granularity', '')
-        x_axis_include_empty_cells = self.statistic.get('x_axis_include_empty_cells', False) or False
-        y_axis_left_summary_type = self.statistic.get('y_axis_left_summary_type', '')
-        y_axis_left_summary_method = self.statistic.get('y_axis_left_summary_method', '')
-        y_axis_left_summary_column = self.statistic.get('y_axis_left_summary_column', '')
-        y_axis_left_group_by_multiple_numeric_column = self.statistic.get('y_axis_left_group_by_multiple_numeric_column', False) or False
-        y_axis_left_group_by_numeric_columns = self.statistic.get('y_axis_left_group_by_numeric_columns', []) or []
+        x_axis_column_key = self.statistic.get('x_axis_column_key') or ''
+        x_axis_date_granularity = self.statistic.get('x_axis_date_granularity') or ''
+        x_axis_geolocation_granularity = self.statistic.get('x_axis_geolocation_granularity') or ''
+        x_axis_include_empty_cells = self.statistic.get('x_axis_include_empty_cells') or False
+        y_axis_left_summary_type = self.statistic.get('y_axis_left_summary_type') or ''
+        y_axis_left_summary_method = self.statistic.get('y_axis_left_summary_method') or ''
+        y_axis_left_summary_column = self.statistic.get('y_axis_left_summary_column') or ''
+        y_axis_left_group_by_multiple_numeric_column = self.statistic.get('y_axis_left_group_by_multiple_numeric_column') or False
+        y_axis_left_group_by_numeric_columns = self.statistic.get('y_axis_left_group_by_numeric_columns') or []
 
-        y_axis_right_summary_type = self.statistic.get('y_axis_right_summary_type', '')
-        y_axis_right_summary_method = self.statistic.get('y_axis_right_summary_method', '')
-        y_axis_right_summary_column = self.statistic.get('y_axis_right_summary_column', '')
+        y_axis_right_summary_type = self.statistic.get('y_axis_right_summary_type') or ''
+        y_axis_right_summary_method = self.statistic.get('y_axis_right_summary_method') or ''
+        y_axis_right_summary_column = self.statistic.get('y_axis_right_summary_column') or ''
 
         groupby_column = self._get_column_by_key(x_axis_column_key)
         if not groupby_column:
@@ -1869,7 +1872,7 @@ class StatisticSQLGenerator(object):
                 return self._get_detail_sql({
                     x_axis_column_key: {'groupby_name': groupby_column_name, 'group_by': { 'date_granularity': x_axis_date_granularity, 'geolocation_granularity': x_axis_geolocation_granularity }}
                 })
-            return 'SELECT %s FROM %s %s GROUP BY %s LIMIT 0, 5000`' % (groupby_column_name, self.table_name, self.filter_sql, groupby_column_name)
+            return 'SELECT %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, self.table_name, self.filter_sql, groupby_column_name)
 
         if y_axis_left_group_by_multiple_numeric_column:
             column_groupby_numeric_columns = y_axis_left_group_by_numeric_columns
@@ -1877,8 +1880,9 @@ class StatisticSQLGenerator(object):
 
             column_groupby_numeric_column_names = []
             for summary_column_obj in column_groupby_numeric_columns:
-                summary_column_key = summary_column_obj.get('column_key', '')
-                summary_method = summary_column_obj.get('summary_method', '').upper()
+                summary_column_key = summary_column_obj.get('column_key') or ''
+                summary_method = summary_column_obj.get('summary_method') or ''
+                summary_method = summary_method.upper()
                 if not summary_column_key:
                     continue
                 summary_column = self._get_column_by_key(summary_column_key)
@@ -1945,14 +1949,14 @@ class StatisticSQLGenerator(object):
             summary_column_names.append(summary_column_name)
 
         for column_option in summary_columns:
-            column_key = column_option.get('column_key', '')
-            method = column_option.get('summary_method', '')
+            column_key = column_option.get('column_key') or ''
+            method = column_option.get('summary_method') or ''
             method = method.upper()
             column = self._get_column_by_key(column_key)
             if column and (is_numeric_column(column) or is_date_column(column)):
                 column_name = self._summary_column_2_sql(method, column)
                 summary_column_names.append(column_name)
-        groupby_column_type = groupby_column.get('type', '')
+        groupby_column_type = groupby_column.get('type') or ''
 
         # groupby_column is COLLABORATOR or MULTIPLE_SELECT, replace AVG with SUM, and add 'COUNT(*)'
         if groupby_column_type == ColumnTypes.COLLABORATOR or groupby_column_type == ColumnTypes.MULTIPLE_SELECT:
@@ -1966,14 +1970,14 @@ class StatisticSQLGenerator(object):
         return summary_column_names_str
 
     def _one_dimension_statistic_table_2_sql(self):
-        groupby_column_key = self.statistic.get('groupby_column_key', '')
-        summary_type = self.statistic.get('summary_type', '')
-        summary_column_key = self.statistic.get('summary_column_key', '')
-        groupby_date_granularity = self.statistic.get('groupby_date_granularity', '')
-        groupby_geolocation_granularity = self.statistic.get('groupby_geolocation_granularity', '')
-        groupby_include_empty_cells = self.statistic.get('groupby_include_empty_cells', False)
-        summary_method = self.statistic.get('summary_method', '')
-        summary_columns = self.statistic.get('summary_columns', [])
+        groupby_column_key = self.statistic.get('groupby_column_key') or ''
+        summary_type = self.statistic.get('summary_type') or ''
+        summary_column_key = self.statistic.get('summary_column_key') or ''
+        groupby_date_granularity = self.statistic.get('groupby_date_granularity') or ''
+        groupby_geolocation_granularity = self.statistic.get('groupby_geolocation_granularity') or ''
+        groupby_include_empty_cells = self.statistic.get('groupby_include_empty_cells') or False
+        summary_method = self.statistic.get('summary_method') or ''
+        summary_columns = self.statistic.get('summary_columns') or []
 
         groupby_column = self._get_column_by_key(groupby_column_key)
         if not groupby_column:
@@ -2027,17 +2031,17 @@ class StatisticSQLGenerator(object):
         return 'SELECT %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, self.table_name, self.filter_sql, groupby_column_name)
 
     def _two_dimension_statistic_table_2_sql(self):
-        groupby_column_key = self.statistic.get('groupby_column_key', '')
-        column_groupby_column_key = self.statistic.get('column_groupby_column_key', '')
-        summary_type = self.statistic.get('summary_type', '')
-        summary_column_key = self.statistic.get('summary_column_key', '')
-        groupby_date_granularity = self.statistic.get('groupby_date_granularity', '')
-        groupby_geolocation_granularity = self.statistic.get('groupby_geolocation_granularity', '')
-        groupby_include_empty_cells = self.statistic.get('groupby_include_empty_cells', False)
-        column_groupby_date_granularity = self.statistic.get('column_groupby_date_granularity', '')
-        column_groupby_geolocation_granularity = self.statistic.get('column_groupby_geolocation_granularity', '')
-        summary_method = self.statistic.get('summary_method', '')
-        summary_columns = self.statistic.get('summary_columns', [])
+        groupby_column_key = self.statistic.get('groupby_column_key') or ''
+        column_groupby_column_key = self.statistic.get('column_groupby_column_key') or ''
+        summary_type = self.statistic.get('summary_type') or ''
+        summary_column_key = self.statistic.get('summary_column_key') or ''
+        groupby_date_granularity = self.statistic.get('groupby_date_granularity') or ''
+        groupby_geolocation_granularity = self.statistic.get('groupby_geolocation_granularity') or ''
+        groupby_include_empty_cells = self.statistic.get('groupby_include_empty_cells') or False
+        column_groupby_date_granularity = self.statistic.get('column_groupby_date_granularity') or ''
+        column_groupby_geolocation_granularity = self.statistic.get('column_groupby_geolocation_granularity') or ''
+        summary_method = self.statistic.get('summary_method') or ''
+        summary_columns = self.statistic.get('summary_columns') or []
 
         column_groupby_column = self._get_column_by_key(column_groupby_column_key)
         if not column_groupby_column:
@@ -2074,13 +2078,13 @@ class StatisticSQLGenerator(object):
         return 'SELECT %s, %s, %s FROM %s %s GROUP BY %s, %s LIMIT 0, 5000' % (groupby_column_name, column_groupby_column_name, summary_column_names_str, self.table_name, self.filter_sql, groupby_column_name, column_groupby_column_name)
 
     def _pie_chart_statistic_2_sql(self):
-        groupby_column_key = self.statistic.get('groupby_column_key', '')
-        summary_type = self.statistic.get('summary_type', '')
-        summary_method = self.statistic.get('summary_method', '')
-        summary_column_key = self.statistic.get('summary_column_key', '')
-        groupby_date_granularity = self.statistic.get('groupby_date_granularity', '')
-        groupby_geolocation_granularity = self.statistic.get('groupby_geolocation_granularity', '')
-        groupby_include_empty_cells = self.statistic.get('groupby_include_empty_cells', False)
+        groupby_column_key = self.statistic.get('groupby_column_key') or ''
+        summary_type = self.statistic.get('summary_type') or ''
+        summary_method = self.statistic.get('summary_method') or ''
+        summary_column_key = self.statistic.get('summary_column_key') or ''
+        groupby_date_granularity = self.statistic.get('groupby_date_granularity') or ''
+        groupby_geolocation_granularity = self.statistic.get('groupby_geolocation_granularity') or ''
+        groupby_include_empty_cells = self.statistic.get('groupby_include_empty_cells') or False
 
         groupby_column = self._get_column_by_key(groupby_column_key)
         if not groupby_column:
@@ -2090,6 +2094,7 @@ class StatisticSQLGenerator(object):
         self._update_filter_sql(groupby_include_empty_cells, groupby_column)
         groupby_column_name = self._statistic_column_name_to_sql(groupby_column, { 'date_granularity': groupby_date_granularity, 'geolocation_granularity': groupby_geolocation_granularity })
         summary_type = summary_type.upper()
+        summary_column_name = ''
         if summary_type == 'COUNT':
             summary_column_name = self._summary_column_2_sql('COUNT', groupby_column)
         else:
@@ -2115,13 +2120,13 @@ class StatisticSQLGenerator(object):
         return 'SELECT %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, self.table_name, self.filter_sql, groupby_column_name)
 
     def _basic_number_card_chart_statistic_2_sql(self):
-        summary_type = self.statistic.get('summary_type', '')
+        summary_type = self.statistic.get('summary_type') or ''
         if summary_type == 'count':
             self._update_filter_sql(True, None)
             return 'SELECT COUNT(*) FROM %s %s LIMIT 0, 5000' % (self.table_name, self.filter_sql)
 
-        numeric_column_key = self.statistic.get('numeric_column_key', '')
-        summary_method = self.statistic.get('summary_method', '')
+        numeric_column_key = self.statistic.get('numeric_column_key') or ''
+        summary_method = self.statistic.get('summary_method') or ''
         numeric_column = self._get_column_by_key(numeric_column_key)
         if not numeric_column:
             self.error = 'Numeric column not found'
@@ -2135,8 +2140,8 @@ class StatisticSQLGenerator(object):
         return 'SELECT %s FROM %s %s LIMIT 0, 5000' % (summary_column_name, self.table_name, self.filter_sql)
 
     def _dashboard_chart_statistic_2_sql(self):
-        target_column_key = self.statistic.get('target_value_column_key', '')
-        target_summary_method = self.statistic.get('target_value_column_summary_method', '')
+        target_column_key = self.statistic.get('target_value_column_key') or ''
+        target_summary_method = self.statistic.get('target_value_column_summary_method') or ''
         target_column = self._get_column_by_key(target_column_key)
         if not target_column:
             self.error = 'Target column not found'
@@ -2147,8 +2152,8 @@ class StatisticSQLGenerator(object):
         target_summary_method = target_summary_method.upper()
         target_summary_column_name = self._summary_column_2_sql(target_summary_method, target_column)
 
-        total_column_key = self.statistic.get('total_value_column_key', '')
-        total_summary_method = self.statistic.get('total_value_column_summary_method', '')
+        total_column_key = self.statistic.get('total_value_column_key') or ''
+        total_summary_method = self.statistic.get('total_value_column_summary_method') or ''
         total_column = self._get_column_by_key(total_column_key)
         if not total_column:
             self.error = 'Total column not found'
@@ -2175,8 +2180,8 @@ class StatisticSQLGenerator(object):
             return GeolocationGranularity.PROVINCE
 
         # e.g. Beijing
-        province_name = location.get('province', '')
-        city_name = location.get('city', '')
+        province_name = location.get('province') or ''
+        city_name = location.get('city') or ''
         if province_name and province_name in MUNICIPALITIES:
             return GeolocationGranularity.DISTRICT
 
@@ -2194,7 +2199,7 @@ class StatisticSQLGenerator(object):
         if not city_name:
             return self._get_geo_granularity_by_level(level)
 
-        cities = province.get('cities', [])
+        cities = province.get('cities') or []
         try:
             city = [city for city in cities if city['name'] == city_name][0]
         except Exception:
@@ -2247,10 +2252,10 @@ class StatisticSQLGenerator(object):
         return 'SELECT %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, self.table_name, self.filter_sql, groupby_column_name)
 
     def _world_map_basic_statistic_2_sql(self):
-        geo_column_key = self.statistic.get('geo_column_key', '')
-        summary_type = self.statistic.get('summary_type', '')
-        summary_method = self.statistic.get('summary_method', '')
-        summary_column_key = self.statistic.get('summary_column_key', '')
+        geo_column_key = self.statistic.get('geo_column_key') or ''
+        summary_type = self.statistic.get('summary_type') or ''
+        summary_method = self.statistic.get('summary_method') or ''
+        summary_column_key = self.statistic.get('summary_column_key') or ''
 
         groupby_column = self._get_column_by_key(geo_column_key)
         if not groupby_column:
@@ -2308,11 +2313,11 @@ class StatisticSQLGenerator(object):
         return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, summary_column_name, self.table_name, self.filter_sql, groupby_column_name)
 
     def _mirror_map_statistic_2_sql(self):
-        column_key = self.statistic.get('column_key', '')
-        summary_type = self.statistic.get('summary_type', '')
-        summary_method = self.statistic.get('summary_method', '')
-        summary_column_key = self.statistic.get('summary_column_key', '')
-        group_column_key = self.statistic.get('group_column_key', '')
+        column_key = self.statistic.get('column_key') or ''
+        summary_type = self.statistic.get('summary_type') or ''
+        summary_method = self.statistic.get('summary_method') or ''
+        summary_column_key = self.statistic.get('summary_column_key') or ''
+        group_column_key = self.statistic.get('group_column_key') or ''
 
         groupby_column = self._get_column_by_key(column_key)
         if not groupby_column:
@@ -2346,11 +2351,11 @@ class StatisticSQLGenerator(object):
         return 'SELECT %s, %s, %s FROM %s %s GROUP BY %s, %s LIMIT 0, 5000' % (groupby_column_name, column_groupby_column_name, summary_column_name, self.table_name, self.filter_sql, groupby_column_name, column_groupby_column_name)
 
     def _trend_map_statistic_2_sql(self):
-        date_column_key = self.statistic.get('date_column_key', '')
-        date_granularity = self.statistic.get('date_granularity', '')
-        summary_type = self.statistic.get('summary_type', '')
-        summary_method = self.statistic.get('summary_method', '')
-        summary_column_key = self.statistic.get('summary_column_key', '')
+        date_column_key = self.statistic.get('date_column_key') or ''
+        date_granularity = self.statistic.get('date_granularity') or ''
+        summary_type = self.statistic.get('summary_type') or ''
+        summary_method = self.statistic.get('summary_method') or ''
+        summary_column_key = self.statistic.get('summary_column_key') or ''
 
         groupby_column = self._get_column_by_key(date_column_key)
         if not groupby_column:
@@ -2401,8 +2406,8 @@ class StatisticSQLGenerator(object):
             return sql, self.error
 
         if self.statistic_type in [StatisticType.BAR_GROUP, StatisticType.LINE_GROUP, StatisticType.AREA_GROUP, StatisticType.HORIZONTAL_GROUP_BAR, StatisticType.STACKED_HORIZONTAL_BAR, StatisticType.BAR_STACK]:
-            column_groupby_column_key = self.statistic.get('column_groupby_column_key', '')
-            column_groupby_multiple_numeric_column = self.statistic.get('column_groupby_multiple_numeric_column', False) or False
+            column_groupby_column_key = self.statistic.get('column_groupby_column_key') or ''
+            column_groupby_multiple_numeric_column = self.statistic.get('column_groupby_multiple_numeric_column') or False
             if not (column_groupby_column_key or column_groupby_multiple_numeric_column):
                 sql = self._basic_statistic_2_sql()
                 return sql, self.error
@@ -2447,8 +2452,8 @@ class StatisticSQLGenerator(object):
             return sql, self.error
 
         if self.statistic_type == StatisticType.TABLE:
-            column_groupby_column_key = self.statistic.get('column_groupby_column_key', '')
-            groupby_column_key = self.statistic.get('groupby_column_key', '')
+            column_groupby_column_key = self.statistic.get('column_groupby_column_key') or ''
+            groupby_column_key = self.statistic.get('groupby_column_key') or ''
             if not groupby_column_key:
                 return '', 'Groupby column not set'
             if not column_groupby_column_key:
@@ -2506,16 +2511,16 @@ class BaseSQLGenerator(object):
             filter_conditions = self.filter_condition_groups
         else:
             filter_conditions = self.filter_conditions
-        condition_sorts = filter_conditions.get('sorts', [])
+        condition_sorts = filter_conditions.get('sorts') or []
         if not condition_sorts:
             return ''
 
         order_header = 'ORDER BY '
         clauses = []
         for sort in condition_sorts:
-            column_key = sort.get('column_key', '')
-            column_name = sort.get('column_name', '')
-            sort_type = sort.get('sort_type', 'DESC') == 'up' and 'ASC' or 'DESC'
+            column_key = sort.get('column_key') or ''
+            column_name = sort.get('column_name') or ''
+            sort_type = (sort.get('sort_type') or 'DESC') == 'up' and 'ASC' or 'DESC'
             column = self._get_column_by_key(column_key)
             if not column:
                 column = self._get_column_by_name(column_name)
@@ -2539,8 +2544,8 @@ class BaseSQLGenerator(object):
 
     def _groupfilter2sql(self):
         filter_condition_groups = self.filter_condition_groups
-        filter_groups = filter_condition_groups.get('filter_groups', [])
-        group_conjunction = filter_condition_groups.get('group_conjunction', 'And')
+        filter_groups = filter_condition_groups.get('filter_groups') or []
+        group_conjunction = filter_condition_groups.get('group_conjunction') or 'And'
         if not filter_groups:
             return ''
         filter_header = 'WHERE '
@@ -2548,7 +2553,7 @@ class BaseSQLGenerator(object):
         group_conjunction_split = ' %s ' % group_conjunction
         for filter_group in filter_groups:
             filters = filter_group.get('filters')
-            filter_conjunction = filter_group.get('filter_conjunction', 'And')
+            filter_conjunction = filter_group.get('filter_conjunction') or 'And'
             filter_conjunction_split = " %s " % filter_conjunction
             filter_string_list = []
             for filter_item in filters:
@@ -2573,7 +2578,7 @@ class BaseSQLGenerator(object):
     def _filter_item_2_sql(self, filter_item):
         inner_filters = filter_item.get('filters')
         if inner_filters and isinstance(inner_filters, list):
-            inner_filter_conjunction = filter_item.get('filter_conjunction', 'And')
+            inner_filter_conjunction = filter_item.get('filter_conjunction') or 'And'
             inner_filter_condition_list = []
             for inner_item in inner_filters:
                 sql_condition = self._filter_item_2_sql(inner_item)
@@ -2603,8 +2608,8 @@ class BaseSQLGenerator(object):
 
     def _filter2sql(self):
         filter_conditions = self.filter_conditions
-        filters = filter_conditions.get('filters', [])
-        filter_conjunction = filter_conditions.get('filter_conjunction', 'And')
+        filters = filter_conditions.get('filters') or []
+        filter_conjunction = filter_conditions.get('filter_conjunction') or 'And'
         if not filters:
             return ''
 
@@ -2672,11 +2677,11 @@ class LinkRecordsSQLGenerator(object):
             pass
         else:
             self.link_record_ids_str = ', '.join(["'%s'" % (item) for item in link_record_ids])
-            table_id = current_table.get('_id', '')
-            link_column_data = link_column.get('data', {})
-            config_table_id = link_column_data.get('table_id', '')
-            config_other_table_id = link_column_data.get('other_table_id', '')
-            self.link_column_sorts = link_column_data.get('sorts', [])
+            table_id = current_table.get('_id') or ''
+            link_column_data = link_column.get('data') or {}
+            config_table_id = link_column_data.get('table_id') or ''
+            config_other_table_id = link_column_data.get('other_table_id') or ''
+            self.link_column_sorts = link_column_data.get('sorts') or []
             linked_table_id = config_other_table_id if config_table_id == table_id else config_table_id
             linked_table = None
             for table in tables:
@@ -2684,8 +2689,8 @@ class LinkRecordsSQLGenerator(object):
                     linked_table = table
                     break
             if linked_table:
-                self.linked_table_name = linked_table.get('name', '')
-                self.linked_table_columns = linked_table.get('columns', [])
+                self.linked_table_name = linked_table.get('name') or ''
+                self.linked_table_columns = linked_table.get('columns') or []
             else:
                 self.linked_table_name = ''
                 self.linked_table_columns = []
@@ -2703,8 +2708,8 @@ class LinkRecordsSQLGenerator(object):
         order_header = 'ORDER BY '
         clauses = []
         for sort in self.link_column_sorts:
-            column_key = sort.get('column_key', '')
-            sort_type = sort.get('sort_type', 'DESC') == 'up' and 'ASC' or 'DESC'
+            column_key = sort.get('column_key') or ''
+            sort_type = (sort.get('sort_type') or 'DESC') == 'up' and 'ASC' or 'DESC'
             column = self._get_column_by_key(column_key)
             if column:
                 order_condition = '`%s` %s' % (column.get('name'), sort_type)
