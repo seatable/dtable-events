@@ -1181,13 +1181,18 @@ def sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username,
     rows_name_id_map = {}
     dtable_db_api = DTableDBAPI('dtable-events', dtable_uuid, INNER_DTABLE_DB_URL)
     query_column_names = ', '.join([f"`{column_name}`" for column_name in ['_id'] + list(APP_USERS_COUMNS_TYPE_MAP.keys())])
-    sql = f"SELECT {query_column_names} FROM `{table['name']}`"
-    rows, _ = dtable_db_api.query(sql, convert=True, server_only=True)
-    for row in rows:
-        row_user = row.get('User') and row.get('User')[0] or None
-        if not row_user:
-            continue
-        rows_name_id_map[row_user] = row
+    offset, limit = 0, 1000
+    while True:
+        sql = f"SELECT {query_column_names} FROM `{table['name']}` LIMIT {offset}, {limit}"
+        rows, _ = dtable_db_api.query(sql, convert=True, server_only=True)
+        for row in rows:
+            row_user = row.get('User') and row.get('User')[0] or None
+            if not row_user:
+                continue
+            rows_name_id_map[row_user] = row
+        if len(rows) < limit:
+            break
+        offset += limit
 
     row_data_for_create = []
     row_data_for_update = []
