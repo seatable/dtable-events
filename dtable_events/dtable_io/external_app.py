@@ -29,11 +29,15 @@ def match_user_info(rows_name_id_map, username, user_info):
     is_active = row_info.get('IsActive')
     joined_at = row_info.get('JoinedAt')
 
+    try:
+        is_joined_at_same = parse(joined_at).strftime('%Y-%m-%d %H:%M') == user_info.get('created_at')
+    except:
+        is_joined_at_same = False
 
     if user_info.get('name', '') == name and \
         user_info.get('role_name') == role_name and \
-        user_info.get('created_at') == joined_at and \
-        user_info.get('is_active') == is_active:
+        user_info.get('is_active') == is_active and \
+        is_joined_at_same:
         return True, None, None
     return False, 'update', row_info.get('_id')
 
