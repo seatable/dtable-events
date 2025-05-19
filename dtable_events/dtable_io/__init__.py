@@ -898,8 +898,8 @@ def app_user_sync(dtable_uuid, app_name, app_id, table_name, table_id, username,
     try:
         sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username, db_session)
     except Exception as e:
-
         dtable_io_logger.exception('app user sync ERROR: {}'.format(e))
+        raise Exception('app user sync ERROR: {}'.format(e))
     else:
         dtable_io_logger.info('app %s user sync success!' % app_name)
     finally:

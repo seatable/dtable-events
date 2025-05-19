@@ -21,7 +21,7 @@ import posixpath
 from sqlalchemy import text
 from seaserv import seafile_api, USE_GO_FILESERVER
 
-from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_FILE_SERVER_ROOT
+from dtable_events.app.config import INNER_DTABLE_DB_URL, DTABLE_WEB_SERVICE_URL, INNER_FILE_SERVER_ROOT
 from dtable_events.dtable_io.external_app import APP_USERS_COUMNS_TYPE_MAP, match_user_info, update_app_sync, \
     get_row_ids_for_delete, get_app_users
 from dtable_events.dtable_io.task_manager import task_manager
@@ -1134,6 +1134,8 @@ def get_nicknames_from_dtable(user_id_list):
 
 def sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username, db_session):
     from dtable_events.utils.dtable_server_api import DTableServerAPI
+    from dtable_events.utils.dtable_db_api import DTableDBAPI
+
     api_url = get_inner_dtable_server_url()
     base = DTableServerAPI(username, dtable_uuid, api_url)
     user_list = get_app_users(db_session, app_id)
@@ -1176,8 +1178,11 @@ def sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username,
             except:
                 continue
 
-    rows = base.list_rows(table['name'])
     rows_name_id_map = {}
+    dtable_db_api = DTableDBAPI('dtable-events', dtable_uuid, INNER_DTABLE_DB_URL)
+    query_column_names = ', '.join([f"`{column_name}`" for column_name in ['_id'] + list(APP_USERS_COUMNS_TYPE_MAP.keys())])
+    sql = f"SELECT {query_column_names} FROM `{table['name']}`"
+    rows, _ = dtable_db_api.query(sql, convert=True, server_only=True)
     for row in rows:
         row_user = row.get('User') and row.get('User')[0] or None
         if not row_user:
