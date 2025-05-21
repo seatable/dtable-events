@@ -19,12 +19,12 @@ from seaserv import seafile_api
 from dtable_events.automations.models import get_third_party_account
 from dtable_events.app.metadata_cache_managers import BaseMetadataCacheManager
 from dtable_events.app.event_redis import redis_cache
-from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL
+from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
 from dtable_events.dtable_io import send_wechat_msg, send_dingtalk_msg
 from dtable_events.convert_page.manager import conver_page_to_pdf_manager
 from dtable_events.app.log import setup_logger
 from dtable_events.notification_rules.notification_rules_utils import send_notification, fill_msg_blanks_with_sql_row
-from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, get_inner_dtable_server_url, \
+from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, \
     normalize_file_path, gen_file_get_url, gen_random_option, get_dtable_admins
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI
@@ -3033,7 +3033,7 @@ class ConvertPageToPDFAction(BaseAction):
 
     def upload_pdf_cb(self, row_id, pdf_content):
         try:
-            dtable_server_api = DTableServerAPI('dtable-events', self.auto_rule.dtable_uuid, get_inner_dtable_server_url(), DTABLE_WEB_SERVICE_URL, self.repo_id, self.workspace_id)
+            dtable_server_api = DTableServerAPI('dtable-events', self.auto_rule.dtable_uuid, INNER_DTABLE_SERVER_URL, DTABLE_WEB_SERVICE_URL, self.repo_id, self.workspace_id)
             file_name = self.file_names_dict.get(row_id, f'{self.auto_rule.dtable_uuid}_{self.page_id}_{row_id}.pdf')
             if not file_name.endswith('.pdf'):
                 file_name += '.pdf'
@@ -3058,7 +3058,7 @@ class ConvertPageToPDFAction(BaseAction):
                     'row_id': row_id,
                     'row': {target_column['name']: files}
                 })
-            dtable_server_api = DTableServerAPI('dtable-events', self.auto_rule.dtable_uuid, get_inner_dtable_server_url())
+            dtable_server_api = DTableServerAPI('dtable-events', self.auto_rule.dtable_uuid, INNER_DTABLE_SERVER_URL)
             dtable_server_api.batch_update_rows(table['name'], updates)
         except Exception as e:
             logger.exception('rule: %s dtable: %s page: %s rows: %s update rows error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.page_id, self.row_pdfs, e)
@@ -3155,7 +3155,7 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
         logger.debug('rule: %s convert-and-send start check save can_do: %s', self.auto_rule.rule_id, self.save_config.get('can_do'))
         if not self.save_config.get('can_do'):
             return
-        dtable_server_api = DTableServerAPI('dtable-events', self.auto_rule.dtable_uuid, get_inner_dtable_server_url(), DTABLE_WEB_SERVICE_URL, self.repo_id, self.workspace_id)
+        dtable_server_api = DTableServerAPI('dtable-events', self.auto_rule.dtable_uuid, INNER_DTABLE_SERVER_URL, DTABLE_WEB_SERVICE_URL, self.repo_id, self.workspace_id)
         file_name = self.file_name
         if not file_name.endswith('.pdf'):
             file_name += '.pdf'
@@ -3285,7 +3285,7 @@ class AutomationRule:
 
         self.username = 'Automation Rule'
 
-        self.dtable_server_api = DTableServerAPI(self.username, str(UUID(self.dtable_uuid)), get_inner_dtable_server_url())
+        self.dtable_server_api = DTableServerAPI(self.username, str(UUID(self.dtable_uuid)), INNER_DTABLE_SERVER_URL)
         self.dtable_db_api = DTableDBAPI(self.username, str(UUID(self.dtable_uuid)), INNER_DTABLE_DB_URL)
         self.dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
 

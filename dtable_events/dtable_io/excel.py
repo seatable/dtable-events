@@ -9,8 +9,8 @@ from openpyxl.styles import PatternFill
 from openpyxl import load_workbook
 from copy import deepcopy
 from datetime import datetime, time
-from dtable_events.app.config import EXPORT2EXCEL_DEFAULT_STRING, TIME_ZONE, INNER_DTABLE_DB_URL
-from dtable_events.utils import utc_to_tz, get_inner_dtable_server_url, gen_random_option, format_date
+from dtable_events.app.config import EXPORT2EXCEL_DEFAULT_STRING, TIME_ZONE, INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
+from dtable_events.utils import utc_to_tz, gen_random_option, format_date
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.geo_location_parser import parse_geolocation_from_tree
 from dtable_events.utils.dtable_db_api import DTableDBAPI
@@ -527,8 +527,7 @@ def parse_and_update_file_to_table(file_name, username, dtable_uuid, table_name,
     related_users = get_related_nicknames_from_dtable(dtable_uuid)
     name_to_email = {user.get('name'): user.get('email') for user in related_users}
 
-    dtable_server_url = get_inner_dtable_server_url()
-    dtable_server_api = DTableServerAPI(username, dtable_uuid, dtable_server_url)
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
     columns = dtable_server_api.list_columns(table_name)
 
     try:
@@ -572,8 +571,7 @@ def parse_and_append_excel_csv_to_table(username, file_name, dtable_uuid, table_
     related_users = get_related_nicknames_from_dtable(dtable_uuid)
     name_to_email = {user.get('name'): user.get('email') for user in related_users}
 
-    dtable_server_url = get_inner_dtable_server_url()
-    dtable_server_api = DTableServerAPI(username, dtable_uuid, dtable_server_url)
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
     columns = dtable_server_api.list_columns(table_name)
 
     try:
@@ -677,8 +675,7 @@ def append_parsed_file_by_dtable_server(username, dtable_uuid, file_name, table_
     # upload json file to dtable-server
     rows = json.loads(json_file)[0]['rows']
 
-    dtable_server_url = get_inner_dtable_server_url()
-    dtable_server_api = DTableServerAPI(username, dtable_uuid, dtable_server_url)
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
     columns = dtable_server_api.list_columns(table_name)
 
     dtable_col_name_to_column = {col['name']: col for col in columns}
@@ -705,8 +702,7 @@ def parse_append_excel_csv_upload_file_to_json(file_name, username, dtable_uuid,
     related_users = get_related_nicknames_from_dtable(dtable_uuid)
     name_to_email = {user.get('name'): user.get('email') for user in related_users}
 
-    dtable_server_url = get_inner_dtable_server_url()
-    dtable_server_api = DTableServerAPI(username, dtable_uuid, dtable_server_url)
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
     columns = dtable_server_api.list_columns(table_name)
     if file_type == 'csv':
         tmp_file_path = os.path.join(EXCEL_IMPORT_DIR, dtable_uuid, file_name + '.csv')
@@ -783,8 +779,7 @@ def update_parsed_file_by_dtable_server(username, dtable_uuid, file_name, table_
     dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
     dtable_rows = get_rows_from_dtable_db(dtable_db_api, table_name)
 
-    dtable_server_url = get_inner_dtable_server_url()
-    dtable_server_api = DTableServerAPI(username, dtable_uuid, dtable_server_url)
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
 
     columns = dtable_server_api.list_columns(table_name)
 
@@ -936,8 +931,7 @@ def parse_update_excel_upload_excel_to_json(file_name, username, dtable_uuid, ta
     related_users = get_related_nicknames_from_dtable(dtable_uuid)
     name_to_email = {user.get('name'): user.get('email') for user in related_users}
 
-    dtable_server_url = get_inner_dtable_server_url()
-    dtable_server_api = DTableServerAPI(username, dtable_uuid, dtable_server_url)
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
     columns = dtable_server_api.list_columns(table_name)
 
     tmp_file_path = os.path.join(EXCEL_IMPORT_DIR, dtable_uuid, file_name + '.xlsx')
@@ -1042,8 +1036,7 @@ def parse_update_csv_upload_csv_to_json(file_name, username, dtable_uuid, table_
     related_users = get_related_nicknames_from_dtable(dtable_uuid)
     name_to_email = {user.get('name'): user.get('email') for user in related_users}
 
-    dtable_server_url = get_inner_dtable_server_url()
-    dtable_server_api = DTableServerAPI(username, dtable_uuid, dtable_server_url)
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
     columns = dtable_server_api.list_columns(table_name)
 
     tmp_file_path = os.path.join(EXCEL_IMPORT_DIR, dtable_uuid, file_name + '.csv')

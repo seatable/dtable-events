@@ -9,7 +9,7 @@ from datetime import datetime
 
 from seaserv import seafile_api
 
-from dtable_events.app.config import DTABLE_WEB_SERVICE_URL
+from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, INNER_DTABLE_SERVER_URL
 from dtable_events.dtable_io.big_data import import_excel_to_db, update_excel_to_db, export_big_data_to_excel, \
     export_app_table_page_to_excel
 from dtable_events.dtable_io.utils import post_big_data_screen_app_zip_file, \
@@ -31,7 +31,7 @@ from dtable_events.convert_page.utils import get_chrome_data_dir, get_driver, op
     gen_page_design_pdf_view_url, gen_document_pdf_view_url
 from dtable_events.statistics.db import save_email_sending_records, batch_save_email_sending_records
 from dtable_events.data_sync.data_sync_utils import run_sync_emails
-from dtable_events.utils import get_inner_dtable_server_url, is_valid_email, uuid_str_to_36_chars, gen_file_upload_url
+from dtable_events.utils import is_valid_email, uuid_str_to_36_chars, gen_file_upload_url
 from dtable_events.utils.dtable_server_api import DTableServerAPI, BaseExceedsException
 from dtable_events.utils.exception import ExcelFormatError
 from dtable_events.utils.email_sender import EmailSender
@@ -624,8 +624,7 @@ def send_dingtalk_msg(webhook_url, msg, msg_type="text", msg_title=None):
 def send_notification_msg(emails, user_col_key, msg, dtable_uuid, username, table_id=None, row_id=None):
     result = {}
     try:
-        dtable_server_url = get_inner_dtable_server_url()
-        dtable_server_api = DTableServerAPI(username, dtable_uuid, dtable_server_url)
+        dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
         metadata = dtable_server_api.get_metadata()
         table = None
         for tmp_table in metadata['tables']:
@@ -680,10 +679,9 @@ def send_notification_msg(emails, user_col_key, msg, dtable_uuid, username, tabl
     return result
 
 def convert_page_design_to_pdf(dtable_uuid, page_id, row_id, username=None):
-    dtable_server_url = get_inner_dtable_server_url()
     if not username:
         username = 'dtable-events'
-    access_token = DTableServerAPI(username, dtable_uuid, dtable_server_url).internal_access_token
+    access_token = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL).internal_access_token
     target_dir = '/tmp/dtable-io/convert-page-to-pdf'
     if not os.path.isdir(target_dir):
         os.makedirs(target_dir)
@@ -706,10 +704,9 @@ def convert_page_design_to_pdf(dtable_uuid, page_id, row_id, username=None):
 
 
 def convert_document_to_pdf(dtable_uuid, doc_uuid, row_id, username=None):
-    dtable_server_url = get_inner_dtable_server_url()
     if not username:
         username = 'dtable-events'
-    access_token = DTableServerAPI(username, dtable_uuid, dtable_server_url).internal_access_token
+    access_token = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL).internal_access_token
     target_dir = '/tmp/dtable-io/convert-document-to-pdf'
     if not os.path.isdir(target_dir):
         os.makedirs(target_dir)
@@ -946,8 +943,7 @@ def plugin_email_send_email(context, config=None):
 
     send_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    api_url = get_inner_dtable_server_url()
-    dtable_server_api = DTableServerAPI(username, dtable_uuid, api_url, server_url=DTABLE_WEB_SERVICE_URL,
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL, server_url=DTABLE_WEB_SERVICE_URL,
                                         repo_id=repo_id, workspace_id=workspace_id)
 
     replied_email_row = dtable_server_api.get_row(email_table_name, email_row_id)

@@ -10,10 +10,10 @@ from imapclient.exceptions import LoginError
 
 from sqlalchemy import text
 
-from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL
+from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
 from dtable_events.automations.models import get_third_party_account
 from dtable_events.data_sync.imap_mail import ImapMail
-from dtable_events.utils import get_inner_dtable_server_url, get_dtable_admins
+from dtable_events.utils import get_dtable_admins
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.notification_rules.notification_rules_utils import send_notification
@@ -447,8 +447,6 @@ def sync_emails(context, db_session):
     send_date = context.get('send_date')
     username = context.get('username', 'Data Sync')
 
-    api_url = get_inner_dtable_server_url()
-
     account_id = detail.get('third_account_id')
     email_table_id = detail.get('email_table_id')
     link_table_id = detail.get('link_table_id')
@@ -480,7 +478,7 @@ def sync_emails(context, db_session):
     if not all([imap_host, imap_port, email_user, email_password]):
         return 'third_party_account_invalid'
 
-    dtable_server_api = DTableServerAPI(username, dtable_uuid, api_url,
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL,
                                         server_url=DTABLE_WEB_SERVICE_URL,
                                         repo_id=repo_id,
                                         workspace_id=workspace_id

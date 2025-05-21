@@ -5,12 +5,10 @@ from sqlalchemy import text
 
 from dtable_events.common_dataset.common_dataset_sync_utils import import_sync_CDS, get_dataset_data, batch_sync_common_dataset, cds_logger
 from dtable_events.db import init_db_session_class
-from dtable_events.utils import uuid_str_to_32_chars, uuid_str_to_36_chars, get_inner_dtable_server_url
+from dtable_events.utils import uuid_str_to_32_chars
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.dtable_io.task_manager import task_manager
-
-dtable_server_url = get_inner_dtable_server_url()
-
+from dtable_events.app.config import INNER_DTABLE_SERVER_URL
 
 def force_sync_common_dataset(context: dict, config):
     """
@@ -155,7 +153,7 @@ def sync_common_dataset(context, config):
             raise Exception(error_msg)
 
     # get base's metadata
-    src_dtable_server_api = DTableServerAPI(operator, src_dtable_uuid, dtable_server_url)
+    src_dtable_server_api = DTableServerAPI(operator, src_dtable_uuid, INNER_DTABLE_SERVER_URL)
     try:
         src_metadata = src_dtable_server_api.get_metadata()
     except Exception as e:
@@ -242,7 +240,7 @@ def import_common_dataset(context, config):
         dst_table_id = result.get('dst_table_id')
 
     # get base's metadata
-    src_dtable_server_api = DTableServerAPI(operator, src_dtable_uuid, dtable_server_url)
+    src_dtable_server_api = DTableServerAPI(operator, src_dtable_uuid, INNER_DTABLE_SERVER_URL)
     try:
         src_metadata = src_dtable_server_api.get_metadata()
     except Exception as e:

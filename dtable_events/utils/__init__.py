@@ -220,14 +220,6 @@ def is_valid_email(email):
         return EMAIL_RE.match(email) is not None
     return False
 
-def get_inner_dtable_server_url():
-    """ only for api
-    """
-    from dtable_events.app.config import INNER_DTABLE_SERVER_URL
-
-    return INNER_DTABLE_SERVER_URL
-
-
 def get_location_tree_json():
     import json
     from dtable_events.app.config import dtable_web_dir

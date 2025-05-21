@@ -14,11 +14,11 @@ from sqlalchemy import select
 from seaserv import seafile_api
 
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, SEATABLE_FAAS_AUTH_TOKEN, \
-    SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL
+    SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
 from dtable_events.automations.models import BoundThirdPartyAccounts
 from dtable_events.dtable_io import send_wechat_msg, send_dingtalk_msg
 from dtable_events.notification_rules.notification_rules_utils import fill_msg_blanks_with_sql_row, send_notification
-from dtable_events.utils import is_valid_email, get_inner_dtable_server_url, uuid_str_to_36_chars
+from dtable_events.utils import is_valid_email, uuid_str_to_36_chars
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI, NotFoundException
 from dtable_events.utils.dtable_web_api import DTableWebAPI
@@ -124,7 +124,7 @@ class BaseContext:
         self.db_session = db_session
         self.caller = caller
 
-        self.dtable_server_api = DTableServerAPI(caller, self.dtable_uuid, get_inner_dtable_server_url())
+        self.dtable_server_api = DTableServerAPI(caller, self.dtable_uuid, INNER_DTABLE_SERVER_URL)
         self.dtable_db_api = DTableDBAPI(caller, self.dtable_uuid, INNER_DTABLE_DB_URL)
         self.dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
 
