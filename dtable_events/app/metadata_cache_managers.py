@@ -1,6 +1,7 @@
 import json
 import logging
 
+from dtable_events.app.config import INNER_DTABLE_SERVER_URL
 from dtable_events.app.event_redis import redis_cache
 from dtable_events.utils import uuid_str_to_36_chars
 from dtable_events.utils.dtable_server_api import DTableServerAPI
