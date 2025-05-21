@@ -4,15 +4,14 @@ import os
 from queue import Queue, Full
 from threading import Thread
 
-from dtable_events.app.config import INNER_DTABLE_DB_URL
+from dtable_events.app.config import INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
 from dtable_events.convert_page.utils import get_chrome_data_dir, get_driver, open_page_view, wait_page_view, \
     get_documents_config, gen_page_design_pdf_view_url, gen_document_pdf_view_url
-from dtable_events.utils import get_inner_dtable_server_url, get_opt_from_conf_or_env
+from dtable_events.utils import get_opt_from_conf_or_env
 from dtable_events.utils.dtable_server_api import DTableServerAPI, NotFoundException
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 
 logger = logging.getLogger(__name__)
-dtable_server_url = get_inner_dtable_server_url()
 
 
 class ConvertPageTOPDFManager:
@@ -117,7 +116,7 @@ class ConvertPageToPDFWorker:
 
         monitor_dom_id = 'page-design-render-complete'
 
-        dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, dtable_server_url)
+        dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, INNER_DTABLE_SERVER_URL)
 
         # convert
         # open all tabs of rows step by step
@@ -167,7 +166,7 @@ class ConvertPageToPDFWorker:
         action_type = self.task_info.get('action_type')
         per_converted_callbacks = self.task_info.get('per_converted_callbacks') or []
 
-        dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, dtable_server_url)
+        dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, INNER_DTABLE_SERVER_URL)
         monitor_dom_id = 'document-render-complete'
 
         output = io.BytesIO()  # receive pdf content
@@ -206,7 +205,7 @@ class ConvertPageToPDFWorker:
         """
         :return: resources -> dict or None, error_msg -> str or None
         """
-        dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, dtable_server_url)
+        dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, INNER_DTABLE_SERVER_URL)
         dtable_db_api = DTableDBAPI('dtable-events', dtable_uuid, INNER_DTABLE_DB_URL)
 
         plugin_type = 'page-design'

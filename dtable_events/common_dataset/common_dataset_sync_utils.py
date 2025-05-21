@@ -8,18 +8,15 @@ from datetime import datetime
 from sqlalchemy import text
 from dateutil import parser
 
-from dtable_events.app.config import INNER_DTABLE_DB_URL
+from dtable_events.app.config import INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
 from dtable_events.app.log import setup_logger
-from dtable_events.utils import get_inner_dtable_server_url, uuid_str_to_36_chars, uuid_str_to_32_chars
+from dtable_events.utils import uuid_str_to_36_chars, uuid_str_to_32_chars
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import BaseExceedsException, DTableServerAPI
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.utils.sql_generator import BaseSQLGenerator, SQLGeneratorOptionInvalidError, ColumnFilterInvalidError
 
 cds_logger = setup_logger('dtable_events_cds', propagate=False)
-
-dtable_server_url = get_inner_dtable_server_url()
-
 
 SRC_ROWS_LIMIT = 50000
 INSERT_UPDATE_ROWS_LIMIT = 1000
@@ -947,7 +944,7 @@ def _import_sync_CDS(context):
 
     stats_info = context.get('stats_info') or {}
 
-    dst_dtable_server_api = DTableServerAPI(operator, dst_dtable_uuid, dtable_server_url)
+    dst_dtable_server_api = DTableServerAPI(operator, dst_dtable_uuid, INNER_DTABLE_SERVER_URL)
     dst_dtable_db_api = DTableDBAPI(operator, dst_dtable_uuid, INNER_DTABLE_DB_URL)
 
     is_sync = bool(dst_table_id)
@@ -1168,8 +1165,7 @@ def gen_src_assets(src_dtable_uuid, src_table_id, src_view_id, dataset_sync_ids,
     """
     :return: assets -> dict
     """
-    dtable_server_url = get_inner_dtable_server_url()
-    src_dtable_server_api = DTableServerAPI('dtable-events', src_dtable_uuid, dtable_server_url)
+    src_dtable_server_api = DTableServerAPI('dtable-events', src_dtable_uuid, INNER_DTABLE_SERVER_URL)
     try:
         src_dtable_metadata = src_dtable_server_api.get_metadata()
     except Exception as e:
@@ -1212,8 +1208,7 @@ def gen_dst_assets(dst_dtable_uuid, dst_table_id, dataset_sync_id, db_session):
     """
     :return: assets -> dict
     """
-    dtable_server_url = get_inner_dtable_server_url()
-    dst_dtable_server_api = DTableServerAPI('dtable-events', dst_dtable_uuid, dtable_server_url)
+    dst_dtable_server_api = DTableServerAPI('dtable-events', dst_dtable_uuid, INNER_DTABLE_SERVER_URL)
     try:
         dst_dtable_metadata = dst_dtable_server_api.get_metadata()
     except Exception as e:

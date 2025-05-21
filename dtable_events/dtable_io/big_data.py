@@ -7,10 +7,10 @@ from copy import deepcopy
 from dtable_events.dtable_io.excel import parse_row, write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR
 from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, get_metadata_from_dtable_server, \
     escape_sheet_name
-from dtable_events.utils import get_inner_dtable_server_url, get_location_tree_json, gen_random_option, format_date
+from dtable_events.utils import get_location_tree_json, gen_random_option, format_date
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.app.config import INNER_DTABLE_DB_URL, BIG_DATA_ROW_IMPORT_LIMIT, BIG_DATA_ROW_UPDATE_LIMIT, \
-    ARCHIVE_VIEW_EXPORT_ROW_LIMIT, APP_TABLE_EXPORT_EXCEL_ROW_LIMIT
+    ARCHIVE_VIEW_EXPORT_ROW_LIMIT, APP_TABLE_EXPORT_EXCEL_ROW_LIMIT, INNER_DTABLE_SERVER_URL
 from dtable_events.utils.dtable_db_api import DTableDBAPI, convert_db_rows
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.sql_generator import filter2sql, BaseSQLGenerator
@@ -161,9 +161,7 @@ def import_excel_to_db(
 
     try:
 
-        dtable_server_url = get_inner_dtable_server_url()
-
-        base = DTableServerAPI(username, dtable_uuid, dtable_server_url)
+        base = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
         base_columns = base.list_columns(table_name)
         total_row_count = ws.max_row if isinstance(ws.max_row, int) else len(list(ws.rows))
         column_name_type_map = {}
@@ -316,7 +314,6 @@ def update_excel_to_db(
         return
     ref_columns = ref_columns.split(',')
     try:
-        dtable_server_url = get_inner_dtable_server_url()
         excel_columns = [cell.value for cell in ws[1]]
         for ref_col in ref_columns:
             if ref_col not in excel_columns:
@@ -327,7 +324,7 @@ def update_excel_to_db(
                 return
 
         db_handler = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
-        base = DTableServerAPI(username, dtable_uuid, dtable_server_url)
+        base = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
         total_row_count = ws.max_row if isinstance(ws.max_row, int) else len(list(ws.rows))
         base_columns = base.list_columns(table_name)
         column_name_type_map = {}

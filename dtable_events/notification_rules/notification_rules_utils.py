@@ -10,9 +10,9 @@ import jwt
 import requests
 
 from dtable_events.utils.sql_generator import filter2sql, has_user_filter
-from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL
+from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
 from dtable_events.app.metadata_cache_managers import RuleInstantMetadataCacheManger, RuleIntervalMetadataCacheManager
-from dtable_events.utils import is_valid_email, get_inner_dtable_server_url
+from dtable_events.utils import is_valid_email
 from dtable_events.utils.constants import ColumnTypes, FormulaResultType
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_web_api import DTableWebAPI
@@ -69,7 +69,7 @@ def scan_triggered_notification_rules(event_data, db_session):
 def send_notification(dtable_uuid, user_msg_list, username='dtable-events'):
     from dtable_events.utils.dtable_server_api import DTableServerAPI
 
-    dtable_server_api = DTableServerAPI(username, dtable_uuid, get_inner_dtable_server_url())
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
     dtable_server_api.batch_send_notification(user_msg_list)
 
 
@@ -265,7 +265,7 @@ def trigger_notification_rule(rule, message_table_id, row_id, db_session, op_typ
     if message_table_id != table_id:
         return
 
-    dtable_server_api = DTableServerAPI('notification-rule', dtable_uuid, get_inner_dtable_server_url(), access_token_timeout=3600)
+    dtable_server_api = DTableServerAPI('notification-rule', dtable_uuid, INNER_DTABLE_SERVER_URL, access_token_timeout=3600)
     dtable_db_api = DTableDBAPI('notification-rule', dtable_uuid, INNER_DTABLE_DB_URL)
     dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
     dtable_metadata = rule_instant_metadata_cache_manager.get_metadata(dtable_uuid)
@@ -408,7 +408,7 @@ def trigger_near_deadline_notification_rule(rule, db_session, rule_interval_meta
     if trigger['condition'] != CONDITION_NEAR_DEADLINE:
         return
 
-    dtable_server_api = DTableServerAPI('notification-rule', dtable_uuid, get_inner_dtable_server_url(), access_token_timeout=3600)
+    dtable_server_api = DTableServerAPI('notification-rule', dtable_uuid, INNER_DTABLE_SERVER_URL, access_token_timeout=3600)
     dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
     dtable_db_api = DTableDBAPI('dtable-events', dtable_uuid, INNER_DTABLE_DB_URL)
     dtable_metadata = rule_interval_metadata_cache_manager.get_metadata(dtable_uuid)

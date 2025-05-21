@@ -6,17 +6,15 @@ from urllib.parse import unquote
 
 from seaserv import seafile_api
 
-from dtable_events.app.config import DTABLE_WEB_SERVICE_URL
+from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, INNER_DTABLE_SERVER_URL
 from dtable_events.dtable_io import dtable_io_logger
 from dtable_events.dtable_io.utils import get_non_duplicated_name
-from dtable_events.utils import get_inner_dtable_server_url
 from dtable_events.utils.constants import ColumnTypes, DATE_FORMATS, DURATION_FORMATS, NUMBER_FORMATS, NUMBER_DECIMALS,\
     NUMBER_THOUSANDS, GEO_FORMATS
 from dtable_events.utils.dtable_column_utils import AutoNumberUtils
 from dtable_events.utils.dtable_server_api import DTableServerAPI, BaseExceedsException
 
 service_url = DTABLE_WEB_SERVICE_URL.strip()
-dtable_server_url = get_inner_dtable_server_url().rstrip('/')
 
 
 def _trans_url(url, workspace_id, dtable_uuid):
@@ -203,8 +201,8 @@ def import_table_from_base(context):
     dst_table_name = context['dst_table_name']
     lang = context.get('lang', 'en')
 
-    src_dtable_server_api = DTableServerAPI(username, src_dtable_uuid, dtable_server_url)
-    dst_dtable_server_api = DTableServerAPI(username, dst_dtable_uuid, dtable_server_url)
+    src_dtable_server_api = DTableServerAPI(username, src_dtable_uuid, INNER_DTABLE_SERVER_URL.rstrip('/'))
+    dst_dtable_server_api = DTableServerAPI(username, dst_dtable_uuid, INNER_DTABLE_SERVER_URL.rstrip('/'))
     try:
         src_dtable_json = src_dtable_server_api.get_base()
         dst_dtable_json = dst_dtable_server_api.get_base()

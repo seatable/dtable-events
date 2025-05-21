@@ -21,11 +21,11 @@ import posixpath
 from sqlalchemy import text
 from seaserv import seafile_api, USE_GO_FILESERVER
 
-from dtable_events.app.config import INNER_DTABLE_DB_URL, DTABLE_WEB_SERVICE_URL, INNER_FILE_SERVER_ROOT
+from dtable_events.app.config import INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL, DTABLE_WEB_SERVICE_URL, INNER_FILE_SERVER_ROOT
 from dtable_events.dtable_io.external_app import APP_USERS_COUMNS_TYPE_MAP, match_user_info, update_app_sync, \
     get_row_ids_for_delete, get_app_users
 from dtable_events.dtable_io.task_manager import task_manager
-from dtable_events.utils import get_inner_dtable_server_url, uuid_str_to_36_chars, get_inner_fileserver_root, \
+from dtable_events.utils import uuid_str_to_36_chars, get_inner_fileserver_root, \
     gen_file_get_url, gen_file_upload_url
 
 from dtable_events.utils.constants import ColumnTypes
@@ -133,7 +133,7 @@ def prepare_dtable_json_from_memory(workspace_id, dtable_uuid, username):
     """
     from dtable_events.utils.dtable_server_api import DTableServerAPI
 
-    dtable_server_api = DTableServerAPI(username, dtable_uuid, get_inner_dtable_server_url())
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
     json_content = dtable_server_api.get_base()
     dtable_content = convert_dtable_export_file_and_image_url(workspace_id, dtable_uuid, json_content)
     log_dtable_info(dtable_uuid, dtable_content, username, 'export dtable')
@@ -1031,13 +1031,13 @@ def download_files_to_path(username, repo_id, dtable_uuid, files, path, db_sessi
 def upload_excel_json_to_dtable_server(username, dtable_uuid, json_file, lang='en'):
     from dtable_events.utils.dtable_server_api import DTableServerAPI
 
-    dtable_server_api = DTableServerAPI(username, dtable_uuid, get_inner_dtable_server_url())
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
     dtable_server_api.import_excel(json_file, lang=lang)
 
 def upload_excel_json_add_table_to_dtable_server(username, dtable_uuid, json_file, lang='en'):
     from dtable_events.utils.dtable_server_api import DTableServerAPI
 
-    dtable_server_api = DTableServerAPI(username, dtable_uuid, get_inner_dtable_server_url())
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
     dtable_server_api.import_excel_add_table(json_file, lang=lang)
 
 
@@ -1069,7 +1069,7 @@ def get_csv_file(file_path):
 def get_rows_from_dtable_server(username, dtable_uuid, table_name):
     from dtable_events.utils.dtable_server_api import DTableServerAPI
 
-    dtable_server_api = DTableServerAPI(username, dtable_uuid, get_inner_dtable_server_url())
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
     rows = dtable_server_api.list_table_rows(table_name, convert_link_id=True)
     return rows
 
@@ -1077,7 +1077,7 @@ def get_rows_from_dtable_server(username, dtable_uuid, table_name):
 def update_rows_by_dtable_server(username, dtable_uuid, update_rows, table_name):
     from dtable_events.utils.dtable_server_api import DTableServerAPI
 
-    dtable_server_api = DTableServerAPI(username, dtable_uuid, get_inner_dtable_server_url())
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
     offset, limit = 0, 1000
     while True:
         rows = update_rows[offset: offset + limit]
@@ -1091,7 +1091,7 @@ def update_rows_by_dtable_server(username, dtable_uuid, update_rows, table_name)
 def get_metadata_from_dtable_server(dtable_uuid, username):
     from dtable_events.utils.dtable_server_api import DTableServerAPI
 
-    dtable_server_api = DTableServerAPI(username, dtable_uuid, get_inner_dtable_server_url())
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
     metadata = dtable_server_api.get_metadata()
     return metadata
 
@@ -1103,7 +1103,7 @@ def get_view_rows_from_dtable_server(dtable_uuid, table_name, view_name, usernam
         'id_in_org': id_in_org,
         'user_department_ids_map': user_department_ids_map
     }
-    dtable_server_api = DTableServerAPI(username, dtable_uuid, get_inner_dtable_server_url(), permission=permission, kwargs=kwargs)
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL, permission=permission, kwargs=kwargs)
     rows = dtable_server_api.list_view_rows(table_name, view_name, convert_link_id=True)
     return rows
 
@@ -1136,8 +1136,7 @@ def sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username,
     from dtable_events.utils.dtable_server_api import DTableServerAPI
     from dtable_events.utils.dtable_db_api import DTableDBAPI
 
-    api_url = get_inner_dtable_server_url()
-    base = DTableServerAPI(username, dtable_uuid, api_url)
+    base = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
     user_list = get_app_users(db_session, app_id)
     # handle the sync logic
     metadata = base.get_metadata()
@@ -1749,8 +1748,7 @@ def save_file_by_path(file_path, content):
 
 def get_table_names_by_dtable_server(username, dtable_uuid):
     from dtable_events.utils.dtable_server_api import DTableServerAPI
-    dtable_server_url = get_inner_dtable_server_url()
-    dtable_server_api = DTableServerAPI(username, dtable_uuid, dtable_server_url)
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
     metadata = dtable_server_api.get_metadata()
 
     tables = metadata.get('tables', [])
