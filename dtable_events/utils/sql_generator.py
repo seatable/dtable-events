@@ -60,7 +60,7 @@ class Operator(object):
         self.column_type = self.column.get('type') or ''
         self.column_data = self.column.get('data') or {}
         self.filter_predicate = self.filter_item.get('filter_predicate') or ''
-        self.filter_term = self.filter_item.get('filter_term') or ''
+        self.filter_term = self.filter_item.get('filter_term', '')
         self.filter_term_modifier = self.filter_item.get('filter_term_modifier') or ''
         self.case_sensitive = self.filter_item.get('case_sensitive') or False
         self.current_user_department = self.filter_item.get('current_user_department') or []
