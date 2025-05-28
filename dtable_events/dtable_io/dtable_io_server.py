@@ -28,30 +28,30 @@ class DTableIOServer(Thread):
         big_data_task_manager.run()
 
     def _parse_config(self, config):
-        if config.has_option('DTABLE-IO', 'host'):
-            self._host = config.get('DTABLE-IO', 'host')
-        else:
-            self._host = '127.0.0.1'
+        self._host = '127.0.0.1'
+        self._port = '6000'
+        self._workers = 3
+        self._io_task_timeout = 3600
+        self._file_server_port = 8082
 
-        if config.has_option('DTABLE-IO', 'port'):
-            self._port = config.getint('DTABLE-IO', 'port')
-        else:
-            self._port = '6000'
+        section_name = 'DTABLE IO'
+        if not config.has_section(section_name):
+            section_name = 'DTABLE-IO'
 
-        if config.has_option('DTABLE-IO', 'workers'):
-            self._workers = config.getint('DTABLE-IO', 'workers')
-        else:
-            self._workers = 3
+        if config.has_option(section_name, 'host'):
+            self._host = config.get(section_name, 'host')
+        if config.has_option(section_name, 'port'):
+            self._port = config.getint(section_name, 'port')  
 
-        if config.has_option('DTABLE-IO', 'io_task_timeout'):
-            self._io_task_timeout = config.getint('DTABLE-IO', 'io_task_timeout')
-        else:
-            self._io_task_timeout = 3600
+        if config.has_option(section_name, 'workers'):
+            self._workers = config.getint(section_name, 'workers')
 
-        if config.has_option('DTABLE-IO', 'file_server_port'):
-            self._file_server_port = config.getint('DTABLE-IO', 'file_server_port')
-        else:
-            self._file_server_port = 8082
+        if config.has_option(section_name, 'io_task_timeout'):
+            self._io_task_timeout = config.getint(section_name, 'io_task_timeout')
+
+        if config.has_option(section_name, 'file_server_port'):
+            self._file_server_port = config.getint(section_name, 'file_server_port')
+            
 
     def run(self):
         serve(application, host=self._host, port=int(self._port))

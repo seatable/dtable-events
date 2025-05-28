@@ -26,13 +26,11 @@ class DTableAutomationRulesScanner(object):
     def _parse_config(self, config):
         """parse send email related options from config file
         """
-        section_name = 'AUTOMATION-SCANNER'
+        section_name = 'AUTOMATION'
         key_enabled = 'enabled'
 
         if not config.has_section(section_name):
-            section_name = 'AUTOMATION SCANNER'
-            if not config.has_section(section_name):
-                return
+            return
 
         # enabled
         enabled = get_opt_from_conf_or_env(config, section_name, key_enabled, default=True)
