@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import copy
+import json
 import logging
 import os
 import time
@@ -6,6 +8,7 @@ import redis
 
 logger = logging.getLogger(__name__)
 
+REDIS_METRIC_KEY = 'metric'
 
 class RedisClient(object):
 
@@ -74,6 +77,9 @@ class RedisClient(object):
 
     def delete(self, key):
         return self.connection.delete(key)
+    
+    def publish(self, channel_name, message):
+        return self.connection.publish(channel_name, message)
 
 
 class RedisCache(object):
@@ -91,6 +97,20 @@ class RedisCache(object):
 
     def delete(self, key):
         return self._redis_client.delete(key)
+    
+    def create_or_update(self, key, value):
+        try:
+            current_value = self._redis_client.get(key)
+            if current_value:
+                current_value_dict_copy = copy.deepcopy(json.loads(current_value))
+                current_value_dict_copy.update(value)
+                self._redis_client.set(key, json.dumps(current_value_dict_copy))
+            else:
+                self._redis_client.set(key, json.dumps(value))
+        except Exception as e:
+            logging.error(e)
 
+    def publish(self, channel_name, message):
+        return self._redis_client.publish(channel_name, message)
 
 redis_cache = RedisCache()

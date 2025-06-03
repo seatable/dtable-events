@@ -3,6 +3,8 @@ import threading
 import time
 import uuid
 
+from dtable_events.utils.metrics_utils import publish_io_qsize_metric
+
 class TaskMessageManager(object):
 
     def __init__(self):
@@ -30,6 +32,7 @@ class TaskMessageManager(object):
         task = (toggle_send_email, (account_id, send_info, username, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric('message_task_queue', self.tasks_queue.qsize(), component_name='message')
         return task_id
 
     def add_wechat_sending_task(self, webhook_url, msg, msg_type):
@@ -38,6 +41,7 @@ class TaskMessageManager(object):
         task = (send_wechat_msg, (webhook_url, msg, msg_type))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='message_io_task_queue_size')
         return task_id
 
     def add_dingtalk_sending_task(self, webhook_url, msg ):
@@ -46,6 +50,7 @@ class TaskMessageManager(object):
         task = (send_dingtalk_msg, (webhook_url, msg))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='message_io_task_queue_size')
         return task_id
 
     def add_notification_sending_task(self, emails, user_col_key, msg, dtable_uuid, username, table_id=None, row_id=None ):
@@ -54,6 +59,7 @@ class TaskMessageManager(object):
         task = (send_notification_msg, (emails, user_col_key, msg, dtable_uuid, username, table_id, row_id ))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='message_io_task_queue_size')
         return task_id
 
     def query_status(self, task_id):

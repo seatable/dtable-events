@@ -3,6 +3,8 @@ import queue
 import threading
 import time
 
+from dtable_events.utils.metrics_utils import publish_io_qsize_metric
+
 
 class TaskPluginEmailManager(object):
 
@@ -30,6 +32,7 @@ class TaskPluginEmailManager(object):
         task = (plugin_email_send_email, (context, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='plugin_email_io_task_queue_size')
 
         return task_id
 
