@@ -37,6 +37,7 @@ def log_function_call(func):
 
 
 class TaskManager(object):
+    
     def __init__(self):
         self.tasks_map = {}
         self.task_results_map = {}
