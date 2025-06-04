@@ -526,6 +526,7 @@ class TaskManager(object):
 
         while True:
             try:
+                publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='io_task_queue_size')
                 task_id = self.tasks_queue.get(timeout=2)
             except queue.Empty:
                 continue
@@ -550,6 +551,7 @@ class TaskManager(object):
                     task_result['success'] = True
                 else:
                     task_result = {'success': True}
+                # publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='io_task_queue_size')
                 self.task_results_map[task_id] = task_result
 
                 finish_time = time.time()

@@ -68,6 +68,7 @@ class BigDataTaskManager(object):
                 # run
                 task[0](*task[1])
                 self.tasks_map[task_id] = 'success'
+                publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='big_data_io_task_queue_size')
 
                 finish_time = time.time()
                 dtable_io_logger.info(
