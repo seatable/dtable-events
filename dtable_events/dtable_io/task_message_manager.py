@@ -96,6 +96,7 @@ class TaskMessageManager(object):
                 result = task[0](*task[1])
                 self.tasks_map[task_id] = 'success'
                 self.tasks_result_map[task_id] = result
+                publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='message_io_task_queue_size')
 
                 finish_time = time.time()
                 dtable_message_logger.info('Run task success: %s cost %ds \n' % (self.current_task_info, int(finish_time - start_time)))
