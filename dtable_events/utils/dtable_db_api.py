@@ -58,7 +58,12 @@ def is_single_multiple_structure(column):
         array_type = column.get('data', {}).get('array_type')
         if array_type in ('single-select', 'multiple-select'):
             data = column.get('data', {})  # data may be None
-            options = data.get('array_data', {}).get('options', [])
+            if not data:
+                return True, []
+            array_data = data.get('array_data', {})
+            if not array_data:
+                return True, []
+            options = array_data.get('options', [])
             return True, options
     return False, []
 
@@ -254,7 +259,7 @@ class DTableDBAPI(object):
         }
         resp = requests.post(url, json=json_data, headers=self.headers, timeout=TIMEOUT)
         return parse_response(resp)
-    
+
     def list_bases(self, offset=None, limit=None):
         url = '%s/api/v1/bases/' % self.dtable_db_url
         params = {}
