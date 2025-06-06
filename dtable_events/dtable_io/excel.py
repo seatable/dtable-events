@@ -1416,7 +1416,12 @@ def parse_link(column, cell_data, email2nickname, is_big_data_view):
             if is_big_data_view:
                 return ', '.join(cell_data)
             else:
-                options = column.get('data').get('array_data', {}).get('options')
+                if not column.get('data'):
+                    options = []
+                elif not column.get('data').get('array_data', {}):
+                    options = []
+                else:
+                    options = column.get('data').get('array_data', {}).get('options')
                 id2name = {op.get('id'): op.get('name') for op in options}
                 return ', '.join([select_option_to_name(id2name, cell) for cell in cell_data])
         elif column.get('data').get('array_type') in (ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER):
