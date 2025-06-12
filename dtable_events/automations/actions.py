@@ -19,7 +19,7 @@ from seaserv import seafile_api
 from dtable_events.automations.models import get_third_party_account
 from dtable_events.app.metadata_cache_managers import BaseMetadataCacheManager
 from dtable_events.app.event_redis import redis_cache
-from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
+from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, ENABLE_PYTHON_SCRIPT, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
 from dtable_events.dtable_io import send_wechat_msg, send_dingtalk_msg
 from dtable_events.convert_page.manager import conver_page_to_pdf_manager
 from dtable_events.app.log import setup_logger
@@ -1420,7 +1420,7 @@ class RunPythonScriptAction(BaseAction):
         self.repo_id = repo_id
 
     def can_do_action(self):
-        if not SEATABLE_FAAS_URL:
+        if not ENABLE_PYTHON_SCRIPT or not SEATABLE_FAAS_URL:
             return False
 
         script_file_path = os.path.join('/asset', uuid_str_to_36_chars(self.auto_rule.dtable_uuid), 'scripts', self.script_name)
