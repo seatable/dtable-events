@@ -1329,23 +1329,7 @@ class StatisticSQLGenerator(object):
         # filters
         filters = statistic.get('filters') or []
         if filters:
-            for item in filters:
-                filter_term = item.get('filter_term')
-                column_key = item.get('column_key')
-                if column_key not in shown_column_keys:
-                    continue
-                if item.get('filter_predicate') == 'include_me':
-                    item['filter_term'].append(username)
-                if item.get('filter_predicate') == 'is_current_user_ID':
-                    item['filter_term'] = id_in_org
-                if filter_term == 'current_user_department':
-                    item['current_user_department'] = current_user_department_ids
-                if filter_term == 'current_user_department_and_sub':
-                    item['current_user_department_and_sub'] = current_user_department_and_sub_ids
-                if isinstance(filter_term, list):
-                    if 'current_user_department' in filter_term or 'current_user_department_and_sub' in filter_term:
-                        item['current_user_department'] = current_user_department_ids
-                        item['current_user_department_and_sub'] = current_user_department_and_sub_ids
+            filters = self._pre_filter_to_filter_term(filters, column_keys, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids)
         self.filters = filters
 
         filter_conjunction = statistic.get('filter_conjunction') or 'and'
@@ -1363,6 +1347,33 @@ class StatisticSQLGenerator(object):
 
         # statistic detail filter
         self.detail_filter_conditions = detail_filter_conditions
+
+    def _pre_filter_to_filter_term(self, filters, table_column_keys, username, id_in_org, current_user_department_ids = [], current_user_department_and_sub_ids = []):
+        for item in filters:
+            sub_filters = item.get('filters')
+            filter_conjunction = item.get('filter_conjunction')
+            if filter_conjunction and sub_filters:
+                processed_sub_filters = self._pre_filter_to_filter_term(sub_filters, table_column_keys, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids)
+                item['filters'] = processed_sub_filters
+            else:
+                column_key = item.get('column_key')
+                filter_term = item.get('filter_term')
+                filter_predicate = item.get('filter_predicate')
+                if table_column_keys and column_key not in table_column_keys:
+                    continue
+                if filter_predicate == 'include_me':
+                    item['filter_term'].append(username)
+                if filter_predicate == 'is_current_user_ID':
+                    item['filter_term'] = id_in_org
+                if filter_term == 'current_user_department':
+                    item['current_user_department'] = current_user_department_ids
+                if filter_term == 'current_user_department_and_sub':
+                    item['current_user_department_and_sub'] = current_user_department_and_sub_ids
+                if isinstance(filter_term, list):
+                    if 'current_user_department' in filter_term or 'current_user_department_and_sub' in filter_term:
+                        item['current_user_department'] = current_user_department_ids
+                        item['current_user_department_and_sub'] = current_user_department_and_sub_ids
+        return filters
 
     def _get_column_by_key(self, column_key):
         return self.column_key_map.get(column_key)
