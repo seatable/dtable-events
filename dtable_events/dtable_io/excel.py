@@ -11,7 +11,7 @@ from copy import deepcopy
 from datetime import datetime, time
 from dtable_events.app.config import EXPORT2EXCEL_DEFAULT_STRING, TIME_ZONE, INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
 from dtable_events.utils import utc_to_tz, gen_random_option, format_date
-from dtable_events.utils.constants import ColumnTypes
+from dtable_events.utils.constants import ColumnTypes, FormulaResultType
 from dtable_events.utils.geo_location_parser import parse_geolocation_from_tree
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.utils.dtable_server_api import DTableServerAPI
@@ -1735,11 +1735,17 @@ def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_
             if not email2nickname.get(cell_data2str(cell_value), ''):
                 unknown_user_set.add(cell_data2str(cell_value))
                 unknown_cell_list.append((c, cell_data2str(cell_value), col_type))
-        elif col_type == ColumnTypes.FORMULA \
-                and isinstance(column.get('data'), dict) and column.get('data').get('result_type') == 'number':
-            formula_value, number_format = parse_formula_number(cell_value, column.get('data'), is_big_data_view)
-            c = WriteOnlyCell(ws, value=formula_value)
-            c.number_format = number_format
+        elif col_type == ColumnTypes.FORMULA:
+            if isinstance(column.get('data'), dict) and column.get('data').get('result_type') == FormulaResultType.NUMBER:
+                formula_value, number_format = parse_formula_number(cell_value, column.get('data'), is_big_data_view)
+                c = WriteOnlyCell(ws, value=formula_value)
+                c.number_format = number_format
+            elif isinstance(column.get('data'), dict) and column.get('data').get('result_type') == FormulaResultType.DATE:
+                c = WriteOnlyCell(ws, value=format_time(cell_value))
+                if column.get('data'):
+                    c.number_format = column.get('data').get('format', '')
+                else:
+                    c.number_format = 'YYYY-MM-DD'
         elif col_type == ColumnTypes.IMAGE and cell_value and image_param['is_support']:
             c = WriteOnlyCell(ws)
             image_num = image_param.get('num')
