@@ -762,7 +762,7 @@ class RunPythonScriptAction(BaseAction):
         self.operator = operator
 
     def can_run_python(self):
-        if not ENABLE_PYTHON_SCRIPT or not SEATABLE_FAAS_URL:
+        if not ENABLE_PYTHON_SCRIPT:
             return False
 
         script_file_path = os.path.join('/asset', uuid_str_to_36_chars(self.context.dtable_uuid), 'scripts', self.script_name)
