@@ -26,6 +26,7 @@ try:
     FILE_SERVER_ROOT = getattr(seahub_settings, 'FILE_SERVER_ROOT', 'http://127.0.0.1:8082')
     INNER_FILE_SERVER_ROOT = getattr(seahub_settings, 'INNER_FILE_SERVER_ROOT', 'http://127.0.0.1:8082')
     SEATABLE_FAAS_AUTH_TOKEN = getattr(seahub_settings, 'SEATABLE_FAAS_AUTH_TOKEN', '')
+    ENABLE_PYTHON_SCRIPT = getattr(seahub_settings, 'ENABLE_PYTHON_SCRIPT', '')
     SEATABLE_FAAS_URL = getattr(seahub_settings, 'SEATABLE_FAAS_URL', '')
     SECRET_KEY = getattr(seahub_settings, 'SECRET_KEY', '')
     SESSION_COOKIE_NAME = getattr(seahub_settings, 'SESSION_COOKIE_NAME', 'sessionid')
