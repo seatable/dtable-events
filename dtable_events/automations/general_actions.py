@@ -14,7 +14,7 @@ from sqlalchemy import select
 from seaserv import seafile_api
 
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, DTABLE_PRIVATE_KEY, SEATABLE_FAAS_AUTH_TOKEN, \
-    SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
+    ENABLE_PYTHON_SCRIPT, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
 from dtable_events.automations.models import BoundThirdPartyAccounts
 from dtable_events.dtable_io import send_wechat_msg, send_dingtalk_msg
 from dtable_events.notification_rules.notification_rules_utils import fill_msg_blanks_with_sql_row, send_notification
@@ -762,7 +762,7 @@ class RunPythonScriptAction(BaseAction):
         self.operator = operator
 
     def can_run_python(self):
-        if not SEATABLE_FAAS_URL:
+        if not ENABLE_PYTHON_SCRIPT or not SEATABLE_FAAS_URL:
             return False
 
         script_file_path = os.path.join('/asset', uuid_str_to_36_chars(self.context.dtable_uuid), 'scripts', self.script_name)
