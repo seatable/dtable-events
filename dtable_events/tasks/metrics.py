@@ -60,6 +60,8 @@ class MetricSaver(Thread):
         schedule = BlockingScheduler()
         @schedule.scheduled_job('interval', seconds=15, misfire_grace_time=30)
         def time_job():
+            logging.info('Start dtable metric saver... ')
+            
             try:
                 if local_metric['metrics']:
                     for key, metric_detail in local_metric.get('metrics').items():
@@ -76,13 +78,13 @@ class MetricManager(object):
         self.config = config
     
     def start(self):
+        logging.info('Start metric manager...')
         try:
             self._metric_collect_thread = MetricSaver()
             self._metric_collect_thread.start()
         except Exception as e:  
             logging.error('Failed to start metric collect thread: %s' % e)
         try:
-            logging.info('Starting metric handle')
             self._metric_task = MetricReceiver(self.config)
             self._metric_task.start()
         except Exception as e:  
