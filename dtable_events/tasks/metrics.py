@@ -77,9 +77,8 @@ class MetricSaver(Thread):
     """
     save metrics to redis
     """
-    def __init__(self, config):
+    def __init__(self):
         super(MetricSaver, self).__init__()
-        self.config = config
     def run(self):
         schedule = BlockingScheduler()
         @schedule.scheduled_job('interval', seconds=15, misfire_grace_time=30)
@@ -101,7 +100,7 @@ class MetricManager(object):
     
     def start(self):
         try:
-            self._metric_collect_thread = MetricSaver(self.config)
+            self._metric_collect_thread = MetricSaver()
             self._metric_collect_thread.start()
         except Exception as e:  
             logging.error('Failed to start metric collect thread: %s' % e)
