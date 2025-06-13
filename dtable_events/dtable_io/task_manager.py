@@ -6,6 +6,7 @@ import time
 import uuid
 from threading import Lock
 
+from dtable_events.utils.utils_metric import publish_io_qsize_metric, TASK_MANAGER_METRIC_HELP
 
 from seaserv import seafile_api
 
@@ -78,6 +79,7 @@ class TaskManager(object):
                 (username, repo_id, workspace_id, dtable_uuid, asset_dir_id, self.config, task_id))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
 
         return task_id
 
@@ -92,6 +94,7 @@ class TaskManager(object):
                  can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', TASK_MANAGER_METRIC_HELP)
         return task_id
 
     @log_function_call
@@ -103,6 +106,7 @@ class TaskManager(object):
                 (username, repo_id, dtable_uuid, files, task_id, self.config, files_map))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
         return task_id
 
     @log_function_call
@@ -113,6 +117,7 @@ class TaskManager(object):
                 (username, repo_id, dtable_uuid, page_id, task_id))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
         return task_id
 
     @log_function_call
@@ -123,6 +128,7 @@ class TaskManager(object):
                 (username, repo_id, dtable_uuid, page_id))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
         return task_id
 
     @log_function_call
@@ -133,6 +139,7 @@ class TaskManager(object):
                 (username, repo_id, dtable_uuid, app_uuid, app_id, task_id, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
         return task_id
 
     @log_function_call
@@ -143,6 +150,7 @@ class TaskManager(object):
                 (username, repo_id, dtable_uuid, app_uuid, app_id, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
         return task_id
 
     @log_function_call
@@ -164,6 +172,7 @@ class TaskManager(object):
                  self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
         return task_id
 
     @log_function_call
@@ -175,6 +184,7 @@ class TaskManager(object):
                 (username, repo_id, file_name, file_type, parse_type, dtable_uuid, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
         return task_id
 
     @log_function_call
@@ -186,6 +196,7 @@ class TaskManager(object):
                 (username, repo_id, dtable_uuid, dtable_name, included_tables, lang, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
         return task_id
 
     @log_function_call
@@ -197,6 +208,7 @@ class TaskManager(object):
                 (username, dtable_uuid, dtable_name, included_tables, lang, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
         return task_id
 
     @log_function_call
@@ -208,6 +220,7 @@ class TaskManager(object):
                 (username, dtable_uuid, file_name, table_name))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
         return task_id
 
     @log_function_call
@@ -219,6 +232,7 @@ class TaskManager(object):
                 (username, file_name, dtable_uuid, table_name, file_type))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
         return task_id
 
     @log_function_call
@@ -236,6 +250,7 @@ class TaskManager(object):
         task = (run_auto_rule_task, (trigger, actions, options, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
         return task_id
 
     @log_function_call
@@ -248,6 +263,7 @@ class TaskManager(object):
                 (username, dtable_uuid, file_name, table_name, selected_columns, can_add_row, can_update_row))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
         return task_id
 
     @log_function_call
@@ -259,6 +275,7 @@ class TaskManager(object):
                 (username, file_name, dtable_uuid, table_name))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
         return task_id
 
     @log_function_call
@@ -270,6 +287,7 @@ class TaskManager(object):
                 (username, file_name, dtable_uuid, table_name))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
         return task_id
 
     @log_function_call
@@ -280,6 +298,7 @@ class TaskManager(object):
         task = (import_excel_csv_to_dtable, (username, repo_id, dtable_name, dtable_uuid, file_type, lang))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
         return task_id
 
     @log_function_call
@@ -290,6 +309,7 @@ class TaskManager(object):
         task = (import_excel_csv_to_table, (username, file_name, dtable_uuid, file_type, lang))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
         return task_id
 
     @log_function_call
@@ -300,6 +320,7 @@ class TaskManager(object):
         task = (update_table_via_excel_csv, (username, file_name, dtable_uuid, table_name, selected_columns, file_type, can_add_row, can_update_row))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
         return task_id
 
     @log_function_call
@@ -310,6 +331,7 @@ class TaskManager(object):
         task = (append_excel_csv_to_table, (username, file_name, dtable_uuid, table_name, file_type))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
         return task_id
 
     def query_status(self, task_id):
@@ -326,6 +348,7 @@ class TaskManager(object):
                 (dtable_uuid, page_id, row_id, username))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
 
         return task_id
 
@@ -337,6 +360,7 @@ class TaskManager(object):
                 (dtable_uuid, doc_uuid, row_id, username))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
 
         return task_id
 
@@ -348,6 +372,7 @@ class TaskManager(object):
         task = (import_table_from_base, (context,))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
 
         return task_id
 
@@ -360,6 +385,7 @@ class TaskManager(object):
         task = (import_common_dataset, (context, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
 
         return task_id
 
@@ -381,6 +407,7 @@ class TaskManager(object):
         task = (sync_common_dataset, (context, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
 
         return task_id, None
 
@@ -402,6 +429,7 @@ class TaskManager(object):
         task = (force_sync_common_dataset, (context, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
 
         return task_id, None
 
@@ -413,6 +441,7 @@ class TaskManager(object):
         task = (convert_view_to_excel, (dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
 
         return task_id
 
@@ -424,6 +453,7 @@ class TaskManager(object):
         task = (convert_table_to_excel, (dtable_uuid, table_id, username, name, repo_id, is_support_image))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
 
         return task_id
 
@@ -434,6 +464,7 @@ class TaskManager(object):
         task = (app_user_sync, (dtable_uuid, app_name, app_id, table_name, table_id, username, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
 
         return task_id
 
@@ -444,6 +475,7 @@ class TaskManager(object):
         task = (export_page_design, (repo_id, dtable_uuid, page_id, username))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
 
         return task_id
 
@@ -454,6 +486,7 @@ class TaskManager(object):
         task = (import_page_design, (repo_id, workspace_id, dtable_uuid, page_id, is_dir, username))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
 
         return task_id
 
@@ -466,6 +499,7 @@ class TaskManager(object):
                 (repo_id, dtable_uuid, doc_uuid, parent_path, filename, username))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
 
         return task_id
 
@@ -478,6 +512,7 @@ class TaskManager(object):
                 (repo_id, dtable_uuid, doc_uuid, view_id, table_id, username))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
+        publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
         return task_id
 
     def threads_is_alive(self):
@@ -515,6 +550,7 @@ class TaskManager(object):
                     task_result['success'] = True
                 else:
                     task_result = {'success': True}
+                publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
                 self.task_results_map[task_id] = task_result
 
                 finish_time = time.time()
