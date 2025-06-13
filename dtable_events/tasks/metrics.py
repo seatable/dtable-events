@@ -60,13 +60,13 @@ class MetricSaver(Thread):
         schedule = BlockingScheduler()
         @schedule.scheduled_job('interval', seconds=15, misfire_grace_time=30)
         def time_job():
-            logging.info('Start dtable metric saver... ')
-            
             try:
                 if local_metric['metrics']:
+                    logging.info('Start saving metrics... ')
                     for key, metric_detail in local_metric.get('metrics').items():
                         metric_detail['collected_at'] = datetime.datetime.now().isoformat()
                     redis_cache.create_or_update(REDIS_METRIC_KEY, local_metric.get('metrics'))
+                    local_metric['metrics'].clear()
             except Exception as e:
                 logging.error('metric collect error: %s' % e)
                 
