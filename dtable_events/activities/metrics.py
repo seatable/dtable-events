@@ -5,6 +5,8 @@ import time
 from threading import Thread, Event
 import json
 
+from apscheduler.schedulers.blocking import BlockingScheduler
+
 from dtable_events.app.event_redis import redis_cache, REDIS_METRIC_KEY, RedisClient
 
 
@@ -75,36 +77,31 @@ class MetricSaver(Thread):
     """
     save metrics to redis
     """
-    def __init__(self, interval, config):
-        Thread.__init__(self)
-        self._finished = Event()
-        self.__interval = interval
+    def __init__(self, config):
+        super(MetricSaver, self).__init__()
         self.config = config
     def run(self):
-        while not self._finished.is_set():
-            self._finished.wait(self.__interval)
-            if not self._finished.is_set():
-                try:
-                    if local_metric['metrics']:
-                        for key, metric_detail in local_metric.get('metrics').items():
-                            metric_detail['collected_at'] = datetime.datetime.now().isoformat()
-                        redis_cache.init_redis(self.config)
-                        redis_cache.create_or_update(REDIS_METRIC_KEY, local_metric.get('metrics'))
-                except Exception as e:
-                    logging.error('metric collect error: %s' % e)
-    def cancel(self):
-        self._finished.set()
-        logging.info('MetricSaver thread is cancelled.')
+        schedule = BlockingScheduler()
+        @schedule.scheduled_job('interval', seconds=15, misfire_grace_time=30)
+        def time_job():
+            try:
+                if local_metric['metrics']:
+                    for key, metric_detail in local_metric.get('metrics').items():
+                        metric_detail['collected_at'] = datetime.datetime.now().isoformat()
+                    redis_cache.create_or_update(REDIS_METRIC_KEY, local_metric.get('metrics'))
+            except Exception as e:
+                logging.error('metric collect error: %s' % e)
+                
+        schedule.start()
 
 
 class MetricManager(object):
     def __init__(self, config):
-        self._interval = 15
         self.config = config
     
     def start(self):
         try:
-            self._metric_collect_thread = MetricSaver(self._interval, self.config)
+            self._metric_collect_thread = MetricSaver(self.config)
             self._metric_collect_thread.start()
         except Exception as e:  
             logging.error('Failed to start metric collect thread: %s' % e)
