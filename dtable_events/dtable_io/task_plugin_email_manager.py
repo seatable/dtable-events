@@ -3,7 +3,7 @@ import queue
 import threading
 import time
 
-from dtable_events.activities.metrics import publish_io_qsize_metric, PLUGIN_EMAIL_TASK_MANAGER_METRIC_HELP
+from dtable_events.tasks.metrics import publish_io_qsize_metric, PLUGIN_EMAIL_TASK_MANAGER_METRIC_HELP
 
 
 class TaskPluginEmailManager(object):

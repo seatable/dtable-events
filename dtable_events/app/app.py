@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import logging
 import time
 
 from dtable_events.activities.handlers import MessageHandler
@@ -31,7 +30,7 @@ from dtable_events.api_calls.api_calls_counter import APICallsCounter
 from dtable_events.tasks.dtable_file_access_log_cleaner import DTableFileAccessLogCleaner
 from dtable_events.activities.dtable_update_handler import DTableUpdateHander
 from dtable_events.activities.dtable_update_cache_manager import DTableUpdateCacheManager
-from dtable_events.activities.metrics import MetricManager
+from dtable_events.tasks.metrics import MetricManager
 from dtable_events.tasks.ai_stats_worker import AIStatsWorker
 
 

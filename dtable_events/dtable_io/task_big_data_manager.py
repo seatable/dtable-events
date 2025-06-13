@@ -1,10 +1,9 @@
-import logging
 import time
 import uuid
 import queue
 import threading
 
-from dtable_events.activities.metrics import publish_io_qsize_metric, BIG_DATA_TASK_MANAGER_METRIC_HELP
+from dtable_events.tasks.metrics import publish_io_qsize_metric, BIG_DATA_TASK_MANAGER_METRIC_HELP
 
 class BigDataTaskManager(object):
 

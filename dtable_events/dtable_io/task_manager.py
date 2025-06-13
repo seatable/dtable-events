@@ -6,7 +6,7 @@ import time
 import uuid
 from threading import Lock
 
-from dtable_events.activities.metrics import publish_io_qsize_metric, TASK_MANAGER_METRIC_HELP
+from dtable_events.tasks.metrics import publish_io_qsize_metric, TASK_MANAGER_METRIC_HELP
 
 from seaserv import seafile_api
 
