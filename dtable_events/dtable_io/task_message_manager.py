@@ -32,7 +32,7 @@ class TaskMessageManager(object):
         task = (toggle_send_email, (account_id, send_info, username, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
-        publish_io_qsize_metric('message_task_queue', self.tasks_queue.qsize(), component_name='message', metric_help=MESSAGE_TASK_MANAGER_METRIC_HELP)
+        publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='message_io_task_queue_size', metric_help=MESSAGE_TASK_MANAGER_METRIC_HELP)
         return task_id
 
     def add_wechat_sending_task(self, webhook_url, msg, msg_type):
