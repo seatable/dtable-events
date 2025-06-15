@@ -1,6 +1,9 @@
 import logging
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from threading import Thread, current_thread
+from queue import Queue, Empty
+from threading import Thread, current_thread, Lock
 
 from sqlalchemy import text
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -55,19 +58,46 @@ class DTableAutomationRulesScannerTimer(Thread):
     def __init__(self, db_session_class):
         super(DTableAutomationRulesScannerTimer, self).__init__()
         self.db_session_class = db_session_class
+        self.max_workers = 3
+        self.queue = Queue()
+        self.deferred_queue = Queue()
+        self.processing_lock = Lock()
+        self.processing_uuids_set = set()
 
-    def trigger_rules(self, rules):
-        logging.info('thread %s start, %s rules to be handled', current_thread().name, len(rules))
+    def trigger_rule(self):
+        logging.info('thread %s start', current_thread().name)
         rule_interval_metadata_cache_manager = RuleIntervalMetadataCacheManager()
-        db_session = self.db_session_class()
-        for rule in rules:
+        while True:
+            try:
+                rule = self.queue.get(timeout=1)
+            except Empty:
+                return  # means no rules to trigger, finish thread
+            with self.processing_lock:
+                if rule.dtable_uuid in self.processing_uuids_set:
+                    self.deferred_queue.put(rule)
+                    continue
+                self.processing_uuids_set.add(rule.dtable_uuid)
+            db_session = self.db_session_class()
+            logging.info('thread %s start to handle rule %s dtable_uuid %s', current_thread().name, rule.id, rule.dtable_uuid)
             try:
                 run_regular_execution_rule(rule, db_session, rule_interval_metadata_cache_manager)
             except Exception as e:
                 logging.exception(e)
                 logging.error(f'check rule failed. {rule}, error: {e}')
-        logging.info('thread %s end up', current_thread().name)
-        db_session.close()
+            finally:
+                db_session.close()
+                with self.processing_lock:
+                    self.processing_uuids_set.remove(rule.dtable_uuid)
+
+    def deferred_requeue_loop(self):
+        """put deferred rules back to queue"""
+        while not self.queue.empty() or not self.deferred_queue.empty():
+            try:
+                rule = self.deferred_queue.get_nowait()
+                self.queue.put(rule)
+            except Empty:
+                break
+            time.sleep(0.01)
 
     def scan_dtable_automation_rules(self, workers=3):
         sql = '''
@@ -94,16 +124,22 @@ class DTableAutomationRulesScannerTimer(Thread):
         finally:
             db_session.close()
 
-        rules_list = [[] for i in range(workers)]
         for rule in rules:
-            rules_list[ord(rule.dtable_uuid[0]) % workers].append(rule)
-        for i in range(workers):
-            Thread(target=self.trigger_rules, args=(rules_list[i],), daemon=True, name=f'automation-rule-scanner-worker-{i}').start()
+            self.queue.put(rule)
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            for _ in range(self.max_workers):
+                executor.submit(self.trigger_rule)
+
+            while not self.queue.empty():
+                time.sleep(0.2)
+                self.deferred_requeue_loop()
+
+        logging.info('all rules done')
 
     def run(self):
         sched = BlockingScheduler()
         # fire at every hour in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='*', misfire_grace_time=600)
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='28', misfire_grace_time=600)
         def timed_job():
             logging.info('Starts to scan automation rules...')
 
