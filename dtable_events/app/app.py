@@ -30,6 +30,7 @@ from dtable_events.api_calls.api_calls_counter import APICallsCounter
 from dtable_events.tasks.dtable_file_access_log_cleaner import DTableFileAccessLogCleaner
 from dtable_events.activities.dtable_update_handler import DTableUpdateHander
 from dtable_events.activities.dtable_update_cache_manager import DTableUpdateCacheManager
+from dtable_events.tasks.metrics import MetricManager
 from dtable_events.tasks.ai_stats_worker import AIStatsWorker
 
 
@@ -55,6 +56,7 @@ class App(object):
             self._workflow_actions_handler = WorkflowActionsHandler(config)
             self._webhooker = Webhooker(config)
             self._api_calls_counter = APICallsCounter(config)
+            self._metric_manager = MetricManager(config)
             # cron jobs
             self._instant_notices_sender = InstantNoticeSender(config)
             self._email_notices_sender = EmailNoticesSender(config)
@@ -117,6 +119,8 @@ class App(object):
             conver_page_to_pdf_manager.start()               # always True
             # ai stats, listen redis and cron
             self.ai_stats_worker.start()                     # default False
+            #metrics
+            self._metric_manager.start()
 
         while True:
             time.sleep(60)

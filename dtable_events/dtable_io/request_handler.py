@@ -1,3 +1,4 @@
+import datetime
 import json
 import jwt
 import logging
@@ -12,6 +13,7 @@ from dtable_events.dtable_io.task_data_sync_manager import data_sync_task_manage
 from dtable_events.dtable_io.task_plugin_email_manager import plugin_email_task_manager
 from dtable_events.dtable_io.task_big_data_manager import big_data_task_manager
 from dtable_events.dtable_io.utils import to_python_boolean
+from dtable_events.app.event_redis import redis_cache, REDIS_METRIC_KEY
 
 app = Flask(__name__)
 logger = logging.getLogger(__name__)
@@ -1488,3 +1490,32 @@ def add_import_document_task():
         return make_response((e, 500))
 
     return make_response(({'task_id': task_id}, 200))
+
+
+@app.route('/metrics', methods=['GET'])
+def get_metrics():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+    
+    metrics = redis_cache.get(REDIS_METRIC_KEY)
+    if not metrics:
+        return ''
+    metrics = json.loads(metrics)
+    metric_info = ''
+    for key, metric_detail in metrics.items():
+        metric_name = "%s_%s" % (key.split(':')[0], key.split(':')[2])
+        node_name = key.split(':')[1]
+        component_name = key.split(':')[0]
+        metric_value = metric_detail.pop('metric_value', None)
+        metric_type = metric_detail.pop('metric_type', None)
+        metric_help = metric_detail.pop('metric_help', None)
+        collected_at = metric_detail.pop('collected_at', datetime.datetime.now().isoformat())
+        if metric_help:
+            metric_info += "# HELP " + metric_name + " " + metric_help + '\n'
+        if metric_type:
+            metric_info += "# TYPE " + metric_name + " " + metric_type + '\n'
+        label = 'component="%s",node="%s",collected_at="%s"' % (component_name, node_name, collected_at)
+        metric_info += '%s{%s} %s\n' % (metric_name, label, str(metric_value))
+
+    return metric_info.encode()
