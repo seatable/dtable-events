@@ -1329,7 +1329,11 @@ class StatisticSQLGenerator(object):
         # filters
         filters = statistic.get('filters') or []
         if filters:
-            filters = self._pre_filter_to_filter_term(filters, column_keys, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids)
+           error, filters = self._pre_filter_to_filter_term(filters, column_keys, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids)
+           if error:
+               self.error = error
+               self.filters = []
+               return
         self.filters = filters
 
         filter_conjunction = statistic.get('filter_conjunction') or 'and'
@@ -1348,32 +1352,48 @@ class StatisticSQLGenerator(object):
         # statistic detail filter
         self.detail_filter_conditions = detail_filter_conditions
 
-    def _pre_filter_to_filter_term(self, filters, table_column_keys, username, id_in_org, current_user_department_ids = [], current_user_department_and_sub_ids = []):
+    def normalize_filters(self, filters, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids):
+        for filter_item in filters:
+            filter_term = filter_item.get('filter_term')
+            filter_predicate = filter_item.get('filter_predicate')
+            if filter_predicate == 'include_me':
+                filter_item['filter_term'].append(username)
+            if filter_predicate == 'is_current_user_ID':
+                filter_item['filter_term'] = id_in_org
+            if filter_term == 'current_user_department':
+                filter_item['current_user_department'] = current_user_department_ids
+            if filter_term == 'current_user_department_and_sub':
+                filter_item['current_user_department_and_sub'] = current_user_department_and_sub_ids
+            if isinstance(filter_term, list):
+                if 'current_user_department' in filter_term or 'current_user_department_and_sub' in filter_term:
+                    filter_item['current_user_department'] = current_user_department_ids
+                    filter_item['current_user_department_and_sub'] = current_user_department_and_sub_ids
+
+    def check_filter_validation(self, filters, table_column_keys):
         for item in filters:
             sub_filters = item.get('filters')
-            filter_conjunction = item.get('filter_conjunction')
-            if filter_conjunction and sub_filters:
-                processed_sub_filters = self._pre_filter_to_filter_term(sub_filters, table_column_keys, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids)
-                item['filters'] = processed_sub_filters
+            if sub_filters:
+                error = self.check_filter_validation(sub_filters, table_column_keys)
+                if error:
+                    return error
             else:
                 column_key = item.get('column_key')
-                filter_term = item.get('filter_term')
-                filter_predicate = item.get('filter_predicate')
                 if table_column_keys and column_key not in table_column_keys:
-                    continue
-                if filter_predicate == 'include_me':
-                    item['filter_term'].append(username)
-                if filter_predicate == 'is_current_user_ID':
-                    item['filter_term'] = id_in_org
-                if filter_term == 'current_user_department':
-                    item['current_user_department'] = current_user_department_ids
-                if filter_term == 'current_user_department_and_sub':
-                    item['current_user_department_and_sub'] = current_user_department_and_sub_ids
-                if isinstance(filter_term, list):
-                    if 'current_user_department' in filter_term or 'current_user_department_and_sub' in filter_term:
-                        item['current_user_department'] = current_user_department_ids
-                        item['current_user_department_and_sub'] = current_user_department_and_sub_ids
-        return filters
+                    return 'some columns in the filter has been deleted'
+        return None
+
+    def _pre_filter_to_filter_term(self, filters, table_column_keys, username, id_in_org, current_user_department_ids = [], current_user_department_and_sub_ids = []):
+        error = self.check_filter_validation(filters, table_column_keys)
+        if error:
+            return error, None
+
+        for filter_item in filters:
+            sub_filters = filter_item.get('filters')
+            if sub_filters:
+                self.normalize_filters(sub_filters, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids)
+            else:
+                self.normalize_filters([filter_item], username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids)
+        return None, filters
 
     def _get_column_by_key(self, column_key):
         return self.column_key_map.get(column_key)
