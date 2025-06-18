@@ -22,6 +22,12 @@ class InactiveExpiredSubAccountsWorker(object):
 
     def __init__(self, config):
         self._enabled = ENABLE_SUB_ACCOUNT
+        self._logfile = None
+        self._prepare_logfile()
+
+    def _prepare_logfile(self):
+        logdir = os.path.join(os.environ.get('LOG_DIR', ''))
+        self._logfile = os.path.join(logdir, 'inactive_expired_sub_account.log')
 
     def start(self):
         if not self._enabled:
@@ -29,13 +35,14 @@ class InactiveExpiredSubAccountsWorker(object):
             return
         logging.info('Start inactive expired sub accounts.')
 
-        InactiveExpiredSubAccountsWorkerTimer().start()
+        InactiveExpiredSubAccountsWorkerTimer(self._logfile).start()
 
 
 class InactiveExpiredSubAccountsWorkerTimer(Thread):
 
-    def __init__(self):
+    def __init__(self, logfile):
         Thread.__init__(self)
+        self._logfile = logfile
 
     def run(self):
         sched = BlockingScheduler()
