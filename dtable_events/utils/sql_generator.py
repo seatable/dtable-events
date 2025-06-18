@@ -1329,12 +1329,14 @@ class StatisticSQLGenerator(object):
         # filters
         filters = statistic.get('filters') or []
         if filters:
-           error, filters = self._pre_filter_to_filter_term(filters, column_keys, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids)
-           if error:
-               self.error = error
-               self.filters = []
-               return
-        self.filters = filters
+            error, filters = self._pre_filter_to_filter_term(filters, column_keys, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids)
+            if error:
+                self.error = error
+                self.filters = []
+            else:
+                self.filters = filters
+        else:
+            self.filters = []
 
         filter_conjunction = statistic.get('filter_conjunction') or 'and'
         self.filter_conjunction = filter_conjunction.upper()
@@ -1352,48 +1354,55 @@ class StatisticSQLGenerator(object):
         # statistic detail filter
         self.detail_filter_conditions = detail_filter_conditions
 
-    def normalize_filters(self, filters, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids):
-        for filter_item in filters:
-            filter_term = filter_item.get('filter_term')
-            filter_predicate = filter_item.get('filter_predicate')
-            if filter_predicate == 'include_me':
-                filter_item['filter_term'].append(username)
-            if filter_predicate == 'is_current_user_ID':
-                filter_item['filter_term'] = id_in_org
-            if filter_term == 'current_user_department':
-                filter_item['current_user_department'] = current_user_department_ids
-            if filter_term == 'current_user_department_and_sub':
-                filter_item['current_user_department_and_sub'] = current_user_department_and_sub_ids
-            if isinstance(filter_term, list):
-                if 'current_user_department' in filter_term or 'current_user_department_and_sub' in filter_term:
-                    filter_item['current_user_department'] = current_user_department_ids
-                    filter_item['current_user_department_and_sub'] = current_user_department_and_sub_ids
+    def check_filter_validation(self, filter, table_column_keys):
+        column_key = filter.get('column_key')
+        if column_key not in table_column_keys:
+            return 'some columns in the pre-filter has been deleted.'
+        return None
 
-    def check_filter_validation(self, filters, table_column_keys):
+    def check_filters_validation(self, filters, table_column_keys):
+        error_msg = None
         for item in filters:
             sub_filters = item.get('filters')
             if sub_filters:
-                error = self.check_filter_validation(sub_filters, table_column_keys)
-                if error:
-                    return error
+                for filter in sub_filters:
+                    error_msg = self.check_filter_validation(filter, table_column_keys)   
             else:
-                column_key = item.get('column_key')
-                if table_column_keys and column_key not in table_column_keys:
-                    return 'some columns in the filter has been deleted'
+                error_msg = self.check_filter_validation(filter, table_column_keys)
+        if error_msg:
+            return error_msg
         return None
 
-    def _pre_filter_to_filter_term(self, filters, table_column_keys, username, id_in_org, current_user_department_ids = [], current_user_department_and_sub_ids = []):
-        error = self.check_filter_validation(filters, table_column_keys)
-        if error:
-            return error, None
+    def normalize_filter(self, filter_item, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids):
+        filter_term = filter_item.get('filter_term')
+        filter_predicate = filter_item.get('filter_predicate')
+        if filter_predicate == 'include_me':
+            filter_item['filter_term'].append(username)
+        if filter_predicate == 'is_current_user_ID':
+            filter_item['filter_term'] = id_in_org
+        if filter_term == 'current_user_department':
+            filter_item['current_user_department'] = current_user_department_ids
+        if filter_term == 'current_user_department_and_sub':
+            filter_item['current_user_department_and_sub'] = current_user_department_and_sub_ids
+        if isinstance(filter_term, list):
+            if 'current_user_department' in filter_term or 'current_user_department_and_sub' in filter_term:
+                filter_item['current_user_department'] = current_user_department_ids
+                filter_item['current_user_department_and_sub'] = current_user_department_and_sub_ids
+        return filter_item
 
-        for filter_item in filters:
+    def _pre_filter_to_filter_term(self, filters, table_column_keys, username, id_in_org, current_user_department_ids = [], current_user_department_and_sub_ids = []):
+        error_msg = self.check_filters_validation(filters, table_column_keys)
+        if error_msg:
+            return error_msg, None
+
+        for index, filter_item in enumerate(filters):
             sub_filters = filter_item.get('filters')
             if sub_filters:
-                self.normalize_filters(sub_filters, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids)
+                filters[index]['filters'] = [self.normalize_filter(filter, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids) for filter in sub_filters]
             else:
-                self.normalize_filters([filter_item], username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids)
+                filters[index] = self.normalize_filter(filter_item, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids)
         return None, filters
+
 
     def _get_column_by_key(self, column_key):
         return self.column_key_map.get(column_key)
