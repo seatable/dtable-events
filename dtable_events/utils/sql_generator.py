@@ -1310,45 +1310,33 @@ class StatisticSQLGenerator(object):
         column_keys = [column.get('key') for column in columns]
         if statistic_type == StatisticType.TABLE_ELEMENT:
             shown_column_keys = statistic.get('shown_column_keys') or column_keys
-            shown_colums = list(filter(lambda x: x['key'] in shown_column_keys, columns))
-            shown_column_names = ['`' + (column.get('name') or '') + '`' for column in shown_colums]
+            shown_columns = list(filter(lambda x: x['key'] in shown_column_keys, columns))
+            shown_column_names = ['`' + (column.get('name') or '') + '`' for column in shown_columns]
             shown_column_names.append('`_id`')
             shown_column_names.append('`_archived`')
             shown_column_names.append('`_locked`')
             self.shown_column_names = shown_column_names
-            if not shown_colums:
+            if not shown_columns:
                 self.error = 'No column is selected'
         else:
-            shown_colums = columns
+            shown_columns = columns
             shown_column_keys = column_keys
 
         self.column_key_map = {}
-        for column in shown_colums:
+        for column in shown_columns:
             self.column_key_map[column['key']] = column
 
         # filters
         filters = statistic.get('filters') or []
         if filters:
-            for item in filters:
-                filter_term = item.get('filter_term')
-                column_key = item.get('column_key')
-                if column_key not in shown_column_keys:
-                    continue
-                if item.get('filter_predicate') == 'include_me':
-                    item['filter_term'].append(username)
-                if item.get('filter_predicate') == 'is_current_user_ID':
-                    item['filter_term'] = id_in_org
-                if filter_term == 'current_user_department':
-                    item['current_user_department'] = current_user_department_ids
-                if filter_term == 'current_user_department_and_sub':
-                    item['current_user_department_and_sub'] = current_user_department_and_sub_ids
-                if isinstance(filter_term, list):
-                    if 'current_user_department' in filter_term or 'current_user_department_and_sub' in filter_term:
-                        item['current_user_department'] = current_user_department_ids
-                        item['current_user_department_and_sub'] = current_user_department_and_sub_ids
-        self.filters = filters
+            error_msg = self._validate_filters(filters, column_keys)
+            if error_msg:
+                self.error = error_msg
+                return
+            filters = self._pre_filter_to_filter_term(filters, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids)
 
         filter_conjunction = statistic.get('filter_conjunction') or 'and'
+        self.filters = filters
         self.filter_conjunction = filter_conjunction.upper()
 
         # sorts
@@ -1364,8 +1352,85 @@ class StatisticSQLGenerator(object):
         # statistic detail filter
         self.detail_filter_conditions = detail_filter_conditions
 
+    def _validate_filter(self, filter, table_column_keys):
+        column_key = filter.get('column_key')
+        if column_key not in table_column_keys:
+            return 'some columns in the pre-filter has been deleted.'
+        return None
+
+    def _validate_filters(self, filters, table_column_keys):
+        error_msg = None
+        for filter in filters:
+            if error_msg:
+                break
+            sub_filters = filter.get('filters')
+            if sub_filters:
+                for sub_filter in sub_filters:
+                    error_msg = self._validate_filter(sub_filter, table_column_keys)
+                    if error_msg:
+                        break
+            else:
+                error_msg = self._validate_filter(filter, table_column_keys)
+        return error_msg
+
+    def _normalize_filter(self, filter_item, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids):
+        filter_term = filter_item.get('filter_term')
+        filter_predicate = filter_item.get('filter_predicate')
+        if filter_predicate == 'include_me':
+            filter_item['filter_term'].append(username)
+        if filter_predicate == 'is_current_user_ID':
+            filter_item['filter_term'] = id_in_org
+        if filter_term == 'current_user_department':
+            filter_item['current_user_department'] = current_user_department_ids
+        if filter_term == 'current_user_department_and_sub':
+            filter_item['current_user_department_and_sub'] = current_user_department_and_sub_ids
+        if isinstance(filter_term, list):
+            if 'current_user_department' in filter_term or 'current_user_department_and_sub' in filter_term:
+                filter_item['current_user_department'] = current_user_department_ids
+                filter_item['current_user_department_and_sub'] = current_user_department_and_sub_ids
+        return filter_item
+
+    def _pre_filter_to_filter_term(self, filters, username, id_in_org, current_user_department_ids = [], current_user_department_and_sub_ids = []):
+        for index, filter_item in enumerate(filters):
+            sub_filters = filter_item.get('filters')
+            if sub_filters:
+                filters[index]['filters'] = [self._normalize_filter(filter, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids) for filter in sub_filters]
+            else:
+                filters[index] = self._normalize_filter(filter_item, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids)
+        return filters
+
+
     def _get_column_by_key(self, column_key):
         return self.column_key_map.get(column_key)
+
+    def _filter_item_2_sql(self, filter_item):
+        if not filter_item:
+            return ''
+        inner_filters = filter_item.get('filters')
+        if inner_filters and isinstance(inner_filters, list):
+            inner_filter_conjunction = filter_item.get('filter_conjunction') or 'And'
+            inner_filter_condition_list = []
+            for inner_item in inner_filters:
+                sql_condition = self._filter_item_2_sql(inner_item)
+                if sql_condition:
+                    inner_filter_condition_list.append(sql_condition)
+            inner_filter_conjunction_split = f" {inner_filter_conjunction} "
+            return f"({inner_filter_conjunction_split.join(inner_filter_condition_list)})"
+
+        # skip when the column is missing
+        column_key = filter_item.get('column_key')
+        column = column_key and self._get_column_by_key(column_key)
+        if not column:
+            raise ValueError('Column not found column_key: %s ' % (column_key))
+        column_type = column.get('type')
+        operator_cls = _get_operator_by_type(column_type)
+        if not operator_cls:
+            raise ValueError('filter: %s not support to sql' % filter_item)
+        operator = operator_cls(column, filter_item)
+        sql_condition = _filter2sqlslice(operator)
+        if not sql_condition:
+            return ''
+        return f'({sql_condition})'
 
     def _filter_2_sql(self):
         filter_sql = ''
@@ -1376,14 +1441,9 @@ class StatisticSQLGenerator(object):
 
         filter_conjunction = " %s " % self.filter_conjunction
         for filter_item in self.filters:
-            column_key = filter_item.get('column_key')
-            column = column_key and self._get_column_by_key(column_key)
-            if column:
-                column_type = column.get('type')
-                operator = _get_operator_by_type(column_type)(column, filter_item)
-                sql_condition = _filter2sqlslice(operator)
-                if sql_condition:
-                    filter_string_list.append(sql_condition)
+            sql_condition = self._filter_item_2_sql(filter_item)
+            if sql_condition:
+                filter_string_list.append(sql_condition)
         if filter_string_list:
             filter_sql = filter_conjunction.join(filter_string_list)
 
@@ -1690,14 +1750,14 @@ class StatisticSQLGenerator(object):
                 return ''
 
             column_groupby_column_name = self._statistic_column_name_to_sql(column_groupby_column, { 'date_granularity': date_granularity, 'geolocation_granularity': geolocation_granularity })
-            # for statistic detail 
+            # for statistic detail
             if self.detail_filter_conditions:
                 return self._get_detail_sql({
                     groupby_column_key: {'groupby_name': f'`{group_by_column_name}`' },
                     column_groupby_column_key: {'groupby_name': column_groupby_column_name, 'group_by': { 'date_granularity': date_granularity, 'geolocation_granularity': geolocation_granularity }}
                 })
             return 'SELECT `%s`, %s, SUM(`%s`), SUM(`%s`) FROM %s %s GROUP BY `%s`, %s LIMIT 0, 5000' % (group_by_column_name, column_groupby_column_name, target_column_name, completed_column_name, self.table_name, self.filter_sql, group_by_column_name, column_groupby_column_name)
-        # for statistic detail 
+        # for statistic detail
         if self.detail_filter_conditions:
             return self._get_detail_sql({
                 groupby_column_key: {'groupby_name': f'`{group_by_column_name}`' },
