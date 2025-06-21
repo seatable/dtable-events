@@ -7,6 +7,7 @@ from dtable_events.statistics.counter import UserActivityCounter
 from dtable_events.dtable_io.dtable_io_server import DTableIOServer
 from dtable_events.tasks.instant_notices_sender import InstantNoticeSender
 from dtable_events.tasks.email_notices_sender import EmailNoticesSender
+from dtable_events.tasks.inactive_expired_sub_account_worker import InactiveExpiredSubAccountsWorker
 from dtable_events.tasks.dtables_cleaner import DTablesCleaner
 from dtable_events.tasks.dtable_updates_sender import DTableUpdatesSender
 from dtable_events.tasks.dtable_real_time_rows_counter import DTableRealTimeRowsCounter
@@ -60,6 +61,7 @@ class App(object):
             # cron jobs
             self._instant_notices_sender = InstantNoticeSender(config)
             self._email_notices_sender = EmailNoticesSender(config)
+            self._inactive_expired_sub_accounts_worker = InactiveExpiredSubAccountsWorker(config)
             self._dtables_cleaner = DTablesCleaner(config)
             self._dtable_updates_sender = DTableUpdatesSender(config)
             self._dtable_notification_rules_scanner = DTableNofiticationRulesScanner(config)
@@ -99,6 +101,7 @@ class App(object):
             # cron jobs
             self._instant_notices_sender.start()             # default True
             self._email_notices_sender.start()               # default True
+            self._inactive_expired_sub_accounts_worker.start()# default False
             self._dtables_cleaner.start()                    # default True
             self._dtable_updates_sender.start()              # default True
             self._dtable_notification_rules_scanner.start()  # default True
