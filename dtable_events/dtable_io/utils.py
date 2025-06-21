@@ -29,6 +29,8 @@ from dtable_events.utils import uuid_str_to_36_chars, get_inner_fileserver_root,
     gen_file_get_url, gen_file_upload_url
 
 from dtable_events.utils.constants import ColumnTypes
+from dtable_events.utils.dtable_db_api import DTableDBAPI
+from dtable_events.utils.dtable_storage_server_api import DTableStorageServerAPI
 from dtable_events.utils.exception import BaseSizeExceedsLimitError
 
 # this two prefix used in exported zip file
@@ -289,6 +291,21 @@ def copy_src_external_app_to_json(dtable_uuid, tmp_file_path, db_session):
     if src_external_apps_json:
         with open(os.path.join(tmp_file_path, 'external_apps.json'), 'w+') as fp:
             fp.write(json.dumps(src_external_apps_json))
+
+
+def copy_src_archive_backup(dtable_uuid, tmp_archive_path):
+    # query backups and select latest one
+    dtable_db_api = DTableDBAPI('dtable-events', dtable_uuid, INNER_DTABLE_DB_URL)
+    backups = dtable_db_api.get_backups()
+    backup = backups[0] if backups else None
+    if not backup:
+        return
+    # get backup and save to file
+    backup_version = backup['version']
+    dtable_storage_server_api = DTableStorageServerAPI()
+    backup_content = dtable_storage_server_api.get_backup(dtable_uuid, backup_version)
+    with open(tmp_archive_path, 'wb') as fp:
+        fp.write(backup_content)
 
 
 def convert_dtable_import_file_url(dtable_content, workspace_id, dtable_uuid):
