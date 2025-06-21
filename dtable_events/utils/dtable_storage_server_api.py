@@ -80,5 +80,13 @@ class DTableStorageServerAPI(object):
                 return None
         return data
 
+    def get_backup(self, dtable_uuid, version):
+        """Return backup content"""
+        url = self.server_url + f'/backups/{dtable_uuid}/{version}'
+        response = requests.get(url, timeout=TIMEOUT)
+        if not response.ok:
+            raise ConnectionError(response.status_code, 'get backup failed')
+        return response.content
+
 
 storage_api = DTableStorageServerAPI()
