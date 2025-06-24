@@ -1,8 +1,9 @@
 import json
 import logging
 import time
-from queue import Queue
-from threading import Thread, Event, current_thread
+from concurrent.futures import ThreadPoolExecutor
+from queue import Queue, Empty
+from threading import Thread, Event, current_thread, Lock
 
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.automations.auto_rules_utils import scan_triggered_automation_rules
@@ -22,11 +23,12 @@ class AutomationRuleHandler(Thread):
 
         self.per_update_auto_rule_workers = 3
 
-        self.queues = []
-        self.threads = []
+        self.queue = Queue()
+        self.deferred_queue = Queue()
+        self.processing_uuids_set = set()
+        self.processing_lock = Lock()
 
         self._parse_config(config)
-        self.init_workers()
 
     def _parse_config(self, config):
         """parse send email related options from config file
@@ -49,9 +51,15 @@ class AutomationRuleHandler(Thread):
     def is_enabled(self):
         return self._enabled
 
-    def scan(self, index):
+    def scan(self):
         while True:
-            event = self.queues[index].get()
+            event = self.queue.get()
+            event_dtable_uuid = event.get('dtable_uuid')
+            with self.processing_lock:
+                if event_dtable_uuid in self.processing_uuids_set:
+                    self.deferred_queue.put(event)
+                    continue
+                self.processing_uuids_set.add(event_dtable_uuid)
             logger.info("Start to trigger rule %s in thread %s", event, current_thread().name)
             session = self._db_session_class()
             try:
@@ -60,30 +68,38 @@ class AutomationRuleHandler(Thread):
                 logger.exception('Handle automation rule with data %s failed: %s', event, e)
             finally:
                 session.close()
+                with self.processing_lock:
+                    self.processing_uuids_set.remove(event_dtable_uuid)
 
-    def init_workers(self):
-        for i in range(self.per_update_auto_rule_workers):
-            self.queues.append(Queue())
-            t = Thread(target=self.scan, args=(i,), name=f'automation-rule-worker-{i}')
-            self.threads.append(t)
+    def deferred_requeue_loop(self):
+        while True:
+            try:
+                event = self.deferred_queue.get_nowait()
+                logger.debug('get event %s from deferred queue', event)
+                self.queue.put(event)
+            except Empty:
+                time.sleep(1)
+            time.sleep(0.02)
+
+    def start_threads(self):
+        executor = ThreadPoolExecutor(max_workers=self.per_update_auto_rule_workers, thread_name_prefix='scan-auto-rules')
+        for _ in range(self.per_update_auto_rule_workers):
+            executor.submit(self.scan)
+        defer_executor = ThreadPoolExecutor(max_workers=self.per_update_auto_rule_workers, thread_name_prefix='scan-auto-rules-deferred-requeue')
+        defer_executor.submit(self.deferred_requeue_loop)
 
     def run(self):
         logger.info('Starting handle automation rules...')
         subscriber = self._redis_client.get_subscriber('automation-rule-triggered')
 
-        for t in self.threads:
-            t.start()
-            logger.info('thread %s start', t.name)
+        self.start_threads()
 
         while not self._finished.is_set() and self.is_enabled():
             try:
                 message = subscriber.get_message()
                 if message is not None:
                     event = json.loads(message['data'])
-                    dtable_uuid = event.get('dtable_uuid')
-                    logger.debug('get per_update auto-rule message %s', event)
-                    index = ord(dtable_uuid[0]) % self.per_update_auto_rule_workers
-                    self.queues[index].put(event)
+                    self.queue.put(event)
                 else:
                     time.sleep(0.5)
             except Exception as e:
