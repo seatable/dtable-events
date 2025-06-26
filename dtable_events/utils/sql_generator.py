@@ -1299,12 +1299,13 @@ def _get_operator_by_type(column_type):
 
 class StatisticSQLGenerator(object):
 
-    def __init__(self, table, statistic_type, statistic, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids, detail_filter_conditions=None):
+    def __init__(self, table, statistic_type, statistic, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids, detail_filter_conditions=None, start_of_week="monday"):
         self.error = None
         self.statistic_type = statistic_type
         table_name = table.get('name') or ''
         self.table_name = '`%s`' % table_name
         self.statistic = statistic
+        self.start_of_week = start_of_week
 
         columns = table.get('columns') or []
         column_keys = [column.get('key') for column in columns]
@@ -1489,7 +1490,7 @@ class StatisticSQLGenerator(object):
             if date_granularity in ('DAY', 'DAYS_7','DAYS_30'):
                 return 'ISODATE(%s)' % valid_column_name
             if date_granularity == 'WEEK':
-                return 'ISODATE(STARTOFWEEK(%s, "monday"))' % valid_column_name
+                return 'ISODATE(STARTOFWEEK(%s, "%s"))' % (valid_column_name, self.start_of_week)
             if date_granularity == 'MONTH':
                 return 'ISOMONTH(%s)' % valid_column_name
             if date_granularity == 'QUARTER':
@@ -2798,8 +2799,8 @@ def filter2sql(table_name, columns, filter_conditions, by_group=False):
     return sql_generator.to_sql(by_group=by_group)
 
 
-def statistic2sql(table, statistic_type, statistic, username='', id_in_org='', current_user_department_ids=[], current_user_department_and_sub_ids=[], detail_filter_conditions=None):
-    sql_generator = StatisticSQLGenerator(table, statistic_type, statistic, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids, detail_filter_conditions=detail_filter_conditions)
+def statistic2sql(table, statistic_type, statistic, username='', id_in_org='', current_user_department_ids=[], current_user_department_and_sub_ids=[], detail_filter_conditions=None, start_of_week='monday'):
+    sql_generator = StatisticSQLGenerator(table, statistic_type, statistic, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids, detail_filter_conditions=detail_filter_conditions, start_of_week=start_of_week)
     return sql_generator.to_sql()
 
 def linkRecords2sql(current_table, link_column, link_record_ids, tables):
