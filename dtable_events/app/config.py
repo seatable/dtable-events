@@ -52,7 +52,6 @@ except Exception as e:
     logger.critical("Can not import dtable_web settings: %s." % e)
     raise RuntimeError("Can not import dtable_web settings: %s" % e)
 
-
 def get_config(config_file):
     config = configparser.ConfigParser()
     try:
