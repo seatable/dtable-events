@@ -22,13 +22,13 @@ class ConvertPageTOPDFManager:
         self.drivers = {}
 
     def init(self, config):
-        section_name = 'CONERT-PAGE-TO-PDF'
+        section_name = 'CONVERT PAGE TO PDF'
         key_max_workers = 'max_workers'
         key_max_queue = 'max_queue'
 
         self.config = config
 
-        if config.has_section('CONERT-PAGE-TO-PDF'):
+        if config.has_section(section_name):
             try:
                 self.max_workers = int(get_opt_from_conf_or_env(config, section_name, key_max_workers, default=self.max_workers))
             except:

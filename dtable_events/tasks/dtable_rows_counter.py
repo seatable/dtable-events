@@ -24,11 +24,13 @@ class DTableRowsCounter(object):
         self._logfile = os.path.join(logdir, 'dtable_rows_counter.log')
 
     def _prepara_config(self, config):
-        section_name = 'ROWS-COUNTER'
+        section_name = 'ROWS COUNTER'
         key_enabled = 'enabled'
 
         if not config.has_section(section_name):
-            return
+            section_name = 'ROWS-COUNTER'
+            if not config.has_section(section_name):
+                return
 
         # enabled
         enabled = get_opt_from_conf_or_env(config, section_name, key_enabled, default=True)

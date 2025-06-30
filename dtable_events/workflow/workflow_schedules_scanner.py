@@ -20,11 +20,11 @@ class WorkflowSchedulesScanner:
         self._db_session_class = init_db_session_class(config)
 
     def _parse_config(self, config):
-        section_name = 'WORKFLOW-SCANNER'
+        section_name = 'WORKFLOW SCANNER'
         key_enabled = 'enabled'
 
         if not config.has_section(section_name):
-            section_name = 'WORKFLOW SCANNER'
+            section_name = 'WORKFLOW-SCANNER'
             if not config.has_section(section_name):
                 return
 
