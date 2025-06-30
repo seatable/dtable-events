@@ -13,6 +13,7 @@ from dtable_events.tasks.dtable_real_time_rows_counter import DTableRealTimeRows
 from dtable_events.tasks.ldap_syncer import LDAPSyncer
 from dtable_events.tasks.dtable_asset_trash_cleaner import DTableAssetTrashCleaner
 from dtable_events.tasks.license_expiring_notices_sender import LicenseExpiringNoticesSender
+from dtable_events.tasks.universal_app_auto_buckup import UniversalAppAutoBackup
 from dtable_events.tasks.virus_scanner import VirusScanner
 from dtable_events.notification_rules.handler import NotificationRuleHandler
 from dtable_events.notification_rules.dtable_notification_rules_scanner import DTableNofiticationRulesScanner
@@ -57,6 +58,7 @@ class App(object):
             self._webhooker = Webhooker(config)
             self._api_calls_counter = APICallsCounter(config)
             self._metric_manager = MetricManager(config)
+            self._universal_app_auto_backup = UniversalAppAutoBackup(config)
             # cron jobs
             self._instant_notices_sender = InstantNoticeSender(config)
             self._email_notices_sender = EmailNoticesSender(config)
@@ -96,6 +98,7 @@ class App(object):
             self._workflow_actions_handler.start()           # always True
             self._webhooker.start()                          # always True
             self._api_calls_counter.start()                  # always True
+            self._universal_app_auto_backup.start()          # always True
             # cron jobs
             self._instant_notices_sender.start()             # default True
             self._email_notices_sender.start()               # default True
