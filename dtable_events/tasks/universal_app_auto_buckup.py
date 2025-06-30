@@ -8,6 +8,7 @@ from threading import Lock, Thread, Event
 from dtable_events.db import init_db_session_class
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.utils import uuid_str_to_36_chars
+from dtable_events.app.config import UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_DAYS
 
 from sqlalchemy import text
 from seaserv import seafile_api
@@ -122,7 +123,7 @@ class UniversalAppAutoBackup(Thread):
     def should_auto_backup(self, session, app_id, app_version):
         from datetime import datetime, timedelta, timezone
         now = datetime.now(timezone.utc)
-        cutoff = now - timedelta(days=7)
+        cutoff = now - timedelta(days=UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_DAYS)
         threshold_ts = int(cutoff.timestamp())
 
         sql = """
