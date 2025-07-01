@@ -4,11 +4,12 @@ import os
 import time
 import logging
 from threading import Lock, Thread, Event
+from datetime import datetime, timedelta
 
 from dtable_events.db import init_db_session_class
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.utils import uuid_str_to_36_chars
-from dtable_events.app.config import UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_DAYS
+from dtable_events.app.config import UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_DAYS, UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_NOTES
 
 from sqlalchemy import text
 from seaserv import seafile_api
@@ -23,7 +24,7 @@ class UniversalAppAutoBackup(Thread):
         self._redis_client = RedisClient(config)
         self._lock = Lock()
 
-    def create_snapshot(self, session, app_id, notes, app_version, app_config, created_at):
+    def create_snapshot(self, session, app_id, app_version, app_config):
         """
         Create a snapshot for the universal app.
         """
@@ -36,10 +37,10 @@ class UniversalAppAutoBackup(Thread):
         """
         result = session.execute(text(cmd), {
             'app_id':       app_id,
-            'notes':        notes,
+            'notes':        UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_NOTES,
             'app_version':  app_version,
             'app_config':   app_config,
-            'created_at':   created_at,
+            'created_at':   int(time.time()),
         })
         snapshot_id = result.scalar_one()
         session.commit()
@@ -59,9 +60,6 @@ class UniversalAppAutoBackup(Thread):
                     continue
 
                 if 'external-apps' not in content_url:
-                    # relative path
-                    # /app_id/page_id/page_id.json
-                    # /app_id-page_id/page_id.json
                     content_path = base_dir + '/external-apps/' + content_url.strip('/')
 
                 else:
@@ -97,32 +95,30 @@ class UniversalAppAutoBackup(Thread):
             page_id = page.get('id', '')
             if page_type == 'single_record_page':
                 content_url = page.get('content_url', '')
-            if not content_url:
-                continue
+                if not content_url:
+                    continue
 
-            # /app_id/page_id/page_id.json
-            # /app_id-page_id/page_id.json
-            content_path = base_dir + '/external-apps/' + content_url.strip('/')
-
-            src_path = os.path.dirname(content_path)
-            content_file_name = os.path.basename(content_path)
-            dist_path = os.path.join(src_path, 'single_record_page_backup_%s' % snapshot_id)
-            asset_id = seafile_api.get_file_id_by_path(repo_id, content_path)
-
-            try:
-                if asset_id:
-                    seafile_api.mkdir_with_parents(repo_id, '/', dist_path[1:], '')
-                    seafile_api.copy_file(repo_id, src_path, json.dumps([content_file_name]),
-                                        repo_id, dist_path, json.dumps([content_file_name]),
-                                        username=username, need_progress=0, synchronous=1)
-            except Exception as e:
-                logger.warning('fail to backup dtable: %s app: %s single record page: %s error: %s', dtable_uuid,
-                                app_id, page_id, e)
-                continue
+                content_path = base_dir + '/external-apps/' + content_url.strip('/')
+    
+                src_path = os.path.dirname(content_path)
+                content_file_name = os.path.basename(content_path)
+                dist_path = os.path.join(src_path, 'single_record_page_backup_%s' % snapshot_id)
+                asset_id = seafile_api.get_file_id_by_path(repo_id, content_path)
+    
+                try:
+                    if asset_id:
+                        seafile_api.mkdir_with_parents(repo_id, '/', dist_path[1:], '')
+                        seafile_api.copy_file(repo_id, src_path, json.dumps([content_file_name]),
+                                            repo_id, dist_path, json.dumps([content_file_name]),
+                                            username=username, need_progress=0, synchronous=1)
+                except Exception as e:
+                    logger.warning('fail to backup dtable: %s app: %s single record page: %s error: %s', dtable_uuid,
+                                    app_id, page_id, e)
+                    continue
   
     def should_auto_backup(self, session, app_id, app_version):
-        from datetime import datetime, timedelta, timezone
-        now = datetime.now(timezone.utc)
+        
+        now = datetime.now()
         cutoff = now - timedelta(days=UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_DAYS)
         threshold_ts = int(cutoff.timestamp())
 
@@ -151,17 +147,15 @@ class UniversalAppAutoBackup(Thread):
                     user_name = msg.get('username', '')
                     app_id = msg.get('app_id', '')
                     app_version = msg.get('app_version', '')
-                    notes = msg.get('notes', '')
                     repo_id = msg.get('repo_id', '')
                     dtable_uuid = msg.get('dtable_uuid', '')
                     app_config = msg.get('app_config', '{}')
-                    created_at = msg.get('created_at', 0)
                     session = self._db_session_class()
                     try:
                         if not self.should_auto_backup(session, app_id, app_version):
                             continue
                         with self._lock:
-                            new_snapshot_id = self.create_snapshot(session, app_id, notes, app_version, app_config, created_at)
+                            new_snapshot_id = self.create_snapshot(session, app_id, app_version, app_config)
                             self.backup_custom_pages(app_id, app_config, repo_id, dtable_uuid, user_name, new_snapshot_id)
                             self.backup_single_record_pages(app_id, app_config, repo_id, dtable_uuid, user_name, new_snapshot_id)
                     except Exception as e:

@@ -49,6 +49,7 @@ try:
     AI_PRICES = getattr(seahub_settings, 'AI_PRICES', {})
     BAIDU_OCR_TOKENS = getattr(seahub_settings, 'BAIDU_OCR_TOKENS', {})
     UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_DAYS = getattr(seahub_settings, 'UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_DAYS', 7)
+    UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_NOTES = getattr(seahub_settings, 'UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_NOTES', 'auto backup')
 except Exception as e:
     logger.critical("Can not import dtable_web settings: %s." % e)
     raise RuntimeError("Can not import dtable_web settings: %s" % e)
