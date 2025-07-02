@@ -132,7 +132,7 @@ class UniversalAppAutoBackup(Thread):
         latest_snapshot = session.execute(text(sql), {'app_id': app_id}).first()
         if latest_snapshot:
             latest_version, latest_created_at = latest_snapshot
-            if latest_version == app_version or latest_created_at > threshold_ts:
+            if latest_created_at > threshold_ts:
                 return False
         return True
 
