@@ -1480,11 +1480,22 @@ class StatisticSQLGenerator(object):
             else:
                 self.filter_sql = 'WHERE %s' % not_include_empty_sql
 
+    def _check_is_date_granularity_column(self, column):
+        column_type = column.get('type') or ''
+        column_data = column.get('data') or {}
+        result_type, array_type = column_data.get('result_type') or '', column_data.get('array_type') or ''
+        is_date_granularity_column = column_type == ColumnTypes.CTIME or column_type == ColumnTypes.MTIME or column_type == ColumnTypes.DATE
+        is_date_formula_column = column_type == ColumnTypes.FORMULA and result_type == 'date'
+        is_link_date_formula_column = column_type == ColumnTypes.LINK_FORMULA and array_type == 'date'
+        if is_date_granularity_column or is_date_formula_column or is_link_date_formula_column:
+            return True
+        return False
+
+
     def _statistic_column_name_to_sql(self, column, group_by):
         column_name = column.get('name') or ''
         valid_column_name = '`%s`' % column_name
-        type = column.get('type') or ''
-        if type == ColumnTypes.CTIME or type == ColumnTypes.MTIME or type == ColumnTypes.DATE:
+        if self._check_is_date_granularity_column(column):
             date_granularity = group_by.get('date_granularity') or ''
             date_granularity = date_granularity.upper()
             if date_granularity in ('DAY', 'DAYS_7','DAYS_30'):
