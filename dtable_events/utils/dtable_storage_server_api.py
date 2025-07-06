@@ -88,5 +88,18 @@ class DTableStorageServerAPI(object):
             raise ConnectionError(response.status_code, 'get backup failed')
         return response.content
 
+    def create_backup(self, dtable_uuid, version, file):
+        """
+        file: bytes or a file-like obj
+        """
+        url = self.server_url + f'/backups/{dtable_uuid}/{version}'
+        resp = requests.put(url, data=file)
+        return resp
+
+    def delete_dtable_all_backups(self, dtable_uuid):
+        url = self.server_url + f'/backups/{dtable_uuid}'
+        response = requests.delete(url)
+        return parse_response(response)
+
 
 storage_api = DTableStorageServerAPI()

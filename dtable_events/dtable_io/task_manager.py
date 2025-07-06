@@ -85,13 +85,13 @@ class TaskManager(object):
 
     @log_function_call
     def add_import_task(self, username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage,
-                        can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id):
+                        can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id, can_import_archive):
         from dtable_events.dtable_io import post_dtable_import_files
 
         task_id = str(uuid.uuid4())
         task = (post_dtable_import_files,
                 (username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage,
-                 can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id, self.config))
+                 can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id, can_import_archive, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', TASK_MANAGER_METRIC_HELP)
