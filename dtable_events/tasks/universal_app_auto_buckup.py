@@ -33,7 +33,6 @@ class UniversalAppAutoBackup(Thread):
           (app_id, notes, app_version, app_config, created_at)
         VALUES
           (:app_id, :notes, :app_version, :app_config, :created_at)
-        RETURNING id
         """
         result = session.execute(text(cmd), {
             'app_id':       app_id,
@@ -42,7 +41,7 @@ class UniversalAppAutoBackup(Thread):
             'app_config':   app_config,
             'created_at':   int(time.time()),
         })
-        snapshot_id = result.scalar_one()
+        snapshot_id = result.lastrowid
         session.commit()
         return snapshot_id
 
