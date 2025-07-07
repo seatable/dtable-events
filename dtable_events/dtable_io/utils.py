@@ -1032,13 +1032,14 @@ def import_archive_from_src_dtable(username, dtable_uuid):
             time.sleep(1)
     except Exception as e:
         raise e
-    finally:
-        # delete backup
-        dtable_storage_server_api.delete_dtable_all_backups(temp_uuid)
+    else:
         # turn on archive feature for new dtable
         dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
         dtable_server_api.update_enable_archive(True)
         return status
+    finally:
+        # delete backup
+        dtable_storage_server_api.delete_dtable_all_backups(temp_uuid)
 
 
 def download_files_to_path(username, repo_id, dtable_uuid, files, path, db_session, files_map=None):
