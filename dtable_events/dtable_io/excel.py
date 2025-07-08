@@ -1403,7 +1403,11 @@ def convert_time_to_utc_str(time_str):
 def select_option_to_name(id2name, cell):
     if not cell.get('display_value'):
         return ''
-    return id2name.get(cell.get('display_value'), '')
+    display_value = cell.get('display_value')
+    if isinstance(display_value, list):
+        return ','.join([id2name.get(item, '') for item in display_value])
+    else:
+        return id2name.get(display_value, '')
 
 def email_to_nickname(email2nickname, cell):
     if not cell.get('display_value'):
