@@ -38,13 +38,15 @@ class APICallsCounter:
         for stat in stats:
             dtable_uuid = stat.get('base')
             api_name = stat.get('name')
-            org_id = stat.get('org_id') or -1
-            owner_id = stat.get('owner_id') or ''
+            org_id = stat.get('org_id')
+            if not (isinstance(org_id, int) and org_id > 0):
+                org_id = -1
+            owner_id = stat.get('owner_id')
             count = stat.get('count') or 0
             dtable_counts_dict[uuid_str_to_32_chars(dtable_uuid)][api_name] += count
             if org_id != -1:
                 org_counts_dict[org_id][api_name] += count
-            else:
+            elif owner_id:
                 owner_ids_dict[owner_id][api_name] += count
         month = info_time.strftime('%Y-%m-01')
         updated_at = str(datetime.now())
