@@ -6,6 +6,7 @@ import json
 
 import requests
 from datetime import datetime
+from sqlalchemy import text
 
 from seaserv import seafile_api
 
@@ -31,7 +32,7 @@ from dtable_events.convert_page.utils import get_chrome_data_dir, get_driver, op
     gen_page_design_pdf_view_url, gen_document_pdf_view_url
 from dtable_events.statistics.db import save_email_sending_records, batch_save_email_sending_records
 from dtable_events.data_sync.data_sync_utils import run_sync_emails
-from dtable_events.utils import is_valid_email, uuid_str_to_36_chars, gen_file_upload_url
+from dtable_events.utils import is_valid_email, uuid_str_to_36_chars, gen_file_upload_url, uuid_str_to_32_chars
 from dtable_events.utils.dtable_server_api import DTableServerAPI, BaseExceedsException
 from dtable_events.utils.exception import ExcelFormatError
 from dtable_events.utils.email_sender import EmailSender
@@ -678,10 +679,20 @@ def send_notification_msg(emails, user_col_key, msg, dtable_uuid, username, tabl
         dtable_message_logger.info('Notification sending success!')
     return result
 
-def convert_page_design_to_pdf(dtable_uuid, page_id, row_id, username=None):
+def convert_page_design_to_pdf(dtable_uuid, page_id, row_id, username, config):
     if not username:
         username = 'dtable-events'
-    access_token = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL).internal_access_token
+    db_session = init_db_session_class(config)()
+    sql = "SELECT `owner`, `org_id` FROM dtables d JOIN workspaces w ON d.workspace_id=w.id WHERE d.uuid=:dtable_uuid"
+    try:
+        result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+    except Exception as e:
+        dtable_io_logger.error(f'query dtable {dtable_uuid} owner, org_id error {e}')
+        return
+    finally:
+        db_session.close()
+    kwargs = {'org_id': result.org_id, 'owner_id': result.owner}
+    access_token = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL, kwargs=kwargs).internal_access_token
     target_dir = '/tmp/dtable-io/convert-page-to-pdf'
     if not os.path.isdir(target_dir):
         os.makedirs(target_dir)
@@ -703,10 +714,20 @@ def convert_page_design_to_pdf(dtable_uuid, page_id, row_id, username=None):
         driver.quit()
 
 
-def convert_document_to_pdf(dtable_uuid, doc_uuid, row_id, username=None):
+def convert_document_to_pdf(dtable_uuid, doc_uuid, row_id, username, config):
     if not username:
         username = 'dtable-events'
-    access_token = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL).internal_access_token
+    db_session = init_db_session_class(config)()
+    sql = "SELECT `owner`, `org_id` FROM dtables d JOIN workspaces w ON d.workspace_id=w.id WHERE d.uuid=:dtable_uuid"
+    try:
+        result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+    except Exception as e:
+        dtable_io_logger.error(f'query dtable {dtable_uuid} owner, org_id error {e}')
+        return
+    finally:
+        db_session.close()
+    kwargs = {'org_id': result.org_id, 'owner_id': result.owner}
+    access_token = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL, kwargs=kwargs).internal_access_token
     target_dir = '/tmp/dtable-io/convert-document-to-pdf'
     if not os.path.isdir(target_dir):
         os.makedirs(target_dir)

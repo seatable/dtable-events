@@ -4,10 +4,13 @@ import os
 from queue import Queue, Full
 from threading import Thread
 
+from sqlalchemy import text
+
 from dtable_events.app.config import INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
 from dtable_events.convert_page.utils import get_chrome_data_dir, get_driver, open_page_view, wait_page_view, \
     get_documents_config, gen_page_design_pdf_view_url, gen_document_pdf_view_url
-from dtable_events.utils import get_opt_from_conf_or_env
+from dtable_events.db import init_db_session_class
+from dtable_events.utils import get_opt_from_conf_or_env, uuid_str_to_32_chars
 from dtable_events.utils.dtable_server_api import DTableServerAPI, NotFoundException
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 
@@ -27,6 +30,7 @@ class ConvertPageTOPDFManager:
         key_max_queue = 'max_queue'
 
         self.config = config
+        self.session_class = init_db_session_class(self.config)
 
         if config.has_section(section_name):
             try:
@@ -116,7 +120,17 @@ class ConvertPageToPDFWorker:
 
         monitor_dom_id = 'page-design-render-complete'
 
-        dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, INNER_DTABLE_SERVER_URL)
+        db_session = self.manager.session_class()
+        sql = "SELECT `owner`, `org_id` FROM dtables d JOIN workspaces w ON d.workspace_id=w.id WHERE d.uuid=:dtable_uuid"
+        try:
+            result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+        except Exception as e:
+            logger.error(f'query dtable {dtable_uuid} owner, org_id error {e}')
+            return
+        finally:
+            db_session.close()
+        kwargs = {'org_id': result.org_id, 'owner_id': result.owner}
+        dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, INNER_DTABLE_SERVER_URL, kwargs=kwargs)
 
         # convert
         # open all tabs of rows step by step
@@ -145,7 +159,7 @@ class ConvertPageToPDFWorker:
                             try:
                                 callback(row_id, pdf_content)
                             except Exception as e:
-                                logging.exception(e)
+                                logger.exception(e)
             except Exception as e:
                 logger.exception('convert task: %s error: %s', self.task_info, e)
                 continue
@@ -158,7 +172,7 @@ class ConvertPageToPDFWorker:
                 try:
                     callback(table, target_column)
                 except Exception as e:
-                    logging.exception(e)
+                    logger.exception(e)
 
     def convert_document_pdf(self, driver):
         dtable_uuid = self.task_info.get('dtable_uuid')
@@ -184,7 +198,7 @@ class ConvertPageToPDFWorker:
                 try:
                     callback(pdf_content)
                 except Exception as e:
-                    logging.exception(e)
+                    logger.exception(e)
 
     def check_document_resources(self, repo_id, dtable_uuid, doc_uuid):
         """

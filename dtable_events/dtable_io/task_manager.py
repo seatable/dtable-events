@@ -345,7 +345,7 @@ class TaskManager(object):
 
         task_id = str(uuid.uuid4())
         task = (convert_page_design_to_pdf,
-                (dtable_uuid, page_id, row_id, username))
+                (dtable_uuid, page_id, row_id, username, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
@@ -357,7 +357,7 @@ class TaskManager(object):
 
         task_id = str(uuid.uuid4())
         task = (convert_document_to_pdf,
-                (dtable_uuid, doc_uuid, row_id, username))
+                (dtable_uuid, doc_uuid, row_id, username, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
