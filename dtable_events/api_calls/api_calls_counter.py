@@ -39,8 +39,14 @@ class APICallsCounter:
             dtable_uuid = stat.get('base')
             api_name = stat.get('name')
             org_id = stat.get('org_id')
-            if not (isinstance(org_id, int) and org_id > 0):
+            # org_id should be a int
+            if not org_id:
                 org_id = -1
+            else:
+                if not isinstance(org_id, int):
+                    org_id = -1
+                if org_id <= 0:
+                    org_id = -1
             owner_id = stat.get('owner_id')
             count = stat.get('count') or 0
             dtable_counts_dict[uuid_str_to_32_chars(dtable_uuid)][api_name] += count
