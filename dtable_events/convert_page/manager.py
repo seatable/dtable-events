@@ -180,7 +180,17 @@ class ConvertPageToPDFWorker:
         action_type = self.task_info.get('action_type')
         per_converted_callbacks = self.task_info.get('per_converted_callbacks') or []
 
-        dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, INNER_DTABLE_SERVER_URL)
+        db_session = self.manager.session_class()
+        sql = "SELECT `owner`, `org_id` FROM dtables d JOIN workspaces w ON d.workspace_id=w.id WHERE d.uuid=:dtable_uuid"
+        try:
+            result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+        except Exception as e:
+            logger.error(f'query dtable {dtable_uuid} owner, org_id error {e}')
+            return
+        finally:
+            db_session.close()
+        kwargs = {'org_id': result.org_id, 'owner_id': result.owner}
+        dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, INNER_DTABLE_SERVER_URL, kwargs=kwargs)
         monitor_dom_id = 'document-render-complete'
 
         output = io.BytesIO()  # receive pdf content
