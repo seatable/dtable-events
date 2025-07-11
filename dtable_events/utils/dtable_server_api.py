@@ -25,13 +25,19 @@ def get_dtable_server_token(username, dtable_uuid, timeout=300, permission=None,
         'dtable_uuid': dtable_uuid,
         'permission': permission if permission else 'rw',
     }
+    if not kwargs or not isinstance(kwargs, dict):
+        kwargs = {}
     if username:
         payload['username'] = username
         if is_valid_email(username):
-            if kwargs and isinstance(kwargs, dict) and 'user_department_ids_map' in kwargs:
+            if 'user_department_ids_map' in kwargs:
                 payload['user_department_ids_map'] = kwargs['user_department_ids_map']
-            if kwargs and isinstance(kwargs, dict) and 'id_in_org' in kwargs:
+            if 'id_in_org' in kwargs:
                 payload['id_in_org'] = kwargs['id_in_org']
+    if kwargs.get('org_id'):
+        payload['org_id'] = kwargs['org_id']
+    if kwargs.get('owner_id'):
+        payload['owner_id'] = kwargs['owner_id']
 
     access_token = jwt.encode(
         payload, DTABLE_PRIVATE_KEY, algorithm='HS256'
