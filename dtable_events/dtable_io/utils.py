@@ -68,6 +68,16 @@ def gen_dir_zip_download_url(token):
     INNER_FILE_SERVER_ROOT = 'http://127.0.0.1:' + str(FILE_SERVER_PORT)
     return '%s/zip/%s' % (INNER_FILE_SERVER_ROOT, token)
 
+def get_file_download_url(token, filename):
+    """
+    Generate fileserver file url.
+    Format: http://<domain:port>/files/<token>/<filename>
+    """
+    FILE_SERVER_PORT = task_manager.conf['file_server_port']
+    INNER_FILE_SERVER_ROOT = 'http://127.0.0.1:' + str(FILE_SERVER_PORT)
+    return '%s/files/%s/%s' % (INNER_FILE_SERVER_ROOT, token,
+                               urlquote(filename))
+
 
 def convert_dtable_export_file_and_image_url(workspace_id, dtable_uuid, dtable_content):
     """ notice that this function receive a python dict and return a python dict
@@ -156,68 +166,64 @@ def prepare_dtable_json_from_memory(workspace_id, dtable_uuid, username):
     with open(path, 'wb') as f:
         f.write(content_json)
 
-
-def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id, task_id):
-    """
-    used in export dtable
-    create asset folder at /tmp/dtable-io/<dtable_uuid>/dtable_asset
-    notice that create_dtable_json and this function create file at same directory
-
-    1. get asset zip from file_server
-    2. unzip it at /tmp/dtable-io/<dtable_uuid>/dtable_asset/
-
-    :param username:
-    :param repo_id:
-    :param asset_dir_id:
-    :return:
-    """
+def prepare_asset_download(username, repo_id, dtable_uuid, asset_dir_id, task_id, resumeable_export):
     from dtable_events.dtable_io import dtable_io_logger, add_task_id_to_log
 
-    # get file server access token
-    fake_obj_id = {
-        'obj_id': asset_dir_id,
-        'dir_name': 'asset',        # after download and zip, folder root name is asset
-        'is_windows': 0
-    }
-    try:
-        token = seafile_api.get_fileserver_access_token(
-            repo_id, json.dumps(fake_obj_id), 'download-dir', username, use_onetime=False
-    )
-    except Exception as e:
-        raise e
+    def download_assets_recursively(username, repo_id, dtable_uuid, asset_dir_id, task_id, base_path=None):
+        """
+        Recursively download asset directory.
+        1. Walk through directory entries via file server API
+        2. For each file, download individually; on error, skip
+        3. Skip files that already exist if resumeable_export is True
+        """
+        if base_path is None:
+            base_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_asset', 'asset')
 
-    progress = {'zipped': 0, 'total': 1}
-    last_log_time = None
-    dtable_io_logger.info(add_task_id_to_log(f'export dtable: {dtable_uuid} username: {username} start to zip assets', task_id))
-    while progress['zipped'] != progress['total']:
-        time.sleep(0.5)   # sleep 0.5 second
+        os.makedirs(base_path, exist_ok=True)
         try:
-            progress = json.loads(seafile_api.query_zip_progress(token))
+            entries = seafile_api.list_dir_by_dir_id(repo_id, asset_dir_id)
         except Exception as e:
-            raise e
-        else:
-            # per 10s or zip progress done, log progress
-            if not last_log_time or time.time() - last_log_time > 10 or progress['zipped'] == progress['total']:
-                dtable_io_logger.info(add_task_id_to_log(f'progress {progress}', task_id))
-                last_log_time = time.time()
-            failed_reason = progress.get('failed_reason')
-            if failed_reason:
-                raise Exception(failed_reason)
-    dtable_io_logger.info(add_task_id_to_log(f'export dtable: {dtable_uuid} username: {username} zip assets done', task_id))
+            dtable_io_logger.error(add_task_id_to_log(f"Failed to list dir {asset_dir_id}: {e}", task_id))
+            return
 
-    dtable_io_logger.info(add_task_id_to_log(f'export dtable: {dtable_uuid} username: {username} start to download asset zip', task_id))
+        for entry in entries:
+            file_name = entry.obj_name
+            obj_id = entry.obj_id
+            entry_type = entry.mode
+            path = os.path.join(base_path, file_name)
 
-    asset_url = gen_dir_zip_download_url(token)
-    try:
-        resp = requests.get(asset_url)
-    except Exception as e:
-        raise e
-    dtable_io_logger.info(add_task_id_to_log(f'export dtable user: {username} dtable: {dtable_uuid} asset size: {len(resp.content) / 1024 / 1024} MB', task_id))
-    file_obj = io.BytesIO(resp.content)
-    if is_zipfile(file_obj):
-        with ZipFile(file_obj) as zp:
-            dtable_io_logger.info(add_task_id_to_log(f'export dtable user: {username} dtable: {dtable_uuid} start to extractall', task_id))
-            zp.extractall(os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_asset'))
+            if entry_type==16384:
+                # recurse into subdir
+                download_assets_recursively(username, repo_id, dtable_uuid, obj_id, task_id,
+                                            base_path=path)
+            else:
+                # skip if already downloaded 
+                if resumeable_export and os.path.exists(path):
+                    dtable_io_logger.info(add_task_id_to_log(f"Skipping existing file: {path}", task_id))
+                    continue
+                token = seafile_api.get_fileserver_access_token(
+                    repo_id, obj_id, 'download', username, use_onetime=False
+                )
+                #ensure file downlod intact
+                temp_path = path +  '.part  '
+                try:
+                    url = get_file_download_url(token, file_name)
+                    resp = requests.get(url, stream=True)
+                    resp.raise_for_status()
+
+                    with open(temp_path, 'wb') as f:
+                        for chunk in resp.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                    os.rename(temp_path, path)
+
+                except Exception as e:
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
+                    dtable_io_logger.warning(add_task_id_to_log(f"Failed to download {path}, skipping: {e}", task_id))    
+    dtable_io_logger.info(add_task_id_to_log(f"export dtable: {dtable_uuid} username: {username} start asset recursive download", task_id))
+    download_assets_recursively(username, repo_id, dtable_uuid, asset_dir_id, task_id)
+    dtable_io_logger.info(add_task_id_to_log(f"export dtable: {dtable_uuid} username: {username}asset download complete", task_id))
 
 
 def copy_src_forms_to_json(dtable_uuid, tmp_file_path, db_session):
@@ -505,7 +511,7 @@ def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_n
     return content_json
 
 
-def post_asset_files(repo_id, dtable_uuid, username):
+def post_asset_files(repo_id, dtable_uuid, username, resumable_import):
     """
     used to import dtable
     post asset files in  /tmp/dtable-io/<dtable_uuid>/dtable_zip_extracted/ to file server
@@ -526,6 +532,12 @@ def post_asset_files(repo_id, dtable_uuid, username):
             path_id = seafile_api.get_dir_id_by_path(repo_id, cur_file_parent_path)
             if not path_id:
                 seafile_api.mkdir_with_parents(repo_id, '/', cur_file_parent_path[1:], username)
+
+            if resumable_import:
+                cur_file_path = os.path.join(cur_file_parent_path, file_name)
+                file_id = seafile_api.get_file_id_by_path(repo_id, cur_file_path)
+                if file_id:
+                    continue
 
             seafile_api.post_file(repo_id, tmp_file_path, cur_file_parent_path, file_name, username)
 

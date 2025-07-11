@@ -13,8 +13,8 @@ from seaserv import seafile_api
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, INNER_DTABLE_SERVER_URL
 from dtable_events.dtable_io.big_data import import_excel_to_db, update_excel_to_db, export_big_data_to_excel, \
     export_app_table_page_to_excel
-from dtable_events.dtable_io.utils import post_big_data_screen_app_zip_file, \
-    prepare_asset_file_folder, post_dtable_json, post_asset_files, \
+from dtable_events.dtable_io.utils import post_big_data_screen_app_zip_file, prepare_asset_download, \
+    post_dtable_json, post_asset_files, \
     download_files_to_path, create_forms_from_src_dtable, copy_src_forms_to_json, \
     prepare_dtable_json_from_memory, update_page_design_static_image, \
     copy_src_auto_rules_to_json, create_auto_rules_from_src_dtable, sync_app_users_to_table, \
@@ -51,7 +51,7 @@ def add_task_id_to_log(log_msg, task_id=None):
     return f'task [{task_id}] - {log_msg}' if task_id else log_msg
 
 
-def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asset_dir_id, config, task_id):
+def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asset_dir_id, config, task_id, resumeable_export):
     """
     1. prepare file content at /tmp/dtable-io/<dtable_id>/dtable_asset/...
     2. make zip file
@@ -76,7 +76,8 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
         raise Exception(error_msg)
 
     dtable_io_logger.info(add_task_id_to_log('Clear tmp dirs and files before prepare.', task_id))
-    clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path)
+    if not resumeable_export:
+        clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path)
     os.makedirs(tmp_file_path, exist_ok=True)
     # import here to avoid circular dependency
 
@@ -93,12 +94,11 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
     if asset_dir_id:
         dtable_io_logger.info(add_task_id_to_log('Create asset dir.', task_id))
         try:
-            prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id, task_id)
+            prepare_asset_download(username, repo_id, dtable_uuid, asset_dir_id, task_id, resumeable_export)
         except Exception as e:
             error_msg = 'dtable: {} create asset folder failed. ERROR: {}'.format(dtable_uuid, e)
             dtable_io_logger.exception(add_task_id_to_log(error_msg, task_id))
-            if e.args and e.args[0] == 'size too large':
-                task_result['warnings'].append({'type': 'asset_size_too_large'})
+            task_result['warnings'].append({'error': error_msg})
 
     # 3. copy forms
     try:
@@ -167,7 +167,7 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
 
 
 def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage,
-                             can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id, config):
+                             can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id, config, resumable_import):
     """
     post files at /tmp/<dtable_uuid>/dtable_zip_extracted/ to file server
     unzip django uploaded tmp file is suppose to be done in dtable-web api.
@@ -188,9 +188,12 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
 
     dtable_io_logger.info('Post asset files in tmp path to file server.')
     try:
-        post_asset_files(repo_id, dtable_uuid, username)
+        post_asset_files(repo_id, dtable_uuid, username, resumable_import)
     except Exception as e:
         dtable_io_logger.error('post asset files failed. ERROR: {}'.format(e))
+
+    if resumable_import:
+        return
 
     dtable_io_logger.info('create forms from src dtable.')
     try:
