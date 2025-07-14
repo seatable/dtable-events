@@ -1247,6 +1247,7 @@ def batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session, is_for
     src_table = src_assets.get('src_table')
 
     dataset_data = None
+    rows_count = 0
     for dataset_sync in dataset_syncs:
         dst_dtable_uuid = uuid_str_to_36_chars(dataset_sync.dst_dtable_uuid)
         dst_table_id = dataset_sync.dst_table_id
@@ -1296,6 +1297,8 @@ def batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session, is_for
                 'db_session': db_session,
                 'app': app
             })
+            row_nums = len(dataset_data['rows_id_list'])
+            rows_count += row_nums
         except Exception as e:
             cds_logger.error('sync common dataset src-uuid: %s src-table: %s src-view: %s dst-uuid: %s dst-table: %s error: %s', 
                         src_dtable_uuid, src_table['name'], src_view_id, dst_dtable_uuid, dst_table_name, e)
@@ -1326,3 +1329,6 @@ def batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session, is_for
             'id': dataset_sync_id
         })
         db_session.commit()
+
+    return rows_count
+  
