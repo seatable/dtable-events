@@ -25,9 +25,9 @@ class AutomationRuleHandler(Thread):
         self.per_update_auto_rule_workers = 3
 
         self.queue = Queue()
-        self.deferred_queue = Queue()
-        self.processing_uuids_set = set()
-        self.deferred_uuids_count_dict = defaultdict(lambda: 0)
+        self.thread_queues = []
+        self.thread_uuids = []
+        self.thread_status = []
         self.processing_lock = Lock()
 
         self._parse_config(config)
@@ -53,22 +53,12 @@ class AutomationRuleHandler(Thread):
     def is_enabled(self):
         return self._enabled
 
-    def scan(self):
+    def scan(self, index):
+        thread_queue = self.thread_queues[index]
         while True:
-            event = self.queue.get()
-            event_dtable_uuid = event.get('dtable_uuid')
-            is_from_defered = event.get('is_from_defered') or False
+            event = thread_queue.get()
             with self.processing_lock:
-                if event_dtable_uuid in self.processing_uuids_set:  # uuid's some rule is running
-                    self.deferred_queue.put(event)
-                    self.deferred_uuids_count_dict[event_dtable_uuid] += 1
-                    continue
-                if not is_from_defered and self.deferred_uuids_count_dict[event_dtable_uuid]:  # uuid's some events are defered, put event at the end of defered queue also
-                    self.deferred_queue.put(event)
-                    self.deferred_uuids_count_dict[event_dtable_uuid] += 1
-                    continue
-                self.deferred_uuids_count_dict.pop(event_dtable_uuid, None)
-                self.processing_uuids_set.add(event_dtable_uuid)
+                self.thread_status[index] = 'processing'
             logger.info("Start to trigger rule %s in thread %s", event, current_thread().name)
             session = self._db_session_class()
             try:
@@ -78,27 +68,42 @@ class AutomationRuleHandler(Thread):
             finally:
                 session.close()
                 with self.processing_lock:
-                    self.processing_uuids_set.remove(event_dtable_uuid)
+                    self.thread_status[index] = 'idle'
 
-    def deferred_requeue_loop(self):
+    def schedule_events(self):
         while True:
-            try:
-                event = self.deferred_queue.get_nowait()
-                event_dtable_uuid = event.get('dtable_uuid')
-                logger.debug('get event %s from deferred queue', event)
+            event = self.queue.get()
+            logger.debug(f"start to scheduler event: {event}")
+            event_dtable_uuid = event.get('dtable_uuid')
+            is_put_queue = False
+            while not is_put_queue:
                 with self.processing_lock:
-                    self.deferred_uuids_count_dict[event_dtable_uuid] -= 1
-                    event['is_from_defered'] = True
-                    self.queue.put(event)
-            except Empty:
-                time.sleep(1)
-            time.sleep(0.02)
+                    for index in range(self.per_update_auto_rule_workers):
+                        if self.thread_uuids[index] is None:
+                            self.thread_queues[index].put(event)
+                            self.thread_uuids[index] = event_dtable_uuid
+                            is_put_queue = True
+                            logger.debug(f"schedule event {event} in index {index}, uuid is None")
+                            break
+                        if self.thread_queues[index].qsize() == 0 and self.thread_status[index] == 'idle':
+                            self.thread_queues[index].put(event)
+                            self.thread_uuids[index] = event_dtable_uuid
+                            is_put_queue = True
+                            logger.debug(f"schedule event {event} in index {index}, queue is empty")
+                            break
+                        if self.thread_uuids[index] == event_dtable_uuid:
+                            self.thread_queues[index].put(event)
+                            is_put_queue = True
+                            logger.debug(f"schedule event {event} in index {index}, uuid matched")
+                            break
+                if not is_put_queue:
+                    time.sleep(0.1)
 
     def start_threads(self):
         executor = ThreadPoolExecutor(max_workers=self.per_update_auto_rule_workers, thread_name_prefix='scan-auto-rules')
-        for _ in range(self.per_update_auto_rule_workers):
-            executor.submit(self.scan)
-        Thread(target=self.deferred_requeue_loop, name='scan-auto-rules-deferred-requeue').start()
+        for index in range(self.per_update_auto_rule_workers):
+            executor.submit(self.scan, index)
+        Thread(target=self.schedule_events).start()
 
     def run(self):
         if not self.is_enabled():
@@ -106,6 +111,10 @@ class AutomationRuleHandler(Thread):
             return
         logger.info('Starting handle automation rules...')
         subscriber = self._redis_client.get_subscriber('automation-rule-triggered')
+
+        self.thread_queues = [Queue() for _ in range(self.per_update_auto_rule_workers)]
+        self.thread_uuids = [None for _ in range(self.per_update_auto_rule_workers)]
+        self.thread_status = ['idle' for _ in range(self.per_update_auto_rule_workers)]
 
         self.start_threads()
 
