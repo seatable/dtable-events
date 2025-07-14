@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from threading import Thread
 
+from dtable_events.utils.utils_metric import publish_common_dataset_metric_decorator
 import jwt
 from apscheduler.schedulers.blocking import BlockingScheduler
 from sqlalchemy import text
@@ -63,7 +64,7 @@ def list_pending_common_dataset_syncs(db_session):
     })
     return dataset_list
 
-
+@publish_common_dataset_metric_decorator
 def check_common_dataset(app, session_class):
     with session_class() as db_session:
         dataset_sync_list = list(list_pending_common_dataset_syncs(db_session))
@@ -74,17 +75,20 @@ def check_common_dataset(app, session_class):
         cds_logger.info('checkout %s common-dataset(s)', len(cds_dst_dict))
         dataset_count = 0
         sync_count = 0
+        total_row_count= 0
         for dataset_id, dataset_syncs in cds_dst_dict.items():
             dataset_count += 1
             sync_count += len(dataset_syncs)
             cds_logger.info('start to sync no.%s, dataset_id: %s, syncs count: %s', dataset_count, dataset_id, len(dataset_syncs))
             try:
-                batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session)
+                rows_count = batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session)
             except Exception as e:
                 cds_logger.exception('batch sync common dataset_id: %s, error: %s', dataset_id, e)
             finally:
                 cds_logger.info('finish sync dataset_id: %s, syncs count: %s', dataset_id, len(dataset_syncs))
+            total_row_count += rows_count
         cds_logger.info('all syncs done')
+        return total_row_count, sync_count
 
 
 class CommonDatasetSyncerTimer(Thread):
