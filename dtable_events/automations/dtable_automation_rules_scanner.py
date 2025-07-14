@@ -1,9 +1,9 @@
 import logging
-import time
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from queue import Queue, Empty
-from threading import Thread, current_thread, Lock
+from threading import Thread, current_thread
 
 from sqlalchemy import text
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -60,46 +60,27 @@ class DTableAutomationRulesScannerTimer(Thread):
         self.db_session_class = db_session_class
         self.max_workers = 3
         self.queue = Queue()
-        self.deferred_queue = Queue()
-        self.processing_lock = Lock()
-        self.processing_uuids_set = set()
 
     def trigger_rule(self):
         logging.info('thread %s start', current_thread().name)
         rule_interval_metadata_cache_manager = RuleIntervalMetadataCacheManager()
         while True:
             try:
-                rule = self.queue.get(timeout=1)
+                dtable_uuid, rules = self.queue.get(timeout=1)
             except Empty:
                 return  # means no rules to trigger, finish thread
-            with self.processing_lock:
-                if rule.dtable_uuid in self.processing_uuids_set:
-                    self.deferred_queue.put(rule)
-                    continue
-                self.processing_uuids_set.add(rule.dtable_uuid)
             db_session = self.db_session_class()
-            logging.info('thread %s start to handle rule %s dtable_uuid %s', current_thread().name, rule.id, rule.dtable_uuid)
-            try:
-                run_regular_execution_rule(rule, db_session, rule_interval_metadata_cache_manager)
-            except Exception as e:
-                logging.exception(e)
-                logging.error(f'check rule failed. {rule}, error: {e}')
-            finally:
-                db_session.close()
-                with self.processing_lock:
-                    self.processing_uuids_set.remove(rule.dtable_uuid)
+            for rule in rules:
+                logging.info('thread %s start to handle rule %s dtable_uuid %s', current_thread().name, rule.id, dtable_uuid)
+                try:
+                    run_regular_execution_rule(rule, db_session, rule_interval_metadata_cache_manager)
+                except Exception as e:
+                    logging.exception(e)
+                    logging.error(f'check rule failed. {rule}, error: {e}')
+                finally:
+                    db_session.close()
 
-    def deferred_requeue_loop(self):
-        """put deferred rules back to queue"""
-        while not self.queue.empty() or not self.deferred_queue.empty():
-            try:
-                rule = self.deferred_queue.get_nowait()
-                self.queue.put(rule)
-            except Empty:
-                break
-            time.sleep(0.01)
-
-    def scan_dtable_automation_rules(self, workers=3):
+    def scan_dtable_automation_rules(self):
         sql = '''
                 SELECT `dar`.`id`, `run_condition`, `trigger`, `actions`, `last_trigger_time`, `dtable_uuid`, `trigger_count`, `org_id`, dar.`creator` FROM dtable_automation_rules dar
                 JOIN dtables d ON dar.dtable_uuid=d.uuid
@@ -124,22 +105,22 @@ class DTableAutomationRulesScannerTimer(Thread):
         finally:
             db_session.close()
 
+        uuid_rules_dict = defaultdict(list)
+
         for rule in rules:
-            self.queue.put(rule)
+            uuid_rules_dict[rule.dtable_uuid].append(rule)
+        for dtable_uuid, rules in uuid_rules_dict.items():
+            self.queue.put((dtable_uuid, rules))
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             for _ in range(self.max_workers):
                 executor.submit(self.trigger_rule)
-
-            while not self.queue.empty():
-                time.sleep(0.2)
-                self.deferred_requeue_loop()
 
         logging.info('all rules done')
 
     def run(self):
         sched = BlockingScheduler()
         # fire at every hour in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='*', misfire_grace_time=600)
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='55', misfire_grace_time=600)
         def timed_job():
             logging.info('Starts to scan automation rules...')
 
