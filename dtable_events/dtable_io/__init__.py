@@ -1,3 +1,4 @@
+import asyncio
 import os
 import shutil
 import uuid
@@ -7,6 +8,8 @@ import json
 import requests
 from datetime import datetime
 from sqlalchemy import text
+from playwright.async_api import async_playwright
+from playwright._impl._errors import TimeoutError
 
 from seaserv import seafile_api
 
@@ -41,6 +44,8 @@ from dtable_events.dtable_io.utils import clear_tmp_dir, clear_tmp_file, clear_t
     SDOC_IMAGES_DIR, get_seadoc_download_link, gen_seadoc_base_dir, export_sdoc_prepare_images_folder,\
     batch_upload_sdoc_images, get_documents_config, save_documents_config
 from dtable_events.app.log import setup_logger
+from dtable_events.convert_page.utils import get_pdf_print_options, wait_for_images
+from dtable_events.convert_page.manager import playwright_manager
 
 dtable_io_logger = setup_logger('dtable_events_io', propagate=False)
 dtable_message_logger = setup_logger('dtable_events_message', propagate=False)
@@ -917,22 +922,14 @@ def convert_page_design_to_pdf(dtable_uuid, page_id, row_id, username, config):
     target_dir = '/tmp/dtable-io/convert-page-to-pdf'
     if not os.path.isdir(target_dir):
         os.makedirs(target_dir)
-    target_path = os.path.join(target_dir, '%s_%s_%s.pdf' % (dtable_uuid, page_id, row_id))
 
-    chrome_data_dir_name = f'{dtable_uuid}-{page_id}-{row_id}'
-    driver = get_driver(get_chrome_data_dir(chrome_data_dir_name))
-    monitor_dom_id = 'page-design-render-complete'
+    url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/row/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id, row_id)
+    url += '?access-token=%s&need_convert=%s' % (access_token, 0)
+    filename = '%s_%s_%s.pdf' % (dtable_uuid, page_id, row_id)
     try:
-        pdf_view_url = gen_page_design_pdf_view_url(dtable_uuid, page_id, access_token, row_id)
-
-        session_id = open_page_view(driver, pdf_view_url)
-        wait_page_view(driver, session_id, monitor_dom_id, row_id, target_path)
+        playwright_manager.batch_urls_to_pdf_sync([{'url': url, 'filename': filename}], target_dir)
     except Exception as e:
-        dtable_io_logger.exception('convert page_desgin, dtable: %s page: %s row: %s error: %s', dtable_uuid, page_id, row_id, e)
-    finally:
-        if os.path.exists(chrome_data_dir_name):
-            shutil.rmtree(chrome_data_dir_name)
-        driver.quit()
+        dtable_io_logger.exception('dtable: %s plugin: page-design page: %s row: %s error: %s', dtable_uuid, page_id, row_id, e)
 
 
 def convert_document_to_pdf(dtable_uuid, doc_uuid, row_id, username, config):
@@ -952,21 +949,14 @@ def convert_document_to_pdf(dtable_uuid, doc_uuid, row_id, username, config):
     target_dir = '/tmp/dtable-io/convert-document-to-pdf'
     if not os.path.isdir(target_dir):
         os.makedirs(target_dir)
-    target_path = os.path.join(target_dir, '%s_%s_%s.pdf' % (dtable_uuid, doc_uuid, row_id))
 
-    chrome_data_dir_name = f'{dtable_uuid}-{doc_uuid}-{row_id}'
-    driver = get_driver(get_chrome_data_dir(chrome_data_dir_name))
-    monitor_dom_id = 'document-render-complete'
+    url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/document/%s/row/%s/' % (uuid_str_to_36_chars(dtable_uuid), doc_uuid, row_id)
+    url += '?access-token=%s&need_convert=%s' % (access_token, 0)
+    filename = '%s_%s_%s.pdf' % (dtable_uuid, doc_uuid, row_id)
     try:
-        pdf_view_url = gen_document_pdf_view_url(dtable_uuid, doc_uuid, access_token, row_id)
-        session_id = open_page_view(driver, pdf_view_url)
-        wait_page_view(driver, session_id, monitor_dom_id, row_id, target_path)
+        playwright_manager.batch_urls_to_pdf_sync([{'url': url, 'filename': filename}], target_dir)
     except Exception as e:
-        dtable_io_logger.exception('convert document, dtable: %s page: %s row: %s to pdf, error: %s', dtable_uuid, doc_uuid, row_id, e)
-    finally:
-        if os.path.exists(chrome_data_dir_name):
-            shutil.rmtree(chrome_data_dir_name)
-        driver.quit()
+        dtable_io_logger.exception('dtable: %s plugin: document doc_uuid: %s row: %s error: %s', dtable_uuid, doc_uuid, row_id, e)
 
 
 def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image=False):

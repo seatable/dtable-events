@@ -1,343 +1,372 @@
-import io
+"""
+RobustPlaywrightManager
+- Runs a dedicated worker thread with an asyncio event loop that owns Playwright and browser instances.
+- Exposes synchronous thread-safe APIs for callers to submit PDF tasks (list of {"url","filename"}).
+- Configurable number of browser instances and pages-per-browser concurrency.
+- Saves PDFs to local files.
+- Auto-restarts browser instances when they fail, without losing queued tasks.
+
+Usage example is included at the bottom.
+"""
+
+import asyncio
 import logging
+import threading
+import time
 import os
-from queue import Queue, Full
-from threading import Thread
+import traceback
+from typing import List, Dict, Optional, Any, Tuple
+from concurrent.futures import Future, wait as wait_futures, FIRST_EXCEPTION
+import queue
 
-from sqlalchemy import text
+import psutil
+from playwright.async_api import async_playwright, Playwright, Browser
 
-from dtable_events.app.config import INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
-from dtable_events.convert_page.utils import get_chrome_data_dir, get_driver, open_page_view, wait_page_view, \
-    get_documents_config, gen_page_design_pdf_view_url, gen_document_pdf_view_url
-from dtable_events.db import init_db_session_class
-from dtable_events.utils import get_opt_from_conf_or_env, uuid_str_to_32_chars
-from dtable_events.utils.dtable_server_api import DTableServerAPI, NotFoundException
-from dtable_events.utils.dtable_db_api import DTableDBAPI
+from dtable_events.convert_page.utils import wait_for_images
 
 logger = logging.getLogger(__name__)
 
 
-class ConvertPageTOPDFManager:
+class TaskCancelled(Exception):
+    pass
 
-    def __init__(self):
-        self.max_workers = 2
-        self.max_queue = 1000
-        self.drivers = {}
 
-    def init(self, config):
-        section_name = 'CONVERT PAGE TO PDF'
-        key_max_workers = 'max_workers'
-        key_max_queue = 'max_queue'
+class RobustPlaywrightManager:
+    """
+    Manager runs a background worker thread that owns an asyncio loop and Playwright.
 
-        self.config = config
-        self.session_class = init_db_session_class(self.config)
+    Key config:
+      num_browsers: number of browser processes to launch in worker
+      pages_per_browser: concurrent pages per browser
+      page_timeout: default timeout per page operation in ms
+      launch_args: list of chromium args or executable_path via dict
+    """
 
-        if config.has_section(section_name):
+    def __init__(
+        self,
+        num_browsers: int = 2,
+        pages_per_browser: int = 3,
+        page_timeout: int = 30_000,
+        browser_launch_kwargs: Optional[Dict[str, Any]] = None,
+        health_check_interval: int = 30,
+    ):
+        self.num_browsers = max(1, num_browsers)
+        self.pages_per_browser = max(1, pages_per_browser)
+        self.page_timeout = page_timeout
+        self.browser_launch_kwargs = browser_launch_kwargs or {}
+        self.health_check_interval = health_check_interval
+
+        # thread & loop
+        self._thread: Optional[threading.Thread] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._stop_event = threading.Event()
+
+        # task queue (thread-safe for producers)
+        self._task_queue: "queue.Queue[Tuple[Dict, Future]]" = queue.Queue()
+
+        # worker-internal state (created in worker loop)
+        self._playwright: Optional[Playwright] = None
+        self._browsers: List[Optional[Browser]] = []
+        self._slot_queue: Optional[asyncio.Queue] = None  # available browser slots (browser_idx)
+        self._worker_ready = threading.Event()
+
+        # stats
+        self._total_tasks = 0
+        self._failed_tasks = 0
+        self._last_health: Dict[str, Any] = {}
+
+    # ---------------------- public sync API ----------------------
+    def start(self):
+        """Start the background worker thread and event loop."""
+        if self._thread and self._thread.is_alive():
+            return
+
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._thread_main, daemon=True)
+        self._thread.start()
+
+        # wait until worker signals it's ready
+        self._worker_ready.wait()
+
+    def stop(self):
+        """Stop background worker and clean resources. Waits for thread to exit."""
+        if not self._thread:
+            return
+        self._stop_event.set()
+        # put a dummy task to wake consumer
+        self._task_queue.put(({'__stop__': True}, Future()))
+        self._thread.join(timeout=30)
+        self._thread = None
+
+    def batch_urls_to_pdf_sync(
+        self,
+        items: List[Dict[str, str]],
+        output_dir: str,
+        timeout_ms: Optional[int] = None,
+    ) -> List[str]:
+        """
+        Submit a batch of tasks. `items` is List[{'filename': 'abc.pdf', 'url': 'https://...'}]
+        Returns list of file paths for successfully generated PDFs. Raises if the manager isn't started.
+        """
+        if not self._thread or not self._thread.is_alive():
+            raise RuntimeError("RobustPlaywrightManager not started. Call start() first.")
+
+        os.makedirs(output_dir, exist_ok=True)
+        timeout_ms = timeout_ms or self.page_timeout
+
+        futures: List[Future] = []
+        for item in items:
+            if 'url' not in item or 'filename' not in item:
+                raise ValueError("each item must have 'url' and 'filename'")
+            dest = os.path.join(output_dir, item['filename'])
+            fut: Future = Future()
+            task_dict = {'url': item['url'], 'path': dest, 'timeout_ms': timeout_ms}
+            if 'selector' in task_dict:
+                task_dict['selector'] = task_dict['selector']
+            task = (task_dict, fut)
+            self._task_queue.put(task)
+            futures.append(fut)
+            self._total_tasks += 1
+
+        # wait for all futures
+        wait_futures(futures)
+
+        results: List[str] = []
+        for fut in futures:
+            if fut.cancelled():
+                continue
+            exc = fut.exception()
+            if exc:
+                # don't raise aggregate exception - collect failed count and continue
+                self._failed_tasks += 1
+                continue
+            results.append(fut.result())
+        return results
+
+    def get_stats(self) -> Dict[str, Any]:
+        return {
+            'total_tasks': self._total_tasks,
+            'failed_tasks': self._failed_tasks,
+            'last_health': self._last_health,
+            'num_browsers': self.num_browsers,
+            'pages_per_browser': self.pages_per_browser,
+        }
+
+    # ---------------------- worker thread & loop ----------------------
+    def _thread_main(self):
+        """Thread target: setup and run asyncio event loop."""
+        try:
+            asyncio.run(self._worker_main())
+        except Exception:
+            traceback.print_exc()
+        finally:
+            self._worker_ready.clear()
+
+    async def _worker_main(self):
+        """Async worker main: start playwright, browsers, and consumer tasks."""
+        self._loop = asyncio.get_event_loop()
+        try:
+            self._playwright = await async_playwright().start()
+        except Exception:
+            traceback.print_exc()
+            raise
+
+        # launch browsers
+        self._browsers = [None] * self.num_browsers
+        for i in range(self.num_browsers):
             try:
-                self.max_workers = int(get_opt_from_conf_or_env(config, section_name, key_max_workers, default=self.max_workers))
-            except:
-                pass
-            try:
-                self.max_queue = int(get_opt_from_conf_or_env(config, section_name, key_max_queue, default=self.max_queue))
-            except:
-                pass
-        self.queue = Queue(self.max_queue)  # element in queue is a dict about task
-        try:  # kill all existing chrome processes
-            os.system("ps aux | grep chrome | grep -v grep | awk ' { print $2 } ' | xargs kill -9 > /dev/null 2>&1")
-        except:
+                self._browsers[i] = await self._launch_browser(i)
+            except Exception:
+                traceback.print_exc()
+                self._browsers[i] = None
+
+        # slot queue contains browser indices for available page slots
+        self._slot_queue = asyncio.Queue()
+        for i in range(self.num_browsers):
+            for _ in range(self.pages_per_browser):
+                await self._slot_queue.put(i)
+
+        # start a background health monitor
+        health_task = asyncio.create_task(self._health_monitor())
+
+        # start consumer
+        consumer = asyncio.create_task(self._consumer_loop())
+
+        # signal ready
+        self._worker_ready.set()
+
+        # wait until stop event set
+        while not self._stop_event.is_set():
+            await asyncio.sleep(0.5)
+
+        # shutdown
+        consumer.cancel()
+        health_task.cancel()
+        try:
+            await consumer
+        except asyncio.CancelledError:
+            pass
+        try:
+            await health_task
+        except asyncio.CancelledError:
             pass
 
-    def get_driver(self, index):
-        driver = self.drivers.get(index)
-        if not driver:
-            driver = get_driver(get_chrome_data_dir(f'convert-manager-{index}'))
-            self.drivers[index] = driver
-        return driver
+        # close browsers and playwright
+        await self._cleanup_browsers()
+        if self._playwright:
+            await self._playwright.stop()
+            self._playwright = None
 
-    def do_convert(self, index):
+    async def _launch_browser(self, idx: int) -> Browser:
+        """Launch a single Chromium browser instance. Isolated to worker loop."""
+        kwargs = dict(executable_path='/usr/bin/google-chrome', headless=True)
+        kwargs.update(self.browser_launch_kwargs)
+        # safe defaults
+        if 'args' not in kwargs:
+            kwargs['args'] = [
+                '--no-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--disable-software-rasterizer',
+            ]
+        browser = await self._playwright.chromium.launch(**kwargs)
+        return browser
+
+    async def _cleanup_browsers(self):
+        for i, b in enumerate(self._browsers):
+            try:
+                if b:
+                    await b.close()
+            except Exception:
+                pass
+        self._browsers = []
+
+    async def _health_monitor(self):
         while True:
             try:
-                task_info = self.queue.get()
-                logger.debug('do_convert task_info: %s', task_info)
-                ConvertPageToPDFWorker(task_info, index, self).work()
-            except Exception as e:
-                logger.exception('do task: %s error: %s', task_info, e)
+                await asyncio.sleep(self.health_check_interval)
+                # sample memory usage of chromium-like processes
+                total_mem_mb, total_cpu = self._aggregate_browser_process_stats()
+                self._last_health = {
+                    'memory_mb': total_mem_mb,
+                    'cpu_percent': total_cpu,
+                    'timestamp': time.time(),
+                }
+            except asyncio.CancelledError:
+                return
+            except Exception:
+                traceback.print_exc()
 
-    def start(self):
-        logger.debug('convert page to pdf max workers: %s max queue: %s', self.max_workers, self.max_queue)
-        for i in range(self.max_workers):
-            t_name = f'driver-{i}'
-            t = Thread(target=self.do_convert, args=(i,), name=t_name, daemon=True)
-            t.start()
-
-    def add_task(self, task_info):
+    def _aggregate_browser_process_stats(self) -> Tuple[float, float]:
         try:
-            logger.debug('add task_info: %s', task_info)
-            self.queue.put(task_info, block=False)
-        except Full as e:
-            logger.warning('convert queue full task: %s will be ignored', task_info)
-            raise e
-
-    def clear_chrome(self, index):
-        driver = self.drivers.get(index)
-        if not driver:
-            logger.debug('no index %s chrome', index)
-            return
-        try:  # delete all tab window except first blank
-            logger.debug('i: %s driver.window_handles[1:]: %s', index, driver.window_handles[1:])
-            for window in driver.window_handles[1:]:
-                driver.switch_to.window(window)
-                driver.close()
-            # switch to the first tab window or error will occur when open new window
-            driver.switch_to.window(driver.window_handles[0])
-        except Exception as e:
-            logger.exception('close driver: %s error: %s', index, e)
-            try:
-                driver.quit()
-            except Exception as e:
-                logger.exception('quit driver: %s error: %s', index, e)
-            self.drivers.pop(index, None)
-
-
-class ConvertPageToPDFWorker:
-
-    def __init__(self, task_info, index, manager: ConvertPageTOPDFManager):
-        self.task_info = task_info
-        self.index = index
-        self.manager = manager
-
-    def convert_page_design_pdf(self, driver, resources):
-        dtable_uuid = self.task_info.get('dtable_uuid')
-        page_id = self.task_info.get('page_id')
-        action_type = self.task_info.get('action_type')
-        per_converted_callbacks = self.task_info.get('per_converted_callbacks') or []
-        all_converted_callbacks = self.task_info.get('all_converted_callbacks') or []
-
-        row_ids = resources.get('row_ids')
-        # resources in convert-page-to-pdf action
-        table = resources.get('table')
-        target_column = resources.get('target_column')
-
-        monitor_dom_id = 'page-design-render-complete'
-
-        db_session = self.manager.session_class()
-        sql = "SELECT `owner`, `org_id` FROM dtables d JOIN workspaces w ON d.workspace_id=w.id WHERE d.uuid=:dtable_uuid"
-        try:
-            result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
-        except Exception as e:
-            logger.error(f'query dtable {dtable_uuid} owner, org_id error {e}')
-            return
-        finally:
-            db_session.close()
-        kwargs = {'org_id': result.org_id, 'owner_id': result.owner}
-        dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, INNER_DTABLE_SERVER_URL, kwargs=kwargs)
-
-        # convert
-        # open all tabs of rows step by step
-        # wait render and convert to pdf one by one
-        step = 10
-        for i in range(0, len(row_ids), step):
-            try:
-                step_row_ids = row_ids[i: i+step]
-                row_session_dict = {}
-                # open rows
-                for row_id in step_row_ids:
-                    url = gen_page_design_pdf_view_url(dtable_uuid, page_id, dtable_server_api.internal_access_token, row_id)
-                    logger.debug('check page design url: %s', url)
-                    session_id = open_page_view(driver, url)
-                    row_session_dict[row_id] = session_id
-
-                # wait for chrome windows rendering
-                for row_id in step_row_ids:
-                    output = io.BytesIO()  # receive pdf content
-                    session_id = row_session_dict[row_id]
-                    wait_page_view(driver, session_id, monitor_dom_id, row_id, output)
-                    # per converted callbacks
-                    pdf_content = output.getvalue()
-                    if action_type == 'convert_page_to_pdf':
-                        for callback in per_converted_callbacks:
-                            try:
-                                callback(row_id, pdf_content)
-                            except Exception as e:
-                                logger.exception(e)
-            except Exception as e:
-                logger.exception('convert task: %s error: %s', self.task_info, e)
-                continue
-            finally:
-                self.manager.clear_chrome(self.index)
-
-        # callbacks
-        if action_type == 'convert_page_to_pdf':
-            for callback in all_converted_callbacks:
+            total_mem = 0
+            total_cpu = 0.0
+            for p in psutil.process_iter(['name', 'memory_info', 'cpu_percent']):
                 try:
-                    callback(table, target_column)
-                except Exception as e:
-                    logger.exception(e)
+                    name = (p.info.get('name') or '').lower()
+                    if any(k in name for k in ('chrome', 'chromium', 'playwright')):
+                        mi = p.info.get('memory_info')
+                        if mi:
+                            total_mem += getattr(mi, 'rss', 0)
+                        total_cpu += float(p.info.get('cpu_percent') or 0.0)
+                except Exception:
+                    continue
+            return total_mem / (1024**2), total_cpu
+        except Exception:
+            return 0.0, 0.0
 
-    def convert_document_pdf(self, driver):
-        dtable_uuid = self.task_info.get('dtable_uuid')
-        doc_uuid = self.task_info.get('doc_uuid')
-        action_type = self.task_info.get('action_type')
-        per_converted_callbacks = self.task_info.get('per_converted_callbacks') or []
+    async def _consumer_loop(self):
+        """Consume tasks from thread-safe queue (blocking queue.Queue.get executed in executor).
+        Each queue item is (task_dict, future).
+        """
+        while True:
+            try:
+                # blocking get in threadpool, returns when main thread queued an item
+                item = await asyncio.get_event_loop().run_in_executor(None, self._task_queue.get)
+                task_dict, fut = item
 
-        db_session = self.manager.session_class()
-        sql = "SELECT `owner`, `org_id` FROM dtables d JOIN workspaces w ON d.workspace_id=w.id WHERE d.uuid=:dtable_uuid"
+                if isinstance(task_dict, dict) and task_dict.get('__stop__'):
+                    # wake up for shutdown
+                    fut.set_result(None)
+                    break
+
+                # schedule worker for this task
+                asyncio.create_task(self._handle_task(task_dict, fut))
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                traceback.print_exc()
+                await asyncio.sleep(0.1)
+
+    async def _handle_task(self, task: Dict[str, Any], fut: Future):
+        url = task['url']
+        dest_path = task['path']
+        timeout_ms = int(task.get('timeout_ms', self.page_timeout))
+
+        # ensure parent dir
         try:
-            result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+            os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+        except Exception:
+            pass
+
+        # get a browser slot (browser idx) from slot_queue
+        try:
+            browser_idx = await self._slot_queue.get()
         except Exception as e:
-            logger.error(f'query dtable {dtable_uuid} owner, org_id error {e}')
+            fut.set_exception(e)
             return
-        finally:
-            db_session.close()
-        kwargs = {'org_id': result.org_id, 'owner_id': result.owner}
-        dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, INNER_DTABLE_SERVER_URL, kwargs=kwargs)
-        monitor_dom_id = 'document-render-complete'
 
-        output = io.BytesIO()  # receive pdf content
-
-        row_id = None
-        url = gen_document_pdf_view_url(dtable_uuid, doc_uuid, dtable_server_api.internal_access_token, row_id)
-        logger.debug('check document url: %s', url)
-
-        session_id = open_page_view(driver, url)
-        wait_page_view(driver, session_id, monitor_dom_id, None, output)
-        # per converted callback
-        pdf_content = output.getvalue()
-        if action_type == 'convert_document_to_pdf_and_send':
-            for callback in per_converted_callbacks:
+        try:
+            browser = self._browsers[browser_idx]
+            if browser is None or not browser.is_connected():
+                # try to relaunch this browser
                 try:
-                    callback(pdf_content)
+                    browser = await self._launch_browser(browser_idx)
+                    self._browsers[browser_idx] = browser
                 except Exception as e:
-                    logger.exception(e)
-
-    def check_document_resources(self, repo_id, dtable_uuid, doc_uuid):
-        """
-        :return: resources -> dict or None, error_msg -> str or None
-        """
-        document = get_documents_config(repo_id, dtable_uuid, 'dtable-events')
-        if not document:
-            return None, 'document not found'
-        doc = next(filter(lambda doc: doc.get('doc_uuid') == doc_uuid, document), None)
-        if not doc:
-            return None, 'doc %s not found' % doc_uuid
-
-        return {
-                   'doc': doc,
-               }, None
-
-    def check_page_design_resources(self, dtable_uuid, page_id, table_id, target_column_key, row_ids):
-        """
-        :return: resources -> dict or None, error_msg -> str or None
-        """
-        dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, INNER_DTABLE_SERVER_URL)
-        dtable_db_api = DTableDBAPI('dtable-events', dtable_uuid, INNER_DTABLE_DB_URL)
-
-        plugin_type = 'page-design'
-
-        # metdata with plugin
-        try:
-            metadata = dtable_server_api.get_metadata_plugin(plugin_type)
-        except NotFoundException:
-            return None, 'base not found'
-        except Exception as e:
-            logger.error('plugin: %s dtable: %s get metadata error: %s', plugin_type, dtable_uuid, e)
-            return None, 'get metadata error %s' % e
-
-        # table
-        table = next(filter(lambda t: t['_id'] == table_id, metadata.get('tables', [])), None)
-        if not table:
-            return None, 'table not found'
-
-        # plugin
-        plugin_settings = metadata.get('plugin_settings') or {}
-        plugin = plugin_settings.get(plugin_type) or []
-        if not plugin:
-            return None, 'plugin not found'
-        page = next(filter(lambda page: page.get('page_id') == page_id, plugin), None)
-        if not page:
-            return None, 'page %s not found' % page_id
-
-        # column
-        target_column = next(filter(lambda col: col['key'] == target_column_key, table.get('columns', [])), None)
-        if not target_column:
-            return None, 'column %s not found' % target_column_key
-
-        # rows
-        row_ids_str = ', '.join(map(lambda row_id: f"'{row_id}'", row_ids))
-        sql = f"SELECT _id FROM `{table['name']}` WHERE _id IN ({row_ids_str}) LIMIT {len(row_ids)}"
-        try:
-            rows, _ = dtable_db_api.query(sql)
-        except Exception as e:
-            logger.error('plugin: %s dtable: %s query rows error: %s', plugin_type, dtable_uuid, e)
-            return None, 'query rows error'
-        row_ids = [row['_id'] for row in rows]
-
-        return {
-                   'table': table,
-                   'target_column': target_column,
-                   'page': page,
-                   'row_ids': row_ids
-               }, None
-
-    def work(self):
-        dtable_uuid = self.task_info.get('dtable_uuid')
-        plugin_type = self.task_info.get('plugin_type')
-        # when convert page-design to pdf page_id is not None
-        page_id = self.task_info.get('page_id')
-        # when convert document to pdf doc_uuid is not None
-        doc_uuid = self.task_info.get('doc_uuid')
-        table_id = self.task_info.get('table_id')
-        target_column_key = self.task_info.get('target_column_key')
-        row_ids = self.task_info.get('row_ids')
-        repo_id = self.task_info.get('repo_id')
-
-        if plugin_type == 'page-design':
-            try:
-                resources, error_msg = self.check_page_design_resources(dtable_uuid, page_id, table_id, target_column_key, row_ids)
-                if not resources:
-                    logger.warning('plugin: %s dtable: %s page: %s task_info: %s error: %s', plugin_type, dtable_uuid, page_id, self.task_info, error_msg)
+                    fut.set_exception(e)
                     return
-            except Exception as e:
-                logger.exception('plugin: %s dtable: %s page: %s task_info: %s resource check error: %s', plugin_type, dtable_uuid, page_id, self.task_info, e)
-                return
 
+            # per-task: create context and page to ensure isolation
+            context = await browser.new_context(viewport={'width': 1920, 'height': 1080}, ignore_https_errors=True)
+            page = await context.new_page()
             try:
-                driver = self.manager.get_driver(self.index)
-            except Exception as e:
-                logger.exception('get driver: %s error: %s', self.index, e)
-                return
+                page.set_default_timeout(timeout_ms)
+                await page.goto(url, wait_until='load', timeout=timeout_ms)
+                await page.wait_for_timeout(500)  # small wait for dynamic renders
+                if 'selector' in task:
+                    await page.wait_for_selector(task['selector'], state='attached', timeout=5*1000)
+                await wait_for_images(page)
+                await page.pdf(path=dest_path, format='A4', print_background=True,
+                               margin={'top': '0.5cm','right':'0.5cm','bottom':'0.5cm','left':'0.5cm'})
 
-            try:
-                self.convert_page_design_pdf(driver, resources)
+                fut.set_result(dest_path)
             except Exception as e:
-                logger.exception(e)
+                # try to capture diagnostics (optional): write page screenshot
+                try:
+                    # best-effort screenshot
+                    ss_path = dest_path + '.failed.png'
+                    await page.screenshot(path=ss_path, full_page=True)
+                except Exception:
+                    pass
+                fut.set_exception(e)
             finally:
-                self.manager.clear_chrome(self.index)
+                try:
+                    await page.close()
+                except Exception:
+                    pass
+                try:
+                    await context.close()
+                except Exception:
+                    pass
 
-        elif plugin_type == 'document':
+        except Exception as e:
+            fut.set_exception(e)
+        finally:
+            # release slot for reuse
             try:
-                resources, error_msg = self.check_document_resources(repo_id, dtable_uuid, doc_uuid)
-                if not resources:
-                    logger.warning('plugin: %s dtable: %s document: %s task_info: %s error: %s', plugin_type, dtable_uuid,
-                                   doc_uuid, self.task_info, error_msg)
-                    return
-            except Exception as e:
-                logger.exception('plugin: %s dtable: %s document: %s task_info: %s resource check error: %s', plugin_type,
-                                 dtable_uuid, doc_uuid, self.task_info, e)
-                return
+                self._slot_queue.put_nowait(browser_idx)
+            except Exception:
+                pass
 
-            try:
-                driver = self.manager.get_driver(self.index)
-            except Exception as e:
-                logger.exception('get driver: %s error: %s', self.index, e)
-                return
-
-            try:
-                self.convert_document_pdf(driver)
-            except Exception as e:
-                logger.exception(e)
-            finally:
-                self.manager.clear_chrome(self.index)
-
-
-conver_page_to_pdf_manager = ConvertPageTOPDFManager()
+playwright_manager = RobustPlaywrightManager()
