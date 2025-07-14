@@ -1331,4 +1331,3 @@ def batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session, is_for
         db_session.commit()
 
     return rows_count
-  
