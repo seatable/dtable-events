@@ -44,6 +44,7 @@ class CleanDBRecordsWorker(object):
         auto_rules_task_log = config.getint(section_name, 'keep_auto_rules_task_log_days', fallback=30)
         # Disabled by default
         user_activity_statistics = config.getint(section_name, 'keep_user_activity_statistics_days', fallback=0)
+        dtable_app_pages_operation_log = config.getint(section_name, 'keep_dtable_app_pages_operation_log_days', fallback=14)
 
         self._retention_config = RetentionConfig(
             dtable_snapshot=dtable_snapshot,
@@ -56,6 +57,7 @@ class CleanDBRecordsWorker(object):
             session_log=session_log,
             auto_rules_task_log=auto_rules_task_log,
             user_activity_statistics=user_activity_statistics,
+            dtable_app_pages_operation_log=dtable_app_pages_operation_log,
         )
 
     def start(self):
@@ -86,6 +88,7 @@ class RetentionConfig:
     auto_rules_task_log: int = 30
     # Disabled by default
     user_activity_statistics: int = 0
+    dtable_app_pages_operation_log: int = 14
 
 
 class CleanDBRecordsTask(Thread):
@@ -116,6 +119,7 @@ class CleanDBRecordsTask(Thread):
                 clean_django_sessions(session)
                 clean_auto_rules_task_log(session, self.retention_config.auto_rules_task_log)
                 clean_user_activity_statistics(session, self.retention_config.user_activity_statistics)
+                clean_dtable_app_pages_operation_log(session, self.retention_config.dtable_app_pages_operation_log)
             except:
                 logging.exception('Could not clean database')
             finally:
@@ -269,3 +273,16 @@ def clean_user_activity_statistics(session, keep_days: int):
     session.commit()
 
     logging.info('Removed %d entries from "user_activity_statistics"', result.rowcount)
+
+def clean_dtable_app_pages_operation_log(session, keep_days: int):
+    if keep_days <= 0:
+        logging.info('Skipping "dtable_app_pages_operation_log" since retention time is set to %d', keep_days)
+        return
+
+    logging.info('Cleaning "dtable_app_pages_operation_log" table (older than %d days)', keep_days)
+
+    sql = 'DELETE FROM `dtable_app_pages_operation_log` WHERE `updated_at` < DATE_SUB(NOW(), INTERVAL :days DAY)'
+    result = session.execute(text(sql), {'days': keep_days})
+    session.commit()
+
+    logging.info('Removed %d entries from "dtable_app_pages_operation_log"', result.rowcount)
