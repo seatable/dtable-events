@@ -1,3 +1,4 @@
+import asyncio
 import os
 import shutil
 import uuid
@@ -7,6 +8,8 @@ import json
 import requests
 from datetime import datetime
 from sqlalchemy import text
+from playwright.async_api import async_playwright
+from playwright._impl._errors import TimeoutError
 
 from seaserv import seafile_api
 
@@ -41,6 +44,8 @@ from dtable_events.dtable_io.utils import clear_tmp_dir, clear_tmp_file, clear_t
     SDOC_IMAGES_DIR, get_seadoc_download_link, gen_seadoc_base_dir, export_sdoc_prepare_images_folder,\
     batch_upload_sdoc_images, get_documents_config, save_documents_config
 from dtable_events.app.log import setup_logger
+from dtable_events.convert_page.process_monitor import browser_monitor
+from dtable_events.convert_page.utils import get_pdf_print_options, wait_for_images
 
 dtable_io_logger = setup_logger('dtable_events_io', propagate=False)
 dtable_message_logger = setup_logger('dtable_events_message', propagate=False)
@@ -919,20 +924,33 @@ def convert_page_design_to_pdf(dtable_uuid, page_id, row_id, username, config):
         os.makedirs(target_dir)
     target_path = os.path.join(target_dir, '%s_%s_%s.pdf' % (dtable_uuid, page_id, row_id))
 
-    chrome_data_dir_name = f'{dtable_uuid}-{page_id}-{row_id}'
-    driver = get_driver(get_chrome_data_dir(chrome_data_dir_name))
-    monitor_dom_id = 'page-design-render-complete'
-    try:
-        pdf_view_url = gen_page_design_pdf_view_url(dtable_uuid, page_id, access_token, row_id)
+    convert_pdf_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(convert_pdf_loop)
+    async def access_and_save():
+        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/page-design/%s/row/%s/' % (uuid_str_to_36_chars(dtable_uuid), page_id, row_id)
+        url += '?access-token=%s&need_convert=%s' % (access_token, 0)
+        dtable_io_logger.debug('convert_page_to_pdf url: %s', url)
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(executable_path='/usr/bin/google-chrome', headless=True)
+            context = await browser.new_context()
+            page = await context.new_page()
+            pid = browser._impl_obj._connection._transport._proc.pid
+            browser_monitor.add_pid_info({pid: {'name': f"dtable-io dtable_uuid: {dtable_uuid} plugin: page-design page_id: {page_id} row_id: {row_id}"}})
+            try:
+                page.on("request", lambda request: dtable_io_logger.debug(f"Request: {request.method} {request.url}"))
+                page.on("response", lambda response: dtable_io_logger.debug(f"Response: {response.status} {response.url}"))
+                page.on("console", lambda msg: dtable_io_logger.debug(f"Console [{msg.type}]: {msg.text}"))
+                await page.goto(url, wait_until="load")
+                await page.wait_for_load_state('networkidle', timeout=180*1000)
+                await wait_for_images(page)
+                await page.pdf(path=target_path, **get_pdf_print_options())
+            except TimeoutError:
+                dtable_io_logger.exception('dtable: %s plugin: page-design page: %s row: %s timeout', dtable_uuid, page_id, row_id)
+                await page.pdf(path=target_path, **get_pdf_print_options())
+            except Exception as e:
+                dtable_io_logger.exception('dtable: %s plugin: page-design page: %s row: %s error: %s', dtable_uuid, page_id, row_id, e)
 
-        session_id = open_page_view(driver, pdf_view_url)
-        wait_page_view(driver, session_id, monitor_dom_id, row_id, target_path)
-    except Exception as e:
-        dtable_io_logger.exception('convert page_desgin, dtable: %s page: %s row: %s error: %s', dtable_uuid, page_id, row_id, e)
-    finally:
-        if os.path.exists(chrome_data_dir_name):
-            shutil.rmtree(chrome_data_dir_name)
-        driver.quit()
+    convert_pdf_loop.run_until_complete(access_and_save())
 
 
 def convert_document_to_pdf(dtable_uuid, doc_uuid, row_id, username, config):
@@ -954,19 +972,33 @@ def convert_document_to_pdf(dtable_uuid, doc_uuid, row_id, username, config):
         os.makedirs(target_dir)
     target_path = os.path.join(target_dir, '%s_%s_%s.pdf' % (dtable_uuid, doc_uuid, row_id))
 
-    chrome_data_dir_name = f'{dtable_uuid}-{doc_uuid}-{row_id}'
-    driver = get_driver(get_chrome_data_dir(chrome_data_dir_name))
-    monitor_dom_id = 'document-render-complete'
-    try:
-        pdf_view_url = gen_document_pdf_view_url(dtable_uuid, doc_uuid, access_token, row_id)
-        session_id = open_page_view(driver, pdf_view_url)
-        wait_page_view(driver, session_id, monitor_dom_id, row_id, target_path)
-    except Exception as e:
-        dtable_io_logger.exception('convert document, dtable: %s page: %s row: %s to pdf, error: %s', dtable_uuid, doc_uuid, row_id, e)
-    finally:
-        if os.path.exists(chrome_data_dir_name):
-            shutil.rmtree(chrome_data_dir_name)
-        driver.quit()
+    convert_pdf_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(convert_pdf_loop)
+    async def access_and_save():
+        url = DTABLE_WEB_SERVICE_URL.strip('/') + '/dtable/%s/document/%s/row/%s/' % (uuid_str_to_36_chars(dtable_uuid), doc_uuid, row_id)
+        url += '?access-token=%s&need_convert=%s' % (access_token, 0)
+        dtable_io_logger.debug('convert_page_to_pdf url: %s', url)
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(executable_path='/usr/bin/google-chrome', headless=True)
+            context = await browser.new_context()
+            page = await context.new_page()
+            pid = browser._impl_obj._connection._transport._proc.pid
+            browser_monitor.add_pid_info({pid: {'name': f"dtable-io dtable_uuid: {dtable_uuid} plugin: document page_id: {doc_uuid} row_id: {row_id}"}})
+            try:
+                page.on("request", lambda request: dtable_io_logger.debug(f"Request: {request.method} {request.url}"))
+                page.on("response", lambda response: dtable_io_logger.debug(f"Response: {response.status} {response.url}"))
+                page.on("console", lambda msg: dtable_io_logger.debug(f"Console [{msg.type}]: {msg.text}"))
+                await page.goto(url, wait_until="load")
+                await page.wait_for_load_state('networkidle', timeout=180*1000)
+                await wait_for_images(page)
+                await page.pdf(path=target_path, **get_pdf_print_options())
+            except TimeoutError:
+                dtable_io_logger.exception('dtable: %s plugin: document page: %s row: %s timeout', dtable_uuid, doc_uuid, row_id)
+                await page.pdf(path=target_path, **get_pdf_print_options())
+            except Exception as e:
+                dtable_io_logger.exception('dtable: %s plugin: document page: %s row: %s error: %s', dtable_uuid, doc_uuid, row_id, e)
+
+    convert_pdf_loop.run_until_complete(access_and_save())
 
 
 def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image=False):
