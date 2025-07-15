@@ -80,8 +80,6 @@ class AutomationRuleHandler(Thread):
             while not (existing_worker_index or idle_worker_index):
                 with self.processing_lock:
                     for index in range(self.per_update_auto_rule_workers):
-                        if self.thread_uuids[index] is None:
-                            idle_worker_index = index
                         if self.thread_queues[index].qsize() == 0 and self.thread_status[index] == 'idle':
                             idle_worker_index = index
                         if self.thread_uuids[index] == event_dtable_uuid:
