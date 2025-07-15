@@ -77,7 +77,7 @@ class AutomationRuleHandler(Thread):
             event_dtable_uuid = event.get('dtable_uuid')
             existing_worker_index = None
             idle_worker_index = None
-            while not (existing_worker_index is not None or idle_worker_index is not None):
+            while True:
                 with self.processing_lock:
                     for index in range(self.per_update_auto_rule_workers):
                         if self.thread_queues[index].qsize() == 0 and self.thread_status[index] == 'idle':
@@ -87,12 +87,13 @@ class AutomationRuleHandler(Thread):
                     if existing_worker_index is not None:
                         self.thread_queues[index].put(event)
                         logger.debug(f"schedule event {event} in index {index}, uuid matched")
+                        break
                     elif idle_worker_index is not None:
                         self.thread_queues[index].put(event)
                         self.thread_uuids[index] = event_dtable_uuid
                         logger.debug(f"schedule event {event} in index {index}, idle worker")
-                if not (existing_worker_index is not None or idle_worker_index is not None):
-                    time.sleep(0.1)
+                        break
+                time.sleep(0.1)
 
     def start_threads(self):
         executor = ThreadPoolExecutor(max_workers=self.per_update_auto_rule_workers, thread_name_prefix='scan-auto-rules')
