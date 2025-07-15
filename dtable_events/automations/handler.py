@@ -75,28 +75,25 @@ class AutomationRuleHandler(Thread):
             event = self.queue.get()
             logger.debug(f"start to scheduler event: {event}")
             event_dtable_uuid = event.get('dtable_uuid')
-            is_put_queue = False
-            while not is_put_queue:
+            existing_worker_index = None
+            idle_worker_index = None
+            while not (existing_worker_index or idle_worker_index):
                 with self.processing_lock:
                     for index in range(self.per_update_auto_rule_workers):
                         if self.thread_uuids[index] is None:
-                            self.thread_queues[index].put(event)
-                            self.thread_uuids[index] = event_dtable_uuid
-                            is_put_queue = True
-                            logger.debug(f"schedule event {event} in index {index}, uuid is None")
-                            break
+                            idle_worker_index = index
                         if self.thread_queues[index].qsize() == 0 and self.thread_status[index] == 'idle':
-                            self.thread_queues[index].put(event)
-                            self.thread_uuids[index] = event_dtable_uuid
-                            is_put_queue = True
-                            logger.debug(f"schedule event {event} in index {index}, queue is empty")
-                            break
+                            idle_worker_index = index
                         if self.thread_uuids[index] == event_dtable_uuid:
-                            self.thread_queues[index].put(event)
-                            is_put_queue = True
-                            logger.debug(f"schedule event {event} in index {index}, uuid matched")
-                            break
-                if not is_put_queue:
+                            existing_worker_index = index
+                    if existing_worker_index:
+                        self.thread_queues[index].put(event)
+                        logger.debug(f"schedule event {event} in index {index}, uuid matched")
+                    elif idle_worker_index:
+                        self.thread_queues[index].put(event)
+                        self.thread_uuids[index] = event_dtable_uuid
+                        logger.debug(f"schedule event {event} in index {index}, idle worker")
+                if not (existing_worker_index or idle_worker_index):
                     time.sleep(0.1)
 
     def start_threads(self):
