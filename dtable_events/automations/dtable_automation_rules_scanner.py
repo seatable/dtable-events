@@ -1,5 +1,4 @@
 import logging
-from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from queue import Queue, Empty
@@ -66,19 +65,18 @@ class DTableAutomationRulesScannerTimer(Thread):
         rule_interval_metadata_cache_manager = RuleIntervalMetadataCacheManager()
         while True:
             try:
-                dtable_uuid, rules = self.queue.get(timeout=1)
+                rule = self.queue.get(timeout=1)
             except Empty:
                 return  # means no rules to trigger, finish thread
             db_session = self.db_session_class()
-            for rule in rules:
-                logging.info('thread %s start to handle rule %s dtable_uuid %s', current_thread().name, rule.id, dtable_uuid)
-                try:
-                    run_regular_execution_rule(rule, db_session, rule_interval_metadata_cache_manager)
-                except Exception as e:
-                    logging.exception(e)
-                    logging.error(f'check rule failed. {rule}, error: {e}')
-                finally:
-                    db_session.close()
+            logging.info('thread %s start to handle rule %s dtable_uuid %s', current_thread().name, rule.id, rule.dtable_uuid)
+            try:
+                run_regular_execution_rule(rule, db_session, rule_interval_metadata_cache_manager)
+            except Exception as e:
+                logging.exception(e)
+                logging.error(f'check rule failed. {rule}, error: {e}')
+            finally:
+                db_session.close()
 
     def scan_dtable_automation_rules(self):
         sql = '''
@@ -105,12 +103,8 @@ class DTableAutomationRulesScannerTimer(Thread):
         finally:
             db_session.close()
 
-        uuid_rules_dict = defaultdict(list)
-
         for rule in rules:
-            uuid_rules_dict[rule.dtable_uuid].append(rule)
-        for dtable_uuid, rules in uuid_rules_dict.items():
-            self.queue.put((dtable_uuid, rules))
+            self.queue.put(rule)
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             for _ in range(self.max_workers):
                 executor.submit(self.trigger_rule)
