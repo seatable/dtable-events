@@ -1299,7 +1299,7 @@ def _get_operator_by_type(column_type):
 
 class StatisticSQLGenerator(object):
 
-    def __init__(self, table, statistic_type, statistic, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids, detail_filter_conditions=None, start_of_week="monday"):
+    def __init__(self, table, statistic_type, statistic, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids, detail_filter_conditions=None, start_of_week="sunday"):
         self.error = None
         self.statistic_type = statistic_type
         table_name = table.get('name') or ''
@@ -2810,7 +2810,7 @@ def filter2sql(table_name, columns, filter_conditions, by_group=False):
     return sql_generator.to_sql(by_group=by_group)
 
 
-def statistic2sql(table, statistic_type, statistic, username='', id_in_org='', current_user_department_ids=[], current_user_department_and_sub_ids=[], detail_filter_conditions=None, start_of_week='monday'):
+def statistic2sql(table, statistic_type, statistic, username='', id_in_org='', current_user_department_ids=[], current_user_department_and_sub_ids=[], detail_filter_conditions=None, start_of_week='sunday'):
     sql_generator = StatisticSQLGenerator(table, statistic_type, statistic, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids, detail_filter_conditions=detail_filter_conditions, start_of_week=start_of_week)
     return sql_generator.to_sql()
 
