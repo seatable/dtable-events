@@ -66,7 +66,7 @@ class TaskManager(object):
         return task_id in (self.tasks_map.keys() | self.task_results_map.keys())
 
     @log_function_call
-    def add_export_task(self, username, repo_id, workspace_id, dtable_uuid, dtable_name, ignore_asset, resumable_export):
+    def add_export_task(self, username, repo_id, workspace_id, dtable_uuid, dtable_name, ignore_asset, resumable_export, recursive_download):
         from dtable_events.dtable_io import get_dtable_export_content
 
         asset_dir_id = None
@@ -76,7 +76,7 @@ class TaskManager(object):
 
         task_id = str(uuid.uuid4())
         task = (get_dtable_export_content,
-                (username, repo_id, workspace_id, dtable_uuid, asset_dir_id, self.config, task_id, resumable_export))
+                (username, repo_id, workspace_id, dtable_uuid, asset_dir_id, self.config, task_id, resumable_export, recursive_download))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)

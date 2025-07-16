@@ -13,15 +13,15 @@ from seaserv import seafile_api
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, INNER_DTABLE_SERVER_URL
 from dtable_events.dtable_io.big_data import import_excel_to_db, update_excel_to_db, export_big_data_to_excel, \
     export_app_table_page_to_excel
-from dtable_events.dtable_io.utils import post_big_data_screen_app_zip_file, prepare_asset_download, \
+from dtable_events.dtable_io.utils import post_big_data_screen_app_zip_file, \
     post_dtable_json, post_asset_files, \
-    download_files_to_path, create_forms_from_src_dtable, copy_src_forms_to_json, \
+    download_files_to_path, create_forms_from_src_dtable, copy_src_forms_to_json, prepare_asset_file_folder, \
     prepare_dtable_json_from_memory, update_page_design_static_image, \
     copy_src_auto_rules_to_json, create_auto_rules_from_src_dtable, sync_app_users_to_table, \
     copy_src_workflows_to_json, create_workflows_from_src_dtable, copy_src_external_app_to_json,\
     create_external_apps_from_src_dtable, zip_big_data_screen, post_big_data_screen_zip_file, \
     export_page_design_dir_to_path, update_page_design_content_to_path, upload_page_design, \
-    download_page_design_file, zip_big_data_screen_app
+    download_page_design_file, zip_big_data_screen_app, prepare_asset_files_download
 from dtable_events.db import init_db_session_class
 from dtable_events.dtable_io.excel import parse_excel_csv_to_json, import_excel_csv_by_dtable_server, \
     append_parsed_file_by_dtable_server, parse_append_excel_csv_upload_file_to_json, \
@@ -51,7 +51,7 @@ def add_task_id_to_log(log_msg, task_id=None):
     return f'task [{task_id}] - {log_msg}' if task_id else log_msg
 
 
-def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asset_dir_id, config, task_id, resumeable_export):
+def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asset_dir_id, config, task_id, resumeable_export, recursive_download):
     """
     1. prepare file content at /tmp/dtable-io/<dtable_id>/dtable_asset/...
     2. make zip file
@@ -94,7 +94,10 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
     if asset_dir_id:
         dtable_io_logger.info(add_task_id_to_log('Create asset dir.', task_id))
         try:
-            prepare_asset_download(username, repo_id, dtable_uuid, asset_dir_id, task_id, resumeable_export)
+            if recursive_download:
+                prepare_asset_files_download(username, repo_id, dtable_uuid, asset_dir_id, task_id, resumeable_export)
+            else:
+                prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id, task_id)
         except Exception as e:
             error_msg = 'dtable: {} create asset folder failed. ERROR: {}'.format(dtable_uuid, e)
             dtable_io_logger.exception(add_task_id_to_log(error_msg, task_id))
