@@ -1,10 +1,9 @@
 import json
 import logging
 import time
-from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from queue import Queue, Empty
-from threading import Thread, Event, current_thread, Lock
+from queue import Queue
+from threading import Thread, Event, current_thread
 
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.automations.auto_rules_utils import scan_triggered_automation_rules
@@ -23,8 +22,7 @@ class AutomationRuleHandler(Thread):
         self._redis_client = RedisClient(config)
 
         self.per_update_auto_rule_workers = 3
-
-        self.thread_queues = []
+        self.queue = Queue()
 
         self._parse_config(config)
 
@@ -49,10 +47,9 @@ class AutomationRuleHandler(Thread):
     def is_enabled(self):
         return self._enabled
 
-    def scan(self, index):
-        thread_queue = self.thread_queues[index]
+    def scan(self):
         while True:
-            event = thread_queue.get()
+            event = self.queue.get()
             logger.info("Start to trigger rule %s in thread %s", event, current_thread().name)
             session = self._db_session_class()
             try:
@@ -62,24 +59,10 @@ class AutomationRuleHandler(Thread):
             finally:
                 session.close()
 
-    def schedule_event(self, event):
-        min_queue_index = None
-        min_queue_size = None
-        for index in range(self.per_update_auto_rule_workers):
-            current_queue_size = self.thread_queues[index].qsize()
-            if min_queue_index is None:
-                min_queue_index = index
-                min_queue_size = current_queue_size
-            elif min_queue_size > current_queue_size:
-                min_queue_index = index
-                min_queue_size = current_queue_size
-        logger.info(f"schedule event {event} in queue {min_queue_index}")
-        self.thread_queues[min_queue_index].put(event)
-
     def start_threads(self):
         executor = ThreadPoolExecutor(max_workers=self.per_update_auto_rule_workers, thread_name_prefix='scan-auto-rules')
         for index in range(self.per_update_auto_rule_workers):
-            executor.submit(self.scan, index)
+            executor.submit(self.scan)
 
     def run(self):
         if not self.is_enabled():
@@ -88,8 +71,6 @@ class AutomationRuleHandler(Thread):
         logger.info('Starting handle automation rules...')
         subscriber = self._redis_client.get_subscriber('automation-rule-triggered')
 
-        self.thread_queues = [Queue() for _ in range(self.per_update_auto_rule_workers)]
-
         self.start_threads()
 
         while not self._finished.is_set():
@@ -97,7 +78,8 @@ class AutomationRuleHandler(Thread):
                 message = subscriber.get_message()
                 if message is not None:
                     event = json.loads(message['data'])
-                    self.schedule_event(event)
+                    self.queue.put(event)
+                    logger.info(f"subscribe event {event}")
                 else:
                     time.sleep(0.5)
             except Exception as e:
