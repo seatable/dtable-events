@@ -24,11 +24,7 @@ class AutomationRuleHandler(Thread):
 
         self.per_update_auto_rule_workers = 3
 
-        self.queue = Queue()
         self.thread_queues = []
-        self.thread_uuids = []
-        self.thread_status = []
-        self.processing_lock = Lock()
 
         self._parse_config(config)
 
@@ -57,8 +53,6 @@ class AutomationRuleHandler(Thread):
         thread_queue = self.thread_queues[index]
         while True:
             event = thread_queue.get()
-            with self.processing_lock:
-                self.thread_status[index] = 'processing'
             logger.info("Start to trigger rule %s in thread %s", event, current_thread().name)
             session = self._db_session_class()
             try:
@@ -67,39 +61,25 @@ class AutomationRuleHandler(Thread):
                 logger.exception('Handle automation rule with data %s failed: %s', event, e)
             finally:
                 session.close()
-                with self.processing_lock:
-                    self.thread_status[index] = 'idle'
 
-    def schedule_events(self):
-        while True:
-            event = self.queue.get()
-            logger.debug(f"start to scheduler event: {event}")
-            event_dtable_uuid = event.get('dtable_uuid')
-            existing_worker_index = None
-            idle_worker_index = None
-            while True:
-                with self.processing_lock:
-                    for index in range(self.per_update_auto_rule_workers):
-                        if self.thread_queues[index].qsize() == 0 and self.thread_status[index] == 'idle':
-                            idle_worker_index = index
-                        if self.thread_uuids[index] == event_dtable_uuid:
-                            existing_worker_index = index
-                    if existing_worker_index is not None:
-                        self.thread_queues[index].put(event)
-                        logger.debug(f"schedule event {event} in index {index}, uuid matched")
-                        break
-                    elif idle_worker_index is not None:
-                        self.thread_queues[index].put(event)
-                        self.thread_uuids[index] = event_dtable_uuid
-                        logger.debug(f"schedule event {event} in index {index}, idle worker")
-                        break
-                time.sleep(0.1)
+    def schedule_event(self, event):
+        min_queue_index = None
+        min_queue_size = None
+        for index in range(self.per_update_auto_rule_workers):
+            current_queue_size = self.thread_queues[index].qsize()
+            if min_queue_index is None:
+                min_queue_index = index
+                min_queue_size = current_queue_size
+            elif min_queue_size > current_queue_size:
+                min_queue_index = index
+                min_queue_size = current_queue_size
+        logger.info(f"schedule event {event} in queue {min_queue_index}")
+        self.thread_queues[min_queue_index].put(event)
 
     def start_threads(self):
         executor = ThreadPoolExecutor(max_workers=self.per_update_auto_rule_workers, thread_name_prefix='scan-auto-rules')
         for index in range(self.per_update_auto_rule_workers):
             executor.submit(self.scan, index)
-        Thread(target=self.schedule_events).start()
 
     def run(self):
         if not self.is_enabled():
@@ -109,8 +89,6 @@ class AutomationRuleHandler(Thread):
         subscriber = self._redis_client.get_subscriber('automation-rule-triggered')
 
         self.thread_queues = [Queue() for _ in range(self.per_update_auto_rule_workers)]
-        self.thread_uuids = [None for _ in range(self.per_update_auto_rule_workers)]
-        self.thread_status = ['idle' for _ in range(self.per_update_auto_rule_workers)]
 
         self.start_threads()
 
@@ -119,7 +97,7 @@ class AutomationRuleHandler(Thread):
                 message = subscriber.get_message()
                 if message is not None:
                     event = json.loads(message['data'])
-                    self.queue.put(event)
+                    self.schedule_event(event)
                 else:
                     time.sleep(0.5)
             except Exception as e:
