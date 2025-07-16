@@ -1,6 +1,7 @@
 import json
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
 from threading import Thread, Event, current_thread
 
@@ -21,12 +22,9 @@ class AutomationRuleHandler(Thread):
         self._redis_client = RedisClient(config)
 
         self.per_update_auto_rule_workers = 3
-
-        self.queues = []
-        self.threads = []
+        self.queue = Queue()
 
         self._parse_config(config)
-        self.init_workers()
 
     def _parse_config(self, config):
         """parse send email related options from config file
@@ -49,9 +47,9 @@ class AutomationRuleHandler(Thread):
     def is_enabled(self):
         return self._enabled
 
-    def scan(self, index):
+    def scan(self):
         while True:
-            event = self.queues[index].get()
+            event = self.queue.get()
             logger.info("Start to trigger rule %s in thread %s", event, current_thread().name)
             session = self._db_session_class()
             try:
@@ -61,29 +59,27 @@ class AutomationRuleHandler(Thread):
             finally:
                 session.close()
 
-    def init_workers(self):
-        for i in range(self.per_update_auto_rule_workers):
-            self.queues.append(Queue())
-            t = Thread(target=self.scan, args=(i,), name=f'automation-rule-worker-{i}')
-            self.threads.append(t)
+    def start_threads(self):
+        executor = ThreadPoolExecutor(max_workers=self.per_update_auto_rule_workers, thread_name_prefix='scan-auto-rules')
+        for index in range(self.per_update_auto_rule_workers):
+            executor.submit(self.scan)
 
     def run(self):
+        if not self.is_enabled():
+            logger.info('Can not start handle automation rules: it is not enabled!')
+            return
         logger.info('Starting handle automation rules...')
         subscriber = self._redis_client.get_subscriber('automation-rule-triggered')
 
-        for t in self.threads:
-            t.start()
-            logger.info('thread %s start', t.name)
+        self.start_threads()
 
-        while not self._finished.is_set() and self.is_enabled():
+        while not self._finished.is_set():
             try:
                 message = subscriber.get_message()
                 if message is not None:
                     event = json.loads(message['data'])
-                    dtable_uuid = event.get('dtable_uuid')
-                    logger.debug('get per_update auto-rule message %s', event)
-                    index = ord(dtable_uuid[0]) % self.per_update_auto_rule_workers
-                    self.queues[index].put(event)
+                    self.queue.put(event)
+                    logger.info(f"subscribe event {event}")
                 else:
                     time.sleep(0.5)
             except Exception as e:

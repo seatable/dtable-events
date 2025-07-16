@@ -1,5 +1,7 @@
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
+from queue import Queue, Empty
 from threading import Thread, current_thread
 
 from sqlalchemy import text
@@ -55,21 +57,28 @@ class DTableAutomationRulesScannerTimer(Thread):
     def __init__(self, db_session_class):
         super(DTableAutomationRulesScannerTimer, self).__init__()
         self.db_session_class = db_session_class
+        self.max_workers = 3
+        self.queue = Queue()
 
-    def trigger_rules(self, rules):
-        logging.info('thread %s start, %s rules to be handled', current_thread().name, len(rules))
+    def trigger_rule(self):
+        logging.info('thread %s start', current_thread().name)
         rule_interval_metadata_cache_manager = RuleIntervalMetadataCacheManager()
-        db_session = self.db_session_class()
-        for rule in rules:
+        while True:
+            try:
+                rule = self.queue.get(timeout=1)
+            except Empty:
+                return  # means no rules to trigger, finish thread
+            db_session = self.db_session_class()
+            logging.info('thread %s start to handle rule %s dtable_uuid %s', current_thread().name, rule.id, rule.dtable_uuid)
             try:
                 run_regular_execution_rule(rule, db_session, rule_interval_metadata_cache_manager)
             except Exception as e:
                 logging.exception(e)
                 logging.error(f'check rule failed. {rule}, error: {e}')
-        logging.info('thread %s end up', current_thread().name)
-        db_session.close()
+            finally:
+                db_session.close()
 
-    def scan_dtable_automation_rules(self, workers=3):
+    def scan_dtable_automation_rules(self):
         sql = '''
                 SELECT `dar`.`id`, `run_condition`, `trigger`, `actions`, `last_trigger_time`, `dtable_uuid`, `trigger_count`, `org_id`, dar.`creator` FROM dtable_automation_rules dar
                 JOIN dtables d ON dar.dtable_uuid=d.uuid
@@ -94,11 +103,13 @@ class DTableAutomationRulesScannerTimer(Thread):
         finally:
             db_session.close()
 
-        rules_list = [[] for i in range(workers)]
         for rule in rules:
-            rules_list[ord(rule.dtable_uuid[0]) % workers].append(rule)
-        for i in range(workers):
-            Thread(target=self.trigger_rules, args=(rules_list[i],), daemon=True, name=f'automation-rule-scanner-worker-{i}').start()
+            self.queue.put(rule)
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            for _ in range(self.max_workers):
+                executor.submit(self.trigger_rule)
+
+        logging.info('all rules done')
 
     def run(self):
         sched = BlockingScheduler()
