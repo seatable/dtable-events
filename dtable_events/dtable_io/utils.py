@@ -534,7 +534,7 @@ def update_custom_assets(content, dst_dtable_uuid, db_session):
     return content
 
 
-def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage, db_session):
+def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage, resumable_import, db_session):
     """
     used to import dtable
     prepare dtable json file and post it at file server
@@ -547,6 +547,12 @@ def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_n
     """
     from dtable_events.dtable_io import dtable_io_logger
     from dtable_events.utils.storage_backend import storage_backend
+
+    # if were resumable import and dtable content exists, don't change anything
+    if resumable_import:
+        dtable_content = storage_backend.get_dtable(dtable_uuid)
+        if dtable_content:
+            return
 
     # change url in content json, then save it at file server
     content_json_file_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted/', 'content.json')

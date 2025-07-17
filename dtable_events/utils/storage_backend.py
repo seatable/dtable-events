@@ -1,4 +1,6 @@
+import json
 import os
+from dtable_events.utils import uuid_str_to_36_chars
 from dtable_events.utils.dtable_storage_server_api import storage_api
 
 FILE_TYPE = '.dtable'
@@ -29,6 +31,15 @@ class StorageBackend(object):
             return storage_api.save_dtable(dtable_uuid, json_string)
         else:
             raise RuntimeError(NOT_IN_STORAGE_ERROR_MSG)
+
+    def get_dtable(self, dtable_uuid):
+        data = storage_api.get_dtable(uuid_str_to_36_chars(dtable_uuid))
+        if not data:
+            return None
+        if isinstance(data, str):
+            # compatible with old data
+            return json.loads(data)
+        return data
 
 
 storage_backend = StorageBackend()

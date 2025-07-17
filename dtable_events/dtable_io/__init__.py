@@ -186,7 +186,7 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
 
     dtable_io_logger.info(add_task_id_to_log('Prepare dtable json file and post it at file server.', task_id))
     try:
-        dtable_content = post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage, db_session)
+        dtable_content = post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage, resumable_import, db_session)
     except Exception as e:
         dtable_io_logger.error(add_task_id_to_log(f'post dtable json failed. ERROR: {e}', task_id))
 
