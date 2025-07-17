@@ -8,6 +8,7 @@ import io
 import uuid
 import datetime
 import random
+import stat
 import string
 import sys
 import re
@@ -186,13 +187,15 @@ def prepare_asset_files_download(username, repo_id, dtable_uuid, asset_dir_id, t
             dtable_io_logger.error(add_task_id_to_log(f"Failed to list dir {asset_dir_id}: {e}", task_id))
             return
 
+        dtable_io_logger.info(add_task_id_to_log(f"Start to download assets in {base_path}", task_id))
+
+        file_download_count = 0
         for entry in entries:
             file_name = entry.obj_name
             obj_id = entry.obj_id
-            entry_type = entry.mode
             path = os.path.join(base_path, file_name)
 
-            if entry_type==16384:
+            if stat.S_ISDIR(entry.mode):
                 # recurse into subdir
                 download_assets_files_recursively(username, repo_id, dtable_uuid, obj_id, task_id,
                                             base_path=path)
@@ -221,6 +224,9 @@ def prepare_asset_files_download(username, repo_id, dtable_uuid, asset_dir_id, t
                     if os.path.exists(temp_path):
                         os.remove(temp_path)
                     dtable_io_logger.warning(add_task_id_to_log(f"Failed to download {path}, skipping: {e}", task_id))    
+                else:
+                    file_download_count += 1
+        dtable_io_logger.info(add_task_id_to_log(f"Downloaded {file_download_count} files in {base_path}", task_id))
     dtable_io_logger.info(add_task_id_to_log(f"export dtable: {dtable_uuid} username: {username} start asset recursive download", task_id))
     download_assets_files_recursively(username, repo_id, dtable_uuid, asset_dir_id, task_id)
     dtable_io_logger.info(add_task_id_to_log(f"export dtable: {dtable_uuid} username: {username}asset download complete", task_id))
