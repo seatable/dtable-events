@@ -147,24 +147,25 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
         if db_session:
             db_session.close()
 
-    """
-    /tmp/dtable-io/<dtable_uuid>/dtable_asset/
-                                    |- asset/
-                                    |- content.json
+    if not recursive_download:  # means task is not from export_dtable command, do make archive
+        """
+        /tmp/dtable-io/<dtable_uuid>/dtable_asset/
+                                        |- asset/
+                                        |- content.json
 
-    we zip /tmp/dtable-io/<dtable_uuid>/dtable_asset/ to /tmp/dtable-io/<dtable_id>/zip_file.zip and download it
-    notice than make_archive will auto add .zip suffix to /tmp/dtable-io/<dtable_id>/zip_file
-    """
-    dtable_io_logger.info(add_task_id_to_log('Make zip file for download...', task_id))
-    try:
-        shutil.make_archive('/tmp/dtable-io/' + dtable_uuid + '/zip_file', "zip", root_dir=tmp_file_path)
-    except Exception as e:
-        error_msg = 'make zip failed. ERROR: {}'.format(e)
-        dtable_io_logger.error(add_task_id_to_log(error_msg, task_id))
-        raise Exception(error_msg)
+        we zip /tmp/dtable-io/<dtable_uuid>/dtable_asset/ to /tmp/dtable-io/<dtable_id>/zip_file.zip and download it
+        notice than make_archive will auto add .zip suffix to /tmp/dtable-io/<dtable_id>/zip_file
+        """
+        dtable_io_logger.info(add_task_id_to_log('Make zip file for download...', task_id))
+        try:
+            shutil.make_archive('/tmp/dtable-io/' + dtable_uuid + '/zip_file', "zip", root_dir=tmp_file_path)
+        except Exception as e:
+            error_msg = 'make zip failed. ERROR: {}'.format(e)
+            dtable_io_logger.error(add_task_id_to_log(error_msg, task_id))
+            raise Exception(error_msg)
 
-    dtable_io_logger.info(add_task_id_to_log('Create /tmp/dtable-io/{}/zip_file.zip success!'.format(dtable_uuid), task_id))
-    # we remove '/tmp/dtable-io/<dtable_uuid>' in dtable web api
+        dtable_io_logger.info(add_task_id_to_log('Create /tmp/dtable-io/{}/zip_file.zip success!'.format(dtable_uuid), task_id))
+        # we remove '/tmp/dtable-io/<dtable_uuid>' in dtable web api
 
     return task_result
 
