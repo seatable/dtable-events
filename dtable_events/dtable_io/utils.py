@@ -1004,7 +1004,7 @@ def create_forms_from_src_dtable(workspace_id, dtable_uuid, resumable_import, db
 
     if resumable_import:
         sql = "SELECT COUNT(1) as count FROM dtable_forms WHERE dtable_uuid=:dtable_uuid"
-        result = db_session.execute(sql, {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+        result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
         if result.count > 0:
             return
 
@@ -1026,7 +1026,7 @@ def create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, or
 
     if resumable_import:
         sql = "SELECT COUNT(1) as count FROM dtable_automation_rules WHERE dtable_uuid=:dtable_uuid"
-        result = db_session.execute(sql, {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+        result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
         if result.count > 0:
             return
 
@@ -1048,7 +1048,7 @@ def create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uui
 
     if resumable_import:
         sql = "SELECT COUNT(1) as count FROM dtable_workflows WHERE dtable_uuid=:dtable_uuid"
-        result = db_session.execute(sql, {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+        result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
         if result.count > 0:
             return
 
@@ -1071,7 +1071,7 @@ def create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_
 
     if resumable_import:
         sql = "SELECT COUNT(1) as count FROM dtable_external_apps WHERE dtable_uuid=:dtable_uuid"
-        result = db_session.execute(sql, {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+        result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
         if result.count > 0:
             return
 
