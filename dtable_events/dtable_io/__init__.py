@@ -170,70 +170,67 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
 
 
 def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage,
-                             can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id, config, resumable_import):
+                             can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id, config, task_id, resumable_import):
     """
     post files at /tmp/<dtable_uuid>/dtable_zip_extracted/ to file server
     unzip django uploaded tmp file is suppose to be done in dtable-web api.
     """
-    dtable_io_logger.info('Start import DTable: {}.'.format(dtable_uuid))
+    dtable_io_logger.info(add_task_id_to_log(f'Start import DTable: {dtable_uuid}.', task_id))
 
     try:
         db_session = init_db_session_class(config)()
     except Exception as e:
         db_session = None
-        dtable_io_logger.error('create db session failed. ERROR: {}'.format(e))
+        dtable_io_logger.error(add_task_id_to_log(f'create db session failed. ERROR: {e}', task_id))
 
-    dtable_io_logger.info('Prepare dtable json file and post it at file server.')
+    dtable_io_logger.info(add_task_id_to_log('Prepare dtable json file and post it at file server.', task_id))
     try:
         dtable_content = post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage, db_session)
     except Exception as e:
-        dtable_io_logger.error('post dtable json failed. ERROR: {}'.format(e))
+        dtable_io_logger.error(add_task_id_to_log(f'post dtable json failed. ERROR: {e}', task_id))
 
-    dtable_io_logger.info('Post asset files in tmp path to file server.')
+    dtable_io_logger.info(add_task_id_to_log('Post asset files in tmp path to file server.', task_id))
     try:
         post_asset_files(repo_id, dtable_uuid, username, resumable_import)
     except Exception as e:
-        dtable_io_logger.error('post asset files failed. ERROR: {}'.format(e))
+        dtable_io_logger.error(add_task_id_to_log(f'post asset files failed. ERROR: {e}', task_id))
 
-    if resumable_import:
-        return
-
-    dtable_io_logger.info('create forms from src dtable.')
+    dtable_io_logger.info(add_task_id_to_log('create forms from src dtable.', task_id))
     try:
-        create_forms_from_src_dtable(workspace_id, dtable_uuid, db_session)
+        create_forms_from_src_dtable(workspace_id, dtable_uuid, resumable_import, db_session)
     except Exception as e:
-        dtable_io_logger.error('create forms failed. ERROR: {}'.format(e))
+        dtable_io_logger.error(add_task_id_to_log(f'create forms failed. ERROR: {e}', task_id))
     finally:
         if db_session:
             db_session.close()
 
     old_new_workflow_token_dict = {}  # old new workflow token dict
     if can_use_workflows:
-        dtable_io_logger.info('create workflows from src dtable.')
+        dtable_io_logger.info(add_task_id_to_log('create workflows from src dtable.', task_id))
         try:
-            create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, db_session)
+            create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, resumable_import, db_session)
         except Exception as e:
-            dtable_io_logger.error('create workflows failed. ERROR: {}'.format(e))
+            dtable_io_logger.error(add_task_id_to_log(f'create workflows failed. ERROR: {e}', task_id))
         finally:
             if db_session:
                 db_session.close()
 
     if can_use_automation_rules:
-        dtable_io_logger.info('create auto rules from src dtable.')
+        dtable_io_logger.info(add_task_id_to_log('create auto rules from src dtable.', task_id))
         try:
-            create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, db_session)
+            create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, resumable_import, db_session)
         except Exception as e:
-            dtable_io_logger.error('create auto rules failed. ERROR: {}'.format(e))
+            dtable_io_logger.error(add_task_id_to_log(f'create auto rules failed. ERROR: {e}', task_id))
         finally:
             if db_session:
                 db_session.close()
 
     if can_use_external_apps:
-        dtable_io_logger.info('create external apps from src dtable.')
+        dtable_io_logger.info(add_task_id_to_log('create external apps from src dtable.', task_id))
         try:
-            create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_id, workspace_id, repo_id)
+            create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_id, workspace_id, repo_id, resumable_import)
         except Exception as e:
-            dtable_io_logger.exception('create external apps failed. ERROR: {}'.format(e))
+            dtable_io_logger.exception(add_task_id_to_log(f'create external apps failed. ERROR: {e}', task_id))
         finally:
             if db_session:
                 db_session.close()
@@ -246,16 +243,16 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
             # handle different url in settings.py
             update_page_design_static_image(page_design_settings, repo_id, workspace_id, dtable_uuid, page_design_content_json_tmp_path, username)
     except Exception as e:
-        dtable_io_logger.exception('update page design static image failed. ERROR: {}'.format(e))
+        dtable_io_logger.exception(add_task_id_to_log(f'update page design static image failed. ERROR: {e}', task_id))
 
     # remove extracted tmp file
-    dtable_io_logger.info('Remove extracted tmp file.')
+    dtable_io_logger.info(add_task_id_to_log('Remove extracted tmp file.', task_id))
     try:
         shutil.rmtree(os.path.join('/tmp/dtable-io', dtable_uuid))
     except Exception as e:
-        dtable_io_logger.error('rm extracted tmp file failed. ERROR: {}'.format(e))
+        dtable_io_logger.error(add_task_id_to_log(f'rm extracted tmp file failed. ERROR: {e}', task_id))
 
-    dtable_io_logger.info('Import DTable: {} success!'.format(dtable_uuid))
+    dtable_io_logger.info(add_task_id_to_log(f'Import DTable: {dtable_uuid} success!', task_id))
 
 def get_dtable_export_asset_files(username, repo_id, dtable_uuid, files, task_id, config, files_map=None):
     """

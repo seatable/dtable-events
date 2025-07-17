@@ -27,7 +27,7 @@ from dtable_events.dtable_io.external_app import APP_USERS_COUMNS_TYPE_MAP, matc
     get_row_ids_for_delete, get_app_users
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.utils import uuid_str_to_36_chars, get_inner_fileserver_root, \
-    gen_file_get_url, gen_file_upload_url
+    gen_file_get_url, gen_file_upload_url, uuid_str_to_32_chars
 
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.exception import BaseSizeExceedsLimitError
@@ -170,6 +170,7 @@ def prepare_dtable_json_from_memory(workspace_id, dtable_uuid, username):
 def prepare_asset_files_download(username, repo_id, dtable_uuid, asset_dir_id, task_id, resumeable_export):
     from dtable_events.dtable_io import dtable_io_logger, add_task_id_to_log
 
+    export_asset_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_asset', 'asset')
     def download_assets_files_recursively(username, repo_id, dtable_uuid, asset_dir_id, task_id, base_path=None):
         """
         Recursively download asset directory.
@@ -178,7 +179,7 @@ def prepare_asset_files_download(username, repo_id, dtable_uuid, asset_dir_id, t
         3. Skip files that already exist if resumeable_export is True
         """
         if base_path is None:
-            base_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_asset', 'asset')
+            base_path = export_asset_path
 
         os.makedirs(base_path, exist_ok=True)
         try:
@@ -187,7 +188,8 @@ def prepare_asset_files_download(username, repo_id, dtable_uuid, asset_dir_id, t
             dtable_io_logger.error(add_task_id_to_log(f"Failed to list dir {asset_dir_id}: {e}", task_id))
             return
 
-        dtable_io_logger.info(add_task_id_to_log(f"Start to download assets in {base_path}", task_id))
+        asset_path = base_path[len(export_asset_path):] or '/'
+        dtable_io_logger.info(add_task_id_to_log(f"Start to download assets in {asset_path}", task_id))
 
         file_download_count = 0
         for entry in entries:
@@ -226,7 +228,7 @@ def prepare_asset_files_download(username, repo_id, dtable_uuid, asset_dir_id, t
                     dtable_io_logger.warning(add_task_id_to_log(f"Failed to download {path}, skipping: {e}", task_id))    
                 else:
                     file_download_count += 1
-        dtable_io_logger.info(add_task_id_to_log(f"Downloaded {file_download_count} files in {base_path}", task_id))
+        dtable_io_logger.info(add_task_id_to_log(f"Downloaded {file_download_count} files in {asset_path}", task_id))
     dtable_io_logger.info(add_task_id_to_log(f"export dtable: {dtable_uuid} username: {username} start asset recursive download", task_id))
     download_assets_files_recursively(username, repo_id, dtable_uuid, asset_dir_id, task_id)
     dtable_io_logger.info(add_task_id_to_log(f"export dtable: {dtable_uuid} username: {username}asset download complete", task_id))
@@ -993,12 +995,18 @@ def add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, o
         db_session.commit()
 
 
-def create_forms_from_src_dtable(workspace_id, dtable_uuid, db_session):
+def create_forms_from_src_dtable(workspace_id, dtable_uuid, resumable_import, db_session):
     if not db_session:
         return
     forms_json_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted/', 'forms.json')
     if not os.path.exists(forms_json_path):
         return
+
+    if resumable_import:
+        sql = "SELECT COUNT(1) as count FROM dtable_forms WHERE dtable_uuid=:dtable_uuid"
+        result = db_session.execute(sql, {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+        if result.count > 0:
+            return
 
     with open(forms_json_path, 'r') as fp:
         forms_json = fp.read()
@@ -1009,12 +1017,19 @@ def create_forms_from_src_dtable(workspace_id, dtable_uuid, db_session):
         add_a_form_to_db(form, workspace_id, dtable_uuid, db_session)
 
 
-def create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, db_session):
+def create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, resumable_import, db_session):
     if not db_session:
         return
     auto_rules_json_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted/', 'auto_rules.json')
     if not os.path.exists(auto_rules_json_path):
         return
+
+    if resumable_import:
+        sql = "SELECT COUNT(1) as count FROM dtable_automation_rules WHERE dtable_uuid=:dtable_uuid"
+        result = db_session.execute(sql, {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+        if result.count > 0:
+            return
+
     with open(auto_rules_json_path, 'r') as fp:
         auto_rules_json = fp.read()
     auto_rules = json.loads(auto_rules_json)
@@ -1024,12 +1039,19 @@ def create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, or
         add_a_auto_rule_to_db(username, auto_rule, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, db_session)
 
 
-def create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, db_session):
+def create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, resumable_import, db_session):
     if not db_session:
         return
     workflows_json_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted/', 'workflows.json')
     if not os.path.exists(workflows_json_path):
         return
+
+    if resumable_import:
+        sql = "SELECT COUNT(1) as count FROM dtable_workflows WHERE dtable_uuid=:dtable_uuid"
+        result = db_session.execute(sql, {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+        if result.count > 0:
+            return
+
     with open(workflows_json_path, 'r') as fp:
         workflows_json = fp.read()
     workflows = json.loads(workflows_json)
@@ -1039,13 +1061,20 @@ def create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uui
         add_a_workflow_to_db(username, workflow, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, db_session)
 
 
-def create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_id, workspace_id, repo_id):
+def create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_id, workspace_id, repo_id, resumable_import):
     from dtable_events.dtable_io.import_table_from_base import trans_page_content_url
     if not db_session:
         return
     external_apps_json_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted/', 'external_apps.json')
     if not os.path.exists(external_apps_json_path):
         return
+
+    if resumable_import:
+        sql = "SELECT COUNT(1) as count FROM dtable_external_apps WHERE dtable_uuid=:dtable_uuid"
+        result = db_session.execute(sql, {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+        if result.count > 0:
+            return
+
     with open(external_apps_json_path, 'r') as fp:
         external_apps_json = fp.read()
     external_apps = json.loads(external_apps_json)

@@ -91,7 +91,7 @@ class TaskManager(object):
         task_id = str(uuid.uuid4())
         task = (post_dtable_import_files,
                 (username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage,
-                 can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id, self.config, resumable_import))
+                 can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id, self.config, task_id, resumable_import))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', TASK_MANAGER_METRIC_HELP)
