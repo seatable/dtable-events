@@ -51,7 +51,7 @@ def add_task_id_to_log(log_msg, task_id=None):
     return f'task [{task_id}] - {log_msg}' if task_id else log_msg
 
 
-def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asset_dir_id, config, task_id, resumeable_export, recursive_download):
+def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asset_dir_id, config, task_id, recursive_download):
     """
     1. prepare file content at /tmp/dtable-io/<dtable_id>/dtable_asset/...
     2. make zip file
@@ -76,7 +76,7 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
         raise Exception(error_msg)
 
     dtable_io_logger.info(add_task_id_to_log('Clear tmp dirs and files before prepare.', task_id))
-    if not resumeable_export:
+    if not recursive_download:
         clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path)
     os.makedirs(tmp_file_path, exist_ok=True)
     # import here to avoid circular dependency
@@ -95,7 +95,7 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
         dtable_io_logger.info(add_task_id_to_log('Create asset dir.', task_id))
         try:
             if recursive_download:
-                prepare_asset_files_download(username, repo_id, dtable_uuid, asset_dir_id, task_id, resumeable_export)
+                prepare_asset_files_download(username, repo_id, dtable_uuid, asset_dir_id, task_id)
             else:
                 prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id, task_id)
         except Exception as e:
@@ -171,7 +171,7 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
 
 
 def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage,
-                             can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id, config, task_id, resumable_import):
+                             can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id, config, task_id):
     """
     post files at /tmp/<dtable_uuid>/dtable_zip_extracted/ to file server
     unzip django uploaded tmp file is suppose to be done in dtable-web api.
@@ -186,19 +186,19 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
 
     dtable_io_logger.info(add_task_id_to_log('Prepare dtable json file and post it at file server.', task_id))
     try:
-        dtable_content = post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage, resumable_import, db_session)
+        dtable_content = post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage, db_session)
     except Exception as e:
         dtable_io_logger.error(add_task_id_to_log(f'post dtable json failed. ERROR: {e}', task_id))
 
     dtable_io_logger.info(add_task_id_to_log('Post asset files in tmp path to file server.', task_id))
     try:
-        post_asset_files(repo_id, dtable_uuid, username, resumable_import)
+        post_asset_files(repo_id, dtable_uuid, username)
     except Exception as e:
         dtable_io_logger.error(add_task_id_to_log(f'post asset files failed. ERROR: {e}', task_id))
 
     dtable_io_logger.info(add_task_id_to_log('create forms from src dtable.', task_id))
     try:
-        create_forms_from_src_dtable(workspace_id, dtable_uuid, resumable_import, db_session)
+        create_forms_from_src_dtable(workspace_id, dtable_uuid, db_session)
     except Exception as e:
         dtable_io_logger.error(add_task_id_to_log(f'create forms failed. ERROR: {e}', task_id))
     finally:
@@ -209,7 +209,7 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
     if can_use_workflows:
         dtable_io_logger.info(add_task_id_to_log('create workflows from src dtable.', task_id))
         try:
-            create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, resumable_import, db_session)
+            create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, db_session)
         except Exception as e:
             dtable_io_logger.error(add_task_id_to_log(f'create workflows failed. ERROR: {e}', task_id))
         finally:
@@ -219,7 +219,7 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
     if can_use_automation_rules:
         dtable_io_logger.info(add_task_id_to_log('create auto rules from src dtable.', task_id))
         try:
-            create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, resumable_import, db_session)
+            create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, db_session)
         except Exception as e:
             dtable_io_logger.error(add_task_id_to_log(f'create auto rules failed. ERROR: {e}', task_id))
         finally:
@@ -229,7 +229,7 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
     if can_use_external_apps:
         dtable_io_logger.info(add_task_id_to_log('create external apps from src dtable.', task_id))
         try:
-            create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_id, workspace_id, repo_id, resumable_import)
+            create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_id, workspace_id, repo_id)
         except Exception as e:
             dtable_io_logger.exception(add_task_id_to_log(f'create external apps failed. ERROR: {e}', task_id))
         finally:

@@ -167,7 +167,7 @@ def prepare_dtable_json_from_memory(workspace_id, dtable_uuid, username):
     with open(path, 'wb') as f:
         f.write(content_json)
 
-def prepare_asset_files_download(username, repo_id, dtable_uuid, asset_dir_id, task_id, resumeable_export):
+def prepare_asset_files_download(username, repo_id, dtable_uuid, asset_dir_id, task_id):
     from dtable_events.dtable_io import dtable_io_logger, add_task_id_to_log
 
     export_asset_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_asset', 'asset')
@@ -203,7 +203,7 @@ def prepare_asset_files_download(username, repo_id, dtable_uuid, asset_dir_id, t
                                             base_path=path)
             else:
                 # skip if already downloaded 
-                if resumeable_export and os.path.exists(path):
+                if os.path.exists(path):
                     dtable_io_logger.info(add_task_id_to_log(f"Skipping existing file: {path}", task_id))
                     continue
                 token = seafile_api.get_fileserver_access_token(
@@ -534,7 +534,7 @@ def update_custom_assets(content, dst_dtable_uuid, db_session):
     return content
 
 
-def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage, resumable_import, db_session):
+def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage, db_session):
     """
     used to import dtable
     prepare dtable json file and post it at file server
@@ -548,11 +548,10 @@ def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_n
     from dtable_events.dtable_io import dtable_io_logger
     from dtable_events.utils.storage_backend import storage_backend
 
-    # if were resumable import and dtable content exists, don't change anything
-    if resumable_import:
-        dtable_content = storage_backend.get_dtable(dtable_uuid)
-        if dtable_content:
-            return
+    # if dtable content exists, don't change anything
+    dtable_content = storage_backend.get_dtable(dtable_uuid)
+    if dtable_content:
+        return dtable_content
 
     # change url in content json, then save it at file server
     content_json_file_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted/', 'content.json')
@@ -587,7 +586,7 @@ def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_n
     return content_json
 
 
-def post_asset_files(repo_id, dtable_uuid, username, resumable_import):
+def post_asset_files(repo_id, dtable_uuid, username):
     """
     used to import dtable
     post asset files in  /tmp/dtable-io/<dtable_uuid>/dtable_zip_extracted/ to file server
@@ -609,11 +608,10 @@ def post_asset_files(repo_id, dtable_uuid, username, resumable_import):
             if not path_id:
                 seafile_api.mkdir_with_parents(repo_id, '/', cur_file_parent_path[1:], username)
 
-            if resumable_import:
-                cur_file_path = os.path.join(cur_file_parent_path, file_name)
-                file_id = seafile_api.get_file_id_by_path(repo_id, cur_file_path)
-                if file_id:
-                    continue
+            cur_file_path = os.path.join(cur_file_parent_path, file_name)
+            file_id = seafile_api.get_file_id_by_path(repo_id, cur_file_path)
+            if file_id:
+                continue
 
             seafile_api.post_file(repo_id, tmp_file_path, cur_file_parent_path, file_name, username)
 
@@ -1001,18 +999,17 @@ def add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, o
         db_session.commit()
 
 
-def create_forms_from_src_dtable(workspace_id, dtable_uuid, resumable_import, db_session):
+def create_forms_from_src_dtable(workspace_id, dtable_uuid, db_session):
     if not db_session:
         return
     forms_json_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted/', 'forms.json')
     if not os.path.exists(forms_json_path):
         return
 
-    if resumable_import:
-        sql = "SELECT COUNT(1) as count FROM dtable_forms WHERE dtable_uuid=:dtable_uuid"
-        result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
-        if result.count > 0:
-            return
+    sql = "SELECT COUNT(1) as count FROM dtable_forms WHERE dtable_uuid=:dtable_uuid"
+    result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+    if result.count > 0:
+        return
 
     with open(forms_json_path, 'r') as fp:
         forms_json = fp.read()
@@ -1023,18 +1020,19 @@ def create_forms_from_src_dtable(workspace_id, dtable_uuid, resumable_import, db
         add_a_form_to_db(form, workspace_id, dtable_uuid, db_session)
 
 
-def create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, resumable_import, db_session):
+def create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, db_session):
+    from dtable_events.utils.dtable_server_api import DTableServerAPI
+
     if not db_session:
         return
     auto_rules_json_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted/', 'auto_rules.json')
     if not os.path.exists(auto_rules_json_path):
         return
 
-    if resumable_import:
-        sql = "SELECT COUNT(1) as count FROM dtable_automation_rules WHERE dtable_uuid=:dtable_uuid"
-        result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
-        if result.count > 0:
-            return
+    sql = "SELECT COUNT(1) as count FROM dtable_automation_rules WHERE dtable_uuid=:dtable_uuid"
+    result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+    if result.count > 0:
+        return
 
     with open(auto_rules_json_path, 'r') as fp:
         auto_rules_json = fp.read()
@@ -1043,20 +1041,21 @@ def create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, or
         if ('run_condition' not in auto_rule) or ('trigger' not in auto_rule) or ('actions' not in auto_rule):
             continue
         add_a_auto_rule_to_db(username, auto_rule, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, db_session)
+    dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, INNER_DTABLE_SERVER_URL)
+    dtable_server_api.send_signal('automation-rules-changed')
 
 
-def create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, resumable_import, db_session):
+def create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, db_session):
     if not db_session:
         return
     workflows_json_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted/', 'workflows.json')
     if not os.path.exists(workflows_json_path):
         return
 
-    if resumable_import:
-        sql = "SELECT COUNT(1) as count FROM dtable_workflows WHERE dtable_uuid=:dtable_uuid"
-        result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
-        if result.count > 0:
-            return
+    sql = "SELECT COUNT(1) as count FROM dtable_workflows WHERE dtable_uuid=:dtable_uuid"
+    result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+    if result.count > 0:
+        return
 
     with open(workflows_json_path, 'r') as fp:
         workflows_json = fp.read()
@@ -1067,7 +1066,7 @@ def create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uui
         add_a_workflow_to_db(username, workflow, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, db_session)
 
 
-def create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_id, workspace_id, repo_id, resumable_import):
+def create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_id, workspace_id, repo_id):
     from dtable_events.dtable_io.import_table_from_base import trans_page_content_url
     if not db_session:
         return
@@ -1075,11 +1074,10 @@ def create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_
     if not os.path.exists(external_apps_json_path):
         return
 
-    if resumable_import:
-        sql = "SELECT COUNT(1) as count FROM dtable_external_apps WHERE dtable_uuid=:dtable_uuid"
-        result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
-        if result.count > 0:
-            return
+    sql = "SELECT COUNT(1) as count FROM dtable_external_apps WHERE dtable_uuid=:dtable_uuid"
+    result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+    if result.count > 0:
+        return
 
     with open(external_apps_json_path, 'r') as fp:
         external_apps_json = fp.read()
