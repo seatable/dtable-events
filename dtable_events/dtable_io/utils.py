@@ -231,7 +231,7 @@ def prepare_asset_files_download(username, repo_id, dtable_uuid, asset_dir_id, t
         dtable_io_logger.info(add_task_id_to_log(f"Downloaded {file_download_count} files in {asset_path}", task_id))
     dtable_io_logger.info(add_task_id_to_log(f"export dtable: {dtable_uuid} username: {username} start asset recursive download", task_id))
     download_assets_files_recursively(username, repo_id, dtable_uuid, asset_dir_id, task_id)
-    dtable_io_logger.info(add_task_id_to_log(f"export dtable: {dtable_uuid} username: {username}asset download complete", task_id))
+    dtable_io_logger.info(add_task_id_to_log(f"export dtable: {dtable_uuid} username: {username} asset download complete", task_id))
 
 
 def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id, task_id):
