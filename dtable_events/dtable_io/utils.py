@@ -8,6 +8,7 @@ import io
 import uuid
 import datetime
 import random
+import stat
 import string
 import sys
 import re
@@ -26,7 +27,7 @@ from dtable_events.dtable_io.external_app import APP_USERS_COUMNS_TYPE_MAP, matc
     get_row_ids_for_delete, get_app_users
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.utils import uuid_str_to_36_chars, get_inner_fileserver_root, \
-    gen_file_get_url, gen_file_upload_url
+    gen_file_get_url, gen_file_upload_url, uuid_str_to_32_chars
 
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.exception import BaseSizeExceedsLimitError
@@ -67,6 +68,16 @@ def gen_dir_zip_download_url(token):
     FILE_SERVER_PORT = task_manager.conf['file_server_port']
     INNER_FILE_SERVER_ROOT = 'http://127.0.0.1:' + str(FILE_SERVER_PORT)
     return '%s/zip/%s' % (INNER_FILE_SERVER_ROOT, token)
+
+def get_file_download_url(token, filename):
+    """
+    Generate fileserver file url.
+    Format: http://<domain:port>/files/<token>/<filename>
+    """
+    FILE_SERVER_PORT = task_manager.conf['file_server_port']
+    INNER_FILE_SERVER_ROOT = 'http://127.0.0.1:' + str(FILE_SERVER_PORT)
+    return '%s/files/%s/%s' % (INNER_FILE_SERVER_ROOT, token,
+                               urlquote(filename))
 
 
 def convert_dtable_export_file_and_image_url(workspace_id, dtable_uuid, dtable_content):
@@ -135,7 +146,7 @@ def log_dtable_info(dtable_uuid, content, username, op_type):
         dtable_io_logger.exception('%s username: %s dtable: %s error: %s', op_type, username, dtable_uuid, e)
 
 
-def prepare_dtable_json_from_memory(workspace_id, dtable_uuid, username):
+def prepare_dtable_json_from_memory(workspace_id, dtable_uuid, username, path):
     """
     Used in dtable file export in real-time from memory by request the api of dtable-server
     It is more effective than exporting dtable files from seafile-server which will take about 5 minutes
@@ -151,13 +162,81 @@ def prepare_dtable_json_from_memory(workspace_id, dtable_uuid, username):
     dtable_content = convert_dtable_export_file_and_image_url(workspace_id, dtable_uuid, json_content)
     log_dtable_info(dtable_uuid, dtable_content, username, 'export dtable')
     content_json = json.dumps(dtable_content).encode('utf-8')
-    path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_asset', 'content.json')
 
-    with open(path, 'wb') as f:
+    with open(os.path.join(path, 'content.json'), 'wb') as f:
         f.write(content_json)
 
+def prepare_asset_files_download(username, repo_id, dtable_uuid, asset_dir_id, path, task_id):
+    from dtable_events.dtable_io import dtable_io_logger, add_task_id_to_log
 
-def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id, task_id):
+    export_asset_path = os.path.join(path, 'asset')
+    def download_assets_files_recursively(username, repo_id, dtable_uuid, asset_dir_id, task_id, base_path=None):
+        """
+        Recursively download asset directory.
+        1. Walk through directory entries via file server API
+        2. For each file, download individually; on error, skip
+        3. Skip files that already exist if resumeable_export is True
+        """
+        if base_path is None:
+            base_path = export_asset_path
+
+        os.makedirs(base_path, exist_ok=True)
+        try:
+            entries = seafile_api.list_dir_by_dir_id(repo_id, asset_dir_id)
+        except Exception as e:
+            dtable_io_logger.error(add_task_id_to_log(f"Failed to list dir {asset_dir_id}: {e}", task_id))
+            return
+
+        asset_path = base_path[len(export_asset_path):] or '/'
+        dtable_io_logger.info(add_task_id_to_log(f"Start to download assets in {asset_path}", task_id))
+
+        file_download_count = 0
+        file_skip_count = 0
+        file_fail_count = 0
+        for entry in entries:
+            file_name = entry.obj_name
+            obj_id = entry.obj_id
+            path = os.path.join(base_path, file_name)
+
+            if stat.S_ISDIR(entry.mode):
+                # recurse into subdir
+                download_assets_files_recursively(username, repo_id, dtable_uuid, obj_id, task_id,
+                                            base_path=path)
+            else:
+                # skip if already downloaded 
+                if os.path.exists(path):
+                    file_skip_count += 1
+                    continue
+                token = seafile_api.get_fileserver_access_token(
+                    repo_id, obj_id, 'download', username, use_onetime=False
+                )
+                #ensure file downlod intact
+                temp_path = path +  '.part  '
+                try:
+                    url = get_file_download_url(token, file_name)
+                    resp = requests.get(url, stream=True)
+                    resp.raise_for_status()
+
+                    with open(temp_path, 'wb') as f:
+                        for chunk in resp.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                    os.rename(temp_path, path)
+
+                except Exception as e:
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
+                    file_fail_count += 1
+                    dtable_io_logger.warning(add_task_id_to_log(f"Failed to download {path}, skipping: {e}", task_id))    
+                else:
+                    file_download_count += 1
+        dtable_io_logger.info(add_task_id_to_log(f"Downloaded {file_download_count} files, skip {file_skip_count} files, failed {file_fail_count} files in {asset_path}", task_id))
+    dtable_io_logger.info(add_task_id_to_log(f"export dtable: {dtable_uuid} username: {username} start asset recursive download", task_id))
+    download_assets_files_recursively(username, repo_id, dtable_uuid, asset_dir_id, task_id)
+    dtable_io_logger.info(add_task_id_to_log(f"export dtable: {dtable_uuid} username: {username} asset download complete", task_id))
+
+
+def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id, path, task_id):
     """
     used in export dtable
     create asset folder at /tmp/dtable-io/<dtable_uuid>/dtable_asset
@@ -217,8 +296,7 @@ def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id, task
     if is_zipfile(file_obj):
         with ZipFile(file_obj) as zp:
             dtable_io_logger.info(add_task_id_to_log(f'export dtable user: {username} dtable: {dtable_uuid} start to extractall', task_id))
-            zp.extractall(os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_asset'))
-
+            zp.extractall(path)
 
 def copy_src_forms_to_json(dtable_uuid, tmp_file_path, db_session):
     if not db_session:
@@ -382,9 +460,8 @@ def get_dtable_uuid_parent_path_md5(dtable_uuid, parent_path):
     return hashlib.md5((dtable_uuid + '-' + parent_path).encode('utf-8')).hexdigest()
 
 
-def update_custom_assets(content, dst_dtable_uuid, db_session):
-    tmp_extracted_path = os.path.join('/tmp/dtable-io', dst_dtable_uuid, 'dtable_zip_extracted/')
-    if not os.path.isdir(os.path.join(tmp_extracted_path, 'asset', 'custom')):
+def update_custom_assets(content, dst_dtable_uuid, path, db_session):
+    if not os.path.isdir(os.path.join(path, 'asset', 'custom')):
         return content
     old_new_dict = {}
     uuid_old_path_dict = {}
@@ -458,7 +535,7 @@ def update_custom_assets(content, dst_dtable_uuid, db_session):
     return content
 
 
-def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage, db_session):
+def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage, path, db_session):
     """
     used to import dtable
     prepare dtable json file and post it at file server
@@ -472,8 +549,13 @@ def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_n
     from dtable_events.dtable_io import dtable_io_logger
     from dtable_events.utils.storage_backend import storage_backend
 
+    # if dtable content exists, don't change anything
+    dtable_content = storage_backend.get_dtable(dtable_uuid)
+    if dtable_content:
+        return dtable_content
+
     # change url in content json, then save it at file server
-    content_json_file_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted/', 'content.json')
+    content_json_file_path = os.path.join(path, 'content.json')
     with open(content_json_file_path, 'r') as f:
         content_json = f.read()
 
@@ -493,7 +575,7 @@ def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_n
     content_json = convert_dtable_import_file_url(content, workspace_id, dtable_uuid)
 
     try:
-        content_json = update_custom_assets(content, dtable_uuid, db_session)
+        content_json = update_custom_assets(content, dtable_uuid, path, db_session)
     except Exception as e:
         dtable_io_logger.exception('update dtable: %s update custom assets error: %s', dtable_uuid, e)
 
@@ -505,7 +587,7 @@ def post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_n
     return content_json
 
 
-def post_asset_files(repo_id, dtable_uuid, username):
+def post_asset_files(repo_id, dtable_uuid, username, path):
     """
     used to import dtable
     post asset files in  /tmp/dtable-io/<dtable_uuid>/dtable_zip_extracted/ to file server
@@ -514,18 +596,21 @@ def post_asset_files(repo_id, dtable_uuid, username):
     """
     asset_root_path = os.path.join('/asset', dtable_uuid)
 
-    tmp_extracted_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted/')
-    for root, dirs, files in os.walk(tmp_extracted_path):
+    extracted_asset_path = os.path.join(path, 'asset')
+    for dirpath, dirs, files in os.walk(extracted_asset_path):
         for file_name in files:
-            if file_name in ['content.json', 'forms.json']:
-                continue
-            inner_path = root[len(tmp_extracted_path)+6:]  # path inside zip
-            tmp_file_path = os.path.join(root, file_name)
+            inner_path = dirpath[len(extracted_asset_path)+1:]  # path inside zip
+            tmp_file_path = os.path.join(dirpath, file_name)
             cur_file_parent_path = os.path.join(asset_root_path, inner_path)
             # check current file's parent path before post file
             path_id = seafile_api.get_dir_id_by_path(repo_id, cur_file_parent_path)
             if not path_id:
                 seafile_api.mkdir_with_parents(repo_id, '/', cur_file_parent_path[1:], username)
+
+            cur_file_path = os.path.join(cur_file_parent_path, file_name)
+            file_id = seafile_api.get_file_id_by_path(repo_id, cur_file_path)
+            if file_id:
+                continue
 
             seafile_api.post_file(repo_id, tmp_file_path, cur_file_parent_path, file_name, username)
 
@@ -913,11 +998,16 @@ def add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, o
         db_session.commit()
 
 
-def create_forms_from_src_dtable(workspace_id, dtable_uuid, db_session):
+def create_forms_from_src_dtable(workspace_id, dtable_uuid, path, db_session):
     if not db_session:
         return
-    forms_json_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted/', 'forms.json')
+    forms_json_path = os.path.join(path, 'forms.json')
     if not os.path.exists(forms_json_path):
+        return
+
+    sql = "SELECT COUNT(1) as count FROM dtable_forms WHERE dtable_uuid=:dtable_uuid"
+    result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+    if result.count > 0:
         return
 
     with open(forms_json_path, 'r') as fp:
@@ -929,12 +1019,20 @@ def create_forms_from_src_dtable(workspace_id, dtable_uuid, db_session):
         add_a_form_to_db(form, workspace_id, dtable_uuid, db_session)
 
 
-def create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, db_session):
+def create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, path, db_session):
+    from dtable_events.utils.dtable_server_api import DTableServerAPI
+
     if not db_session:
         return
-    auto_rules_json_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted/', 'auto_rules.json')
+    auto_rules_json_path = os.path.join(path, 'auto_rules.json')
     if not os.path.exists(auto_rules_json_path):
         return
+
+    sql = "SELECT COUNT(1) as count FROM dtable_automation_rules WHERE dtable_uuid=:dtable_uuid"
+    result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+    if result.count > 0:
+        return
+
     with open(auto_rules_json_path, 'r') as fp:
         auto_rules_json = fp.read()
     auto_rules = json.loads(auto_rules_json)
@@ -942,14 +1040,22 @@ def create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, or
         if ('run_condition' not in auto_rule) or ('trigger' not in auto_rule) or ('actions' not in auto_rule):
             continue
         add_a_auto_rule_to_db(username, auto_rule, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, db_session)
+    dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, INNER_DTABLE_SERVER_URL)
+    dtable_server_api.send_signal('automation-rules-changed')
 
 
-def create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, db_session):
+def create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, path, db_session):
     if not db_session:
         return
-    workflows_json_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted/', 'workflows.json')
+    workflows_json_path = os.path.join(path, 'workflows.json')
     if not os.path.exists(workflows_json_path):
         return
+
+    sql = "SELECT COUNT(1) as count FROM dtable_workflows WHERE dtable_uuid=:dtable_uuid"
+    result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+    if result.count > 0:
+        return
+
     with open(workflows_json_path, 'r') as fp:
         workflows_json = fp.read()
     workflows = json.loads(workflows_json)
@@ -959,13 +1065,19 @@ def create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uui
         add_a_workflow_to_db(username, workflow, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, db_session)
 
 
-def create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_id, workspace_id, repo_id):
+def create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_id, workspace_id, repo_id, path):
     from dtable_events.dtable_io.import_table_from_base import trans_page_content_url
     if not db_session:
         return
-    external_apps_json_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted/', 'external_apps.json')
+    external_apps_json_path = os.path.join(path, 'external_apps.json')
     if not os.path.exists(external_apps_json_path):
         return
+
+    sql = "SELECT COUNT(1) as count FROM dtable_external_apps WHERE dtable_uuid=:dtable_uuid"
+    result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+    if result.count > 0:
+        return
+
     with open(external_apps_json_path, 'r') as fp:
         external_apps_json = fp.read()
     external_apps = json.loads(external_apps_json)

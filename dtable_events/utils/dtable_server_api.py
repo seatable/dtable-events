@@ -38,6 +38,8 @@ def get_dtable_server_token(username, dtable_uuid, timeout=300, permission=None,
         payload['org_id'] = kwargs['org_id']
     if kwargs.get('owner_id'):
         payload['owner_id'] = kwargs['owner_id']
+    if kwargs.get('signal_name'):
+        payload['signal_name'] = kwargs['signal_name']
 
     access_token = jwt.encode(
         payload, DTABLE_PRIVATE_KEY, algorithm='HS256'
@@ -525,4 +527,11 @@ class DTableServerAPI(object):
             'user_messages': user_msg_list,
         }
         response = requests.post(url, json=body, headers=self.headers)
+        return parse_response(response)
+
+    def send_signal(self, signal_name):
+        url = self.dtable_server_url + f'/api/v1/internal/dtables/{self.dtable_uuid}/signals/?from=dtable_web'
+        access_token = get_dtable_server_token('dtable-events', self.dtable_uuid, kwargs={'is_internal': True, 'signal_name': signal_name})['internal_access_token']
+        signal_headers = {'Authorization': f"Token {access_token}"}
+        response = requests.post(url, headers=signal_headers)
         return parse_response(response)
