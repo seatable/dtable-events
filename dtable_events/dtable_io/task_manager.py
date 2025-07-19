@@ -66,8 +66,8 @@ class TaskManager(object):
         return task_id in (self.tasks_map.keys() | self.task_results_map.keys())
 
     @log_function_call
-    def add_export_task(self, username, repo_id, workspace_id, dtable_uuid, dtable_name, ignore_asset, recursive_download):
-        from dtable_events.dtable_io import get_dtable_export_content
+    def add_export_task(self, username, repo_id, workspace_id, dtable_uuid, dtable_name, ignore_asset, is_export_folder, folder_path):
+        from dtable_events.dtable_io import get_dtable_export_content, get_dtable_export_content_folder
 
         asset_dir_id = None
         if not ignore_asset:
@@ -75,8 +75,12 @@ class TaskManager(object):
             asset_dir_id = seafile_api.get_dir_id_by_path(repo_id, asset_dir_path)
 
         task_id = str(uuid.uuid4())
-        task = (get_dtable_export_content,
-                (username, repo_id, workspace_id, dtable_uuid, asset_dir_id, self.config, task_id, recursive_download))
+        if not is_export_folder:
+            task = (get_dtable_export_content,
+                    (username, repo_id, workspace_id, dtable_uuid, asset_dir_id, self.config, task_id))
+        else:
+            task = (get_dtable_export_content_folder,
+                    (username, repo_id, workspace_id, dtable_uuid, asset_dir_id, self.config, folder_path, task_id))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
@@ -85,13 +89,19 @@ class TaskManager(object):
 
     @log_function_call
     def add_import_task(self, username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage,
-                        can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id):
-        from dtable_events.dtable_io import post_dtable_import_files
+                        can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id,
+                        is_import_folder, folder_path):
+        from dtable_events.dtable_io import post_dtable_import_files, post_dtable_import_files_folder
 
         task_id = str(uuid.uuid4())
-        task = (post_dtable_import_files,
-                (username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage,
-                 can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id, self.config, task_id))
+        if not is_import_folder:
+            task = (post_dtable_import_files,
+                    (username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage,
+                    can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id, self.config, task_id))
+        else:
+            task = (post_dtable_import_files_folder,
+                    (username, repo_id, workspace_id, dtable_uuid, folder_path, in_storage,
+                    can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id, self.config, task_id))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_io_qsize_metric(self.tasks_queue.qsize(), 'io_task_queue_size', TASK_MANAGER_METRIC_HELP)
