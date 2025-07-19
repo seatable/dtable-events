@@ -167,7 +167,7 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
 
 def get_dtable_export_content_folder(username, repo_id, workspace_id, dtable_uuid, asset_dir_id, config, folder_path, task_id):
     """
-    like `get_dtable_export_content` but to export to `folder_path` and not archive
+    like `get_dtable_export_content` but to export to `folder_path` and not to archive
     """
     task_result = {
         'warnings': []
@@ -351,7 +351,7 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
 def post_dtable_import_files_folder(username, repo_id, workspace_id, dtable_uuid, folder_path, in_storage,
                              can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id, config, task_id):
     """
-    like `post_dtable_import_files` but import from `folder_path` and not remove it
+    like `post_dtable_import_files` but import from `folder_path` and not to remove folder_path
     """
     dtable_io_logger.info(add_task_id_to_log(f'Start import DTable: {dtable_uuid}.', task_id))
 

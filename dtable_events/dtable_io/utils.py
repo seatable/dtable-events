@@ -191,6 +191,8 @@ def prepare_asset_files_download(username, repo_id, dtable_uuid, asset_dir_id, p
         dtable_io_logger.info(add_task_id_to_log(f"Start to download assets in {asset_path}", task_id))
 
         file_download_count = 0
+        file_skip_count = 0
+        file_fail_count = 0
         for entry in entries:
             file_name = entry.obj_name
             obj_id = entry.obj_id
@@ -203,7 +205,7 @@ def prepare_asset_files_download(username, repo_id, dtable_uuid, asset_dir_id, p
             else:
                 # skip if already downloaded 
                 if os.path.exists(path):
-                    dtable_io_logger.info(add_task_id_to_log(f"Skipping existing file: {path}", task_id))
+                    file_skip_count += 1
                     continue
                 token = seafile_api.get_fileserver_access_token(
                     repo_id, obj_id, 'download', username, use_onetime=False
@@ -224,10 +226,11 @@ def prepare_asset_files_download(username, repo_id, dtable_uuid, asset_dir_id, p
                 except Exception as e:
                     if os.path.exists(temp_path):
                         os.remove(temp_path)
+                    file_fail_count += 1
                     dtable_io_logger.warning(add_task_id_to_log(f"Failed to download {path}, skipping: {e}", task_id))    
                 else:
                     file_download_count += 1
-        dtable_io_logger.info(add_task_id_to_log(f"Downloaded {file_download_count} files in {asset_path}", task_id))
+        dtable_io_logger.info(add_task_id_to_log(f"Downloaded {file_download_count} files, skip {file_skip_count} files, failed {file_fail_count} files in {asset_path}", task_id))
     dtable_io_logger.info(add_task_id_to_log(f"export dtable: {dtable_uuid} username: {username} start asset recursive download", task_id))
     download_assets_files_recursively(username, repo_id, dtable_uuid, asset_dir_id, task_id)
     dtable_io_logger.info(add_task_id_to_log(f"export dtable: {dtable_uuid} username: {username} asset download complete", task_id))
