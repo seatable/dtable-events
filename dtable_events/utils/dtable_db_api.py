@@ -261,7 +261,7 @@ class DTableDBAPI(object):
         return parse_response(resp)
 
     def list_bases(self, offset=None, limit=None):
-        url = '%s/api/v1/bases/' % self.dtable_db_url
+        url = '%s/api/v1/bases/?from=dtable_events' % self.dtable_db_url
         params = {}
         if offset is not None:
             params['offset'] = offset
@@ -270,3 +270,28 @@ class DTableDBAPI(object):
         params['from'] = 'dtable_events'
         resp = requests.get(url, params=params, headers=self.admin_headers)
         return parse_response(resp)
+
+    def get_backups(self):
+        url = '%s/api/v1/backup/%s/?from=dtable_events' % (self.dtable_db_url, self.dtable_uuid)
+        response = requests.get(url, headers=self.admin_headers)
+        return parse_response(response)
+
+    def restore_backup(self, version, new_dtable_uuid):
+        url = '%s/api/v1/restore/%s/%s?new-dtable-uuid=%s&from=dtable_events' % (self.dtable_db_url, self.dtable_uuid, version, new_dtable_uuid)
+        response = requests.post(url, headers=self.admin_headers)
+        return parse_response(response)
+
+    def query_restore_task_status(self, task_id):
+        url = '%s/api/v1/restore/%s/task/?task_id=%s&from=dtable_events' % (self.dtable_db_url, self.dtable_uuid, task_id)
+        response = requests.get(url, headers=self.admin_headers)
+        return parse_response(response)
+
+    def create_backup(self):
+        url = '%s/api/v1/backup/%s?from=dtable_events' % (self.dtable_db_url, self.dtable_uuid)
+        response = requests.post(url, headers=self.admin_headers)
+        return parse_response(response)
+
+    def query_backup_task_status(self):
+        url = '%s/api/v1/backup/%s/task/?from=dtable_events' % (self.dtable_db_url, self.dtable_uuid)
+        response = requests.get(url, headers=self.admin_headers)
+        return parse_response(response)
