@@ -345,7 +345,7 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
 
     archive_file_path = os.path.join(extracted_path, 'archive')
     include_archive = can_import_archive and os.path.exists(archive_file_path)
-    if can_import_archive and include_archive:
+    if include_archive:
         dtable_io_logger.info(add_task_id_to_log('import archive backup from src dtable.', task_id))
         try:
             status = import_archive_from_src_dtable(username, dtable_uuid, extracted_path)
