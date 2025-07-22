@@ -41,7 +41,6 @@ def scan_triggered_automation_rules(event_data, db_session):
         auto_rule.do_actions()
     except Exception as e:
         auto_rule_logger.exception('auto rule: %s do actions error: %s', rule.id, e)
-        auto_rule_logger.exception('auto rule: %s do actions error: %s', rule.id, e)
 
 
 def run_regular_execution_rule(rule, db_session, metadata_cache_manager):
@@ -62,7 +61,6 @@ def run_regular_execution_rule(rule, db_session, metadata_cache_manager):
         auto_rule.do_actions()
     except Exception as e:
         auto_rule_logger.exception('auto rule: %s do actions error: %s', options['rule_id'], e)
-        auto_rule_logger.exception('auto rule: %s do actions error: %s', options['rule_id'], e)
 
 def run_auto_rule_task(trigger, actions, options, config):
     from dtable_events.automations.actions import AutomationRule
@@ -73,7 +71,6 @@ def run_auto_rule_task(trigger, actions, options, config):
         auto_rule = AutomationRule(None, db_session, trigger, actions, options, metadata_cache_manager)
         auto_rule.do_actions(with_test=True)
     except Exception as e:
-        auto_rule_logger.exception('automation rule: %s run test error: %s', options['rule_id'], e)
         auto_rule_logger.exception('automation rule: %s run test error: %s', options['rule_id'], e)
     finally:
         db_session.close()
