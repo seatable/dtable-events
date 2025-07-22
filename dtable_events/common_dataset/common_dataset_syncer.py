@@ -78,15 +78,16 @@ def check_common_dataset(app, session_class):
         total_row_count= 0
         for dataset_id, dataset_syncs in cds_dst_dict.items():
             dataset_count += 1
-            sync_count += len(dataset_syncs)
             cds_logger.info('start to sync no.%s, dataset_id: %s, syncs count: %s', dataset_count, dataset_id, len(dataset_syncs))
             try:
-                rows_count = batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session)
+                rows_count, final_sync_count = batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session)
+                sync_count += final_sync_count
+                total_row_count += rows_count
             except Exception as e:
                 cds_logger.exception('batch sync common dataset_id: %s, error: %s', dataset_id, e)
             finally:
                 cds_logger.info('finish sync dataset_id: %s, syncs count: %s', dataset_id, len(dataset_syncs))
-            total_row_count += rows_count
+            
         cds_logger.info('all syncs done')
         return total_row_count, sync_count
 
