@@ -110,3 +110,8 @@ def setup_logger(logname, fmt=None, level=None, propagate=None):
         logger.addHandler(handler)
 
     return logger
+
+auto_rule_logger = setup_logger(
+    'automation_rules',
+    propagate=False
+)

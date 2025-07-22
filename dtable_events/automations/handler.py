@@ -6,11 +6,10 @@ from queue import Queue
 from threading import Thread, Event, current_thread
 
 from dtable_events.app.event_redis import RedisClient
+from dtable_events.app.log import auto_rule_logger
 from dtable_events.automations.auto_rules_utils import scan_triggered_automation_rules
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import get_opt_from_conf_or_env
-
-logger = logging.getLogger(__name__)
 
 
 class AutomationRuleHandler(Thread):
@@ -39,7 +38,7 @@ class AutomationRuleHandler(Thread):
         try:
             per_update_auto_rule_workers = int(per_update_auto_rule_workers)
         except Exception as e:
-            logger.error('parse section: %s key: %s error: %s', section_name, per_update_auto_rule_workers, e)
+            auto_rule_logger.error('parse section: %s key: %s error: %s', section_name, per_update_auto_rule_workers, e)
             per_update_auto_rule_workers = 3
 
         self.per_update_auto_rule_workers = per_update_auto_rule_workers
@@ -50,12 +49,12 @@ class AutomationRuleHandler(Thread):
     def scan(self):
         while True:
             event = self.queue.get()
-            logger.info("Start to trigger rule %s in thread %s", event, current_thread().name)
+            auto_rule_logger.info("Start to trigger rule %s in thread %s", event, current_thread().name)
             session = self._db_session_class()
             try:
                 scan_triggered_automation_rules(event, session)
             except Exception as e:
-                logger.exception('Handle automation rule with data %s failed: %s', event, e)
+                auto_rule_logger.exception('Handle automation rule with data %s failed: %s', event, e)
             finally:
                 session.close()
 
@@ -66,9 +65,9 @@ class AutomationRuleHandler(Thread):
 
     def run(self):
         if not self.is_enabled():
-            logger.info('Can not start handle automation rules: it is not enabled!')
+            auto_rule_logger.info('Can not start handle automation rules: it is not enabled!')
             return
-        logger.info('Starting handle automation rules...')
+        auto_rule_logger.info('Starting handle automation rules...')
         subscriber = self._redis_client.get_subscriber('automation-rule-triggered')
 
         self.start_threads()
@@ -79,9 +78,9 @@ class AutomationRuleHandler(Thread):
                 if message is not None:
                     event = json.loads(message['data'])
                     self.queue.put(event)
-                    logger.info(f"subscribe event {event}")
+                    auto_rule_logger.info(f"subscribe event {event}")
                 else:
                     time.sleep(0.5)
             except Exception as e:
-                logger.exception('Failed get automation rules message from redis: %s' % e)
+                auto_rule_logger.exception('Failed get automation rules message from redis: %s' % e)
                 subscriber = self._redis_client.get_subscriber('automation-rule-triggered')
