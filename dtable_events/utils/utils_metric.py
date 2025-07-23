@@ -10,9 +10,9 @@ BIG_DATA_TASK_MANAGER_METRIC_HELP = "The size of the big data task queue"
 DATA_SYNC_TASK_MANAGER_METRIC_HELP = "The size of the data sync task queue"
 MESSAGE_TASK_MANAGER_METRIC_HELP = "The size of the message task queue"
 PLUGIN_EMAIL_TASK_MANAGER_METRIC_HELP = "The size of the plugin email task queue"
-COMMON_DATASET_TOTAL_ROW_COUNT_METRIC_HELP = "Total rows processed in common-dataset sync"
-COMMON_DATASET_OPERATIONS_COUNT_METRIC_HELP = "Common-dataset sync count"
-COMMON_DATASET_ELAPSED_TIME_METRIC_HELP = "Time (seconds) to complete common-dataset sync job"
+COMMON_DATASET_TOTAL_ROW_COUNT_METRIC_HELP = "Total rows processed in common-dataset syncs"
+COMMON_DATASET_OPERATIONS_COUNT_METRIC_HELP = "Common-dataset syncs count"
+COMMON_DATASET_ELAPSED_TIME_METRIC_HELP = "Time taken (in seconds) to complete common-dataset syncs job"
 
 
 def publish_metric(value, metric_name, metric_help):
@@ -39,6 +39,6 @@ def publish_common_dataset_metric_decorator(func):
             total_row_count, sync_count = None, None
         publish_metric(total_row_count, 'common_dataset_sync_total_row_count', COMMON_DATASET_TOTAL_ROW_COUNT_METRIC_HELP)
         publish_metric(sync_count, 'common_dataset_sync_count', COMMON_DATASET_OPERATIONS_COUNT_METRIC_HELP)
-        publish_metric(elapsed, 'common_dataset_sync_elapsed_time', COMMON_DATASET_ELAPSED_TIME_METRIC_HELP)
+        publish_metric(elapsed, 'common_dataset_sync_time_cost', COMMON_DATASET_ELAPSED_TIME_METRIC_HELP)
         return result
     return wrapper
