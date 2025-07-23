@@ -3,7 +3,7 @@ import threading
 import time
 import uuid
 
-from dtable_events.utils.utils_metric import publish_io_qsize_metric, MESSAGE_TASK_MANAGER_METRIC_HELP
+from dtable_events.utils.utils_metric import publish_metric, MESSAGE_TASK_MANAGER_METRIC_HELP
 
 class TaskMessageManager(object):
 
@@ -32,7 +32,7 @@ class TaskMessageManager(object):
         task = (toggle_send_email, (account_id, send_info, username, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
-        publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='message_io_task_queue_size', metric_help=MESSAGE_TASK_MANAGER_METRIC_HELP)
+        publish_metric(self.tasks_queue.qsize(), metric_name='message_io_task_queue_size', metric_help=MESSAGE_TASK_MANAGER_METRIC_HELP)
         return task_id
 
     def add_wechat_sending_task(self, webhook_url, msg, msg_type):
@@ -41,7 +41,7 @@ class TaskMessageManager(object):
         task = (send_wechat_msg, (webhook_url, msg, msg_type))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
-        publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='message_io_task_queue_size', metric_help=MESSAGE_TASK_MANAGER_METRIC_HELP)
+        publish_metric(self.tasks_queue.qsize(), metric_name='message_io_task_queue_size', metric_help=MESSAGE_TASK_MANAGER_METRIC_HELP)
         return task_id
 
     def add_dingtalk_sending_task(self, webhook_url, msg ):
@@ -50,7 +50,7 @@ class TaskMessageManager(object):
         task = (send_dingtalk_msg, (webhook_url, msg))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
-        publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='message_io_task_queue_size', metric_help=MESSAGE_TASK_MANAGER_METRIC_HELP)
+        publish_metric(self.tasks_queue.qsize(), metric_name='message_io_task_queue_size', metric_help=MESSAGE_TASK_MANAGER_METRIC_HELP)
         return task_id
 
     def add_notification_sending_task(self, emails, user_col_key, msg, dtable_uuid, username, table_id=None, row_id=None ):
@@ -59,7 +59,7 @@ class TaskMessageManager(object):
         task = (send_notification_msg, (emails, user_col_key, msg, dtable_uuid, username, table_id, row_id ))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
-        publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='message_io_task_queue_size', metric_help=MESSAGE_TASK_MANAGER_METRIC_HELP)
+        publish_metric(self.tasks_queue.qsize(), metric_name='message_io_task_queue_size', metric_help=MESSAGE_TASK_MANAGER_METRIC_HELP)
         return task_id
 
     def query_status(self, task_id):
@@ -96,7 +96,7 @@ class TaskMessageManager(object):
                 result = task[0](*task[1])
                 self.tasks_map[task_id] = 'success'
                 self.tasks_result_map[task_id] = result
-                publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='message_io_task_queue_size', metric_help=MESSAGE_TASK_MANAGER_METRIC_HELP)
+                publish_metric(self.tasks_queue.qsize(), metric_name='message_io_task_queue_size', metric_help=MESSAGE_TASK_MANAGER_METRIC_HELP)
 
                 finish_time = time.time()
                 dtable_message_logger.info('Run task success: %s cost %ds \n' % (self.current_task_info, int(finish_time - start_time)))

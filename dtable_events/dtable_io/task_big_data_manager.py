@@ -3,7 +3,7 @@ import uuid
 import queue
 import threading
 
-from dtable_events.utils.utils_metric import publish_io_qsize_metric, BIG_DATA_TASK_MANAGER_METRIC_HELP
+from dtable_events.utils.utils_metric import publish_metric, BIG_DATA_TASK_MANAGER_METRIC_HELP
 
 class BigDataTaskManager(object):
 
@@ -67,7 +67,7 @@ class BigDataTaskManager(object):
                 # run
                 task[0](*task[1])
                 self.tasks_map[task_id] = 'success'
-                publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='big_data_io_task_queue_size', metric_help=BIG_DATA_TASK_MANAGER_METRIC_HELP)
+                publish_metric(self.tasks_queue.qsize(), metric_name='big_data_io_task_queue_size', metric_help=BIG_DATA_TASK_MANAGER_METRIC_HELP)
 
                 finish_time = time.time()
                 dtable_io_logger.info(
@@ -85,7 +85,7 @@ class BigDataTaskManager(object):
                 (username, dtable_uuid, table_name, file_path, task_id, self.tasks_status_map))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
-        publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='big_data_io_task_queue_size', metric_help=BIG_DATA_TASK_MANAGER_METRIC_HELP)
+        publish_metric(self.tasks_queue.qsize(), metric_name='big_data_io_task_queue_size', metric_help=BIG_DATA_TASK_MANAGER_METRIC_HELP)
         return task_id
 
     def add_update_big_excel_task(self, username, dtable_uuid, table_name, file_path, ref_columns, can_add_row, can_update_row, is_insert_new_data=False):
@@ -95,7 +95,7 @@ class BigDataTaskManager(object):
                 (username, dtable_uuid, table_name, file_path, ref_columns, is_insert_new_data, can_add_row, can_update_row, task_id, self.tasks_status_map))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
-        publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='big_data_io_task_queue_size', metric_help=BIG_DATA_TASK_MANAGER_METRIC_HELP)
+        publish_metric(self.tasks_queue.qsize(), metric_name='big_data_io_task_queue_size', metric_help=BIG_DATA_TASK_MANAGER_METRIC_HELP)
         return task_id
 
     def add_convert_big_data_view_to_excel_task(self, dtable_uuid, table_id, view_id, username, name, repo_id, is_support_image):
@@ -106,7 +106,7 @@ class BigDataTaskManager(object):
                 (dtable_uuid, table_id, view_id, username, name, task_id, self.tasks_status_map, repo_id, is_support_image))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
-        publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='big_data_io_task_queue_size', metric_help=BIG_DATA_TASK_MANAGER_METRIC_HELP)
+        publish_metric(self.tasks_queue.qsize(), metric_name='big_data_io_task_queue_size', metric_help=BIG_DATA_TASK_MANAGER_METRIC_HELP)
 
         return task_id
 
@@ -118,7 +118,7 @@ class BigDataTaskManager(object):
                 (dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_condition_groups, shown_column_keys, task_id, self.tasks_status_map, is_support_image))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
-        publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='big_data_io_task_queue_size', metric_help=BIG_DATA_TASK_MANAGER_METRIC_HELP)
+        publish_metric(self.tasks_queue.qsize(), metric_name='big_data_io_task_queue_size', metric_help=BIG_DATA_TASK_MANAGER_METRIC_HELP)
 
         return task_id
 

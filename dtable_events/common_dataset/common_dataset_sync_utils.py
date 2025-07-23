@@ -1073,11 +1073,13 @@ def _import_sync_CDS(context):
             for invalid_cell_info in invalid_cell_infos:
                 logs.append(f"\t\t{invalid_cell_info}")
         cds_logger.warning('\n'.join(logs))
-
+        
+    sync_row_count = stats_info['appended_rows_count'] + stats_info['updated_rows_count'] + stats_info['deleted_rows_count']
     return {
         'dst_table_id': dst_table_id,
         'error_msg': '',
-        'task_status_code': 200
+        'task_status_code': 200,
+        'sync_row_count': sync_row_count
     }
 
 
@@ -1243,10 +1245,12 @@ def batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session, is_for
     src_assets = gen_src_assets(src_dtable_uuid, src_table_id, src_view_id, sync_ids, db_session)
     if not src_assets:
         cds_logger.info('sync dataset_id: %s break!', dataset_id)
-        return
+        return 0, 0
     src_table = src_assets.get('src_table')
 
     dataset_data = None
+    rows_count = 0
+    sync_count = 0
     for dataset_sync in dataset_syncs:
         dst_dtable_uuid = uuid_str_to_36_chars(dataset_sync.dst_dtable_uuid)
         dst_table_id = dataset_sync.dst_table_id
@@ -1276,7 +1280,7 @@ def batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session, is_for
                     set_common_dataset_syncs_invalid(sync_ids, db_session)
                 cds_logger.error('request dtable: %s table: %s view: %s data error: %s', src_dtable_uuid, src_table_id, src_view_id, error)
                 cds_logger.info('sync dataset_id: %s break!', dataset_id)
-                return
+                return 0, 0
 
         try:
             result = import_sync_CDS({
@@ -1296,6 +1300,9 @@ def batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session, is_for
                 'db_session': db_session,
                 'app': app
             })
+            row_nums = result.get('sync_row_count', 0)
+            rows_count += row_nums
+            sync_count += 1
         except Exception as e:
             cds_logger.error('sync common dataset src-uuid: %s src-table: %s src-view: %s dst-uuid: %s dst-table: %s error: %s', 
                         src_dtable_uuid, src_table['name'], src_view_id, dst_dtable_uuid, dst_table_name, e)
@@ -1326,3 +1333,5 @@ def batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session, is_for
             'id': dataset_sync_id
         })
         db_session.commit()
+
+    return rows_count, sync_count
