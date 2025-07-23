@@ -33,12 +33,11 @@ def publish_common_dataset_metric_decorator(func):
         start_ts = time.monotonic()
         result = func(*args, **kwargs)
         elapsed = round(time.monotonic() - start_ts, 5)
-        try:
-            total_row_count, sync_count = result
-        except Exception:
-            total_row_count, sync_count = None, None
-        publish_metric(total_row_count, 'common_dataset_sync_total_row_count', COMMON_DATASET_TOTAL_ROW_COUNT_METRIC_HELP)
+        total_row_count, sync_count = result
+
         publish_metric(sync_count, 'common_dataset_sync_count', COMMON_DATASET_OPERATIONS_COUNT_METRIC_HELP)
+        publish_metric(total_row_count, 'common_dataset_sync_total_row_count', COMMON_DATASET_TOTAL_ROW_COUNT_METRIC_HELP)
         publish_metric(elapsed, 'common_dataset_sync_time_cost', COMMON_DATASET_ELAPSED_TIME_METRIC_HELP)
+        
         return result
     return wrapper
