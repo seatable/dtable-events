@@ -15,21 +15,8 @@ COMMON_DATASET_OPERATIONS_COUNT_METRIC_HELP = "Common-dataset sync count"
 COMMON_DATASET_ELAPSED_TIME_METRIC_HELP = "Time (seconds) to complete common-dataset sync job"
 
 
-def publish_io_qsize_metric(qsize, metric_name, metric_help):
-    publish_metric = {
-        "metric_name": metric_name,
-        "metric_type": "gauge",
-        "metric_help": metric_help,
-        "component_name": 'dtable-events',
-        "node_name": NODE_NAME,
-        "metric_value": qsize,
-        "details": {}
-    }
-    redis_cache.publish(METRIC_CHANNEL_NAME, json.dumps(publish_metric))
-
-
-def publish_common_dataset_metric(value, metric_name, metric_help):
-    publish_metric = {
+def publish_metric(value, metric_name, metric_help):
+    metric = {
         "metric_name": metric_name,
         "metric_type": "gauge",
         "metric_help": metric_help,
@@ -38,7 +25,7 @@ def publish_common_dataset_metric(value, metric_name, metric_help):
         "metric_value": value,
         "details": {}
     }
-    redis_cache.publish(METRIC_CHANNEL_NAME, json.dumps(publish_metric))
+    redis_cache.publish(METRIC_CHANNEL_NAME, json.dumps(metric))
 
 
 def publish_common_dataset_metric_decorator(func):
@@ -50,8 +37,8 @@ def publish_common_dataset_metric_decorator(func):
             total_row_count, sync_count = result
         except Exception:
             total_row_count, sync_count = None, None
-        publish_common_dataset_metric(total_row_count, 'common_dataset_sync_total_row_count', COMMON_DATASET_TOTAL_ROW_COUNT_METRIC_HELP)
-        publish_common_dataset_metric(sync_count, 'common_dataset_sync_count', COMMON_DATASET_OPERATIONS_COUNT_METRIC_HELP)
-        publish_common_dataset_metric(elapsed, 'common_dataset_sync_elapsed_time', COMMON_DATASET_ELAPSED_TIME_METRIC_HELP)
+        publish_metric(total_row_count, 'common_dataset_sync_total_row_count', COMMON_DATASET_TOTAL_ROW_COUNT_METRIC_HELP)
+        publish_metric(sync_count, 'common_dataset_sync_count', COMMON_DATASET_OPERATIONS_COUNT_METRIC_HELP)
+        publish_metric(elapsed, 'common_dataset_sync_elapsed_time', COMMON_DATASET_ELAPSED_TIME_METRIC_HELP)
         return result
     return wrapper

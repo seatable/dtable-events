@@ -3,7 +3,7 @@ import queue
 import threading
 import time
 
-from dtable_events.utils.utils_metric import publish_io_qsize_metric, PLUGIN_EMAIL_TASK_MANAGER_METRIC_HELP
+from dtable_events.utils.utils_metric import publish_metric, PLUGIN_EMAIL_TASK_MANAGER_METRIC_HELP
 
 
 class TaskPluginEmailManager(object):
@@ -32,7 +32,7 @@ class TaskPluginEmailManager(object):
         task = (plugin_email_send_email, (context, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
-        publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='plugin_email_io_task_queue_size', metric_help=PLUGIN_EMAIL_TASK_MANAGER_METRIC_HELP)
+        publish_metric(self.tasks_queue.qsize(), metric_name='plugin_email_io_task_queue_size', metric_help=PLUGIN_EMAIL_TASK_MANAGER_METRIC_HELP)
 
         return task_id
 
@@ -68,7 +68,7 @@ class TaskPluginEmailManager(object):
                 # run
                 task[0](*task[1])
                 self.tasks_map[task_id] = 'success'
-                publish_io_qsize_metric(self.tasks_queue.qsize(), metric_name='plugin_email_io_task_queue_size', metric_help=PLUGIN_EMAIL_TASK_MANAGER_METRIC_HELP)
+                publish_metric(self.tasks_queue.qsize(), metric_name='plugin_email_io_task_queue_size', metric_help=PLUGIN_EMAIL_TASK_MANAGER_METRIC_HELP)
 
                 finish_time = time.time()
                 dtable_plugin_email_logger.info('Run task success: %s cost %ds \n' % (task_info, int(finish_time - start_time)))
