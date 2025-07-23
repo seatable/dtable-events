@@ -3827,7 +3827,7 @@ class AutomationRule:
                 update_at=:trigger_time
             '''
             set_last_trigger_time_sql = '''
-                UPDATE dtable_automation_rules SET last_trigger_time=:trigger_time, trigger_count=:trigger_count WHERE id=:rule_id;
+                UPDATE dtable_automation_rules SET last_trigger_time=:trigger_time, trigger_count=:trigger_count+1 WHERE id=:rule_id;
             '''
 
             sqls = [set_last_trigger_time_sql]
