@@ -1073,11 +1073,13 @@ def _import_sync_CDS(context):
             for invalid_cell_info in invalid_cell_infos:
                 logs.append(f"\t\t{invalid_cell_info}")
         cds_logger.warning('\n'.join(logs))
-
+        
+    sync_row_count = stats_info['appended_rows_count'] + stats_info['updated_rows_count'] + stats_info['deleted_rows_count']
     return {
         'dst_table_id': dst_table_id,
         'error_msg': '',
-        'task_status_code': 200
+        'task_status_code': 200,
+        'sync_row_count': sync_row_count
     }
 
 
@@ -1298,7 +1300,7 @@ def batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session, is_for
                 'db_session': db_session,
                 'app': app
             })
-            row_nums = len(dataset_data['rows_id_list'])
+            row_nums = result.get('sync_row_count')
             rows_count += row_nums
             sync_count += 1
         except Exception as e:
