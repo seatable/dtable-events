@@ -1245,7 +1245,7 @@ def batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session, is_for
     src_assets = gen_src_assets(src_dtable_uuid, src_table_id, src_view_id, sync_ids, db_session)
     if not src_assets:
         cds_logger.info('sync dataset_id: %s break!', dataset_id)
-        return
+        return 0, 0
     src_table = src_assets.get('src_table')
 
     dataset_data = None
@@ -1280,7 +1280,7 @@ def batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session, is_for
                     set_common_dataset_syncs_invalid(sync_ids, db_session)
                 cds_logger.error('request dtable: %s table: %s view: %s data error: %s', src_dtable_uuid, src_table_id, src_view_id, error)
                 cds_logger.info('sync dataset_id: %s break!', dataset_id)
-                return
+                return 0, 0
 
         try:
             result = import_sync_CDS({
@@ -1300,7 +1300,7 @@ def batch_sync_common_dataset(app, dataset_id, dataset_syncs, db_session, is_for
                 'db_session': db_session,
                 'app': app
             })
-            row_nums = result.get('sync_row_count')
+            row_nums = result.get('sync_row_count', 0)
             rows_count += row_nums
             sync_count += 1
         except Exception as e:
