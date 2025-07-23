@@ -105,7 +105,7 @@ class DTableAutomationRulesScannerTimer(Thread):
 
         for rule in rules:
             self.queue.put(rule)
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+        with ThreadPoolExecutor(max_workers=self.max_workers, thread_name_prefix='interval-auto-rules') as executor:
             for _ in range(self.max_workers):
                 executor.submit(self.trigger_rule)
 

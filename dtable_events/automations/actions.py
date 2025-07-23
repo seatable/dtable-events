@@ -463,7 +463,6 @@ class UpdateAction(BaseAction):
         except Exception as e:
             auto_rule_logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
-        self.auto_rule.set_done_actions()
 
 
     def condition_cron_update(self):
@@ -492,8 +491,6 @@ class UpdateAction(BaseAction):
         elif self.auto_rule.run_condition in CRON_CONDITIONS:
             if self.auto_rule.trigger.get('condition') == CONDITION_PERIODICALLY_BY_CONDITION:
                 self.condition_cron_update()
-
-        self.auto_rule.set_done_actions()
 
 class LockRowAction(BaseAction):
 
@@ -538,8 +535,6 @@ class LockRowAction(BaseAction):
         except Exception as e:
             auto_rule_logger.error('lock dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
-        else:
-            self.auto_rule.set_done_actions()
 
 class AddRowAction(BaseAction):
 
@@ -625,11 +620,6 @@ class AddRowAction(BaseAction):
             row = self.auto_rule.dtable_server_api.append_row(table_name, self.row_data['row'])
         except Exception as e:
             auto_rule_logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
-        self.auto_rule.set_done_actions()
-        try:
-            self.row_data['row']['_id'] = row['_id']
-        except Exception as e:
-            auto_rule_logger.exception('send selected notifications error: %s', e)
 
 class NotifyAction(BaseAction):
 
@@ -814,7 +804,6 @@ class NotifyAction(BaseAction):
                 self.condition_cron_notify()
             else:
                 self.cron_notify()
-        self.auto_rule.set_done_actions()
 
 class AppNotifyAction(BaseAction):
 
@@ -992,7 +981,6 @@ class AppNotifyAction(BaseAction):
                 self.condition_cron_notify()
             else:
                 self.cron_notify()
-        self.auto_rule.set_done_actions()
 
 
 class SendWechatAction(BaseAction):
@@ -1062,7 +1050,6 @@ class SendWechatAction(BaseAction):
                 self.condition_cron_notify()
             else:
                 self.cron_notify()
-        self.auto_rule.set_done_actions()
 
 
 class SendDingtalkAction(BaseAction):
@@ -1133,7 +1120,6 @@ class SendDingtalkAction(BaseAction):
                 self.condition_cron_notify()
             else:
                 self.cron_notify()
-        self.auto_rule.set_done_actions()
 
 
 class SendEmailAction(BaseAction):
@@ -1398,7 +1384,6 @@ class SendEmailAction(BaseAction):
                 self.condition_cron_notify()
             else:
                 self.cron_notify()
-        self.auto_rule.set_done_actions()
 
 
 class RunPythonScriptAction(BaseAction):
@@ -1495,8 +1480,6 @@ class RunPythonScriptAction(BaseAction):
             auto_rule_logger.warning('dtable: %s rule: %s run script: %s context: %s error: %s', self.auto_rule.dtable_uuid, self.auto_rule.rule_id, self.script_name, context_data, e)
         except Exception as e:
             auto_rule_logger.exception('dtable: %s rule: %s run script: %s context: %s error: %s', self.auto_rule.dtable_uuid, self.auto_rule.rule_id, self.script_name, context_data, e)
-        else:
-            self.auto_rule.set_done_actions()
 
 
 class LinkRecordsAction(BaseAction):
@@ -2086,8 +2069,6 @@ class LinkRecordsAction(BaseAction):
             if self.auto_rule.trigger['condition'] == CONDITION_PERIODICALLY:
                 self.cron_link_records()
 
-        self.auto_rule.set_done_actions()
-
 
 class AddRecordToOtherTableAction(BaseAction):
 
@@ -2319,12 +2300,6 @@ class AddRecordToOtherTableAction(BaseAction):
         except Exception as e:
             auto_rule_logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
-        self.auto_rule.set_done_actions()
-
-        try:
-            self.row_data['row']['_id'] = row['_id']
-        except Exception as e:
-            auto_rule_logger.exception('send selected notifications error: %s', e)
 
 
 class TriggerWorkflowAction(BaseAction):
@@ -2426,8 +2401,6 @@ class TriggerWorkflowAction(BaseAction):
             dtable_web_api.internal_submit_row_workflow(self.token, row_id, self.auto_rule.rule_id)
         except Exception as e:
             auto_rule_logger.exception('auto rule: %s submit workflow: %s row: %s error: %s', self.auto_rule.rule_id, self.token, row_id, e)
-        else:
-            self.auto_rule.set_done_actions()
 
 
 class CalculateAction(BaseAction):
@@ -2646,7 +2619,6 @@ class CalculateAction(BaseAction):
             except Exception as e:
                 auto_rule_logger.error('batch update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
                 return
-        self.auto_rule.set_done_actions()
 
 
 class LookupAndCopyAction(BaseAction):
@@ -2842,7 +2814,6 @@ class LookupAndCopyAction(BaseAction):
             except Exception as e:
                 auto_rule_logger.error('batch update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
                 return
-        self.auto_rule.set_done_actions()
 
 
 class ExtractUserNameAction(BaseAction):
@@ -2994,8 +2965,6 @@ class ExtractUserNameAction(BaseAction):
                 self.auto_rule.dtable_server_api.batch_update_rows(table_name, self.update_rows[i: i+step])
             except Exception as e:
                 auto_rule_logger.error('batch update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
-                return
-        self.auto_rule.set_done_actions()
 
 
 class ConvertPageToPDFAction(BaseAction):
@@ -3089,7 +3058,6 @@ class ConvertPageToPDFAction(BaseAction):
                 'type': 'convert_page_to_pdf_server_busy',
                 'page_id': self.page_id
             })
-        self.auto_rule.set_done_actions()
 
 
 class ConvertDocumentToPDFAndSendAction(BaseAction):
@@ -3246,7 +3214,6 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
                 'type': 'convert_document_to_pdf_server_busy',
                 'doc_uuid': self.doc_uuid
             })
-        self.auto_rule.set_done_actions()
 
 
 class RuleInvalidException(Exception):
@@ -3301,7 +3268,6 @@ class AutomationRule:
         self.cache_key = 'AUTOMATION_RULE:%s' % self.rule_id
         self.task_run_success = True
 
-        self.done_actions = False  # indicate at least 1 action be done
         self.load_trigger_and_actions(raw_trigger, raw_actions)
 
         self.current_valid = True
@@ -3808,20 +3774,17 @@ class AutomationRule:
                 self.task_run_success = False
                 auto_rule_logger.exception('rule %s do action %s with data %s error: %s', self.rule_id, action_info, self.data, e)
 
-        auto_rule_logger.info('rule: %s all actions finished done_actions: %s', self.rule_id, self.done_actions)
+        auto_rule_logger.info('rule: %s all actions finished', self.rule_id)
 
         duration = datetime.now() - do_actions_start
         if duration.seconds >= 5:
             auto_rule_logger.warning('the running time of rule %s is too long, for %s. SQL queries are %s', self.rule_id, duration, f"\n{'\n'.join(self.query_stats)}")
 
-        if self.done_actions and not with_test:
+        if not with_test:
             self.update_last_trigger_time()
 
         if not with_test:
             self.add_task_log()
-
-    def set_done_actions(self, done=True):
-        self.done_actions = done
 
     def add_task_log(self):
         if not self.org_id:

@@ -59,7 +59,7 @@ class AutomationRuleHandler(Thread):
                 session.close()
 
     def start_threads(self):
-        executor = ThreadPoolExecutor(max_workers=self.per_update_auto_rule_workers, thread_name_prefix='scan-auto-rules')
+        executor = ThreadPoolExecutor(max_workers=self.per_update_auto_rule_workers, thread_name_prefix='instant-auto-rules')
         for index in range(self.per_update_auto_rule_workers):
             executor.submit(self.scan)
 
