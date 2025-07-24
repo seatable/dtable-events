@@ -4,10 +4,9 @@ from threading import current_thread
 from sqlalchemy import text
 
 from dtable_events import init_db_session_class
+from dtable_events.app.log import auto_rule_logger
 from dtable_events.app.metadata_cache_managers import RuleInstantMetadataCacheManger, RuleIntervalMetadataCacheManager
 from dtable_events.automations.actions import AutomationRule, auto_rule_logger
-
-logger = logging.getLogger(__name__)
 
 
 def scan_triggered_automation_rules(event_data, db_session):
@@ -20,10 +19,10 @@ def scan_triggered_automation_rules(event_data, db_session):
     try:
         rule = db_session.execute(text(sql), {'dtable_uuid': dtable_uuid, 'rule_id': automation_rule_id}).fetchone()
     except Exception as e:
-        logger.error('checkout auto rules error: %s', e)
+        auto_rule_logger.error('checkout auto rules error: %s', e)
         return
     if not rule:
-        logger.info('rule %s not found', automation_rule_id)
+        auto_rule_logger.info('rule %s not found', automation_rule_id)
         return
 
     rule_instant_metadata_cache_manager = RuleInstantMetadataCacheManger()
@@ -41,7 +40,6 @@ def scan_triggered_automation_rules(event_data, db_session):
         auto_rule = AutomationRule(event_data, db_session, rule.trigger, rule.actions, options, rule_instant_metadata_cache_manager)
         auto_rule.do_actions()
     except Exception as e:
-        logger.exception('auto rule: %s do actions error: %s', rule.id, e)
         auto_rule_logger.exception('auto rule: %s do actions error: %s', rule.id, e)
 
 
@@ -62,7 +60,6 @@ def run_regular_execution_rule(rule, db_session, metadata_cache_manager):
         auto_rule = AutomationRule(None, db_session, trigger, actions, options, metadata_cache_manager)
         auto_rule.do_actions()
     except Exception as e:
-        logger.exception('auto rule: %s do actions error: %s', options['rule_id'], e)
         auto_rule_logger.exception('auto rule: %s do actions error: %s', options['rule_id'], e)
 
 def run_auto_rule_task(trigger, actions, options, config):
@@ -74,7 +71,6 @@ def run_auto_rule_task(trigger, actions, options, config):
         auto_rule = AutomationRule(None, db_session, trigger, actions, options, metadata_cache_manager)
         auto_rule.do_actions(with_test=True)
     except Exception as e:
-        logger.exception('automation rule: %s run test error: %s', options['rule_id'], e)
         auto_rule_logger.exception('automation rule: %s run test error: %s', options['rule_id'], e)
     finally:
         db_session.close()

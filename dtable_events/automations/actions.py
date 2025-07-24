@@ -22,7 +22,7 @@ from dtable_events.app.event_redis import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, ENABLE_PYTHON_SCRIPT, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
 from dtable_events.dtable_io import send_wechat_msg, send_dingtalk_msg
 from dtable_events.convert_page.manager import conver_page_to_pdf_manager
-from dtable_events.app.log import setup_logger
+from dtable_events.app.log import auto_rule_logger
 from dtable_events.notification_rules.notification_rules_utils import send_notification, fill_msg_blanks_with_sql_row
 from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, \
     normalize_file_path, gen_file_get_url, gen_random_option, get_dtable_admins
@@ -35,14 +35,6 @@ from dtable_events.utils.sql_generator import filter2sql, BaseSQLGenerator, Colu
     has_user_filter, is_user_filter
 from dtable_events.utils.universal_app_api import UniversalAppAPI
 from dtable_events.utils.email_sender import EmailSender
-
-
-logger = logging.getLogger(__name__)
-auto_rule_logger = setup_logger(
-    'automation_rules',
-    level=logging.INFO,
-    propagate=False
-)
 
 PER_DAY = 'per_day'
 PER_WEEK = 'per_week'
@@ -330,7 +322,7 @@ class UpdateAction(BaseAction):
                         elif set_type == 'set_empty':
                             filtered_updates[col_name] = None
                     except Exception as e:
-                        logger.error(e)
+                        auto_rule_logger.error(e)
                         filtered_updates[col_name] = self.updates.get(col_key)
                 elif col_type in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
                     try:
@@ -358,7 +350,7 @@ class UpdateAction(BaseAction):
                             filtered_updates[col_name] = self.parse_column_value(col, value)
 
                     except Exception as e:
-                        logger.error(e)
+                        auto_rule_logger.error(e)
                         filtered_updates[col_name] = self.updates.get(col_key)
 
                 elif col_type == ColumnTypes.COLLABORATOR:
@@ -385,7 +377,7 @@ class UpdateAction(BaseAction):
                             filtered_updates[col_name] = self.parse_column_value(col, value)
 
                     except Exception as e:
-                        logger.error(e)
+                        auto_rule_logger.error(e)
                         filtered_updates[col_name] = self.updates.get(col_key)
 
                 elif col_type in [
@@ -426,7 +418,7 @@ class UpdateAction(BaseAction):
                             filtered_updates[col_name] = self.parse_column_value(col, value)
 
                     except Exception as e:
-                        logger.exception(e)
+                        auto_rule_logger.exception(e)
                         filtered_updates[col_name] = self.updates.get(col_key)
                 else:
                     cell_value = self.updates.get(col_key)
@@ -469,9 +461,8 @@ class UpdateAction(BaseAction):
         try:
             self.auto_rule.dtable_server_api.update_row(table_name, self.data['row_id'], self.update_data['row'])
         except Exception as e:
-            logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
+            auto_rule_logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
-        self.auto_rule.set_done_actions()
 
 
     def condition_cron_update(self):
@@ -489,7 +480,7 @@ class UpdateAction(BaseAction):
         try:
             self.auto_rule.dtable_server_api.batch_update_rows(table_name, batch_update_list)
         except Exception as e:
-            logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
+            auto_rule_logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
 
     def do_action(self):
@@ -500,8 +491,6 @@ class UpdateAction(BaseAction):
         elif self.auto_rule.run_condition in CRON_CONDITIONS:
             if self.auto_rule.trigger.get('condition') == CONDITION_PERIODICALLY_BY_CONDITION:
                 self.condition_cron_update()
-
-        self.auto_rule.set_done_actions()
 
 class LockRowAction(BaseAction):
 
@@ -544,10 +533,8 @@ class LockRowAction(BaseAction):
         try:
             self.auto_rule.dtable_server_api.lock_rows(table_name, self.update_data.get('row_ids'))
         except Exception as e:
-            logger.error('lock dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
+            auto_rule_logger.error('lock dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
-        else:
-            self.auto_rule.set_done_actions()
 
 class AddRowAction(BaseAction):
 
@@ -613,7 +600,7 @@ class AddRowAction(BaseAction):
                             offset = time_dict.get('offset')
                             filtered_updates[col_name] = self.format_time_by_offset(int(offset), format_length)
                     except Exception as e:
-                        logger.error(e)
+                        auto_rule_logger.error(e)
                         filtered_updates[col_name] = self.row.get(col_key)
                 else:
                     filtered_updates[col_name] = self.parse_column_value(col, self.row.get(col_key))
@@ -632,12 +619,7 @@ class AddRowAction(BaseAction):
         try:
             row = self.auto_rule.dtable_server_api.append_row(table_name, self.row_data['row'])
         except Exception as e:
-            logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
-        self.auto_rule.set_done_actions()
-        try:
-            self.row_data['row']['_id'] = row['_id']
-        except Exception as e:
-            logger.exception('send selected notifications error: %s', e)
+            auto_rule_logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
 
 class NotifyAction(BaseAction):
 
@@ -728,7 +710,7 @@ class NotifyAction(BaseAction):
                     users_from_column = [users_from_column, ]
                 users = list(set(self.users + [user for user in users_from_column if user in self.auto_rule.related_users_dict]))
             else:
-                logger.warning('automation rule: %s notify action user column: %s invalid', self.auto_rule.rule_id, self.users_column_key)
+                auto_rule_logger.warning('automation rule: %s notify action user column: %s invalid', self.auto_rule.rule_id, self.users_column_key)
         for user in users:
             if not self.is_valid_username(user):
                 continue
@@ -740,7 +722,7 @@ class NotifyAction(BaseAction):
         try:
             send_notification(dtable_uuid, user_msg_list, self.auto_rule.username)
         except Exception as e:
-            logger.error('send users: %s notifications error: %s', e)
+            auto_rule_logger.error('send users: %s notifications error: %s', e)
 
     def cron_notify(self):
         dtable_uuid = self.auto_rule.dtable_uuid
@@ -764,7 +746,7 @@ class NotifyAction(BaseAction):
         try:
             send_notification(dtable_uuid, user_msg_list, self.auto_rule.username)
         except Exception as e:
-            logger.error('send users: %s notifications error: %s', e)
+            auto_rule_logger.error('send users: %s notifications error: %s', e)
 
     def condition_cron_notify(self):
         table_id, view_id = self.auto_rule.table_id, self.auto_rule.view_id
@@ -800,7 +782,7 @@ class NotifyAction(BaseAction):
                         users_from_column = [users_from_column, ]
                     users = list(set(self.users + users_from_column))
                 else:
-                    logger.warning('automation rule: %s notify action user column: %s invalid', self.auto_rule.rule_id, self.users_column_key)
+                    auto_rule_logger.warning('automation rule: %s notify action user column: %s invalid', self.auto_rule.rule_id, self.users_column_key)
             for user in users:
                 if not self.is_valid_username(user):
                     continue
@@ -812,7 +794,7 @@ class NotifyAction(BaseAction):
         try:
             send_notification(dtable_uuid, user_msg_list, self.auto_rule.username)
         except Exception as e:
-            logger.error('send users: %s notifications error: %s', e)
+            auto_rule_logger.error('send users: %s notifications error: %s', e)
 
     def do_action(self):
         if self.auto_rule.run_condition == PER_UPDATE:
@@ -822,7 +804,6 @@ class NotifyAction(BaseAction):
                 self.condition_cron_notify()
             else:
                 self.cron_notify()
-        self.auto_rule.set_done_actions()
 
 class AppNotifyAction(BaseAction):
 
@@ -908,7 +889,7 @@ class AppNotifyAction(BaseAction):
                     users_from_column = [users_from_column, ]
                 users = list(set(self.users + users_from_column))
             else:
-                logger.warning('automation rule: %s notify action user column: %s invalid', self.auto_rule.rule_id, self.users_column_key)
+                auto_rule_logger.warning('automation rule: %s notify action user column: %s invalid', self.auto_rule.rule_id, self.users_column_key)
         for user in users:
             if not self.is_valid_username(user):
                 continue
@@ -921,7 +902,7 @@ class AppNotifyAction(BaseAction):
             if user_msg_list:
                 self.notice_api.batch_send_notification(user_msg_list)
         except Exception as e:
-            logger.error('send users: %s notifications error: %s', e)
+            auto_rule_logger.error('send users: %s notifications error: %s', e)
 
     def cron_notify(self):
         table_id, view_id = self.auto_rule.table_id, self.auto_rule.view_id
@@ -944,7 +925,7 @@ class AppNotifyAction(BaseAction):
         try:
             self.notice_api.batch_send_notification(user_msg_list)
         except Exception as e:
-            logger.error('send users: %s notifications error: %s', e)
+            auto_rule_logger.error('send users: %s notifications error: %s', e)
 
     def condition_cron_notify(self):
         table_id, view_id = self.auto_rule.table_id, self.auto_rule.view_id
@@ -978,7 +959,7 @@ class AppNotifyAction(BaseAction):
                         users_from_column = [users_from_column, ]
                     users = list(set(self.users + users_from_column))
                 else:
-                    logger.warning('automation rule: %s notify action user column: %s invalid', self.auto_rule.rule_id, self.users_column_key)
+                    auto_rule_logger.warning('automation rule: %s notify action user column: %s invalid', self.auto_rule.rule_id, self.users_column_key)
             for user in users:
                 if not self.is_valid_username(user):
                     continue
@@ -990,7 +971,7 @@ class AppNotifyAction(BaseAction):
         try:
             self.notice_api.batch_send_notification(user_msg_list)
         except Exception as e:
-            logger.error('send users: %s notifications error: %s', e)
+            auto_rule_logger.error('send users: %s notifications error: %s', e)
 
     def do_action(self):
         if self.auto_rule.run_condition == PER_UPDATE:
@@ -1000,7 +981,6 @@ class AppNotifyAction(BaseAction):
                 self.condition_cron_notify()
             else:
                 self.cron_notify()
-        self.auto_rule.set_done_actions()
 
 
 class SendWechatAction(BaseAction):
@@ -1040,13 +1020,13 @@ class SendWechatAction(BaseAction):
         try:
             send_wechat_msg(self.webhook_url, msg, self.msg_type)
         except Exception as e:
-            logger.error('send wechat error: %s', e)
+            auto_rule_logger.error('send wechat error: %s', e)
 
     def cron_notify(self):
         try:
             send_wechat_msg(self.webhook_url, self.msg, self.msg_type)
         except Exception as e:
-            logger.error('send wechat error: %s', e)
+            auto_rule_logger.error('send wechat error: %s', e)
 
     def condition_cron_notify(self):
         rows_data = self.auto_rule.get_trigger_conditions_rows(self, warning_rows=WECHAT_CONDITION_ROWS_LIMIT)[:WECHAT_CONDITION_ROWS_LIMIT]
@@ -1058,7 +1038,7 @@ class SendWechatAction(BaseAction):
                 send_wechat_msg(self.webhook_url, msg, self.msg_type)
                 time.sleep(0.01)
             except Exception as e:
-                logger.exception('send wechat error: %s', e)
+                auto_rule_logger.exception('send wechat error: %s', e)
 
     def do_action(self):
         if not self.auto_rule.current_valid:
@@ -1070,7 +1050,6 @@ class SendWechatAction(BaseAction):
                 self.condition_cron_notify()
             else:
                 self.cron_notify()
-        self.auto_rule.set_done_actions()
 
 
 class SendDingtalkAction(BaseAction):
@@ -1111,13 +1090,13 @@ class SendDingtalkAction(BaseAction):
         try:
             send_dingtalk_msg(self.webhook_url, msg, self.msg_type, self.msg_title)
         except Exception as e:
-            logger.error('send dingtalk error: %s', e)
+            auto_rule_logger.error('send dingtalk error: %s', e)
 
     def cron_notify(self):
         try:
             send_dingtalk_msg(self.webhook_url, self.msg, self.msg_type, self.msg_title)
         except Exception as e:
-            logger.error('send dingtalk error: %s', e)
+            auto_rule_logger.error('send dingtalk error: %s', e)
 
     def condition_cron_notify(self):
         rows_data = self.auto_rule.get_trigger_conditions_rows(self, warning_rows=DINGTALK_CONDITION_ROWS_LIMIT)[:DINGTALK_CONDITION_ROWS_LIMIT]
@@ -1129,7 +1108,7 @@ class SendDingtalkAction(BaseAction):
                 send_dingtalk_msg(self.webhook_url, msg, self.msg_type, self.msg_title)
                 time.sleep(0.01)
             except Exception as e:
-                logger.error('send dingtalk error: %s', e)
+                auto_rule_logger.error('send dingtalk error: %s', e)
 
     def do_action(self):
         if not self.auto_rule.current_valid:
@@ -1141,7 +1120,6 @@ class SendDingtalkAction(BaseAction):
                 self.condition_cron_notify()
             else:
                 self.cron_notify()
-        self.auto_rule.set_done_actions()
 
 
 class SendEmailAction(BaseAction):
@@ -1239,7 +1217,7 @@ class SendEmailAction(BaseAction):
         asset_id = seafile_api.get_file_id_by_path(self.repo_id, asset_path)
         asset_name = os.path.basename(normalize_file_path(file_path))
         if not asset_id:
-            logger.warning('automation rule: %s, send email asset file %s does not exist.', asset_name)
+            auto_rule_logger.warning('automation rule: %s, send email asset file %s does not exist.', asset_name)
             return None
 
         token = seafile_api.get_fileserver_access_token(
@@ -1252,7 +1230,7 @@ class SendEmailAction(BaseAction):
     def get_file_download_urls(self, attachment_list, row):
         file_download_urls_dict = {}
         if not self.repo_id:
-            logger.warning('automation rule: %s, send email repo_id invalid', self.auto_rule.rule_id)
+            auto_rule_logger.warning('automation rule: %s, send email repo_id invalid', self.auto_rule.rule_id)
             return None
 
         for file_column_id in attachment_list:
@@ -1314,12 +1292,12 @@ class SendEmailAction(BaseAction):
             'reply_to': reply_to if self.is_valid_email(reply_to) else '',
             'file_download_urls': file_download_urls,
         })
-        logger.debug('send_info: %s', send_info)
+        auto_rule_logger.debug('send_info: %s', send_info)
         try:
             sender = EmailSender(self.account_id, 'automation-rules', db_session=self.auto_rule.db_session)
             sender.send(send_info)
         except Exception as e:
-            logger.error('send email error: %s', e)
+            auto_rule_logger.error('send email error: %s', e)
 
     def cron_notify(self):
         send_info = deepcopy(self.send_info)
@@ -1332,7 +1310,7 @@ class SendEmailAction(BaseAction):
             sender = EmailSender(self.account_id, 'automation-rules', db_session=self.auto_rule.db_session)
             sender.send(send_info)
         except Exception as e:
-            logger.error('send email error: %s', e)
+            auto_rule_logger.error('send email error: %s', e)
 
     def condition_cron_notify(self):
         rows_data = self.auto_rule.get_trigger_conditions_rows(self, warning_rows=EMAIL_CONDITION_ROWS_LIMIT)[:EMAIL_CONDITION_ROWS_LIMIT]
@@ -1384,7 +1362,7 @@ class SendEmailAction(BaseAction):
                 'reply_to': reply_to if self.is_valid_email(reply_to) else '',
                 'file_download_urls': file_download_urls,
             })
-            logger.debug('send_info: %s', send_info)
+            auto_rule_logger.debug('send_info: %s', send_info)
 
             send_info_list.append(send_info)
 
@@ -1394,7 +1372,7 @@ class SendEmailAction(BaseAction):
                 sender = EmailSender(self.account_id, 'automation-rules', db_session=self.auto_rule.db_session)
                 sender.batch_send(send_info_list[i: i+step])
             except Exception as e:
-                logger.error('batch send email error: %s', e)
+                auto_rule_logger.error('batch send email error: %s', e)
 
     def do_action(self):
         if not self.auto_rule.current_valid:
@@ -1406,7 +1384,6 @@ class SendEmailAction(BaseAction):
                 self.condition_cron_notify()
             else:
                 self.cron_notify()
-        self.auto_rule.set_done_actions()
 
 
 class RunPythonScriptAction(BaseAction):
@@ -1425,22 +1402,22 @@ class RunPythonScriptAction(BaseAction):
 
         script_file_path = os.path.join('/asset', uuid_str_to_36_chars(self.auto_rule.dtable_uuid), 'scripts', self.script_name)
         try:
-            logger.debug('rule: %s start to get repo: %s', self.auto_rule.rule_id, self.repo_id)
+            auto_rule_logger.debug('rule: %s start to get repo: %s', self.auto_rule.rule_id, self.repo_id)
             repo = seafile_api.get_repo(self.repo_id)
-            logger.debug('rule: %s repo: %s', self.auto_rule.rule_id, repo)
+            auto_rule_logger.debug('rule: %s repo: %s', self.auto_rule.rule_id, repo)
             if not repo:
-                logger.warning('rule: %s script: %s repo: %s not found', self.auto_rule.rule_id, self.script_name, self.repo_id)
+                auto_rule_logger.warning('rule: %s script: %s repo: %s not found', self.auto_rule.rule_id, self.script_name, self.repo_id)
                 raise RuleInvalidException('rule: %s script: %s repo: %s not found' % (self.auto_rule.rule_id, self.script_name, self.repo_id), 'repo_not_found')
-            logger.debug('rule: %s start to get file: %s', self.auto_rule.rule_id, script_file_path)
+            auto_rule_logger.debug('rule: %s start to get file: %s', self.auto_rule.rule_id, script_file_path)
             script_file_id = seafile_api.get_file_id_by_path(self.repo_id, script_file_path)
-            logger.debug('rule: %s file: %s id: %s', self.auto_rule.rule_id, script_file_path, script_file_id)
+            auto_rule_logger.debug('rule: %s file: %s id: %s', self.auto_rule.rule_id, script_file_path, script_file_id)
             if not script_file_id:
-                logger.warning('rule: %s script: %s repo: %s file: %s not found', self.auto_rule.rule_id, self.script_name, self.repo_id, script_file_path)
+                auto_rule_logger.warning('rule: %s script: %s repo: %s file: %s not found', self.auto_rule.rule_id, self.script_name, self.repo_id, script_file_path)
                 raise RuleInvalidException('rule: %s script: %s repo: %s file: %s not found' % (self.auto_rule.rule_id, self.script_name, self.repo_id, script_file_path), 'file_not_found')
         except RuleInvalidException as e:
             raise e
         except Exception as e:
-            logger.exception('access repo: %s path: %s error: %s', self.repo_id, script_file_path, e)
+            auto_rule_logger.exception('access repo: %s path: %s error: %s', self.repo_id, script_file_path, e)
             return False
 
         if self.auto_rule.can_run_python is not None:
@@ -1455,7 +1432,7 @@ class RunPythonScriptAction(BaseAction):
             else:
                 return True
         except Exception as e:
-            logger.exception('can run python org_id: %s owner: %s error: %s', self.org_id, self.owner, e)
+            auto_rule_logger.exception('can run python org_id: %s owner: %s error: %s', self.org_id, self.owner, e)
             return False
 
         self.auto_rule.can_run_python = can_run_python
@@ -1473,7 +1450,7 @@ class RunPythonScriptAction(BaseAction):
             else:
                 return -1
         except Exception as e:
-            logger.exception('get script running limit error: %s', e)
+            auto_rule_logger.exception('get script running limit error: %s', e)
         self.auto_rule.scripts_running_limit = scripts_running_limit
         return scripts_running_limit
 
@@ -1500,11 +1477,9 @@ class RunPythonScriptAction(BaseAction):
                 self.auto_rule.rule_id
             )
         except ConnectionError as e:
-            logger.warning('dtable: %s rule: %s run script: %s context: %s error: %s', self.auto_rule.dtable_uuid, self.auto_rule.rule_id, self.script_name, context_data, e)
+            auto_rule_logger.warning('dtable: %s rule: %s run script: %s context: %s error: %s', self.auto_rule.dtable_uuid, self.auto_rule.rule_id, self.script_name, context_data, e)
         except Exception as e:
-            logger.exception('dtable: %s rule: %s run script: %s context: %s error: %s', self.auto_rule.dtable_uuid, self.auto_rule.rule_id, self.script_name, context_data, e)
-        else:
-            self.auto_rule.set_done_actions()
+            auto_rule_logger.exception('dtable: %s rule: %s run script: %s context: %s error: %s', self.auto_rule.dtable_uuid, self.auto_rule.rule_id, self.script_name, context_data, e)
 
 
 class LinkRecordsAction(BaseAction):
@@ -1868,7 +1843,7 @@ class LinkRecordsAction(BaseAction):
         try:
             sql = filter2sql(table_name, columns, filter_conditions, by_group=True)
         except (ValueError, ColumnFilterInvalidError) as e:
-            logger.warning('wrong filter in rule: %s linked-table filter_conditions: %s error: %s', self.auto_rule.rule_id, filter_conditions, e)
+            auto_rule_logger.warning('wrong filter in rule: %s linked-table filter_conditions: %s error: %s', self.auto_rule.rule_id, filter_conditions, e)
             raise RuleInvalidException('wrong filter in rule: %s linked-table error: %s' % (self.auto_rule.rule_id, e), 'linked_table_gen_sql_failed')
         query_clause = "*"
         if column_names:
@@ -1881,14 +1856,13 @@ class LinkRecordsAction(BaseAction):
         except RowsQueryError:
             raise RuleInvalidException('wrong filter in filters in link-records', 'linked_table_sql_query_failed')
         except Request429Error:
-            logger.warning('rule: %s query row too many', self.auto_rule.rule_id)
+            auto_rule_logger.warning('rule: %s query row too many', self.auto_rule.rule_id)
             return None
         except Exception as e:
-            logger.exception(e)
-            logger.error('rule: %s request filter rows error: %s filter_conditions: %s sql: %s', self.auto_rule.rule_id, e, filter_conditions, sql)
+            auto_rule_logger.exception('rule: %s request filter rows error: %s filter_conditions: %s sql: %s', self.auto_rule.rule_id, e, filter_conditions, sql)
             return None
 
-        logger.debug('Number of linking dtable rows by auto-rule %s is: %s, dtable_uuid: %s, details: %s' % (
+        auto_rule_logger.debug('Number of linking dtable rows by auto-rule %s is: %s, dtable_uuid: %s, details: %s' % (
             self.auto_rule.rule_id,
             rows_data and len(rows_data) or 0,
             self.auto_rule.dtable_uuid,
@@ -1936,7 +1910,7 @@ class LinkRecordsAction(BaseAction):
         try:
             self.auto_rule.dtable_server_api.update_link(self.link_id, self.auto_rule.table_id, self.linked_table_id, self.data['row_id'], self.linked_row_ids)
         except Exception as e:
-            logger.error('link dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
+            auto_rule_logger.error('link dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
 
     def get_columns_dict(self, table_id):
@@ -1964,8 +1938,7 @@ class LinkRecordsAction(BaseAction):
             try:
                 results, _ = self.auto_rule.query(sql)
             except Exception as e:
-                logger.exception(e)
-                logger.error('query dtable: %s, sql: %s, filters: %s, error: %s', self.auto_rule.dtable_uuid, sql, filter_conditions, e)
+                auto_rule_logger.exception('query dtable: %s, sql: %s, filters: %s, error: %s', self.auto_rule.dtable_uuid, sql, filter_conditions, e)
                 return result_rows
             result_rows += results
             start += step
@@ -2086,7 +2059,7 @@ class LinkRecordsAction(BaseAction):
             try:
                 self.auto_rule.dtable_server_api.batch_update_links(self.link_id, table_id, other_table_id, row_id_list[i: i+step], {key: value for key, value in other_rows_ids_map.items() if key in row_id_list[i: i+step]})
             except Exception as e:
-                logger.error('batch update links: %s, error: %s', self.auto_rule.dtable_uuid, e)
+                auto_rule_logger.error('batch update links: %s, error: %s', self.auto_rule.dtable_uuid, e)
                 return
 
     def do_action(self):
@@ -2095,8 +2068,6 @@ class LinkRecordsAction(BaseAction):
         elif self.auto_rule.run_condition in CRON_CONDITIONS:
             if self.auto_rule.trigger['condition'] == CONDITION_PERIODICALLY:
                 self.cron_link_records()
-
-        self.auto_rule.set_done_actions()
 
 
 class AddRecordToOtherTableAction(BaseAction):
@@ -2205,7 +2176,7 @@ class AddRecordToOtherTableAction(BaseAction):
                                 continue
                             filtered_updates[col_name] = sql_row.get(src_col['key'])
                     except Exception as e:
-                        logger.error(f"rule: {self.auto_rule.rule_id} add record to {self.dst_table_id} for date column error {e}, col_key is {col_key} set_type is {set_type}, triggered row id {sql_row['_id']}")
+                        auto_rule_logger.error(f"rule: {self.auto_rule.rule_id} add record to {self.dst_table_id} for date column error {e}, col_key is {col_key} set_type is {set_type}, triggered row id {sql_row['_id']}")
 
                 elif col_type in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
                     try:
@@ -2239,7 +2210,7 @@ class AddRecordToOtherTableAction(BaseAction):
                             filtered_updates[col_name] = self.parse_column_value(col, value)
 
                     except Exception as e:
-                        logger.error(e)
+                        auto_rule_logger.error(e)
                         filtered_updates[col_name] = self.row.get(col_key)
 
                 elif col_type == ColumnTypes.COLLABORATOR:
@@ -2266,7 +2237,7 @@ class AddRecordToOtherTableAction(BaseAction):
                             filtered_updates[col_name] = self.parse_column_value(col, value)
 
                     except Exception as e:
-                        logger.error(e)
+                        auto_rule_logger.error(e)
                         filtered_updates[col_name] = self.row.get(col_key)
 
                 elif col_type in [
@@ -2307,7 +2278,7 @@ class AddRecordToOtherTableAction(BaseAction):
                             filtered_updates[col_name] = self.parse_column_value(col, value)
 
                     except Exception as e:
-                        logger.exception(e)
+                        auto_rule_logger.exception(e)
                         filtered_updates[col_name] = self.row.get(col_key)
                 else:
                     filtered_updates[col_name] = self.parse_column_value(col, self.row.get(col_key))
@@ -2327,14 +2298,8 @@ class AddRecordToOtherTableAction(BaseAction):
         try:
             row = self.auto_rule.dtable_server_api.append_row(self.get_table_name(self.dst_table_id), self.row_data['row'], apply_default=True)
         except Exception as e:
-            logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
+            auto_rule_logger.error('update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
             return
-        self.auto_rule.set_done_actions()
-
-        try:
-            self.row_data['row']['_id'] = row['_id']
-        except Exception as e:
-            logger.exception('send selected notifications error: %s', e)
 
 
 class TriggerWorkflowAction(BaseAction):
@@ -2380,7 +2345,7 @@ class TriggerWorkflowAction(BaseAction):
                 return False
             workflow_config = json.loads(result[0])
         except Exception as e:
-            logger.warning('checkout workflow: %s of dtable: %s error: %s', self.token, self.auto_rule.dtable_uuid)
+            auto_rule_logger.warning('checkout workflow: %s of dtable: %s error: %s', self.token, self.auto_rule.dtable_uuid)
             return False
         workflow_table_id = workflow_config.get('table_id')
         return workflow_table_id == self.auto_rule.table_id
@@ -2413,7 +2378,7 @@ class TriggerWorkflowAction(BaseAction):
                             offset = time_dict.get('offset')
                             filtered_updates[col_name] = self.format_time_by_offset(int(offset), format_length)
                     except Exception as e:
-                        logger.error(e)
+                        auto_rule_logger.error(e)
                         filtered_updates[col_name] = self.row.get(col_key)
                 else:
                     filtered_updates[col_name] = self.parse_column_value(col, self.row.get(col_key))
@@ -2423,21 +2388,19 @@ class TriggerWorkflowAction(BaseAction):
         if not self.is_valid:
             return
         try:
-            logger.debug('rule: %s new workflow: %s task row data: %s', self.auto_rule.rule_id, self.token, self.row_data)
+            auto_rule_logger.debug('rule: %s new workflow: %s task row data: %s', self.auto_rule.rule_id, self.token, self.row_data)
             resp_data = self.auto_rule.dtable_server_api.append_row(self.auto_rule.table_info['name'], self.row_data['row'])
             row_id = resp_data['_id']
-            logger.debug('rule: %s new workflow: %s task row_id: %s', self.auto_rule.rule_id, self.token, row_id)
+            auto_rule_logger.debug('rule: %s new workflow: %s task row_id: %s', self.auto_rule.rule_id, self.token, row_id)
         except Exception as e:
-            logger.error('rule: %s submit workflow: %s append row dtable: %s, error: %s', self.auto_rule.rule_id, self.token, self.auto_rule.dtable_uuid, e)
+            auto_rule_logger.error('rule: %s submit workflow: %s append row dtable: %s, error: %s', self.auto_rule.rule_id, self.token, self.auto_rule.dtable_uuid, e)
             return
 
         dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
         try:
             dtable_web_api.internal_submit_row_workflow(self.token, row_id, self.auto_rule.rule_id)
         except Exception as e:
-            logger.exception('auto rule: %s submit workflow: %s row: %s error: %s', self.auto_rule.rule_id, self.token, row_id, e)
-        else:
-            self.auto_rule.set_done_actions()
+            auto_rule_logger.exception('auto rule: %s submit workflow: %s row: %s error: %s', self.auto_rule.rule_id, self.token, row_id, e)
 
 
 class CalculateAction(BaseAction):
@@ -2654,9 +2617,8 @@ class CalculateAction(BaseAction):
             try:
                 self.auto_rule.dtable_server_api.batch_update_rows(table_name, self.update_rows[i: i+step])
             except Exception as e:
-                logger.error('batch update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
+                auto_rule_logger.error('batch update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
                 return
-        self.auto_rule.set_done_actions()
 
 
 class LookupAndCopyAction(BaseAction):
@@ -2717,8 +2679,7 @@ class LookupAndCopyAction(BaseAction):
             try:
                 results, _ = self.auto_rule.query(sql)
             except Exception as e:
-                logger.exception(e)
-                logger.error('query dtable: %s, table name: %s, error: %s', self.auto_rule.dtable_uuid, table_name, e)
+                auto_rule_logger.exception('query dtable: %s, table name: %s, error: %s', self.auto_rule.dtable_uuid, table_name, e)
                 return []
             result_rows += results
             start += step
@@ -2851,9 +2812,8 @@ class LookupAndCopyAction(BaseAction):
             try:
                 self.auto_rule.dtable_server_api.batch_update_rows(self.copy_to_table_name, self.update_rows[i: i + step])
             except Exception as e:
-                logger.error('batch update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
+                auto_rule_logger.error('batch update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
                 return
-        self.auto_rule.set_done_actions()
 
 
 class ExtractUserNameAction(BaseAction):
@@ -2883,7 +2843,7 @@ class ExtractUserNameAction(BaseAction):
             try:
                 results, _ = self.auto_rule.query(sql)
             except Exception as e:
-                logger.error('query dtable: %s, table name: %s, error: %s', self.auto_rule.dtable_uuid, table_name, e)
+                auto_rule_logger.error('query dtable: %s, table name: %s, error: %s', self.auto_rule.dtable_uuid, table_name, e)
                 return []
             result_rows += results
             start += step
@@ -3004,9 +2964,7 @@ class ExtractUserNameAction(BaseAction):
             try:
                 self.auto_rule.dtable_server_api.batch_update_rows(table_name, self.update_rows[i: i+step])
             except Exception as e:
-                logger.error('batch update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
-                return
-        self.auto_rule.set_done_actions()
+                auto_rule_logger.error('batch update dtable: %s, error: %s', self.auto_rule.dtable_uuid, e)
 
 
 class ConvertPageToPDFAction(BaseAction):
@@ -3040,7 +2998,7 @@ class ConvertPageToPDFAction(BaseAction):
             file_info = dtable_server_api.upload_bytes_file(file_name, pdf_content)
             self.row_pdfs[row_id] = file_info
         except Exception as e:
-            logger.exception('rule: %s dtable: %s page: %s row: %s upload pdf error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.page_id, row_id, e)
+            auto_rule_logger.exception('rule: %s dtable: %s page: %s row: %s upload pdf error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.page_id, row_id, e)
 
     def update_rows_cb(self, table, target_column):
         if not self.row_pdfs:
@@ -3061,7 +3019,7 @@ class ConvertPageToPDFAction(BaseAction):
             dtable_server_api = DTableServerAPI('dtable-events', self.auto_rule.dtable_uuid, INNER_DTABLE_SERVER_URL)
             dtable_server_api.batch_update_rows(table['name'], updates)
         except Exception as e:
-            logger.exception('rule: %s dtable: %s page: %s rows: %s update rows error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.page_id, self.row_pdfs, e)
+            auto_rule_logger.exception('rule: %s dtable: %s page: %s rows: %s update rows error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.page_id, self.row_pdfs, e)
 
     def do_action(self):
         if not self.can_do_action():
@@ -3100,7 +3058,6 @@ class ConvertPageToPDFAction(BaseAction):
                 'type': 'convert_page_to_pdf_server_busy',
                 'page_id': self.page_id
             })
-        self.auto_rule.set_done_actions()
 
 
 class ConvertDocumentToPDFAndSendAction(BaseAction):
@@ -3147,12 +3104,12 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
             ):
                 self.send_email_config['account_info'] = account_info
                 self.send_email_config['can_do'] = True
-        logger.debug('rule: %s convert-and-send save: %s send-wechat: %s send-email: %s',
+        auto_rule_logger.debug('rule: %s convert-and-send save: %s send-wechat: %s send-email: %s',
                 self.auto_rule.rule_id, self.save_config['can_do'], self.send_wechat_robot_config['can_do'], self.send_email_config['can_do'])
         return self.save_config['can_do'] or self.send_wechat_robot_config['can_do'] or self.send_email_config['can_do']
 
     def save_to_custom_cb(self, pdf_content):
-        logger.debug('rule: %s convert-and-send start check save can_do: %s', self.auto_rule.rule_id, self.save_config.get('can_do'))
+        auto_rule_logger.debug('rule: %s convert-and-send start check save can_do: %s', self.auto_rule.rule_id, self.save_config.get('can_do'))
         if not self.save_config.get('can_do'):
             return
         dtable_server_api = DTableServerAPI('dtable-events', self.auto_rule.dtable_uuid, INNER_DTABLE_SERVER_URL, DTABLE_WEB_SERVICE_URL, self.repo_id, self.workspace_id)
@@ -3163,10 +3120,10 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
         try:
             dtable_server_api.upload_bytes_file(file_name, pdf_content, relative_path)
         except Exception as e:
-            logger.exception('rule: %s dtable: %s doc: %s upload pdf to custom: %s error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.doc_uuid, relative_path, e)
+            auto_rule_logger.exception('rule: %s dtable: %s doc: %s upload pdf to custom: %s error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.doc_uuid, relative_path, e)
 
     def send_email_cb(self, pdf_content):
-        logger.debug('rule: %s convert-and-send start check send email can_do: %s', self.auto_rule.rule_id, self.send_email_config.get('can_do'))
+        auto_rule_logger.debug('rule: %s convert-and-send start check send email can_do: %s', self.auto_rule.rule_id, self.send_email_config.get('can_do'))
         if not self.send_email_config.get('can_do'):
             return
         account_id = self.send_email_config['account_info'].get('id')
@@ -3195,10 +3152,10 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
             sender = EmailSender(account_id, 'automation-rules', conver_page_to_pdf_manager.config)
             sender.send(send_info)
         except Exception as e:
-            logger.exception('rule: %s dtable: %s doc: %s send email: %s error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.doc_uuid, send_info, e)
+            auto_rule_logger.exception('rule: %s dtable: %s doc: %s send email: %s error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.doc_uuid, send_info, e)
 
     def send_wechat_robot_cb(self, pdf_content):
-        logger.debug('rule: %s convert-and-send start check send wechat robot can_do: %s', self.auto_rule.rule_id, self.send_wechat_robot_config.get('can_do'))
+        auto_rule_logger.debug('rule: %s convert-and-send start check send wechat robot can_do: %s', self.auto_rule.rule_id, self.send_wechat_robot_config.get('can_do'))
         if not self.send_wechat_robot_config.get('can_do'):
             return
         if len(pdf_content) > self.WECHAT_FILE_SIZE_LIMIT:
@@ -3216,7 +3173,7 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
         upload_url = f'{parsed_url.scheme}://{parsed_url.netloc}/cgi-bin/webhook/upload_media?key={key}&type=file'
         resp = requests.post(upload_url, files={'file': (file_name, io.BytesIO(pdf_content))})
         if not resp.ok:
-            logger.error('rule: %s dtable: %s doc: %s send wechat: %s upload error status: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.doc_uuid, auth_info, resp.status_code)
+            auto_rule_logger.error('rule: %s dtable: %s doc: %s send wechat: %s upload error status: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.doc_uuid, auth_info, resp.status_code)
             return
         media_id = resp.json().get('media_id')
         msg_resp = requests.post(webhook_url, json={
@@ -3226,7 +3183,7 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
             }
         })
         if not msg_resp.ok:
-            logger.error('rule: %s dtable: %s doc: %s send wechat: %s error status: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.doc_uuid, auth_info, msg_resp.status_code)
+            auto_rule_logger.error('rule: %s dtable: %s doc: %s send wechat: %s error status: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.doc_uuid, auth_info, msg_resp.status_code)
         # send msg
         wechat_robot_msg = self.send_wechat_robot_config.get('message') or ''
         wechat_robot_msg_type = self.send_wechat_robot_config.get('message_type') or 'text'
@@ -3235,7 +3192,7 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
             try:
                 send_wechat_msg(webhook_url, wechat_robot_msg, wechat_robot_msg_type)
             except Exception as e:
-                logger.exception('send wechat error: %s', e)
+                auto_rule_logger.exception('send wechat error: %s', e)
 
     def do_action(self):
         if not self.can_do_action():
@@ -3257,7 +3214,6 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
                 'type': 'convert_document_to_pdf_server_busy',
                 'doc_uuid': self.doc_uuid
             })
-        self.auto_rule.set_done_actions()
 
 
 class RuleInvalidException(Exception):
@@ -3305,12 +3261,6 @@ class AutomationRule:
         self._related_users_dict = None
         self._trigger_conditions_rows = None
 
-        self._sql_row = None
-        self._sql_query_count = 0
-
-        self._convert_sql_row = None
-        self._convert_sql_query_count = 0
-
         self._sql_query_max = 3
 
         self.metadata_cache_manager = metadata_cache_manager
@@ -3318,7 +3268,6 @@ class AutomationRule:
         self.cache_key = 'AUTOMATION_RULE:%s' % self.rule_id
         self.task_run_success = True
 
-        self.done_actions = False  # indicate at least 1 action be done
         self.load_trigger_and_actions(raw_trigger, raw_actions)
 
         self.current_valid = True
@@ -3403,7 +3352,7 @@ class AutomationRule:
             try:
                 self._related_users = self.dtable_web_api.get_related_users(self.dtable_uuid)['user_list']
             except Exception as e:
-                logger.error('rule: %s uuid: %srequest related users error: %s', self.rule_id, self.dtable_uuid, e)
+                auto_rule_logger.error('rule: %s uuid: %srequest related users error: %s', self.rule_id, self.dtable_uuid, e)
                 raise RuleInvalidException('rule: %s uuid: %srequest related users error: %s' % (self.rule_id, self.dtable_uuid, e), 'rule_related_users_failed')
         return self._related_users
 
@@ -3414,42 +3363,38 @@ class AutomationRule:
         return self._related_users_dict
 
     def get_convert_sql_row(self):
-        if self._convert_sql_row is not None or self._convert_sql_query_count >= self._sql_query_max:
-            return self._convert_sql_row
         if not self.data:
             return None
         if 'row_id' not in self.data:
             return None
         row_id = self.data['row_id']
-        while not self._convert_sql_row and self._convert_sql_query_count < self._sql_query_max:
+        query_times = 0
+        while query_times < self._sql_query_max:
             sql = f"SELECT * FROM `{self.table_info['name']}` WHERE _id='{row_id}'"
             sql_rows, _ = self.query(sql, convert=True)
             if not sql_rows:
-                self._convert_sql_query_count += 1
-                logger.warning('auto-rule %s query dtable %s table %s convert row %s not found, query count %s', self.rule_id, self.dtable_uuid, self.table_id, row_id, self._convert_sql_query_count)
+                query_times += 1
+                auto_rule_logger.warning('auto-rule %s query dtable %s table %s convert row %s not found, query count %s', self.rule_id, self.dtable_uuid, self.table_id, row_id, self._convert_sql_query_count)
                 time.sleep(0.1)
                 continue
-            self._convert_sql_row = sql_rows[0]
-        return self._convert_sql_row
+            return sql_rows[0]
 
     def get_sql_row(self):
-        if self._sql_row is not None or self._sql_query_count >= self._sql_query_max:
-            return self._sql_row
         if not self.data:
             return None
         if 'row_id' not in self.data:
             return None
         row_id = self.data['row_id']
-        while not self._sql_row and self._sql_query_count < self._sql_query_max:
+        query_times = 0
+        while query_times < self._sql_query_max:
             sql = f"SELECT * FROM `{self.table_info['name']}` WHERE _id='{row_id}'"
             sql_rows, _ = self.query(sql, convert=False)
             if not sql_rows:
-                self._sql_query_count += 1
-                logger.warning('auto-rule %s query dtable %s table %s row %s not found, query count %s', self.rule_id, self.dtable_uuid, self.table_id, row_id, self._sql_query_count)
+                query_times += 1
+                auto_rule_logger.warning('auto-rule %s query dtable %s table %s row %s not found, query count %s', self.rule_id, self.dtable_uuid, self.table_id, row_id, self._convert_sql_query_count)
                 time.sleep(0.1)
                 continue
-            self._sql_row = sql_rows[0]
-        return self._sql_row
+            return sql_rows[0]
 
     def get_trigger_conditions_rows(self, action: BaseAction, warning_rows=50):
         if self._trigger_conditions_rows is not None:
@@ -3495,11 +3440,10 @@ class AutomationRule:
         try:
             sql = filter2sql(table_name, columns, filter_conditions, by_group=True)
         except (ValueError, ColumnFilterInvalidError) as e:
-            logger.warning('wrong filter in rule: %s trigger filters filter_conditions: %s error: %s', self.rule_id, filter_conditions, e)
+            auto_rule_logger.warning('wrong filter in rule: %s trigger filters filter_conditions: %s error: %s', self.rule_id, filter_conditions, e)
             raise RuleInvalidException('wrong filter in rule: %s trigger filters error: %s' % (self.rule_id, e), 'rule_trigger_gen_sql_failed')
         except Exception as e:
-            logger.exception(e)
-            logger.error('rule: %s filter_conditions: %s filter2sql error: %s', self.rule_id, filter_conditions, e)
+            auto_rule_logger.exception('rule: %s filter_conditions: %s filter2sql error: %s', self.rule_id, filter_conditions, e)
             self._trigger_conditions_rows = []
             return self._trigger_conditions_rows
         try:
@@ -3507,10 +3451,10 @@ class AutomationRule:
         except RowsQueryError:
             raise RuleInvalidException('wrong filter in rule: %s trigger filters' % self.rule_id, 'rule_trigger_sql_query_failed')
         except Exception as e:
-            logger.error('request filter rows error: %s', e)
+            auto_rule_logger.error('request filter rows error: %s', e)
             self._trigger_conditions_rows = []
             return self._trigger_conditions_rows
-        logger.debug('Number of filter rows by auto-rule %s is: %s, dtable_uuid: %s, details: %s' % (
+        auto_rule_logger.debug('Number of filter rows by auto-rule %s is: %s, dtable_uuid: %s, details: %s' % (
             self.rule_id,
             len(rows_data),
             self.dtable_uuid,
@@ -3660,11 +3604,9 @@ class AutomationRule:
         for action_info in self.action_infos:
             if not self.current_valid:
                 break
-            auto_rule_logger.info('rule: %s start action: %s ', self.rule_id, action_info['type'])
-            logger.debug('rule: %s start action: %s type: %s', self.rule_id, action_info.get('_id'), action_info['type'])
+            auto_rule_logger.info('rule: %s start action: %s type: %s', self.rule_id, action_info.get('_id'), action_info['type'])
             if not self.can_condition_trigger_action(action_info):
                 auto_rule_logger.info('rule: %s forbidden trigger action: %s type: %s when run_condition: %s trigger_condition: %s', self.rule_id, action_info.get('_id'), action_info['type'], self.run_condition, self.trigger.get('condition'))
-                logger.debug('rule: %s forbidden trigger action: %s type: %s when run_condition: %s trigger_condition: %s', self.rule_id, action_info.get('_id'), action_info['type'], self.run_condition, self.trigger.get('condition'))
                 continue
             try:
                 if action_info.get('type') == 'update_record':
@@ -3814,7 +3756,6 @@ class AutomationRule:
 
             except RuleInvalidException as e:
                 auto_rule_logger.warning('auto rule %s with data %s, invalid error: %s', self.rule_id, self.data, e)
-                logger.warning('auto rule %s with data %s, invalid error: %s', self.rule_id, self.data, e)
                 self.task_run_success = False
                 if not with_test:
                     self.set_invalid(e)
@@ -3832,22 +3773,18 @@ class AutomationRule:
             except Exception as e:
                 self.task_run_success = False
                 auto_rule_logger.exception('rule %s do action %s with data %s error: %s', self.rule_id, action_info, self.data, e)
-                logger.exception('rule %s do action %s with data %s error: %s', self.rule_id, action_info, self.data, e)
 
-        auto_rule_logger.info('rule: %s all actions finished done_actions: %s', self.rule_id, self.done_actions)
+        auto_rule_logger.info('rule: %s all actions finished', self.rule_id)
 
         duration = datetime.now() - do_actions_start
         if duration.seconds >= 5:
             auto_rule_logger.warning('the running time of rule %s is too long, for %s. SQL queries are %s', self.rule_id, duration, f"\n{'\n'.join(self.query_stats)}")
 
-        if self.done_actions and not with_test:
+        if not with_test:
             self.update_last_trigger_time()
 
         if not with_test:
             self.add_task_log()
-
-    def set_done_actions(self, done=True):
-        self.done_actions = done
 
     def add_task_log(self):
         if not self.org_id:
@@ -3871,7 +3808,6 @@ class AutomationRule:
                 self.db_session.commit()
         except Exception as e:
             auto_rule_logger.error('set rule task log: %s error: %s', self.rule_id, e)
-            logger.error('set rule task log: %s error: %s', self.rule_id, e)
 
     def update_last_trigger_time(self):
         try:
@@ -3891,7 +3827,7 @@ class AutomationRule:
                 update_at=:trigger_time
             '''
             set_last_trigger_time_sql = '''
-                UPDATE dtable_automation_rules SET last_trigger_time=:trigger_time, trigger_count=:trigger_count WHERE id=:rule_id;
+                UPDATE dtable_automation_rules SET last_trigger_time=:trigger_time, trigger_count=:trigger_count+1 WHERE id=:rule_id;
             '''
 
             sqls = [set_last_trigger_time_sql]
@@ -3916,7 +3852,6 @@ class AutomationRule:
             self.db_session.commit()
         except Exception as e:
             auto_rule_logger.exception('set rule: %s error: %s', self.rule_id, e)
-            logger.exception('set rule: %s error: %s', self.rule_id, e)
 
     def set_invalid(self, e: RuleInvalidException):
         try:
@@ -3928,14 +3863,13 @@ class AutomationRule:
             self.db_session.commit()
         except Exception as e:
             auto_rule_logger.error('set rule: %s invalid error: %s', self.rule_id, e)
-            logger.error('set rule: %s invalid error: %s', self.rule_id, e)
 
         # send warning notifications
         ## query admins
         try:
             admins = get_dtable_admins(self.dtable_uuid, self.db_session)
         except Exception as e:
-            logger.exception('get dtable: %s admins error: %s', self.dtable_uuid, e)
+            auto_rule_logger.exception('get dtable: %s admins error: %s', self.dtable_uuid, e)
         else:
             ## send notifications
             if len(e.args) == 2:
@@ -3954,4 +3888,4 @@ class AutomationRule:
                     }
                 } for user in admins])
             except Exception as e:
-                logger.exception('send auto-rule: %s invalid notifiaction to admins error: %s', self.rule_id, e)
+                auto_rule_logger.exception('send auto-rule: %s invalid notifiaction to admins error: %s', self.rule_id, e)
