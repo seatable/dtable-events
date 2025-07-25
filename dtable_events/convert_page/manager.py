@@ -55,7 +55,7 @@ class BrowserWorker(Thread):
             self.playwright = await async_playwright().start()
         if not self.browser:
             self.is_browser_alive = True
-            self.browser = await self.playwright.chromium.launch(headless=True)
+            self.browser = await self.playwright.chromium.launch(executable_path='/usr/bin/google-chrome', headless=True)
             self.browser.on('disconnected', self.disconnect_browser_cb)
         self.context = await self.browser.new_context()
         self.browser_pid = self.browser._impl_obj._connection._transport._proc.pid

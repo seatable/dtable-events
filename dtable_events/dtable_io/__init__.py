@@ -886,7 +886,7 @@ def convert_page_design_to_pdf(dtable_uuid, page_id, row_id, username, config):
         url += '?access-token=%s&need_convert=%s' % (access_token, 0)
         dtable_io_logger.debug('convert_page_to_pdf url: %s', url)
         async with async_playwright() as playwright:
-            browser = await playwright.chromium.launch(headless=True)
+            browser = await playwright.chromium.launch(executable_path='/usr/bin/google-chrome', headless=True)
             context = await browser.new_context()
             page = await context.new_page()
             pid = browser._impl_obj._connection._transport._proc.pid
@@ -934,7 +934,7 @@ def convert_document_to_pdf(dtable_uuid, doc_uuid, row_id, username, config):
         url += '?access-token=%s&need_convert=%s' % (access_token, 0)
         dtable_io_logger.debug('convert_page_to_pdf url: %s', url)
         async with async_playwright() as playwright:
-            browser = await playwright.chromium.launch(headless=True)
+            browser = await playwright.chromium.launch(executable_path='/usr/bin/google-chrome', headless=True)
             context = await browser.new_context()
             page = await context.new_page()
             pid = browser._impl_obj._connection._transport._proc.pid
