@@ -7,6 +7,7 @@ from threading import Thread, current_thread
 from sqlalchemy import text
 from apscheduler.schedulers.blocking import BlockingScheduler
 
+from dtable_events.app.log import auto_rule_logger
 from dtable_events.app.metadata_cache_managers import RuleIntervalMetadataCacheManager
 from dtable_events.automations.auto_rules_utils import run_regular_execution_rule
 from dtable_events.db import init_db_session_class
@@ -16,7 +17,6 @@ from dtable_events.utils import get_opt_from_conf_or_env, parse_bool
 __all__ = [
     'DTableAutomationRulesScanner',
 ]
-
 
 class DTableAutomationRulesScanner(object):
 
@@ -41,10 +41,10 @@ class DTableAutomationRulesScanner(object):
 
     def start(self):
         if not self.is_enabled():
-            logging.warning('Can not start dtable automation rules scanner: it is not enabled!')
+            auto_rule_logger.warning('Can not start dtable automation rules scanner: it is not enabled!')
             return
 
-        logging.info('Start dtable automation rules scanner')
+        auto_rule_logger.info('Start dtable automation rules scanner')
 
         DTableAutomationRulesScannerTimer(self._db_session_class).start()
 
@@ -61,7 +61,7 @@ class DTableAutomationRulesScannerTimer(Thread):
         self.queue = Queue()
 
     def trigger_rule(self):
-        logging.info('thread %s start', current_thread().name)
+        auto_rule_logger.info('thread %s start', current_thread().name)
         rule_interval_metadata_cache_manager = RuleIntervalMetadataCacheManager()
         while True:
             try:
@@ -69,12 +69,12 @@ class DTableAutomationRulesScannerTimer(Thread):
             except Empty:
                 return  # means no rules to trigger, finish thread
             db_session = self.db_session_class()
-            logging.info('thread %s start to handle rule %s dtable_uuid %s', current_thread().name, rule.id, rule.dtable_uuid)
+            auto_rule_logger.info('thread %s start to handle rule %s dtable_uuid %s', current_thread().name, rule.id, rule.dtable_uuid)
             try:
                 run_regular_execution_rule(rule, db_session, rule_interval_metadata_cache_manager)
             except Exception as e:
-                logging.exception(e)
-                logging.error(f'check rule failed. {rule}, error: {e}')
+                auto_rule_logger.exception(e)
+                auto_rule_logger.error(f'check rule failed. {rule}, error: {e}')
             finally:
                 db_session.close()
 
@@ -98,29 +98,29 @@ class DTableAutomationRulesScannerTimer(Thread):
                 'per_month_check_time': per_month_check_time
             })
         except Exception as e:
-            logging.exception('query regular automation rules error: %s', e)
+            auto_rule_logger.exception('query regular automation rules error: %s', e)
             return
         finally:
             db_session.close()
 
         for rule in rules:
             self.queue.put(rule)
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+        with ThreadPoolExecutor(max_workers=self.max_workers, thread_name_prefix='interval-auto-rules') as executor:
             for _ in range(self.max_workers):
                 executor.submit(self.trigger_rule)
 
-        logging.info('all rules done')
+        auto_rule_logger.info('all rules done')
 
     def run(self):
         sched = BlockingScheduler()
         # fire at every hour in every day of week
         @sched.scheduled_job('cron', day_of_week='*', hour='*', misfire_grace_time=600)
         def timed_job():
-            logging.info('Starts to scan automation rules...')
+            auto_rule_logger.info('Starts to scan automation rules...')
 
             try:
                 self.scan_dtable_automation_rules()
             except Exception as e:
-                logging.exception('error when scanning dtable automation rules: %s', e)
+                auto_rule_logger.exception('error when scanning dtable automation rules: %s', e)
 
         sched.start()

@@ -110,3 +110,9 @@ def setup_logger(logname, fmt=None, level=None, propagate=None):
         logger.addHandler(handler)
 
     return logger
+
+auto_rule_logger = setup_logger(
+    'automation_rules',
+    fmt='[%(asctime)s] [%(levelname)s] [%(threadName)s] %(filename)s[line:%(lineno)s] %(message)s',
+    propagate=False
+)

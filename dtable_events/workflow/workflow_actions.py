@@ -43,10 +43,10 @@ def do_workflow_actions(task_id, node_id, db_session):
     if not node:
         return
     actions = node.get('actions', [])
-    converted_row = context.get_converted_row(table_id, row_id)
-    if not converted_row:
-        return
     for action_info in actions:
+        converted_row = context.get_converted_row(table_id, row_id)
+        if not converted_row:
+            return
         logger.debug('start action: %s', action_info.get('type'))
         try:
             if action_info.get('type') == 'notify':
