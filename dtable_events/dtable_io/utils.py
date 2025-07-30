@@ -1070,13 +1070,13 @@ def create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, or
             except:
                 pass
             else:
-                stack = [item for item in nav_detail['navigation']]
-                while stack:
-                    item = stack.pop(0)
+                queue = [item for item in nav_detail['navigation']]
+                while queue:
+                    item = queue.pop(0)
                     if item['type'] == 'automation_rule':
                         item['id'] = src_des_id_dict[item['id']]
                     elif item['type'] == 'folder':
-                        stack.extend(item.get('children', []))
+                        queue.extend(item.get('children', []))
                 sql = '''INSERT INTO dtable_automation_rules_navigation(`dtable_uuid`, `detail`) VALUES (:dtable_uuid, :detail)'''
                 db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid), 'detail': json.dumps(nav_detail)})
                 db_session.commit()
