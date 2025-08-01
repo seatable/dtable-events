@@ -393,28 +393,16 @@ def copy_src_archive_backup(dtable_uuid, tmp_file_path, task_id):
     dtable_db_api = DTableDBAPI('dtable-events', dtable_uuid, INNER_DTABLE_DB_URL)
     backups = dtable_db_api.get_backups()
     backup = backups[0] if backups else None
-    
+
     if not backup:
         dtable_io_logger.info(add_task_id_to_log(f"dtable {dtable_uuid} no archive backup", task_id))
         return
-    # create a new backup, up to date
-    dtable_io_logger.info(add_task_id_to_log(f"start to create a new archive backup for dtable {dtable_uuid}", task_id))
-    dtable_db_api.create_backup()
-    # loop query backup task status
-    while True:
-        status = dtable_db_api.query_backup_task_status()['status']
-        if status == 'success':
-            break
-        dtable_io_logger.info(add_task_id_to_log(f"dtable {dtable_uuid} archive backup task is running", task_id))
-        time.sleep(1)
-    dtable_io_logger.info(add_task_id_to_log(f"dtable {dtable_uuid} archive backup task is done", task_id))
     # get backup and save to file
     backup = dtable_db_api.get_backups()[0]
     backup_version = backup['version']
     dtable_storage_server_api = DTableStorageServerAPI()
-    backup_content = dtable_storage_server_api.get_backup(dtable_uuid, backup_version)
-    with open(os.path.join(tmp_file_path, 'archive'), 'wb') as fp:
-        fp.write(backup_content)
+    archive_file_path = os.path.join(tmp_file_path, 'archive')
+    dtable_storage_server_api.get_backup_chunked(dtable_uuid, backup_version, archive_file_path)
 
 
 def convert_dtable_import_file_url(dtable_content, workspace_id, dtable_uuid):
