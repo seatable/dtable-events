@@ -1,10 +1,8 @@
+import os
 import uuid
 import requests
 
-try:
-    from seahub.settings import DTABLE_STORAGE_SERVER_URL
-except ImportError as err:
-    DTABLE_STORAGE_SERVER_URL = ''
+from dtable_events.app.config import DTABLE_STORAGE_SERVER_URL
 
 
 TIMEOUT = 90
@@ -79,6 +77,44 @@ class DTableStorageServerAPI(object):
             if e.args[0] == 404:
                 return None
         return data
+
+    def get_backup(self, dtable_uuid, version):
+        """Return backup content"""
+        url = self.server_url + f'/backups/{dtable_uuid}/{version}'
+        response = requests.get(url, timeout=TIMEOUT)
+        if not response.ok:
+            raise ConnectionError(response.status_code, 'get backup failed')
+        return response.content
+
+    def get_backup_chunked(self, dtable_uuid, version, file_path):
+        temp_path = f'{file_path}.part'
+        url = self.server_url + f'/backups/{dtable_uuid}/{version}'
+        try:
+            resp = requests.get(url, stream=True, timeout=TIMEOUT)
+            resp.raise_for_status()
+
+            with open(temp_path, 'wb') as f:
+                for chunk in resp.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+            os.rename(temp_path, file_path)
+
+        except Exception as e:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+    def create_backup(self, dtable_uuid, version, file):
+        """
+        file: bytes or a file-like obj
+        """
+        url = self.server_url + f'/backups/{dtable_uuid}/{version}'
+        resp = requests.put(url, data=file)
+        return resp
+
+    def delete_dtable_all_backups(self, dtable_uuid):
+        url = self.server_url + f'/backups/{dtable_uuid}'
+        response = requests.delete(url)
+        return parse_response(response)
 
 
 storage_api = DTableStorageServerAPI()

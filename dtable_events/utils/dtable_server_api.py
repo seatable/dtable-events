@@ -535,3 +535,13 @@ class DTableServerAPI(object):
         signal_headers = {'Authorization': f"Token {access_token}"}
         response = requests.post(url, headers=signal_headers)
         return parse_response(response)
+
+    def update_enable_archive(self, enable_archive):
+        url = self.dtable_server_url + '/api/v1/internal/dtables/' + self.dtable_uuid + '/archive/?from=dtable_events'
+        json_data = {
+            'enable_archive': enable_archive,
+        }
+        response = requests.put(url, json=json_data, headers=self.internal_headers, timeout=self.timeout)
+        data = parse_response(response)
+
+        return data
