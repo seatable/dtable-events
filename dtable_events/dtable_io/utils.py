@@ -320,19 +320,33 @@ def copy_src_forms_to_json(dtable_uuid, tmp_file_path, db_session):
 def copy_src_auto_rules_to_json(dtable_uuid, tmp_file_path, db_session):
     if not db_session:
         return
-    sql = """SELECT `run_condition`, `trigger`, `actions` FROM dtable_automation_rules WHERE dtable_uuid=:dtable_uuid"""
+    # copy auto-rules
+    sql = """SELECT `id`, `run_condition`, `trigger`, `actions` FROM dtable_automation_rules WHERE dtable_uuid=:dtable_uuid"""
     src_auto_rules = db_session.execute(text(sql), {'dtable_uuid': ''.join(dtable_uuid.split('-'))})
     src_auto_rules_json = []
     for src_auto_rule in src_auto_rules:
         auto_rule = {
-            'run_condition': src_auto_rule[0],
-            'trigger': src_auto_rule[1],
-            'actions': src_auto_rule[2],
+            'id': src_auto_rule.id,
+            'run_condition': src_auto_rule.run_condition,
+            'trigger': src_auto_rule.trigger,
+            'actions': src_auto_rule.actions,
         }
         src_auto_rules_json.append(auto_rule)
     if src_auto_rules_json:
         with open(os.path.join(tmp_file_path, 'auto_rules.json'), 'w+') as fp:
             fp.write(json.dumps(src_auto_rules_json))
+
+    # copy auto-rules navigation
+    sql = '''SELECT `detail` FROM `dtable_automation_rules_navigation` WHERE dtable_uuid=:dtable_uuid'''
+    src_auto_rules_navigation = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
+    if src_auto_rules_navigation:
+        try:
+            json.loads(src_auto_rules_navigation.detail)
+        except:
+            pass
+        else:
+            with open(os.path.join(tmp_file_path, 'auto_rules_navigation.json'), 'w') as fp:
+                fp.write(src_auto_rules_navigation.detail)
 
 
 def copy_src_workflows_to_json(dtable_uuid, tmp_file_path, db_session):
@@ -907,7 +921,7 @@ def add_a_auto_rule_to_db(username, auto_rule, workspace_id, repo_id, owner, org
     sql = """INSERT INTO dtable_automation_rules (`dtable_uuid`, `run_condition`, `trigger`, `actions`,
              `creator`, `ctime`, `org_id`, `last_trigger_time`) VALUES (:dtable_uuid, :run_condition,
              :trigger, :actions, :creator, :ctime, :org_id, :last_trigger_time)"""
-    db_session.execute(text(sql), {
+    result = db_session.execute(text(sql), {
         'dtable_uuid': ''.join(dtable_uuid.split('-')),
         'run_condition': auto_rule['run_condition'],
         'trigger': auto_rule['trigger'],
@@ -918,6 +932,7 @@ def add_a_auto_rule_to_db(username, auto_rule, workspace_id, repo_id, owner, org
         'last_trigger_time': None,
         })
     db_session.commit()
+    return result.lastrowid
 
 
 def add_a_workflow_to_db(username, workflow, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, db_session):
@@ -1033,15 +1048,38 @@ def create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, or
     if result.count > 0:
         return
 
+    # create auto-rules
+    src_des_id_dict = {}
     with open(auto_rules_json_path, 'r') as fp:
         auto_rules_json = fp.read()
     auto_rules = json.loads(auto_rules_json)
     for auto_rule in auto_rules:
         if ('run_condition' not in auto_rule) or ('trigger' not in auto_rule) or ('actions' not in auto_rule):
             continue
-        add_a_auto_rule_to_db(username, auto_rule, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, db_session)
+        new_rule_id = add_a_auto_rule_to_db(username, auto_rule, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, db_session)
+        src_des_id_dict[auto_rule['id']] = new_rule_id
     dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, INNER_DTABLE_SERVER_URL)
     dtable_server_api.send_signal('automation-rules-changed')
+
+    # create auto-rules navigation
+    auto_rules_navigation_json_path = os.path.join(path, 'auto_rules_navigation.json')
+    if os.path.isfile(auto_rules_navigation_json_path):
+        with open(auto_rules_navigation_json_path, 'r') as fp:
+            try:
+                nav_detail = json.load(fp)
+            except:
+                pass
+            else:
+                queue = [item for item in nav_detail['children']]
+                while queue:
+                    item = queue.pop(0)
+                    if item['type'] == 'automation_rule':
+                        item['id'] = src_des_id_dict[item['id']]
+                    elif item['type'] == 'folder':
+                        queue.extend(item.get('children', []))
+                sql = '''INSERT INTO dtable_automation_rules_navigation(`dtable_uuid`, `detail`) VALUES (:dtable_uuid, :detail)'''
+                db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid), 'detail': json.dumps(nav_detail)})
+                db_session.commit()
 
 
 def create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, path, db_session):
