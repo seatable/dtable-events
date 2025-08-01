@@ -1070,7 +1070,7 @@ def create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, or
             except:
                 pass
             else:
-                queue = [item for item in nav_detail['navigation']]
+                queue = [item for item in nav_detail['children']]
                 while queue:
                     item = queue.pop(0)
                     if item['type'] == 'automation_rule':
