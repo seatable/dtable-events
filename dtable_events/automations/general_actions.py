@@ -292,7 +292,7 @@ class BaseAction:
         self.context = context
         self.table = self.context.table
 
-    def generate_real_msg(self, msg, sql_row):
+    def generate_real_msg(self, msg, sql_row, **format_options):
         if not sql_row:
             return msg
         blanks = set(re.findall(r'\{([^{]*?)\}', msg))
@@ -301,7 +301,7 @@ class BaseAction:
         if not column_blanks:
             return msg
         try:
-            return fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, sql_row, self.context.db_session)
+            return fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, sql_row, self.context.db_session, **format_options)
         except Exception as e:
             logger.exception(e)
             logger.error('msg: %s col_name_dict: %s column_blanks: %s fill error: %s', msg, col_name_dict, column_blanks, e)
@@ -484,14 +484,14 @@ class SendEmailAction(BaseAction):
         sql_row = self.context.get_sql_row(self.table['_id'], converted_row['_id'])
         if self.send_to_list:
             for send_to in self.send_to_list:
-                real_send_to = self.generate_real_msg(send_to, sql_row)
+                real_send_to = self.generate_real_msg(send_to, sql_row, convert_to_nickname=False)
                 if is_valid_email(real_send_to):
                     final_send_to_list.append(real_send_to)
         if not final_send_to_list:
             return
         if self.copy_to_list:
             for copy_to in self.copy_to_list:
-                real_copy_to = self.generate_real_msg(copy_to, sql_row)
+                real_copy_to = self.generate_real_msg(copy_to, sql_row, convert_to_nickname=False)
                 if is_valid_email(real_copy_to):
                     final_copy_to_list.append(real_copy_to)
         send_info = {
