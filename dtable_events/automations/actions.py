@@ -1217,6 +1217,8 @@ class SendEmailAction(BaseAction):
             if '@auth.local' in item:
                 usernames.append(item)
                 continue
+            if item in return_emails:
+                continue
             return_emails.append(item)
         if usernames:
             sql = '''
