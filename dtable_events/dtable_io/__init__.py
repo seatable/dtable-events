@@ -85,7 +85,7 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
         prepare_dtable_json_from_memory(workspace_id, dtable_uuid, username)
     except Exception as e:
         error_msg = 'prepare dtable json failed. ERROR: {}'.format(e)
-        dtable_io_logger.error(add_task_id_to_log(error_msg, task_id))
+        dtable_io_logger.exception(add_task_id_to_log(error_msg, task_id))
         raise Exception(error_msg)
 
     # 2. get asset file folder, asset could be empty
