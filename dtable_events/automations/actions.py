@@ -1205,10 +1205,31 @@ class SendEmailAction(BaseAction):
         self.init_notify_subject()
         self.init_notify_images()
 
-    def fill_msg_blanks_with_sql(self, row, text, blanks, convert_to_html=False):
+    def fill_msg_blanks_with_sql(self, row, text, blanks, **format_options):
         col_name_dict = self.col_name_dict
         db_session = self.auto_rule.db_session
-        return fill_msg_blanks_with_sql_row(text, blanks, col_name_dict, row, db_session, convert_to_html=convert_to_html)
+        return fill_msg_blanks_with_sql_row(text, blanks, col_name_dict, row, db_session, **format_options)
+
+    def replace_username_with_contact_emails(self, emails):
+        return_emails = []
+        usernames = []
+        for item in emails:
+            if '@auth.local' in item:
+                usernames.append(item)
+                continue
+            return_emails.append(item)
+        if usernames:
+            sql = '''
+                SELECT `contact_email` FROM `profile_profile`
+                WHERE `user` IN :usernames AND `contact_email` IS NOT NULL AND `contact_email` != ''
+            '''
+            try:
+                results = self.auto_rule.db_session.execute(text(sql), {'usernames': usernames})
+            except Exception as e:
+                auto_rule_logger.error(f'query users {usernames} contact_emails error {e}')
+            else:
+                return_emails.extend([item.contact_email for item in results])
+        return return_emails
 
     def get_file_down_url(self, file_url):
         file_path = unquote('/'.join(file_url.split('/')[7:]).strip())
@@ -1262,14 +1283,17 @@ class SendEmailAction(BaseAction):
                 # html message, when filling long-text value, convert markdown string to html string
                 html_msg = self.fill_msg_blanks_with_sql(sql_row, html_msg, self.column_blanks, convert_to_html=True)
         if self.column_blanks_send_to:
-            temp = [self.fill_msg_blanks_with_sql(sql_row, send_to, self.column_blanks_send_to) for send_to in send_to_list]
+            temp = [self.fill_msg_blanks_with_sql(sql_row, send_to, self.column_blanks_send_to, convert_to_nickname=False) for send_to in send_to_list]
             send_to_list = list(set([item.strip() for sublist in temp for item in sublist.split(',')]))
+            send_to_list = self.replace_username_with_contact_emails(send_to_list)
         if self.column_blanks_copy_to:
-            temp = [self.fill_msg_blanks_with_sql(sql_row, copy_to, self.column_blanks_copy_to) for copy_to in copy_to_list]
+            temp = [self.fill_msg_blanks_with_sql(sql_row, copy_to, self.column_blanks_copy_to, convert_to_nickname=False) for copy_to in copy_to_list]
             copy_to_list = list(set([item.strip() for sublist in temp for item in sublist.split(',')]))
+            copy_to_list = self.replace_username_with_contact_emails(copy_to_list)
         if self.column_blanks_reply_to:
-            temp = [self.fill_msg_blanks_with_sql(sql_row, reply_to, self.column_blanks_reply_to)]
+            temp = [self.fill_msg_blanks_with_sql(sql_row, reply_to, self.column_blanks_reply_to, convert_to_nickname=False)]
             reply_to_list = list(set([item.strip() for sublist in temp for item in sublist.split(',')]))
+            reply_to_list = self.replace_username_with_contact_emails(reply_to_list)
             reply_to = next(filter(lambda temp_reply_to: is_valid_email(temp_reply_to), reply_to_list), '')
 
         file_download_urls = self.get_file_download_urls(attachment_list, self.auto_rule.get_sql_row())
@@ -1332,14 +1356,17 @@ class SendEmailAction(BaseAction):
                 if not is_plain_text and html_msg:
                     html_msg = self.fill_msg_blanks_with_sql(row, html_msg, self.column_blanks, convert_to_html=True)
             if self.column_blanks_send_to:
-                temp = [self.fill_msg_blanks_with_sql(row, send_to, self.column_blanks_send_to) for send_to in send_to_list]
+                temp = [self.fill_msg_blanks_with_sql(row, send_to, self.column_blanks_send_to, convert_to_nickname=False) for send_to in send_to_list]
                 send_to_list = list(set([item.strip() for sublist in temp for item in sublist.split(',')]))
+                send_to_list = self.replace_username_with_contact_emails(send_to_list)
             if self.column_blanks_copy_to:
-                temp = [self.fill_msg_blanks_with_sql(row, copy_to, self.column_blanks_copy_to) for copy_to in copy_to_list]
+                temp = [self.fill_msg_blanks_with_sql(row, copy_to, self.column_blanks_copy_to, convert_to_nickname=False) for copy_to in copy_to_list]
                 copy_to_list = list(set([item.strip() for sublist in temp for item in sublist.split(',')]))
+                copy_to_list = self.replace_username_with_contact_emails(copy_to_list)
             if self.column_blanks_reply_to:
-                temp = [self.fill_msg_blanks_with_sql(row, reply_to, self.column_blanks_reply_to)]
+                temp = [self.fill_msg_blanks_with_sql(row, reply_to, self.column_blanks_reply_to, convert_to_nickname=False)]
                 reply_to_list = list(set([item.strip() for sublist in temp for item in sublist.split(',')]))
+                reply_to_list = self.replace_username_with_contact_emails(reply_to_list)
                 reply_to = next(filter(lambda temp_reply_to: is_valid_email(temp_reply_to), reply_to_list), '')
 
             file_download_urls = self.get_file_download_urls(attachment_list, row)
