@@ -95,12 +95,12 @@ def convert_dtable_export_file_and_image_url(workspace_id, dtable_uuid, dtable_c
                             v[idx] = IMG_URL_PREFIX + img_name
                 elif col['type'] == ColumnTypes.FILE and isinstance(v, list) and v:
                     for idx, item in enumerate(v):
-                        if isinstance(item, dict) and old_file_part_path in item.get('url', ''):
+                        if isinstance(item, dict) and item.get('url') and old_file_part_path in item.get('url', ''):
                             file_name = '/'.join(item['url'].split('/')[-2:])
                             item['url'] = FILE_URL_PREFIX + file_name
                 elif col['type'] == ColumnTypes.LONG_TEXT and isinstance(v, dict) and v.get('text') and v.get('images'):
                     for idx, item in enumerate(v['images']):
-                        if old_file_part_path in item:
+                        if item and old_file_part_path in item:
                             img_name = '/'.join(item.split('/')[-2:])
                             v['images'][idx] = IMG_URL_PREFIX + img_name
                             v['text'] = v['text'].replace(item, v['images'][idx])
