@@ -111,7 +111,7 @@ def convert_dtable_export_file_and_image_url(workspace_id, dtable_uuid, dtable_c
                                 v[idx] = IMG_URL_PREFIX + img_name
                 elif col['type'] == ColumnTypes.FILE and isinstance(v, list) and v:
                     for idx, item in enumerate(v):
-                        if isinstance(item, dict) and old_file_part_path in item.get('url', ''):
+                        if isinstance(item, dict) and isinstance(item.get('url'), str) and old_file_part_path in item['url']:
                             file_name = '/'.join(item['url'].split('/')[-2:])
                             if '/external-apps/' in item.get('url', ''):
                                 item['url'] = EXTERNAL_APPS_FILE_URL_PREFIX + file_name
@@ -120,7 +120,7 @@ def convert_dtable_export_file_and_image_url(workspace_id, dtable_uuid, dtable_c
 
                 elif col['type'] == ColumnTypes.LONG_TEXT and isinstance(v, dict) and v.get('text') and v.get('images'):
                     for idx, item in enumerate(v['images']):
-                        if old_file_part_path in item:
+                        if isinstance(item, str) and old_file_part_path in item:
                             img_name = '/'.join(item.split('/')[-2:])
                             if '/external-apps/' in item:
                                 v['images'][idx] = EXTERNAL_APPS_IMG_URL_PREFIX + img_name
@@ -422,8 +422,8 @@ def convert_dtable_import_file_url(dtable_content, workspace_id, dtable_uuid):
                                 v[idx] = new_url
                 elif col['type'] == ColumnTypes.FILE and isinstance(v, list) and v:
                     for idx, item in enumerate(v):
-                        if isinstance(item, dict):
-                            url = item.get('url', '')  
+                        if isinstance(item, dict) and isinstance(item.get('url'), str):
+                            url = item['url']
                             file_name = '/'.join(url.split('/')[-2:])
                             if EXTERNAL_APPS_FILE_URL_PREFIX in url:
                                 new_url = '/'.join([dtable_web_service_url, 'workspace', str(workspace_id), 'asset',
@@ -435,6 +435,8 @@ def convert_dtable_import_file_url(dtable_content, workspace_id, dtable_uuid):
                                 item['url'] = new_url
                 elif col['type'] == ColumnTypes.LONG_TEXT and isinstance(v, dict) and v.get('text') and v.get('images'):
                     for idx, item in enumerate(v['images']):
+                        if not isinstance(item, str):
+                            continue
                         img_name = '/'.join(item.split('/')[-2:])
                         if IMG_URL_PREFIX in item:
                             new_url = '/'.join([dtable_web_service_url, 'workspace', str(workspace_id), 'asset',
