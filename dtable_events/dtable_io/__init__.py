@@ -67,13 +67,7 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
                                  'dtable_asset/')  # used to store asset files and json from file_server
     tmp_zip_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'zip_file') + '.zip'  # zip path of zipped xxx.dtable
 
-    try:
-        db_session = init_db_session_class(config)()
-    except Exception as e:
-        db_session = None
-        error_msg = 'create db session failed. ERROR: {}'.format(e)
-        dtable_io_logger.error(add_task_id_to_log(error_msg, task_id))
-        raise Exception(error_msg)
+    db_session = init_db_session_class(config)()
 
     dtable_io_logger.info(add_task_id_to_log('Clear tmp dirs and files before prepare.', task_id))
     clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path)
@@ -86,7 +80,8 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
         prepare_dtable_json_from_memory(workspace_id, dtable_uuid, username, tmp_file_path)
     except Exception as e:
         error_msg = 'prepare dtable json failed. ERROR: {}'.format(e)
-        dtable_io_logger.error(add_task_id_to_log(error_msg, task_id))
+        dtable_io_logger.exception(add_task_id_to_log(error_msg, task_id))
+        db_session.close()
         raise Exception(error_msg)
 
     # 2. get asset file folder, asset could be empty
@@ -104,44 +99,28 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
         copy_src_forms_to_json(dtable_uuid, tmp_file_path, db_session)
     except Exception as e:
         error_msg = 'copy forms failed. ERROR: {}'.format(e)
-        dtable_io_logger.error(add_task_id_to_log(error_msg, task_id))
-        raise Exception(error_msg)
-    finally:
-        if db_session:
-            db_session.close()
+        dtable_io_logger.exception(add_task_id_to_log(error_msg, task_id))
 
     # 4. copy automation rules
     try:
         copy_src_auto_rules_to_json(dtable_uuid, tmp_file_path, db_session)
     except Exception as e:
         error_msg = 'copy automation rules failed. ERROR: {}'.format(e)
-        dtable_io_logger.error(add_task_id_to_log(error_msg, task_id))
-        raise Exception(error_msg)
-    finally:
-        if db_session:
-            db_session.close()
+        dtable_io_logger.exception(add_task_id_to_log(error_msg, task_id))
 
     # 5. copy workflows
     try:
         copy_src_workflows_to_json(dtable_uuid, tmp_file_path, db_session)
     except Exception as e:
         error_msg = 'copy workflows failed. ERROR: {}'.format(e)
-        dtable_io_logger.error(add_task_id_to_log(error_msg, task_id))
-        raise Exception(error_msg)
-    finally:
-        if db_session:
-            db_session.close()
+        dtable_io_logger.exception(add_task_id_to_log(error_msg, task_id))
 
     # 5. copy external app
     try:
         copy_src_external_app_to_json(dtable_uuid, tmp_file_path, db_session)
     except Exception as e:
         error_msg = 'copy external apps failed. ERROR: {}'.format(e)
-        dtable_io_logger.error(add_task_id_to_log(error_msg, task_id))
-        raise Exception(error_msg)
-    finally:
-        if db_session:
-            db_session.close()
+        dtable_io_logger.exception(add_task_id_to_log(error_msg, task_id))
 
     """
     /tmp/dtable-io/<dtable_uuid>/dtable_asset/
@@ -157,7 +136,10 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
     except Exception as e:
         error_msg = 'make zip failed. ERROR: {}'.format(e)
         dtable_io_logger.error(add_task_id_to_log(error_msg, task_id))
+        db_session.close()
         raise Exception(error_msg)
+
+    db_session.close()
 
     dtable_io_logger.info(add_task_id_to_log('Create /tmp/dtable-io/{}/zip_file.zip success!'.format(dtable_uuid), task_id))
     # we remove '/tmp/dtable-io/<dtable_uuid>' in dtable web api
@@ -173,13 +155,7 @@ def get_dtable_export_content_folder(username, repo_id, workspace_id, dtable_uui
         'warnings': []
     }
 
-    try:
-        db_session = init_db_session_class(config)()
-    except Exception as e:
-        db_session = None
-        error_msg = 'create db session failed. ERROR: {}'.format(e)
-        dtable_io_logger.error(add_task_id_to_log(error_msg, task_id))
-        raise Exception(error_msg)
+    db_session = init_db_session_class(config)()
 
     # if not os.path.isdir(folder_path):
     if not os.path.exists(folder_path):
@@ -201,6 +177,7 @@ def get_dtable_export_content_folder(username, repo_id, workspace_id, dtable_uui
     except Exception as e:
         error_msg = 'prepare dtable json failed. ERROR: {}'.format(e)
         dtable_io_logger.exception(add_task_id_to_log(error_msg, task_id))
+        db_session.close()
         raise Exception(error_msg)
 
     # 2. get asset file folder, asset could be empty
@@ -219,10 +196,6 @@ def get_dtable_export_content_folder(username, repo_id, workspace_id, dtable_uui
     except Exception as e:
         error_msg = 'copy forms failed. ERROR: {}'.format(e)
         dtable_io_logger.error(add_task_id_to_log(error_msg, task_id))
-        raise Exception(error_msg)
-    finally:
-        if db_session:
-            db_session.close()
 
     # 4. copy automation rules
     try:
@@ -230,10 +203,6 @@ def get_dtable_export_content_folder(username, repo_id, workspace_id, dtable_uui
     except Exception as e:
         error_msg = 'copy automation rules failed. ERROR: {}'.format(e)
         dtable_io_logger.error(add_task_id_to_log(error_msg, task_id))
-        raise Exception(error_msg)
-    finally:
-        if db_session:
-            db_session.close()
 
     # 5. copy workflows
     try:
@@ -241,10 +210,6 @@ def get_dtable_export_content_folder(username, repo_id, workspace_id, dtable_uui
     except Exception as e:
         error_msg = 'copy workflows failed. ERROR: {}'.format(e)
         dtable_io_logger.error(add_task_id_to_log(error_msg, task_id))
-        raise Exception(error_msg)
-    finally:
-        if db_session:
-            db_session.close()
 
     # 5. copy external app
     try:
@@ -252,10 +217,8 @@ def get_dtable_export_content_folder(username, repo_id, workspace_id, dtable_uui
     except Exception as e:
         error_msg = 'copy external apps failed. ERROR: {}'.format(e)
         dtable_io_logger.error(add_task_id_to_log(error_msg, task_id))
-        raise Exception(error_msg)
-    finally:
-        if db_session:
-            db_session.close()
+
+    db_session.close()
 
     return task_result
 
@@ -270,32 +233,27 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
 
     extracted_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted')
 
-    try:
-        db_session = init_db_session_class(config)()
-    except Exception as e:
-        db_session = None
-        dtable_io_logger.error(add_task_id_to_log(f'create db session failed. ERROR: {e}', task_id))
+    db_session = init_db_session_class(config)()
 
     dtable_io_logger.info(add_task_id_to_log('Prepare dtable json file and post it at file server.', task_id))
     try:
         dtable_content = post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage, extracted_path, db_session)
     except Exception as e:
-        dtable_io_logger.error(add_task_id_to_log(f'post dtable json failed. ERROR: {e}', task_id))
+        dtable_io_logger.exception(add_task_id_to_log(f'post dtable json failed. ERROR: {e}', task_id))
+        db_session.close()
+        raise e
 
     dtable_io_logger.info(add_task_id_to_log('Post asset files in tmp path to file server.', task_id))
     try:
         post_asset_files(repo_id, dtable_uuid, username, extracted_path)
     except Exception as e:
-        dtable_io_logger.error(add_task_id_to_log(f'post asset files failed. ERROR: {e}', task_id))
+        dtable_io_logger.exception(add_task_id_to_log(f'post asset files failed. ERROR: {e}', task_id))
 
     dtable_io_logger.info(add_task_id_to_log('create forms from src dtable.', task_id))
     try:
         create_forms_from_src_dtable(workspace_id, dtable_uuid, extracted_path, db_session)
     except Exception as e:
-        dtable_io_logger.error(add_task_id_to_log(f'create forms failed. ERROR: {e}', task_id))
-    finally:
-        if db_session:
-            db_session.close()
+        dtable_io_logger.exception(add_task_id_to_log(f'create forms failed. ERROR: {e}', task_id))
 
     old_new_workflow_token_dict = {}  # old new workflow token dict
     if can_use_workflows:
@@ -303,20 +261,14 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
         try:
             create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, extracted_path, db_session)
         except Exception as e:
-            dtable_io_logger.error(add_task_id_to_log(f'create workflows failed. ERROR: {e}', task_id))
-        finally:
-            if db_session:
-                db_session.close()
+            dtable_io_logger.exception(add_task_id_to_log(f'create workflows failed. ERROR: {e}', task_id))
 
     if can_use_automation_rules:
         dtable_io_logger.info(add_task_id_to_log('create auto rules from src dtable.', task_id))
         try:
             create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, extracted_path, db_session)
         except Exception as e:
-            dtable_io_logger.error(add_task_id_to_log(f'create auto rules failed. ERROR: {e}', task_id))
-        finally:
-            if db_session:
-                db_session.close()
+            dtable_io_logger.exception(add_task_id_to_log(f'create auto rules failed. ERROR: {e}', task_id))
 
     if can_use_external_apps:
         dtable_io_logger.info(add_task_id_to_log('create external apps from src dtable.', task_id))
@@ -324,9 +276,6 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
             create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_id, workspace_id, repo_id, extracted_path)
         except Exception as e:
             dtable_io_logger.exception(add_task_id_to_log(f'create external apps failed. ERROR: {e}', task_id))
-        finally:
-            if db_session:
-                db_session.close()
 
     try:
         if dtable_content:
@@ -345,6 +294,8 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
     except Exception as e:
         dtable_io_logger.error(add_task_id_to_log(f'rm extracted tmp file failed. ERROR: {e}', task_id))
 
+    db_session.close()
+
     dtable_io_logger.info(add_task_id_to_log(f'Import DTable: {dtable_uuid} success!', task_id))
 
 
@@ -356,32 +307,27 @@ def post_dtable_import_files_folder(username, repo_id, workspace_id, dtable_uuid
     dtable_io_logger.info(add_task_id_to_log(f'Start import DTable: {dtable_uuid}.', task_id))
 
     dtable_file_name = os.path.basename(folder_path)
-    try:
-        db_session = init_db_session_class(config)()
-    except Exception as e:
-        db_session = None
-        dtable_io_logger.error(add_task_id_to_log(f'create db session failed. ERROR: {e}', task_id))
+    db_session = init_db_session_class(config)()
 
     dtable_io_logger.info(add_task_id_to_log('Prepare dtable json file and post it at file server.', task_id))
     try:
         dtable_content = post_dtable_json(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage, folder_path, db_session)
     except Exception as e:
-        dtable_io_logger.error(add_task_id_to_log(f'post dtable json failed. ERROR: {e}', task_id))
+        dtable_io_logger.exception(add_task_id_to_log(f'post dtable json failed. ERROR: {e}', task_id))
+        db_session.close()
+        raise e
 
     dtable_io_logger.info(add_task_id_to_log('Post asset files in tmp path to file server.', task_id))
     try:
         post_asset_files(repo_id, dtable_uuid, username, folder_path)
     except Exception as e:
-        dtable_io_logger.error(add_task_id_to_log(f'post asset files failed. ERROR: {e}', task_id))
+        dtable_io_logger.exception(add_task_id_to_log(f'post asset files failed. ERROR: {e}', task_id))
 
     dtable_io_logger.info(add_task_id_to_log('create forms from src dtable.', task_id))
     try:
         create_forms_from_src_dtable(workspace_id, dtable_uuid, folder_path, db_session)
     except Exception as e:
-        dtable_io_logger.error(add_task_id_to_log(f'create forms failed. ERROR: {e}', task_id))
-    finally:
-        if db_session:
-            db_session.close()
+        dtable_io_logger.exception(add_task_id_to_log(f'create forms failed. ERROR: {e}', task_id))
 
     old_new_workflow_token_dict = {}  # old new workflow token dict
     if can_use_workflows:
@@ -389,20 +335,14 @@ def post_dtable_import_files_folder(username, repo_id, workspace_id, dtable_uuid
         try:
             create_workflows_from_src_dtable(username, workspace_id, repo_id, dtable_uuid, owner, org_id, old_new_workflow_token_dict, folder_path, db_session)
         except Exception as e:
-            dtable_io_logger.error(add_task_id_to_log(f'create workflows failed. ERROR: {e}', task_id))
-        finally:
-            if db_session:
-                db_session.close()
+            dtable_io_logger.exception(add_task_id_to_log(f'create workflows failed. ERROR: {e}', task_id))
 
     if can_use_automation_rules:
         dtable_io_logger.info(add_task_id_to_log('create auto rules from src dtable.', task_id))
         try:
             create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, folder_path, db_session)
         except Exception as e:
-            dtable_io_logger.error(add_task_id_to_log(f'create auto rules failed. ERROR: {e}', task_id))
-        finally:
-            if db_session:
-                db_session.close()
+            dtable_io_logger.exception(add_task_id_to_log(f'create auto rules failed. ERROR: {e}', task_id))
 
     if can_use_external_apps:
         dtable_io_logger.info(add_task_id_to_log('create external apps from src dtable.', task_id))
@@ -410,9 +350,6 @@ def post_dtable_import_files_folder(username, repo_id, workspace_id, dtable_uuid
             create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_id, workspace_id, repo_id, folder_path)
         except Exception as e:
             dtable_io_logger.exception(add_task_id_to_log(f'create external apps failed. ERROR: {e}', task_id))
-        finally:
-            if db_session:
-                db_session.close()
 
     try:
         if dtable_content:
@@ -423,6 +360,8 @@ def post_dtable_import_files_folder(username, repo_id, workspace_id, dtable_uuid
             update_page_design_static_image(page_design_settings, repo_id, workspace_id, dtable_uuid, page_design_content_json_tmp_path, username)
     except Exception as e:
         dtable_io_logger.exception(add_task_id_to_log(f'update page design static image failed. ERROR: {e}', task_id))
+
+    db_session.close()
 
     dtable_io_logger.info(add_task_id_to_log(f'Import DTable: {dtable_uuid} success!', task_id))
 
