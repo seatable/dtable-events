@@ -13,7 +13,7 @@ from seaserv import seafile_api
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, INNER_DTABLE_SERVER_URL
 from dtable_events.dtable_io.big_data import import_excel_to_db, update_excel_to_db, export_big_data_to_excel, \
     export_app_table_page_to_excel
-from dtable_events.dtable_io.utils import post_big_data_screen_app_zip_file, \
+from dtable_events.dtable_io.utils import import_archive_from_src_dtable, post_big_data_screen_app_zip_file, \
     post_dtable_json, post_asset_files, \
     download_files_to_path, create_forms_from_src_dtable, copy_src_forms_to_json, prepare_asset_file_folder, \
     prepare_dtable_json_from_memory, update_page_design_static_image, \
@@ -21,7 +21,7 @@ from dtable_events.dtable_io.utils import post_big_data_screen_app_zip_file, \
     copy_src_workflows_to_json, create_workflows_from_src_dtable, copy_src_external_app_to_json,\
     create_external_apps_from_src_dtable, zip_big_data_screen, post_big_data_screen_zip_file, \
     export_page_design_dir_to_path, update_page_design_content_to_path, upload_page_design, \
-    download_page_design_file, zip_big_data_screen_app, prepare_asset_files_download
+    download_page_design_file, zip_big_data_screen_app, prepare_asset_files_download, copy_src_archive_backup
 from dtable_events.db import init_db_session_class
 from dtable_events.dtable_io.excel import parse_excel_csv_to_json, import_excel_csv_by_dtable_server, \
     append_parsed_file_by_dtable_server, parse_append_excel_csv_upload_file_to_json, \
@@ -34,6 +34,7 @@ from dtable_events.statistics.db import save_email_sending_records, batch_save_e
 from dtable_events.data_sync.data_sync_utils import run_sync_emails
 from dtable_events.utils import is_valid_email, uuid_str_to_36_chars, gen_file_upload_url, uuid_str_to_32_chars
 from dtable_events.utils.dtable_server_api import DTableServerAPI, BaseExceedsException
+from dtable_events.utils.dtable_web_api import DTableWebAPI
 from dtable_events.utils.exception import ExcelFormatError
 from dtable_events.utils.email_sender import EmailSender
 from dtable_events.dtable_io.utils import clear_tmp_dir, clear_tmp_file, clear_tmp_files_and_dirs, \
@@ -51,7 +52,7 @@ def add_task_id_to_log(log_msg, task_id=None):
     return f'task [{task_id}] - {log_msg}' if task_id else log_msg
 
 
-def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asset_dir_id, config, task_id):
+def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asset_dir_id, ignore_archive_backup, config, task_id):
     """
     1. prepare file content at /tmp/dtable-io/<dtable_id>/dtable_asset/...
     2. make zip file
@@ -122,6 +123,18 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
         error_msg = 'copy external apps failed. ERROR: {}'.format(e)
         dtable_io_logger.exception(add_task_id_to_log(error_msg, task_id))
 
+    # 6. archive backup
+    if not ignore_archive_backup:
+        dtable_io_logger.info(add_task_id_to_log('Export archive backup', task_id))
+        try:
+            copy_src_archive_backup(dtable_uuid, tmp_file_path, task_id)
+        except Exception as e:
+            error_msg = 'export archive backup failed. ERROR: {}'.format(e)
+            dtable_io_logger.error(add_task_id_to_log(error_msg, task_id))
+            clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path)
+            if db_session:
+                db_session.close()
+
     """
     /tmp/dtable-io/<dtable_uuid>/dtable_asset/
                                     |- asset/
@@ -144,10 +157,51 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
     dtable_io_logger.info(add_task_id_to_log('Create /tmp/dtable-io/{}/zip_file.zip success!'.format(dtable_uuid), task_id))
     # we remove '/tmp/dtable-io/<dtable_uuid>' in dtable web api
 
+    # if export dtable with archive backup, need to post .zip to seafile repo which dtable belongs to and to send a notificaition to user
+    if not ignore_archive_backup and username != 'export_dtable_command':
+        dtable_io_logger.info(add_task_id_to_log(f'Post dtable file to attachments.', task_id))
+        files_dir_path = f'/asset/{uuid_str_to_36_chars(dtable_uuid)}/files/{str(datetime.today())[:7]}'
+        if not seafile_api.get_dir_id_by_path(repo_id, files_dir_path):
+            seafile_api.mkdir_with_parents(repo_id, '/', files_dir_path[1:], username)
+        # query dtable name
+        try:
+            dtable_name = db_session.execute(text(f"SELECT name FROM dtables WHERE uuid='{uuid_str_to_32_chars(dtable_uuid)}'")).fetchone().name
+        except Exception as e:
+            dtable_io_logger.error(add_task_id_to_log(f'query dtable {dtable_uuid} name error {e}', task_id))
+            clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path)
+            if db_session:
+                db_session.close()
+            return
+        # post file to seafile
+        dtable_file_name = f"{dtable_name} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.dtable"
+        try:
+            seafile_api.post_file(repo_id, tmp_zip_path, files_dir_path, dtable_file_name, username)
+        except Exception as e:
+            dtable_io_logger.error(add_task_id_to_log(f'post dtable file to attachments error {e}', task_id))
+            clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path)
+            if db_session:
+                db_session.close()
+            return
+        # send notification
+        dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+        detail = {
+            'dtable_uuid': uuid_str_to_32_chars(dtable_uuid),
+            'dtable_name': dtable_name,
+            'file_name': dtable_file_name,
+            'file_path': os.path.join(files_dir_path[len(f'/asset/{uuid_str_to_36_chars(dtable_uuid)}'):], dtable_file_name)
+        }
+        try:
+            dtable_web_api.internal_add_notification([username], 'export_dtable_completed', detail)
+        except Exception as e:
+            dtable_io_logger.error(add_task_id_to_log(f"send notification to {username} error: {e}", task_id))
+            if db_session:
+                db_session.close()
+        clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path)
+
     return task_result
 
 
-def get_dtable_export_content_folder(username, repo_id, workspace_id, dtable_uuid, asset_dir_id, config, folder_path, task_id):
+def get_dtable_export_content_folder(username, repo_id, workspace_id, dtable_uuid, asset_dir_id, ignore_archive_backup, config, folder_path, task_id):
     """
     like `get_dtable_export_content` but to export to `folder_path` and not to archive
     """
@@ -220,11 +274,23 @@ def get_dtable_export_content_folder(username, repo_id, workspace_id, dtable_uui
 
     db_session.close()
 
+    # 6. archive backup
+    if not ignore_archive_backup:
+        dtable_io_logger.info(add_task_id_to_log('Export archive backup', task_id))
+        try:
+            copy_src_archive_backup(dtable_uuid, folder_path, task_id)
+        except Exception as e:
+            error_msg = 'export archive backup failed. ERROR: {}'.format(e)
+            dtable_io_logger.error(add_task_id_to_log(error_msg, task_id))
+            clear_tmp_files_and_dirs(folder_path, folder_path)
+            if db_session:
+                db_session.close()
+
     return task_result
 
 
 def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage,
-                             can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id, config, task_id):
+                             can_use_automation_rules, can_use_workflows, can_use_external_apps, can_import_archive, owner, org_id, config, task_id):
     """
     post files at /tmp/<dtable_uuid>/dtable_zip_extracted/ to file server
     unzip django uploaded tmp file is suppose to be done in dtable-web api.
@@ -277,6 +343,20 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
         except Exception as e:
             dtable_io_logger.exception(add_task_id_to_log(f'create external apps failed. ERROR: {e}', task_id))
 
+    archive_file_path = os.path.join(extracted_path, 'archive')
+    include_archive = can_import_archive and os.path.exists(archive_file_path)
+    if include_archive:
+        dtable_io_logger.info(add_task_id_to_log('import archive backup from src dtable.', task_id))
+        try:
+            status = import_archive_from_src_dtable(username, dtable_uuid, extracted_path)
+        except Exception as e:
+            dtable_io_logger.exception(f"import archive for {dtable_uuid} error: {e}")
+        else:
+            if status == 'failure':
+                dtable_io_logger.error(f"import archive for {dtable_uuid} status: {status}")
+            else:
+                dtable_io_logger.info(f"import archive for {dtable_uuid} status: {status}")
+
     try:
         if dtable_content:
             plugin_settings = dtable_content.get('plugin_settings', {})
@@ -296,11 +376,23 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
 
     db_session.close()
 
+    # send notifications if include_archive
+    if include_archive:
+        dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+        detail = {
+            'dtable_uuid': uuid_str_to_32_chars(dtable_uuid),
+            'dtable_name': os.path.splitext(dtable_file_name)[0]
+        }
+        try:
+            dtable_web_api.internal_add_notification([username], 'import_dtable_completed', detail)
+        except Exception as e:
+            dtable_io_logger.error(f"send notification to user {username} import_dtable_completed error {e}")
+
     dtable_io_logger.info(add_task_id_to_log(f'Import DTable: {dtable_uuid} success!', task_id))
 
 
 def post_dtable_import_files_folder(username, repo_id, workspace_id, dtable_uuid, folder_path, in_storage,
-                             can_use_automation_rules, can_use_workflows, can_use_external_apps, owner, org_id, config, task_id):
+                             can_use_automation_rules, can_use_workflows, can_use_external_apps, can_import_archive, owner, org_id, config, task_id):
     """
     like `post_dtable_import_files` but import from `folder_path` and not to remove folder_path
     """
@@ -350,6 +442,20 @@ def post_dtable_import_files_folder(username, repo_id, workspace_id, dtable_uuid
             create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_id, workspace_id, repo_id, folder_path)
         except Exception as e:
             dtable_io_logger.exception(add_task_id_to_log(f'create external apps failed. ERROR: {e}', task_id))
+
+    archive_file_path = os.path.join(folder_path, 'archive')
+    include_archive = can_import_archive and os.path.exists(archive_file_path)
+    if can_import_archive and include_archive:
+        dtable_io_logger.info(add_task_id_to_log('import archive backup from src dtable.', task_id))
+        try:
+            status = import_archive_from_src_dtable(username, dtable_uuid, folder_path)
+        except Exception as e:
+            dtable_io_logger.exception(f"import archive for {dtable_uuid} error: {e}")
+        else:
+            if status == 'failure':
+                dtable_io_logger.error(f"import archive for {dtable_uuid} status: {status}")
+            else:
+                dtable_io_logger.info(f"import archive for {dtable_uuid} status: {status}")
 
     try:
         if dtable_content:

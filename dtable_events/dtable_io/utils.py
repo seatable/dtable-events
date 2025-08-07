@@ -30,6 +30,9 @@ from dtable_events.utils import uuid_str_to_36_chars, get_inner_fileserver_root,
     gen_file_get_url, gen_file_upload_url, uuid_str_to_32_chars
 
 from dtable_events.utils.constants import ColumnTypes
+from dtable_events.utils.dtable_db_api import DTableDBAPI
+from dtable_events.utils.dtable_server_api import DTableServerAPI
+from dtable_events.utils.dtable_storage_server_api import DTableStorageServerAPI
 from dtable_events.utils.exception import BaseSizeExceedsLimitError
 
 # this two prefix used in exported zip file
@@ -381,6 +384,25 @@ def copy_src_external_app_to_json(dtable_uuid, tmp_file_path, db_session):
     if src_external_apps_json:
         with open(os.path.join(tmp_file_path, 'external_apps.json'), 'w+') as fp:
             fp.write(json.dumps(src_external_apps_json))
+
+
+def copy_src_archive_backup(dtable_uuid, tmp_file_path, task_id):
+    from dtable_events.dtable_io import dtable_io_logger, add_task_id_to_log
+
+    # query backups and select latest one
+    dtable_db_api = DTableDBAPI('dtable-events', dtable_uuid, INNER_DTABLE_DB_URL)
+    backups = dtable_db_api.get_backups()
+    backup = backups[0] if backups else None
+
+    if not backup:
+        dtable_io_logger.info(add_task_id_to_log(f"dtable {dtable_uuid} no archive backup", task_id))
+        return
+    # get backup and save to file
+    backup = dtable_db_api.get_backups()[0]
+    backup_version = backup['version']
+    dtable_storage_server_api = DTableStorageServerAPI()
+    archive_file_path = os.path.join(tmp_file_path, 'archive')
+    dtable_storage_server_api.get_backup_chunked(dtable_uuid, backup_version, archive_file_path)
 
 
 def convert_dtable_import_file_url(dtable_content, workspace_id, dtable_uuid):
@@ -1136,6 +1158,47 @@ def create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_
                 if page_type == 'custom_page' or page_type == 'single_record_page':
                     page['content_url'] = '/%s/%s/%s.json' % (app_id, page_id, page_id)
         add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, org_id, workspace_id, repo_id)
+
+
+def import_archive_from_src_dtable(username, dtable_uuid, path):
+    archive_file_path = os.path.join(path, 'archive')
+    if not os.path.isfile(archive_file_path):
+        return
+    # check archived data metadata from dtable-db
+    # archive backup will only be imported when there is no data from db
+    dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
+    try:
+        dtable_db_api.get_metadata()
+    except ConnectionError as e:
+        if e.args[0] != 404:
+            return
+    else:
+        return
+    # upload backup
+    temp_uuid = str(uuid4())
+    dtable_storage_server_api = DTableStorageServerAPI()
+    with open(archive_file_path, 'rb') as f:
+        dtable_storage_server_api.create_backup(temp_uuid, 1, f)
+    # restore backup
+    try:
+        temp_dtable_db_api = DTableDBAPI(username, temp_uuid, INNER_DTABLE_DB_URL)
+        task_id = temp_dtable_db_api.restore_backup(1, uuid_str_to_36_chars(dtable_uuid))['task_id']
+        dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
+        while True:
+            status = dtable_db_api.query_restore_task_status(task_id)['status']
+            if status in ['failure', 'success']:
+                break
+            time.sleep(1)
+    except Exception as e:
+        raise e
+    else:
+        # turn on archive feature for new dtable
+        dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
+        dtable_server_api.update_enable_archive(True)
+        return status
+    finally:
+        # delete backup
+        dtable_storage_server_api.delete_dtable_all_backups(temp_uuid)
 
 
 def download_files_to_path(username, repo_id, dtable_uuid, files, path, db_session, files_map=None):
