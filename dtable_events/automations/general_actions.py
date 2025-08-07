@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 import jwt
 import requests
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from seaserv import seafile_api
 
@@ -479,24 +479,49 @@ class SendEmailAction(BaseAction):
     def do_action_without_row(self):
         return self.do_action_with_row(None)
 
+    def replace_username_with_contact_emails(self, emails):
+        return_emails = []
+        usernames = []
+        for item in emails:
+            if '@auth.local' in item:
+                usernames.append(item)
+                continue
+            if item in return_emails:
+                continue
+            return_emails.append(item)
+        if usernames:
+            sql = '''
+                SELECT `contact_email` FROM `profile_profile`
+                WHERE `user` IN :usernames AND `contact_email` IS NOT NULL AND `contact_email` != ''
+            '''
+            try:
+                results = self.context.db_session.execute(text(sql), {'usernames': usernames})
+            except Exception as e:
+                logger.error(f'query users {usernames} contact_emails error {e}')
+            else:
+                return_emails.extend([item.contact_email for item in results])
+        return return_emails
+
     def do_action_with_row(self, converted_row):
-        final_send_to_list, final_copy_to_list = [], []
+        valid_send_to_list, valid_copy_to_list = [], []
         sql_row = self.context.get_sql_row(self.table['_id'], converted_row['_id'])
         if self.send_to_list:
             for send_to in self.send_to_list:
                 real_send_to = self.generate_real_msg(send_to, sql_row, convert_to_nickname=False)
                 if is_valid_email(real_send_to):
-                    final_send_to_list.append(real_send_to)
-        if not final_send_to_list:
+                    valid_send_to_list.append(real_send_to)
+            valid_send_to_list = self.replace_username_with_contact_emails(valid_send_to_list)
+        if not valid_send_to_list:
             return
         if self.copy_to_list:
             for copy_to in self.copy_to_list:
                 real_copy_to = self.generate_real_msg(copy_to, sql_row, convert_to_nickname=False)
                 if is_valid_email(real_copy_to):
-                    final_copy_to_list.append(real_copy_to)
+                    valid_copy_to_list.append(real_copy_to)
+            valid_copy_to_list = self.replace_username_with_contact_emails(valid_copy_to_list)
         send_info = {
-            'send_to': final_send_to_list,
-            'copy_to': final_copy_to_list,
+            'send_to': valid_send_to_list,
+            'copy_to': valid_copy_to_list,
             'subject': self.subject
         }
         try:
