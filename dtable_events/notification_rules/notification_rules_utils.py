@@ -17,7 +17,7 @@ from dtable_events.utils.constants import ColumnTypes, FormulaResultType
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 from dtable_events.utils.dtable_db_api import DTableDBAPI
-from dtable_events.notification_rules.message_formatters import create_formatter_params, formatter_map
+from dtable_events.notification_rules.message_formatters import formatter_map
 
 logger = logging.getLogger(__name__)
 
@@ -187,20 +187,20 @@ def convert_zero_in_value(value):
     return value
 
 
-def fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, row, db_session, convert_to_html=False):
+def fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, row, db_session, **format_options):
     for blank in column_blanks:
         value = row.get(col_name_dict[blank]['key'])
         column_type = col_name_dict[blank]['type']
         formatter_class = formatter_map.get(column_type)
         if not formatter_class:
             continue
-        params = create_formatter_params(column_type, value=value, db_session=db_session, convert_to_html=convert_to_html)
+        format_options['db_session'] = db_session
         if value is None:
-            message = formatter_class(col_name_dict[blank]).format_empty_message()
+            message = formatter_class(col_name_dict[blank], **format_options).format_empty_message()
             msg = msg.replace('{' + blank + '}', str(message))
             continue
         try:
-            message = formatter_class(col_name_dict[blank]).format_message(**params)
+            message = formatter_class(col_name_dict[blank], **format_options).format_message(value)
             msg = msg.replace('{' + blank + '}', str(message))
         except Exception as e:
             logger.exception(e)

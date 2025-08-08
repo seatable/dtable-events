@@ -16,8 +16,11 @@ class BaseMessageFormatter:
 
     EMPTY_MESSAGE = ''
 
-    def __init__(self, column):
+    def __init__(self, column, **format_options):
         self.column = column
+        self.format_options = format_options or {}
+        if 'convert_to_nickname' not in self.format_options:
+            self.format_options['convert_to_nickname'] = True
 
     def get_column_data(self):
         return self.column.get('data') or {}
@@ -49,7 +52,7 @@ class ImageMessageFormatter(BaseMessageFormatter):
 
 class LongTextMessageFormatter(BaseMessageFormatter):
 
-    def format_message(self, value, convert_to_html=False):
+    def format_message(self, value):
         if isinstance(value, str):
             return_value = value.strip()
         else:
@@ -58,7 +61,7 @@ class LongTextMessageFormatter(BaseMessageFormatter):
             if not isinstance(value, dict):
                 return self.format_empty_message()
             return_value = value.get('text') or ''
-        if convert_to_html:
+        if self.format_options.get('convert_to_html'):
             try:
                 return_value = markdown.markdown(return_value).strip()
             except Exception as e:
@@ -122,7 +125,7 @@ class LinkMessageFormatter(BaseMessageFormatter):
 
     EMPTY_MESSAGE = ''
 
-    def format_message(self, value, db_session):
+    def format_message(self, value):
         if not value:
             return self.format_empty_message()
         if not isinstance(value, list):
@@ -150,12 +153,14 @@ class CollaboratorMessageFormatter(BaseMessageFormatter):
 
     EMPTY_MESSAGE = ''
 
-    def format_message(self, value, db_session):
+    def format_message(self, value):
         if not value:
             return self.format_empty_message()
         if not isinstance(value, list):
             value = [value]
-        names_dict = get_nickname_by_usernames(value, db_session)
+        if not self.format_options.get('convert_to_nickname'):
+            return ', '.join(value)
+        names_dict = get_nickname_by_usernames(value, self.format_options.get('db_session'))
         names = [names_dict.get(str(user)) for user in value if user in names_dict]
         return ', '.join(names)
 
@@ -269,11 +274,13 @@ class DateMessageFormatter(BaseMessageFormatter):
 
 class CreatorMessageFormatter(BaseMessageFormatter):
 
-    def format_message(self, value, db_session):
+    def format_message(self, value):
         if not value:
             return self.format_empty_message()
         value = str(value)
-        user_dict = get_nickname_by_usernames([value], db_session)
+        if not self.format_options.get('convert_to_nickname'):
+            return value
+        user_dict = get_nickname_by_usernames([value], self.format_options.get('db_session'))
         return user_dict.get(value, value)
 
 
@@ -350,7 +357,7 @@ def flat(value):
 
 class FormulaMessageFormatter(BaseMessageFormatter):
 
-    def format_message(self, value, db_session):
+    def format_message(self, value):
         if not value and value != 0 and value != False:
             return self.format_empty_message()
         column_data = self.get_column_data()
@@ -382,8 +389,7 @@ class FormulaMessageFormatter(BaseMessageFormatter):
                 formatter_class = formatter_map.get(array_type)
                 if not formatter_class:
                     return ''
-                formatter_params = create_formatter_params(array_type, value=list(set(flat(value))), db_session=db_session)
-                return formatter_class({'data': array_data}).format_message(**formatter_params)
+                return formatter_class({'data': array_data}, **self.format_options).format_message(list(set(flat(value))))
             if array_type == FormulaResultType.STRING:
                 array_type = ColumnTypes.TEXT
             elif array_type == FormulaResultType.BOOL:
@@ -393,8 +399,7 @@ class FormulaMessageFormatter(BaseMessageFormatter):
                     return ''
             real_values = []
             for v in value:
-                formatter_params = create_formatter_params(array_type, value=v, db_session=db_session)
-                tmp = formatter_class({'data': array_data}).format_message(**formatter_params)
+                tmp = formatter_class({'data': array_data}, **self.format_options).format_message(v)
                 if not tmp:
                     continue
                 real_values.append(tmp)
@@ -450,14 +455,14 @@ class RateMessageFormatter(TextMessageFormatter):
 
 class DepartmentSingleSelectMessageFormatter(TextMessageFormatter):
 
-    def format_message(self, value, db_session):
+    def format_message(self, value):
         if not value:
             return self.EMPTY_MESSAGE
         try:
             value = int(value)
         except:
             return self.EMPTY_MESSAGE
-        return get_department_name(value, db_session)
+        return get_department_name(value, self.format_options.get('db_session'))
 
 
 formatter_map = {
@@ -486,28 +491,6 @@ formatter_map = {
     ColumnTypes.LINK_FORMULA: LinkFormulaMessageFormatter,
     ColumnTypes.DEPARTMENT_SINGLE_SELECT: DepartmentSingleSelectMessageFormatter
 }
-
-
-def create_formatter_params(formatter_type, **kwargs):
-    if formatter_type not in formatter_map:
-        return {}
-    value = kwargs.get('value')
-    db_session = kwargs.get('db_session')
-    params = {'value': value}
-    if formatter_type in [
-        ColumnTypes.COLLABORATOR,
-        ColumnTypes.LINK,
-        ColumnTypes.LINK_FORMULA,
-        ColumnTypes.CREATOR,
-        ColumnTypes.LAST_MODIFIER,
-        ColumnTypes.FORMULA,
-        ColumnTypes.DEPARTMENT_SINGLE_SELECT
-    ]:
-        params['db_session'] = db_session
-    if formatter_type == ColumnTypes.LONG_TEXT:
-        convert_to_html = kwargs.get('convert_to_html') or False
-        params['convert_to_html'] = convert_to_html
-    return params
 
 
 def number_validator(value):
