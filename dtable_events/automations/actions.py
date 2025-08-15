@@ -10,6 +10,7 @@ from queue import Full
 from urllib.parse import unquote, urlparse, parse_qs
 from uuid import UUID
 
+from dtable_events.utils.dtable_ai_api import DTableAIAPI
 import jwt
 import requests
 from dateutil import parser
@@ -19,7 +20,7 @@ from seaserv import seafile_api
 from dtable_events.automations.models import get_third_party_account
 from dtable_events.app.metadata_cache_managers import BaseMetadataCacheManager
 from dtable_events.app.event_redis import redis_cache
-from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, ENABLE_PYTHON_SCRIPT, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
+from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, ENABLE_PYTHON_SCRIPT, SEATABLE_AI_SERVER_URL, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
 from dtable_events.dtable_io import send_wechat_msg, send_dingtalk_msg
 from dtable_events.convert_page.manager import conver_page_to_pdf_manager
 from dtable_events.app.log import auto_rule_logger
@@ -3216,6 +3217,96 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
             })
 
 
+class RunAi(BaseAction):
+    def __init__(self, auto_rule, action_type, data, ai_function, config):
+        super().__init__(auto_rule, action_type, data)
+        self.ai_function = ai_function
+        self.config = config
+        self.col_key_dict = {col.get('key'): col for col in self.auto_rule.table_info['columns']}
+
+    def get_field_content(self, row_data):
+        contents = []
+        
+        for field_id in self.config.get('summary_fields', []):
+            column = self.col_key_dict.get(field_id)
+            if not column:
+                continue
+                
+            field_name = column.get('name')
+            field_value = row_data.get(field_name)
+            
+            if field_value is None:
+                continue
+                
+            column_type = column.get('type')
+            if column_type == ColumnTypes.COLLABORATOR:
+                # Convert collaborator usernames to nicknames
+                if isinstance(field_value, list):
+                    from dtable_events.notification_rules.utils import get_nickname_by_usernames
+                    nicknames_dict = get_nickname_by_usernames(field_value, self.auto_rule.db_session)
+                    nicknames = [nicknames_dict.get(user_id, user_id) for user_id in field_value]
+                    field_value = ', '.join(nicknames)
+                else:
+                    field_value = ', '.join(field_value) if field_value else ''
+            elif column_type == ColumnTypes.MULTIPLE_SELECT:
+                field_value = ', '.join(field_value) if field_value else ''
+            content_str = cell_data2str(field_value) if field_value else ''
+
+            if content_str.strip():
+                contents.append(f"{field_name}: {content_str}")
+        return '\n'.join(contents)
+
+    def fill_summary_field(self):
+        table_name = self.auto_rule.table_info['name']
+        
+        target_column = self.col_key_dict.get(self.config.get('target_column_key'))
+        if not target_column:
+            auto_rule_logger.error('target text column not found')
+            return
+            
+        target_column_name = target_column.get('name')
+        
+        sql_row = self.auto_rule.get_sql_row()
+        if not sql_row:
+            auto_rule_logger.error('row data not found')
+            return
+            
+        converted_row = {
+            self.col_key_dict.get(key).get('name') if self.col_key_dict.get(key) else key:
+            self.parse_column_value(self.col_key_dict.get(key), sql_row.get(key)) if self.col_key_dict.get(key) else sql_row.get(key)
+            for key in sql_row
+        }
+        
+        content = self.get_field_content(converted_row)
+        
+        if not content.strip():
+            summary_result = ''
+        else:
+            try:
+                summary_result = self.auto_rule.seatable_ai_api.summarize(content, self.config.get('summary_requirement'))
+            except Exception as e:
+                auto_rule_logger.exception('ai summarize error: %s', e)
+                return 
+
+        update_data = {target_column_name: summary_result}
+        
+        try:
+            self.auto_rule.dtable_server_api.update_row(table_name, self.data['row_id'], update_data)
+        except Exception as e:
+            auto_rule_logger.exception('fill summary field error: %s')
+            return
+            
+    def summary(self):
+        self.fill_summary_field()
+    
+    def do_action(self):
+        if self.ai_function == 'summarize':
+            self.summary()
+        else:
+            auto_rule_logger.warning('ai function %s not supported', self.ai_function)
+            return
+
+
 class RuleInvalidException(Exception):
     """
     Exception which indicates rule need to be set is_valid=Fasle
@@ -3244,6 +3335,7 @@ class AutomationRule:
         self.dtable_server_api = DTableServerAPI(self.username, str(UUID(self.dtable_uuid)), INNER_DTABLE_SERVER_URL)
         self.dtable_db_api = DTableDBAPI(self.username, str(UUID(self.dtable_uuid)), INNER_DTABLE_DB_URL)
         self.dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+        self.seatable_ai_api = DTableAIAPI(self.username, SEATABLE_AI_SERVER_URL)
 
         self.query_stats = []
 
@@ -3589,6 +3681,10 @@ class AutomationRule:
             if run_condition in CRON_CONDITIONS and trigger_condition == CONDITION_PERIODICALLY:
                 return True
             return False
+        elif action_type == 'run_ai':
+            if run_condition == PER_UPDATE:
+                return True
+            return False
         return False
 
     def do_actions(self, with_test=False):
@@ -3753,6 +3849,19 @@ class AutomationRule:
                     }
 
                     ConvertDocumentToPDFAndSendAction(self, action_info.get('type'), plugin_type, doc_uuid, file_name, save_config, send_wechat_robot_config, send_email_config, repo_id, workspace_id).do_action()
+                elif action_info.get('type') == 'run_ai':
+                    ai_function = action_info.get('ai_function')
+                    config_map = {
+                        'summarize': {
+                            'config': {
+                                'summary_fields': action_info.get('summary_fields'),
+                                'summary_requirement': action_info.get('summary_requirement'),
+                                'target_column_key': action_info.get('target_column_key')
+                            }
+                        }
+                    }
+                    config = config_map.get(ai_function, {}).get('config')
+                    RunAi(self, action_info.get('type'), self.data, ai_function, config).do_action()
 
             except RuleInvalidException as e:
                 auto_rule_logger.warning('auto rule %s with data %s, invalid error: %s', self.rule_id, self.data, e)
