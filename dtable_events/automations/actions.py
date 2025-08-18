@@ -3242,7 +3242,6 @@ class RunAi(BaseAction):
             if column_type == ColumnTypes.COLLABORATOR:
                 # Convert collaborator usernames to nicknames
                 if isinstance(field_value, list):
-                    from dtable_events.notification_rules.utils import get_nickname_by_usernames
                     nicknames_dict = get_nickname_by_usernames(field_value, self.auto_rule.db_session)
                     nicknames = [nicknames_dict.get(user_id, user_id) for user_id in field_value]
                     field_value = ', '.join(nicknames)
