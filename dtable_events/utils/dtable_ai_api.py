@@ -17,8 +17,9 @@ def gen_headers():
 
 
 class DTableAIAPI:
-    def __init__(self, username, seatable_ai_server_url):
+    def __init__(self, username, org_id, seatable_ai_server_url):
         self.username = username
+        self.org_id = org_id
         self.seatable_ai_server_url = seatable_ai_server_url
 
 
@@ -29,6 +30,7 @@ class DTableAIAPI:
         data = {
             'content': f'内容：{content}',
             'username': self.username,
+            'org_id': self.org_id,
             'requirement': requirement,
         }
         

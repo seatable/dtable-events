@@ -3335,7 +3335,7 @@ class AutomationRule:
         self.dtable_server_api = DTableServerAPI(self.username, str(UUID(self.dtable_uuid)), INNER_DTABLE_SERVER_URL)
         self.dtable_db_api = DTableDBAPI(self.username, str(UUID(self.dtable_uuid)), INNER_DTABLE_DB_URL)
         self.dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
-        self.seatable_ai_api = DTableAIAPI(self.username, SEATABLE_AI_SERVER_URL)
+        self.seatable_ai_api = DTableAIAPI(self.username, self.org_id, SEATABLE_AI_SERVER_URL)
 
         self.query_stats = []
 
