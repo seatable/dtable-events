@@ -3218,7 +3218,7 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
             })
 
 
-class RunAi(BaseAction):
+class RunAI(BaseAction):
     def __init__(self, auto_rule, action_type, data, ai_function, config):
         super().__init__(auto_rule, action_type, data)
         self.ai_function = ai_function
@@ -3878,7 +3878,7 @@ class AutomationRule:
                         }
                     }
                     config = config_map.get(ai_function, {}).get('config')
-                    RunAi(self, action_info.get('type'), self.data, ai_function, config).do_action()
+                    RunAI(self, action_info.get('type'), self.data, ai_function, config).do_action()
 
             except RuleInvalidException as e:
                 auto_rule_logger.warning('auto rule %s with data %s, invalid error: %s', self.rule_id, self.data, e)
