@@ -231,7 +231,7 @@ class DTableWebAPI:
 
     def ai_permission_check(self, dtable_uuid):
         logger.debug('ai permission check for dtable_uuid: %s', dtable_uuid)
-        url = '%(server_url)s/api/v2.1/ai/ai-permission/' % {
+        url = '%(server_url)s/api/v2.1/ai/internal-ai-permission/' % {
             'server_url': self.dtable_web_service_url
         }
         params = {'dtable_uuid': dtable_uuid}
