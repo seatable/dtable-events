@@ -3286,9 +3286,7 @@ class RunAi(BaseAction):
                 summary_result = self.auto_rule.seatable_ai_api.summarize(content, self.config.get('summary_requirement'))
             except Exception as e:
                 auto_rule_logger.exception('ai summarize error: %s', e)
-                logging.info('error: %s', e)
                 return 
-        logging.info('summary_result: %s', summary_result)
 
         update_data = {target_column_name: summary_result}
         
@@ -3296,7 +3294,6 @@ class RunAi(BaseAction):
             self.auto_rule.dtable_server_api.update_row(table_name, self.data['row_id'], update_data)
         except Exception as e:
             auto_rule_logger.exception('fill summary field error: %s')
-            logging.info('error: %s', e)
             return
             
     def summary(self):
@@ -3308,14 +3305,13 @@ class RunAi(BaseAction):
             return False
         if not self.config.get('summary_fields') or self.col_key_dict.get(self.config.get('target_column_key')).get('type') not in [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT]:
             return False
-        from dtable_events.utils import get_dtable_admins
-        username = get_dtable_admins(self.auto_rule.dtable_uuid, self.auto_rule.db_session)[0]
         try:
-            result = self.auto_rule.dtable_web_api.ai_permission_check(username, self.auto_rule.org_id)
+            result = self.auto_rule.dtable_web_api.ai_permission_check(self.auto_rule.dtable_uuid)
+            if result.get('is_exceed'):
+                return False
         except Exception as e:
             return False
-        if not result.get('has_permission') and not result.get('is_exceed'):
-            return False
+
         return True
             
       
