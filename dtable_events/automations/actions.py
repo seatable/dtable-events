@@ -3306,7 +3306,7 @@ class RunAi(BaseAction):
     def can_summary(self):
         if not ENABLE_SEATABLE_AI:
             return False
-        if not self.config.get('summary_fields') or self.col_key_dict.get(self.config.get('target_column_key')) not in [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT]:
+        if not self.config.get('summary_fields') or self.col_key_dict.get(self.config.get('target_column_key')).get('type') not in [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT]:
             return False
         from dtable_events.utils import get_dtable_admins
         username = get_dtable_admins(self.auto_rule.dtable_uuid, self.auto_rule.db_session)[0]
