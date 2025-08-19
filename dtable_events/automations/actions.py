@@ -3225,35 +3225,35 @@ class RunAI(BaseAction):
         self.config = config
         self.col_key_dict = {col.get('key'): col for col in self.auto_rule.table_info['columns']}
 
-    def get_field_content(self, row_data):
+    def get_column_content(self, row_data):
         contents = []
         
-        for field_id in self.config.get('summary_fields', []):
-            column = self.col_key_dict.get(field_id)
+        for col_id in self.config.get('summary_columns', []):
+            column = self.col_key_dict.get(col_id)
             if not column:
                 continue
 
-            field_name = column.get('name')
-            field_value = row_data.get(field_name)
+            column_name = column.get('name')
+            column_value = row_data.get(column_name)
             
-            if field_value is None:
+            if column_value is None:
                 continue
 
             column_type = column.get('type')
             if column_type == ColumnTypes.COLLABORATOR:
                 # Convert collaborator usernames to nicknames
-                if isinstance(field_value, list):
-                    nicknames_dict = get_nickname_by_usernames(field_value, self.auto_rule.db_session)
-                    nicknames = [nicknames_dict.get(user_id, user_id) for user_id in field_value]
-                    field_value = ', '.join(nicknames)
+                if isinstance(column_value, list):
+                    nicknames_dict = get_nickname_by_usernames(column_value, self.auto_rule.db_session)
+                    nicknames = [nicknames_dict.get(user_id, user_id) for user_id in column_value]
+                    column_value = ', '.join(nicknames)
                 else:
-                    field_value = ', '.join(field_value) if field_value else ''
+                    column_value = ', '.join(column_value) if column_value else ''
             elif column_type == ColumnTypes.MULTIPLE_SELECT:
-                field_value = ', '.join(field_value) if field_value else ''
-            content_str = cell_data2str(field_value) if field_value else ''
+                column_value = ', '.join(column_value) if column_value else ''
+            content_str = cell_data2str(column_value) if column_value else ''
 
             if content_str.strip():
-                contents.append(f"{field_name}: {content_str}")
+                contents.append(f"{column_value}: {content_str}")
         return '\n'.join(contents)
 
     def fill_summary_field(self):
@@ -3277,13 +3277,14 @@ class RunAI(BaseAction):
             for key in sql_row
         }
 
-        content = self.get_field_content(converted_row)
+        content = self.get_column_content(converted_row)
 
         if not content.strip():
             summary_result = ''
         else:
             try:
-                summary_result = self.auto_rule.seatable_ai_api.summarize(content, self.config.get('summary_requirement'))
+                seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, SEATABLE_AI_SERVER_URL)
+                summary_result = seatable_ai_api.summarize(content, self.config.get('summary_prompt'))
             except Exception as e:
                 auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai summarize error: {e}')
                 return 
@@ -3293,7 +3294,7 @@ class RunAI(BaseAction):
         try:
             self.auto_rule.dtable_server_api.update_row(table_name, self.data['row_id'], update_data)
         except Exception as e:
-            auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} fill summary field error: {e}')
+            auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} fill summary column error: {e}')
             return
             
     def summary(self):
@@ -3303,10 +3304,11 @@ class RunAI(BaseAction):
     def can_summary(self):
         if not ENABLE_SEATABLE_AI:
             return False
-        if not self.config.get('summary_fields') or self.col_key_dict.get(self.config.get('target_column_key')).get('type') not in [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT]:
+        if not self.config.get('summary_columns') or self.col_key_dict.get(self.config.get('target_column_key')).get('type') not in [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT]:
             return False
         try:
             result = self.auto_rule.dtable_web_api.ai_permission_check(self.auto_rule.dtable_uuid)
+            self.username = result.get('username')
             if result.get('is_exceed'):
                 auto_rule_logger.info(f'rule {self.auto_rule.rule_id} dtable: {self.auto_rule.dtable_uuid} exceed ai limit')
                 return False
@@ -3871,8 +3873,8 @@ class AutomationRule:
                     config_map = {
                         'summarize': {
                             'config': {
-                                'summary_fields': action_info.get('summary_fields'),
-                                'summary_requirement': action_info.get('summary_requirement'),
+                                'summary_columns': action_info.get('summary_columns'),
+                                'summary_prompt': action_info.get('summary_prompt'),
                                 'target_column_key': action_info.get('target_column_key')
                             }
                         }

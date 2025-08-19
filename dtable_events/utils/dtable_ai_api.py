@@ -28,7 +28,7 @@ class DTableAIAPI:
             return ''
         
         data = {
-            'content': f'内容：{content}',
+            'content': f'content:{content}',
             'username': self.username,
             'org_id': self.org_id,
             'requirement': requirement,
