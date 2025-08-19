@@ -23,7 +23,7 @@ class DTableAIAPI:
         self.seatable_ai_server_url = seatable_ai_server_url
 
 
-    def summarize(self, content, requirement):
+    def summarize(self, content, summary_prompt):
         if not content or not content.strip():
             return ''
         
@@ -31,7 +31,7 @@ class DTableAIAPI:
             'content': f'content:{content}',
             'username': self.username,
             'org_id': self.org_id,
-            'requirement': requirement,
+            'summary_prompt': summary_prompt,
         }
         
         url = f'{self.seatable_ai_server_url}/api/v1/ai/text-summarize'
