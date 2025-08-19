@@ -3232,13 +3232,13 @@ class RunAI(BaseAction):
             column = self.col_key_dict.get(field_id)
             if not column:
                 continue
-                
+
             field_name = column.get('name')
             field_value = row_data.get(field_name)
             
             if field_value is None:
                 continue
-                
+
             column_type = column.get('type')
             if column_type == ColumnTypes.COLLABORATOR:
                 # Convert collaborator usernames to nicknames
@@ -3261,39 +3261,39 @@ class RunAI(BaseAction):
         
         target_column = self.col_key_dict.get(self.config.get('target_column_key'))
         if not target_column:
-            auto_rule_logger.error('target text column not found')
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} target text column not found')
             return
-            
+
         target_column_name = target_column.get('name')
         
         sql_row = self.auto_rule.get_sql_row()
         if not sql_row:
-            auto_rule_logger.error('row data not found')
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} row data not found')
             return
-            
+
         converted_row = {
             self.col_key_dict.get(key).get('name') if self.col_key_dict.get(key) else key:
             self.parse_column_value(self.col_key_dict.get(key), sql_row.get(key)) if self.col_key_dict.get(key) else sql_row.get(key)
             for key in sql_row
         }
-        
+
         content = self.get_field_content(converted_row)
-        
+
         if not content.strip():
             summary_result = ''
         else:
             try:
                 summary_result = self.auto_rule.seatable_ai_api.summarize(content, self.config.get('summary_requirement'))
             except Exception as e:
-                auto_rule_logger.exception('ai summarize error: %s', e)
+                auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai summarize error: {e}')
                 return 
 
         update_data = {target_column_name: summary_result}
-        
+
         try:
             self.auto_rule.dtable_server_api.update_row(table_name, self.data['row_id'], update_data)
         except Exception as e:
-            auto_rule_logger.exception('fill summary field error: %s')
+            auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} fill summary field error: {e}')
             return
             
     def summary(self):
@@ -3308,13 +3308,13 @@ class RunAI(BaseAction):
         try:
             result = self.auto_rule.dtable_web_api.ai_permission_check(self.auto_rule.dtable_uuid)
             if result.get('is_exceed'):
+                auto_rule_logger.info(f'rule {self.auto_rule.rule_id} dtable: {self.auto_rule.dtable_uuid} exceed ai limit')
                 return False
         except Exception as e:
             return False
 
         return True
-            
-      
+
     def do_action(self):
         if self.ai_function == 'summarize':
             if self.can_summary():
