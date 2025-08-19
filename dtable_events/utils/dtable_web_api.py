@@ -228,3 +228,13 @@ class DTableWebAPI:
         header_token = 'Token ' + jwt.encode(payload, DTABLE_PRIVATE_KEY, 'HS256')
         resp = requests.post(url, json=data, headers={'Authorization': header_token}, timeout=30)
         return parse_response(resp)
+
+    def ai_permission_check(self, username, org_id):
+        logger.debug('ai permission check for user %s, org_id %s', username, org_id)
+        url = '%(server_url)s/api/v2.1/ai/ai-permission/' % {
+            'server_url': self.dtable_web_service_url
+        }
+        params = {'username': username, 'org_id': org_id}
+        headers = {'Authorization': 'Token' + SEATABLE_FAAS_AUTH_TOKEN}
+        resp = requests.get(url, params=params, headers=headers)
+        return parse_response(resp)

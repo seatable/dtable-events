@@ -20,7 +20,8 @@ from seaserv import seafile_api
 from dtable_events.automations.models import get_third_party_account
 from dtable_events.app.metadata_cache_managers import BaseMetadataCacheManager
 from dtable_events.app.event_redis import redis_cache
-from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, ENABLE_PYTHON_SCRIPT, SEATABLE_AI_SERVER_URL, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
+from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, ENABLE_PYTHON_SCRIPT, SEATABLE_AI_SERVER_URL, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, \
+INNER_DTABLE_SERVER_URL, ENABLE_SEATABLE_AI
 from dtable_events.dtable_io import send_wechat_msg, send_dingtalk_msg
 from dtable_events.convert_page.manager import conver_page_to_pdf_manager
 from dtable_events.app.log import auto_rule_logger
@@ -3285,7 +3286,9 @@ class RunAi(BaseAction):
                 summary_result = self.auto_rule.seatable_ai_api.summarize(content, self.config.get('summary_requirement'))
             except Exception as e:
                 auto_rule_logger.exception('ai summarize error: %s', e)
+                logging.info('error: %s', e)
                 return 
+        logging.info('summary_result: %s', summary_result)
 
         update_data = {target_column_name: summary_result}
         
@@ -3293,14 +3296,33 @@ class RunAi(BaseAction):
             self.auto_rule.dtable_server_api.update_row(table_name, self.data['row_id'], update_data)
         except Exception as e:
             auto_rule_logger.exception('fill summary field error: %s')
+            logging.info('error: %s', e)
             return
             
     def summary(self):
         self.fill_summary_field()
-    
+
+
+    def can_summary(self):
+        if not ENABLE_SEATABLE_AI:
+            return False
+        if not self.config.get('summary_fields') or self.col_key_dict.get(self.config.get('target_column_key')) not in [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT]:
+            return False
+        from dtable_events.utils import get_dtable_admins
+        username = get_dtable_admins(self.auto_rule.dtable_uuid, self.auto_rule.db_session)[0]
+        try:
+            result = self.auto_rule.dtable_web_api.ai_permission_check(username, self.auto_rule.org_id)
+        except Exception as e:
+            return False
+        if not result.get('has_permission') and not result.get('is_exceed'):
+            return False
+        return True
+            
+      
     def do_action(self):
         if self.ai_function == 'summarize':
-            self.summary()
+            if self.can_summary():
+                self.summary()
         else:
             auto_rule_logger.warning('ai function %s not supported', self.ai_function)
             return
