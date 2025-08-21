@@ -34,7 +34,7 @@ class DTableAIAPI:
             'summary_prompt': summary_prompt,
         }
         
-        url = f'{self.seatable_ai_server_url}/api/v1/ai/text-summarize'
+        url = f'{self.seatable_ai_server_url}/api/v1/ai/text-summarize/'
         headers = gen_headers()
         response = requests.post(url, json=data, headers=headers, timeout=30)
         
