@@ -10,6 +10,7 @@ from queue import Full
 from urllib.parse import unquote, urlparse, parse_qs
 from uuid import UUID
 
+from dtable_events.utils.dtable_ai_api import DTableAIAPI
 import jwt
 import requests
 from dateutil import parser
@@ -19,7 +20,8 @@ from seaserv import seafile_api
 from dtable_events.automations.models import get_third_party_account
 from dtable_events.app.metadata_cache_managers import BaseMetadataCacheManager
 from dtable_events.app.event_redis import redis_cache
-from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, ENABLE_PYTHON_SCRIPT, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
+from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, ENABLE_PYTHON_SCRIPT, SEATABLE_AI_SERVER_URL, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, \
+INNER_DTABLE_SERVER_URL, ENABLE_SEATABLE_AI
 from dtable_events.dtable_io import send_wechat_msg, send_dingtalk_msg
 from dtable_events.convert_page.manager import conver_page_to_pdf_manager
 from dtable_events.app.log import auto_rule_logger
@@ -3245,6 +3247,114 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
             })
 
 
+class RunAI(BaseAction):
+    def __init__(self, auto_rule, action_type, data, ai_function, config):
+        super().__init__(auto_rule, action_type, data)
+        self.ai_function = ai_function
+        self.config = config
+        self.col_key_dict = {col.get('key'): col for col in self.auto_rule.table_info['columns']}
+
+    def get_column_content(self, row_data):
+        contents = []
+        
+        for col_id in self.config.get('summary_columns', []):
+            column = self.col_key_dict.get(col_id)
+            if not column:
+                continue
+
+            column_name = column.get('name')
+            column_value = row_data.get(column_name)
+            
+            if column_value is None:
+                continue
+
+            column_type = column.get('type')
+            if column_type == ColumnTypes.COLLABORATOR:
+                # Convert collaborator usernames to nicknames
+                if isinstance(column_value, list):
+                    nicknames_dict = get_nickname_by_usernames(column_value, self.auto_rule.db_session)
+                    nicknames = [nicknames_dict.get(user_id, user_id) for user_id in column_value]
+                    column_value = ', '.join(nicknames)
+                else:
+                    column_value = ', '.join(column_value) if column_value else ''
+            elif column_type == ColumnTypes.MULTIPLE_SELECT:
+                column_value = ', '.join(column_value) if column_value else ''
+            content_str = cell_data2str(column_value) if column_value else ''
+
+            if content_str.strip():
+                contents.append(f"{column_value}: {content_str}")
+        return '\n'.join(contents)
+
+    def fill_summary_field(self):
+        table_name = self.auto_rule.table_info['name']
+        
+        target_column = self.col_key_dict.get(self.config.get('target_column_key'))
+        if not target_column:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} target text column not found')
+            return
+
+        target_column_name = target_column.get('name')
+        
+        sql_row = self.auto_rule.get_sql_row()
+        if not sql_row:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} row data not found')
+            return
+
+        converted_row = {
+            self.col_key_dict.get(key).get('name') if self.col_key_dict.get(key) else key:
+            self.parse_column_value(self.col_key_dict.get(key), sql_row.get(key)) if self.col_key_dict.get(key) else sql_row.get(key)
+            for key in sql_row
+        }
+
+        content = self.get_column_content(converted_row)
+
+        if not content.strip():
+            summary_result = ''
+        else:
+            try:
+                seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, SEATABLE_AI_SERVER_URL)
+                summary_result = seatable_ai_api.summarize(content, self.config.get('summary_prompt'))
+            except Exception as e:
+                auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai summarize error: {e}')
+                return 
+
+        update_data = {target_column_name: summary_result}
+
+        try:
+            self.auto_rule.dtable_server_api.update_row(table_name, self.data['row_id'], update_data)
+        except Exception as e:
+            auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} fill summary column error: {e}')
+            return
+            
+    def summary(self):
+        self.fill_summary_field()
+
+
+    def can_summary(self):
+        if not ENABLE_SEATABLE_AI:
+            return False
+        if not self.config.get('summary_columns') or self.col_key_dict.get(self.config.get('target_column_key')).get('type') not in [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT]:
+            return False
+        try:
+            result = self.auto_rule.dtable_web_api.ai_permission_check(self.auto_rule.dtable_uuid)
+            self.username = result.get('username')
+            if result.get('is_exceed'):
+                auto_rule_logger.info(f'rule {self.auto_rule.rule_id} dtable: {self.auto_rule.dtable_uuid} exceed ai limit')
+                return False
+        except Exception as e:
+            return False
+
+        return True
+
+    def do_action(self):
+        if self.ai_function == 'summarize':
+            if self.can_summary():
+                self.summary()
+        else:
+            auto_rule_logger.warning('ai function %s not supported', self.ai_function)
+            return
+
+
 class RuleInvalidException(Exception):
     """
     Exception which indicates rule need to be set is_valid=Fasle
@@ -3273,6 +3383,7 @@ class AutomationRule:
         self.dtable_server_api = DTableServerAPI(self.username, str(UUID(self.dtable_uuid)), INNER_DTABLE_SERVER_URL)
         self.dtable_db_api = DTableDBAPI(self.username, str(UUID(self.dtable_uuid)), INNER_DTABLE_DB_URL)
         self.dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+        self.seatable_ai_api = DTableAIAPI(self.username, self.org_id, SEATABLE_AI_SERVER_URL)
 
         self.query_stats = []
 
@@ -3618,6 +3729,10 @@ class AutomationRule:
             if run_condition in CRON_CONDITIONS and trigger_condition == CONDITION_PERIODICALLY:
                 return True
             return False
+        elif action_type == 'run_ai':
+            if run_condition == PER_UPDATE:
+                return True
+            return False
         return False
 
     def do_actions(self, with_test=False):
@@ -3782,6 +3897,19 @@ class AutomationRule:
                     }
 
                     ConvertDocumentToPDFAndSendAction(self, action_info.get('type'), plugin_type, doc_uuid, file_name, save_config, send_wechat_robot_config, send_email_config, repo_id, workspace_id).do_action()
+                elif action_info.get('type') == 'run_ai':
+                    ai_function = action_info.get('ai_function')
+                    config_map = {
+                        'summarize': {
+                            'config': {
+                                'summary_columns': action_info.get('summary_columns'),
+                                'summary_prompt': action_info.get('summary_prompt'),
+                                'target_column_key': action_info.get('target_column_key')
+                            }
+                        }
+                    }
+                    config = config_map.get(ai_function, {}).get('config')
+                    RunAI(self, action_info.get('type'), self.data, ai_function, config).do_action()
 
             except RuleInvalidException as e:
                 auto_rule_logger.warning('auto rule %s with data %s, invalid error: %s', self.rule_id, self.data, e)
