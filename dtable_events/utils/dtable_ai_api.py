@@ -56,7 +56,7 @@ class DTableAIAPI:
             'classify_prompt': classify_prompt,
         }
         
-        url = f'{self.seatable_ai_server_url}/api/v1/ai/classification'
+        url = f'{self.seatable_ai_server_url}/api/v1/ai/classification/'
         headers = gen_headers()
         response = requests.post(url, json=data, headers=headers, timeout=30)
         
