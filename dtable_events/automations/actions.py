@@ -3269,20 +3269,24 @@ class RunAI(BaseAction):
                 continue
 
             column_type = column.get('type')
-            if column_type == ColumnTypes.COLLABORATOR:
+            if column_type in [ColumnTypes.COLLABORATOR, ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
                 # Convert collaborator usernames to nicknames
                 if isinstance(column_value, list):
                     nicknames_dict = get_nickname_by_usernames(column_value, self.auto_rule.db_session)
                     nicknames = [nicknames_dict.get(user_id, user_id) for user_id in column_value]
                     column_value = ', '.join(nicknames)
-                else:
-                    column_value = ', '.join(column_value) if column_value else ''
+                elif column_value:
+                    # Single collaborator, convert to list and process
+                    nicknames_dict = get_nickname_by_usernames([column_value], self.auto_rule.db_session)
+                    column_value = nicknames_dict.get(column_value, column_value)
             elif column_type == ColumnTypes.MULTIPLE_SELECT:
                 column_value = ', '.join(column_value) if column_value else ''
+            elif column_type == ColumnTypes.FILE:
+                continue
             content_str = cell_data2str(column_value) if column_value else ''
 
             if content_str.strip():
-                contents.append(f"{column_value}: {content_str}")
+                contents.append(f"{column_name}: {content_str}")
         return '\n'.join(contents)
 
     def fill_summary_field(self):
@@ -3325,10 +3329,82 @@ class RunAI(BaseAction):
         except Exception as e:
             auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} fill summary column error: {e}')
             return
+        
+    def get_classify_content(self, row_data):
+        classify_judge_column_key = self.config.get('classify_judge_column_key')
+        classify_target_column_key = self.config.get('classify_target_column_key')
+        
+        classify_column = self.col_key_dict.get(classify_judge_column_key)
+        target_column = self.col_key_dict.get(classify_target_column_key)
+
+        if not classify_column or not target_column:
+            return ''
+        
+        classify_column_name = classify_column.get('name')
+        classify_content = row_data.get(classify_column_name, '')
+        
+        target_column_data = target_column.get('data', {})
+        if not target_column_data:
+            return ''
+        options = target_column_data.get('options', [])
+        option_names = [option.get('name', '') for option in options if option.get('name')]
+        target_content = ', '.join(option_names)
+        content = f'Content to classify: {classify_content}\nAvailable options: {target_content}\nOption type: {target_column.get("type")}\n'
+        return content
             
     def summary(self):
         self.fill_summary_field()
 
+    def classify(self):
+        table_name = self.auto_rule.table_info['name']
+        
+        classify_target_column_key = self.config.get('classify_target_column_key')
+        target_column = self.col_key_dict.get(classify_target_column_key)
+        if not target_column:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} target column not found')
+            return
+
+        target_column_name = target_column.get('name')
+        target_column_type = target_column.get('type')
+        
+        sql_row = self.auto_rule.get_sql_row()
+        if not sql_row:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} row data not found')
+            return
+
+        converted_row = {
+            self.col_key_dict.get(key).get('name') if self.col_key_dict.get(key) else key:
+            self.parse_column_value(self.col_key_dict.get(key), sql_row.get(key)) if self.col_key_dict.get(key) else sql_row.get(key)
+            for key in sql_row
+        }
+
+        content = self.get_classify_content(converted_row)
+
+        if not content.strip():
+            classification_result = []
+        else:
+            try:
+                seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, SEATABLE_AI_SERVER_URL)
+                classification_result = seatable_ai_api.classify(content, self.config.get('classify_prompt'))
+            except Exception as e:
+                auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai classify error: {e}')
+                return 
+        if not classification_result:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} no suitable options found')
+            return
+        if target_column_type == ColumnTypes.SINGLE_SELECT:
+            update_data = {target_column_name: classification_result[0]}
+        elif target_column_type == ColumnTypes.MULTIPLE_SELECT:
+            update_data = {target_column_name: classification_result}
+        else:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} unsupported target column type: {target_column_type}')
+            return
+
+        try:
+            self.auto_rule.dtable_server_api.update_row(table_name, self.data['row_id'], update_data)
+        except Exception as e:
+            auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} update classify result error: {e}')
+            return
 
     def can_summary(self):
         if not ENABLE_SEATABLE_AI:
@@ -3346,10 +3422,33 @@ class RunAI(BaseAction):
 
         return True
 
+    def can_classify(self):
+        if not ENABLE_SEATABLE_AI:
+            return False
+        classify_column = self.col_key_dict.get(self.config.get('classify_judge_column_key'))
+        target_column = self.col_key_dict.get(self.config.get('classify_target_column_key'))
+        
+        if not classify_column or classify_column.get('type') in [ColumnTypes.FILE, ColumnTypes.IMAGE, ColumnTypes.FORMULA, ColumnTypes.LINK, ColumnTypes.LINK_FORMULA, ColumnTypes.BUTTON]:
+            return False
+        if not target_column or target_column.get('type') not in [ColumnTypes.MULTIPLE_SELECT, ColumnTypes.SINGLE_SELECT]:
+            return False
+        try:
+            result = self.auto_rule.dtable_web_api.ai_permission_check(self.auto_rule.dtable_uuid)
+            self.username = result.get('username')
+            if result.get('is_exceed'):
+                auto_rule_logger.info(f'rule {self.auto_rule.rule_id} dtable: {self.auto_rule.dtable_uuid} exceed ai limit')
+                return False
+        except Exception as e:
+            return False
+        return True
+        
     def do_action(self):
         if self.ai_function == 'summarize':
             if self.can_summary():
                 self.summary()
+        elif self.ai_function == 'classify':
+            if self.can_classify():
+                self.classify()
         else:
             auto_rule_logger.warning('ai function %s not supported', self.ai_function)
             return
@@ -3905,6 +4004,13 @@ class AutomationRule:
                                 'summary_columns': action_info.get('summary_columns'),
                                 'summary_prompt': action_info.get('summary_prompt'),
                                 'target_column_key': action_info.get('target_column_key')
+                            }
+                        },
+                        'classify': {
+                            'config': {
+                                'classify_judge_column_key': action_info.get('classify_judge_column_key'),
+                                'classify_prompt': action_info.get('classify_prompt'),
+                                'classify_target_column_key': action_info.get('classify_target_column_key'),
                             }
                         }
                     }
