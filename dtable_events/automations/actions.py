@@ -3435,8 +3435,8 @@ class RunAI(BaseAction):
         return True
 
     def can_classify(self):
-        # if not ENABLE_SEATABLE_AI:
-        #     return False
+        if not ENABLE_SEATABLE_AI:
+            return False
         classify_column = self.col_key_dict.get(self.config.get('classify_judge_column_key'))
         target_column = self.col_key_dict.get(self.config.get('classify_target_column_key'))
         
