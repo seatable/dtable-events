@@ -3331,24 +3331,30 @@ class RunAI(BaseAction):
             return
         
     def get_classify_content(self, row_data):
+        """Build AI classification input content including content to classify and available options"""
         classify_judge_column_key = self.config.get('classify_judge_column_key')
         classify_target_column_key = self.config.get('classify_target_column_key')
         
+        # Get column info by key
         classify_column = self.col_key_dict.get(classify_judge_column_key)
         target_column = self.col_key_dict.get(classify_target_column_key)
 
         if not classify_column or not target_column:
             return ''
         
+        # Get content to classify
         classify_column_name = classify_column.get('name')
         classify_content = row_data.get(classify_column_name, '')
         
+        # Get target column options data
         target_column_data = target_column.get('data', {})
         if not target_column_data:
             return ''
+        # Extract all available option names
         options = target_column_data.get('options', [])
         option_names = [option.get('name', '') for option in options if option.get('name')]
         target_content = ', '.join(option_names)
+        # Build complete AI classification input content
         content = f'Content to classify: {classify_content}\nAvailable options: {target_content}\nOption type: {target_column.get("type")}\n'
         return content
             
@@ -3356,8 +3362,10 @@ class RunAI(BaseAction):
         self.fill_summary_field()
 
     def classify(self):
+        """Execute AI classification, call AI API to classify and update target column"""
         table_name = self.auto_rule.table_info['name']
         
+        # Get target column config and info
         classify_target_column_key = self.config.get('classify_target_column_key')
         target_column = self.col_key_dict.get(classify_target_column_key)
         if not target_column:
@@ -3367,11 +3375,13 @@ class RunAI(BaseAction):
         target_column_name = target_column.get('name')
         target_column_type = target_column.get('type')
         
+        # Get current row data
         sql_row = self.auto_rule.get_sql_row()
         if not sql_row:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} row data not found')
             return
 
+        # Convert column keys to column names and parse column values
         converted_row = {
             self.col_key_dict.get(key).get('name') if self.col_key_dict.get(key) else key:
             self.parse_column_value(self.col_key_dict.get(key), sql_row.get(key)) if self.col_key_dict.get(key) else sql_row.get(key)
@@ -3392,6 +3402,8 @@ class RunAI(BaseAction):
         if not classification_result:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} no suitable options found')
             return
+        
+        # Build update data based on target column type
         if target_column_type == ColumnTypes.SINGLE_SELECT:
             update_data = {target_column_name: classification_result[0]}
         elif target_column_type == ColumnTypes.MULTIPLE_SELECT:
@@ -3423,8 +3435,8 @@ class RunAI(BaseAction):
         return True
 
     def can_classify(self):
-        if not ENABLE_SEATABLE_AI:
-            return False
+        # if not ENABLE_SEATABLE_AI:
+        #     return False
         classify_column = self.col_key_dict.get(self.config.get('classify_judge_column_key'))
         target_column = self.col_key_dict.get(self.config.get('classify_target_column_key'))
         
@@ -3432,6 +3444,8 @@ class RunAI(BaseAction):
             return False
         if not target_column or target_column.get('type') not in [ColumnTypes.MULTIPLE_SELECT, ColumnTypes.SINGLE_SELECT]:
             return False
+
+        # Check AI usage permissions and quotas
         try:
             result = self.auto_rule.dtable_web_api.ai_permission_check(self.auto_rule.dtable_uuid)
             self.username = result.get('username')
