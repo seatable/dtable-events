@@ -7,6 +7,7 @@ import subprocess
 import uuid
 from dateutil import parser
 from datetime import datetime
+from pathlib import Path
 
 import pytz
 import re
@@ -253,6 +254,8 @@ def gen_file_get_url(token, filename):
     """
     return '%s/files/%s/%s' % (file_server_root, token, quote(filename))
 
+def get_file_ext(filename):
+    return Path(filename).suffix.lower()
 
 def get_fileserver_root():
     """ Construct seafile fileserver address and port.
