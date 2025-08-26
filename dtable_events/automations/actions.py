@@ -4173,6 +4173,13 @@ class AutomationRule:
                                 'ocr_target_column_key': action_info.get('ocr_target_column_key'),
                                 'repo_id': action_info.get('repo_id'),
                             }
+                        },
+                        'OCR': {
+                            'config': {
+                                'ocr_image_column_key': action_info.get('ocr_image_column_key'),
+                                'ocr_target_column_key': action_info.get('ocr_target_column_key'),
+                                'repo_id': action_info.get('repo_id'),
+                            }
                         }
                     }
                     config = config_map.get(ai_function, {}).get('config')
