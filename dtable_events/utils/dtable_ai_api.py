@@ -1,6 +1,8 @@
 import requests
 import logging
 import time
+from dtable_events.utils import gen_file_get_url, get_file_ext
+from dtable_events.utils.constants import EXTRACT_TEXT_SUPPORTED_IMAGES
 import jwt
 
 from dtable_events.app.config import DTABLE_PRIVATE_KEY
@@ -66,4 +68,27 @@ class DTableAIAPI:
             return classification
         else:
             logger.error(f"Failed to classify text: {response.text}")
+            raise DTableAIAPIError()
+
+    def ocr(self, file_name, download_token):
+        if get_file_ext(file_name) not in EXTRACT_TEXT_SUPPORTED_IMAGES:
+            raise DTableAIAPIError("Unsupported image format")
+        
+        img_url = gen_file_get_url(download_token, file_name)
+
+        data = {
+            'username': self.username,
+            'org_id': self.org_id,
+            'img_url': img_url,
+        }
+        
+        url = f'{self.seatable_ai_server_url}/api/v1/ai/ocr/'
+        headers = gen_headers()
+        response = requests.post(url, json=data, headers=headers, timeout=30)
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result.get('ocr_result', '')
+        else:
+            logger.error(f"Failed to ocr image: {response.text}")
             raise DTableAIAPIError()
