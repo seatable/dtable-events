@@ -3332,19 +3332,48 @@ class RunAI(BaseAction):
         
     def get_classify_content(self, row_data):
         """Build AI classification input content including content to classify and available options"""
-        classify_judge_column_key = self.config.get('classify_judge_column_key')
+        classify_judge_column_keys = self.config.get('classify_judge_column_keys', [])
         classify_target_column_key = self.config.get('classify_target_column_key')
         
-        # Get column info by key
-        classify_column = self.col_key_dict.get(classify_judge_column_key)
+        # Get target column info
         target_column = self.col_key_dict.get(classify_target_column_key)
-
-        if not classify_column or not target_column:
+        if not target_column:
             return ''
         
-        # Get content to classify
-        classify_column_name = classify_column.get('name')
-        classify_content = row_data.get(classify_column_name, '')
+        # Get content to classify from multiple judge columns
+        contents = []
+        for col_key in classify_judge_column_keys:
+            column = self.col_key_dict.get(col_key)
+            if not column:
+                continue
+
+            column_name = column.get('name')
+            column_value = row_data.get(column_name)
+            
+            if column_value is None:
+                continue
+
+            column_type = column.get('type')
+            if column_type in [ColumnTypes.COLLABORATOR, ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
+                # Convert collaborator usernames to nicknames
+                if isinstance(column_value, list):
+                    nicknames_dict = get_nickname_by_usernames(column_value, self.auto_rule.db_session)
+                    nicknames = [nicknames_dict.get(user_id, user_id) for user_id in column_value]
+                    column_value = ', '.join(nicknames)
+                elif column_value:
+                    # Single collaborator, convert to list and process
+                    nicknames_dict = get_nickname_by_usernames([column_value], self.auto_rule.db_session)
+                    column_value = nicknames_dict.get(column_value, column_value)
+            elif column_type == ColumnTypes.MULTIPLE_SELECT:
+                column_value = ', '.join(column_value) if column_value else ''
+            elif column_type == ColumnTypes.FILE:
+                continue
+            content_str = cell_data2str(column_value) if column_value else ''
+
+            if content_str.strip():
+                contents.append(f"{column_name}: {content_str}")
+        
+        classify_content = '\n'.join(contents)
         
         # Get target column options data
         target_column_data = target_column.get('data', {})
@@ -3437,10 +3466,9 @@ class RunAI(BaseAction):
     def can_classify(self):
         if not ENABLE_SEATABLE_AI:
             return False
-        classify_column = self.col_key_dict.get(self.config.get('classify_judge_column_key'))
         target_column = self.col_key_dict.get(self.config.get('classify_target_column_key'))
         
-        if not classify_column or classify_column.get('type') in [ColumnTypes.FILE, ColumnTypes.IMAGE, ColumnTypes.FORMULA, ColumnTypes.LINK, ColumnTypes.LINK_FORMULA, ColumnTypes.BUTTON]:
+        if not self.config.get('classify_judge_column_keys'):
             return False
         if not target_column or target_column.get('type') not in [ColumnTypes.MULTIPLE_SELECT, ColumnTypes.SINGLE_SELECT]:
             return False
@@ -4022,7 +4050,7 @@ class AutomationRule:
                         },
                         'classify': {
                             'config': {
-                                'classify_judge_column_key': action_info.get('classify_judge_column_key'),
+                                'classify_judge_column_keys': action_info.get('classify_judge_column_keys'),
                                 'classify_prompt': action_info.get('classify_prompt'),
                                 'classify_target_column_key': action_info.get('classify_target_column_key'),
                             }
