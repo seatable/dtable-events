@@ -3751,8 +3751,8 @@ class RunAI(BaseAction):
             return False
         return True
     def can_extract(self):
-        # if not ENABLE_SEATABLE_AI:
-        #     return False
+        if not ENABLE_SEATABLE_AI:
+            return False
         
         extract_input_column_key = self.config.get('extract_input_column_key')
         extract_output_columns = self.config.get('extract_output_columns', {})
