@@ -3609,15 +3609,15 @@ class RunAI(BaseAction):
         table_name = self.auto_rule.table_info['name']
         
         # Get source and target column configuration
-        extract_source_column_key = self.config.get('extract_source_column_key')
-        extract_target_columns = self.config.get('extract_target_columns', {})
+        extract_input_column_key = self.config.get('extract_input_column_key')
+        extract_output_columns = self.config.get('extract_output_columns', {})
         
-        source_column = self.col_key_dict.get(extract_source_column_key)
+        source_column = self.col_key_dict.get(extract_input_column_key)
         if not source_column:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} source column not found')
             return
         
-        if not extract_target_columns:
+        if not extract_output_columns:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} target columns not configured')
             return
         
@@ -3628,7 +3628,7 @@ class RunAI(BaseAction):
             return
         
         # Get source content
-        source_content = sql_row.get(extract_source_column_key, '')
+        source_content = sql_row.get(extract_input_column_key, '')
         if not source_content:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} source content is empty')
             return
@@ -3650,7 +3650,7 @@ class RunAI(BaseAction):
         # Build extraction content with target fields descriptions
         target_descriptions = {}
         
-        for target_column_key, description in extract_target_columns.items():
+        for target_column_key, description in extract_output_columns.items():
             target_column = self.col_key_dict.get(target_column_key)
             if target_column:
                 target_column_name = target_column.get('name')
@@ -3673,7 +3673,7 @@ class RunAI(BaseAction):
         
         # Build update data directly from target columns
         update_data = {}
-        for target_column_key, description in extract_target_columns.items():
+        for target_column_key, description in extract_output_columns.items():
             target_column = self.col_key_dict.get(target_column_key)
             if target_column:
                 target_column_name = target_column.get('name')
@@ -3751,13 +3751,13 @@ class RunAI(BaseAction):
             return False
         return True
     def can_extract(self):
-        if not ENABLE_SEATABLE_AI:
-            return False
+        # if not ENABLE_SEATABLE_AI:
+        #     return False
         
-        extract_source_column_key = self.config.get('extract_source_column_key')
-        extract_target_columns = self.config.get('extract_target_columns', {})
+        extract_input_column_key = self.config.get('extract_input_column_key')
+        extract_output_columns = self.config.get('extract_output_columns', {})
         
-        source_column = self.col_key_dict.get(extract_source_column_key)
+        source_column = self.col_key_dict.get(extract_input_column_key)
         if not source_column:
             return False
         
@@ -3768,11 +3768,11 @@ class RunAI(BaseAction):
             return False
         
         # Check if target columns are configured and valid
-        if not extract_target_columns:
+        if not extract_output_columns:
             return False
         
         valid_target_types = [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT, ColumnTypes.NUMBER, ColumnTypes.DATE, ColumnTypes.NUMBER, ColumnTypes.GEOLOCATION, ColumnTypes.DURATION, ColumnTypes.CHECKBOX, ColumnTypes.URL, ColumnTypes.EMAIL, ColumnTypes.RATE]
-        for target_column_key in extract_target_columns.keys():
+        for target_column_key in extract_output_columns.keys():
             target_column = self.col_key_dict.get(target_column_key)
             if not target_column or target_column.get('type') not in valid_target_types:
                 return False
@@ -4374,8 +4374,8 @@ class AutomationRule:
                         },
                         'extract': {
                             'config': {
-                                'extract_source_column_key': action_info.get('extract_source_column_key'),
-                                'extract_target_columns': action_info.get('extract_target_columns'),
+                                'extract_input_column_key': action_info.get('extract_input_column_key'),
+                                'extract_output_columns': action_info.get('extract_output_columns'),
                                 'repo_id': action_info.get('repo_id'),
                             }
                         }
