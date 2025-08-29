@@ -3451,8 +3451,8 @@ class RunAI(BaseAction):
         # Get table and configuration information
         table_name = self.auto_rule.table_info['name']
         
-        ocr_image_column_key = self.config.get('ocr_image_column_key')
-        ocr_target_column_key = self.config.get('ocr_target_column_key')
+        ocr_input_column_key = self.config.get('ocr_input_column_key')
+        ocr_output_column_key = self.config.get('ocr_output_column_key')
         repo_id = self.config.get('repo_id')
         
         # Validate required configuration parameters
@@ -3460,8 +3460,8 @@ class RunAI(BaseAction):
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} repo_id not found in config')
             return
             
-        image_column = self.col_key_dict.get(ocr_image_column_key)
-        target_column = self.col_key_dict.get(ocr_target_column_key)
+        image_column = self.col_key_dict.get(ocr_input_column_key)
+        target_column = self.col_key_dict.get(ocr_output_column_key)
         
         if not image_column or not target_column:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} image column or target column not found')
@@ -3476,7 +3476,7 @@ class RunAI(BaseAction):
             return
         
         # Get image file list
-        image_files = sql_row.get(ocr_image_column_key, [])
+        image_files = sql_row.get(ocr_input_column_key, [])
         if not image_files:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} no images found in column')
             return
@@ -3576,8 +3576,8 @@ class RunAI(BaseAction):
     def can_ocr(self):
         if not ENABLE_SEATABLE_AI:
             return False
-        image_column = self.col_key_dict.get(self.config.get('ocr_image_column_key'))
-        target_column = self.col_key_dict.get(self.config.get('ocr_target_column_key'))
+        image_column = self.col_key_dict.get(self.config.get('ocr_input_column_key'))
+        target_column = self.col_key_dict.get(self.config.get('ocr_output_column_key'))
         
         if not image_column or image_column.get('type') != ColumnTypes.IMAGE:
             return False
@@ -4169,8 +4169,8 @@ class AutomationRule:
                         },
                         'OCR': {
                             'config': {
-                                'ocr_image_column_key': action_info.get('ocr_image_column_key'),
-                                'ocr_target_column_key': action_info.get('ocr_target_column_key'),
+                                'ocr_input_column_key': action_info.get('ocr_input_column_key'),
+                                'ocr_output_column_key': action_info.get('ocr_output_column_key'),
                                 'repo_id': action_info.get('repo_id'),
                             }
                         },
