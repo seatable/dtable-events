@@ -3257,7 +3257,7 @@ class RunAI(BaseAction):
     def get_column_content(self, row_data):
         contents = []
         
-        for col_id in self.config.get('summary_input_columns', []):
+        for col_id in self.config.get('summary_input_column_keys', []):
             column = self.col_key_dict.get(col_id)
             if not column:
                 continue
@@ -3450,7 +3450,7 @@ class RunAI(BaseAction):
     def can_summary(self):
         if not ENABLE_SEATABLE_AI:
             return False
-        if not self.config.get('summary_input_columns') or self.col_key_dict.get(self.config.get('summary_output_column_key')).get('type') not in [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT]:
+        if not self.config.get('summary_input_column_keys') or self.col_key_dict.get(self.config.get('summary_output_column_key')).get('type') not in [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT]:
             return False
         try:
             result = self.auto_rule.dtable_web_api.ai_permission_check(self.auto_rule.dtable_uuid)
@@ -4043,7 +4043,7 @@ class AutomationRule:
                     config_map = {
                         'summarize': {
                             'config': {
-                                'summary_input_columns': action_info.get('summary_input_columns'),
+                                'summary_input_column_keys': action_info.get('summary_input_column_keys'),
                                 'summary_prompt': action_info.get('summary_prompt'),
                                 'summary_output_column_key': action_info.get('summary_output_column_key')
                             }
