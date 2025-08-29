@@ -3257,7 +3257,7 @@ class RunAI(BaseAction):
     def get_column_content(self, row_data):
         contents = []
         
-        for col_id in self.config.get('summary_columns', []):
+        for col_id in self.config.get('summary_input_columns', []):
             column = self.col_key_dict.get(col_id)
             if not column:
                 continue
@@ -3292,7 +3292,7 @@ class RunAI(BaseAction):
     def fill_summary_field(self):
         table_name = self.auto_rule.table_info['name']
         
-        target_column = self.col_key_dict.get(self.config.get('target_column_key'))
+        target_column = self.col_key_dict.get(self.config.get('summary_output_column_key'))
         if not target_column:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} target text column not found')
             return
@@ -3332,17 +3332,17 @@ class RunAI(BaseAction):
         
     def get_classify_content(self, row_data):
         """Build AI classification input content including content to classify and available options"""
-        classify_judge_column_keys = self.config.get('classify_judge_column_keys', [])
-        classify_target_column_key = self.config.get('classify_target_column_key')
+        classify_input_column_keys = self.config.get('classify_input_column_keys', [])
+        classify_output_column_key = self.config.get('classify_output_column_key')
         
         # Get target column info
-        target_column = self.col_key_dict.get(classify_target_column_key)
+        target_column = self.col_key_dict.get(classify_output_column_key)
         if not target_column:
             return ''
         
         # Get content to classify from multiple judge columns
         contents = []
-        for col_key in classify_judge_column_keys:
+        for col_key in classify_input_column_keys:
             column = self.col_key_dict.get(col_key)
             if not column:
                 continue
@@ -3395,8 +3395,8 @@ class RunAI(BaseAction):
         table_name = self.auto_rule.table_info['name']
         
         # Get target column config and info
-        classify_target_column_key = self.config.get('classify_target_column_key')
-        target_column = self.col_key_dict.get(classify_target_column_key)
+        classify_output_column_key = self.config.get('classify_output_column_key')
+        target_column = self.col_key_dict.get(classify_output_column_key)
         if not target_column:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} target column not found')
             return
@@ -3450,7 +3450,7 @@ class RunAI(BaseAction):
     def can_summary(self):
         if not ENABLE_SEATABLE_AI:
             return False
-        if not self.config.get('summary_columns') or self.col_key_dict.get(self.config.get('target_column_key')).get('type') not in [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT]:
+        if not self.config.get('summary_input_columns') or self.col_key_dict.get(self.config.get('summary_output_column_key')).get('type') not in [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT]:
             return False
         try:
             result = self.auto_rule.dtable_web_api.ai_permission_check(self.auto_rule.dtable_uuid)
@@ -3466,9 +3466,9 @@ class RunAI(BaseAction):
     def can_classify(self):
         if not ENABLE_SEATABLE_AI:
             return False
-        target_column = self.col_key_dict.get(self.config.get('classify_target_column_key'))
+        target_column = self.col_key_dict.get(self.config.get('classify_output_column_key'))
         
-        if not self.config.get('classify_judge_column_keys'):
+        if not self.config.get('classify_input_column_keys'):
             return False
         if not target_column or target_column.get('type') not in [ColumnTypes.MULTIPLE_SELECT, ColumnTypes.SINGLE_SELECT]:
             return False
@@ -4043,16 +4043,16 @@ class AutomationRule:
                     config_map = {
                         'summarize': {
                             'config': {
-                                'summary_columns': action_info.get('summary_columns'),
+                                'summary_input_columns': action_info.get('summary_input_columns'),
                                 'summary_prompt': action_info.get('summary_prompt'),
-                                'target_column_key': action_info.get('target_column_key')
+                                'summary_output_column_key': action_info.get('summary_output_column_key')
                             }
                         },
                         'classify': {
                             'config': {
-                                'classify_judge_column_keys': action_info.get('classify_judge_column_keys'),
+                                'classify_input_column_keys': action_info.get('classify_input_column_keys'),
                                 'classify_prompt': action_info.get('classify_prompt'),
-                                'classify_target_column_key': action_info.get('classify_target_column_key'),
+                                'classify_output_column_key': action_info.get('classify_output_column_key'),
                             }
                         }
                     }
