@@ -92,3 +92,26 @@ class DTableAIAPI:
         else:
             logger.error(f"Failed to ocr image: {response.text}")
             raise DTableAIAPIError()
+
+    def extract(self, content, extract_fields):
+        """Extract specific information from content based on field descriptions"""
+        if not content or not content.strip():
+            return {}
+        
+        data = {
+            'content': content,
+            'username': self.username,
+            'org_id': self.org_id,
+            'extract_fields': extract_fields,
+        }
+        
+        url = f'{self.seatable_ai_server_url}/api/v1/ai/extract/'
+        headers = gen_headers()
+        response = requests.post(url, json=data, headers=headers, timeout=30)
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result.get('extracted_data', {})
+        else:
+            logger.error(f"Failed to extract information: {response.text}")
+            raise DTableAIAPIError()

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import io
 import os
 import sys
 import logging
@@ -14,6 +15,8 @@ import re
 
 from seaserv import ccnet_api
 from sqlalchemy import text
+from pdfminer.high_level import extract_text
+import mammoth
 
 from dtable_events.app.config import INNER_FILE_SERVER_ROOT
 
@@ -256,6 +259,16 @@ def gen_file_get_url(token, filename):
 
 def get_file_ext(filename):
     return Path(filename).suffix.lower()
+
+def parse_docx(file):
+    ignore_images = lambda _: []
+    result = mammoth.convert_to_markdown(io.BytesIO(file), convert_image=ignore_images)
+    return result.value.replace('\\', '')
+
+
+def parse_pdf(file):
+    text = extract_text(io.BytesIO(file))
+    return text
 
 def get_fileserver_root():
     """ Construct seafile fileserver address and port.
