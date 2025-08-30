@@ -16,8 +16,6 @@ import jwt
 import requests
 from dateutil import parser
 from sqlalchemy import text
-from pdfminer.high_level import extract_text
-import mammoth
 
 from seaserv import seafile_api
 from dtable_events.automations.models import get_third_party_account
@@ -30,7 +28,8 @@ from dtable_events.convert_page.manager import conver_page_to_pdf_manager
 from dtable_events.app.log import auto_rule_logger
 from dtable_events.notification_rules.notification_rules_utils import send_notification, fill_msg_blanks_with_sql_row
 from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, \
-    normalize_file_path, gen_file_get_url, gen_random_option, get_dtable_admins
+    normalize_file_path, gen_file_get_url, gen_random_option, get_dtable_admins, \
+    parse_docx, parse_pdf
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_web_api import DTableWebAPI
@@ -70,6 +69,9 @@ CONVERT_PAGE_TO_PDF_ROWS_LIMIT = 50
 AUTO_RULE_INVALID_MSG_TYPE = 'auto_rule_invalid'
 
 AUTO_RULE_CALCULATE_TYPES = ['calculate_accumulated_value', 'calculate_delta', 'calculate_rank', 'calculate_percentage']
+
+# AI content processing limits
+AI_CONTENT_MAX_LENGTH = 10000
 
 
 def email2list(email_str, split_pattern='[,，]'):
@@ -3315,6 +3317,9 @@ class RunAI(BaseAction):
 
         content = self.get_column_content(converted_row)
 
+        if len(content) > AI_CONTENT_MAX_LENGTH:
+            content = content[:AI_CONTENT_MAX_LENGTH]
+
         if not content.strip():
             summary_result = ''
         else:
@@ -3387,7 +3392,7 @@ class RunAI(BaseAction):
         option_names = [option.get('name', '') for option in options if option.get('name')]
         target_content = ', '.join(option_names)
         # Build complete AI classification input content
-        content = f'Content to classify: {classify_content}\nAvailable options: {target_content}\nOption type: {target_column.get("type")}\n'
+        content = f'Available options: {target_content}\nOption type: {target_column.get("type")}\nContent to classify: {classify_content}\n'
         return content
             
     def summary(self):
@@ -3421,6 +3426,8 @@ class RunAI(BaseAction):
         }
 
         content = self.get_classify_content(converted_row)
+        if len(content) > AI_CONTENT_MAX_LENGTH:
+            content = content[:AI_CONTENT_MAX_LENGTH]
 
         if not content.strip():
             classification_result = []
@@ -3555,24 +3562,14 @@ class RunAI(BaseAction):
 
         # Parse based on file extension
         if file_ext in ['.docx', '.doc']:
-            return self._parse_docx(file_content)
+            return parse_docx(file_content)
         elif file_ext == '.pdf':
-            return self._parse_pdf(file_content)
+            return parse_pdf(file_content)
         elif file_ext in ['.md', '.markdown', '.txt']:
             return file_content.decode()
         else:
             auto_rule_logger.warning(f'rule {self.auto_rule.rule_id} unsupported file type: {file_ext}')
             return None
-
-    def _parse_docx(self, file):
-        ignore_images = lambda _: []
-        result = mammoth.convert_to_markdown(io.BytesIO(file), convert_image=ignore_images)
-        return result.value.replace('\\', '')
-
-
-    def _parse_pdf(self, file):
-        text = extract_text(io.BytesIO(file))
-        return text
 
     def get_file_content(self, file_data, repo_id):
         """Get file content from file data"""
@@ -3647,6 +3644,9 @@ class RunAI(BaseAction):
                 auto_rule_logger.error(f'rule {self.auto_rule.rule_id} failed to get file content')
                 return
                     
+        if len(source_content) > AI_CONTENT_MAX_LENGTH:
+            source_content = source_content[:AI_CONTENT_MAX_LENGTH]
+                
         # Build extraction content with target fields descriptions
         target_descriptions = {}
         
