@@ -3447,6 +3447,95 @@ class RunAI(BaseAction):
             auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} update classify result error: {e}')
             return
 
+    def ocr(self):
+        # Get table and configuration information
+        table_name = self.auto_rule.table_info['name']
+        
+        ocr_input_column_key = self.config.get('ocr_input_column_key')
+        ocr_output_column_key = self.config.get('ocr_output_column_key')
+        repo_id = self.config.get('repo_id')
+        
+        # Validate required configuration parameters
+        if not repo_id:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} repo_id not found in config')
+            return
+            
+        image_column = self.col_key_dict.get(ocr_input_column_key)
+        target_column = self.col_key_dict.get(ocr_output_column_key)
+        
+        if not image_column or not target_column:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} image column or target column not found')
+            return
+
+        target_column_name = target_column.get('name')
+        
+        # Get current row data
+        sql_row = self.auto_rule.get_sql_row()
+        if not sql_row:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} row data not found')
+            return
+        
+        # Get image file list
+        image_files = sql_row.get(ocr_input_column_key, [])
+        if not image_files:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} no images found in column')
+            return
+
+        # Process the first image
+        first_image = image_files[0] if image_files else None
+        if not first_image:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} no first image found')
+            return
+        
+        file_url = first_image
+        file_name = os.path.basename(unquote(file_url.split('/')[-1]))
+        if not file_name or not file_url:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} first image missing name or url')
+            return
+
+        # Build file path and get download token
+        try:
+            file_path = unquote('/'.join(file_url.split('/')[7:]).strip())
+            asset_path = normalize_file_path(os.path.join('/asset', uuid_str_to_36_chars(self.auto_rule.dtable_uuid), file_path))
+            
+            asset_id = seafile_api.get_file_id_by_path(repo_id, asset_path)
+            if not asset_id:
+                auto_rule_logger.warning(f'rule {self.auto_rule.rule_id} OCR asset file {file_name} does not exist')
+                return
+
+            download_token = seafile_api.get_fileserver_access_token(
+                repo_id, asset_id, 'download', self.username, use_onetime=True
+            )
+            if not download_token:
+                auto_rule_logger.error(f'rule {self.auto_rule.rule_id} failed to get download token for OCR')
+                return
+
+        except Exception as e:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} failed to process file for OCR: {e}')
+            return
+
+        ocr_result = ''
+        
+        # Call AI service for OCR recognition
+        try:
+            seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, SEATABLE_AI_SERVER_URL)
+            
+            ocr_text = seatable_ai_api.ocr(file_name, download_token)
+            if ocr_text.strip():
+                ocr_result = ocr_text.strip()
+                            
+        except Exception as e:
+            auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai ocr error: {e}')
+            return
+
+        update_data = {target_column_name: ocr_result}
+
+        try:
+            self.auto_rule.dtable_server_api.update_row(table_name, self.data['row_id'], update_data)
+        except Exception as e:
+            auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} update ocr result error: {e}')
+            return
+
     def can_summary(self):
         if not ENABLE_SEATABLE_AI:
             return False
@@ -3483,6 +3572,26 @@ class RunAI(BaseAction):
         except Exception as e:
             return False
         return True
+
+    def can_ocr(self):
+        if not ENABLE_SEATABLE_AI:
+            return False
+        image_column = self.col_key_dict.get(self.config.get('ocr_input_column_key'))
+        target_column = self.col_key_dict.get(self.config.get('ocr_output_column_key'))
+        
+        if not image_column or image_column.get('type') != ColumnTypes.IMAGE:
+            return False
+        if not target_column or target_column.get('type') not in [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT]:
+            return False
+        try:
+            result = self.auto_rule.dtable_web_api.ai_permission_check(self.auto_rule.dtable_uuid)
+            self.username = result.get('username')
+            if result.get('is_exceed'):
+                auto_rule_logger.info(f'rule {self.auto_rule.rule_id} dtable: {self.auto_rule.dtable_uuid} exceed ai limit')
+                return False
+        except Exception as e:
+            return False
+        return True
         
     def do_action(self):
         if self.ai_function == 'summarize':
@@ -3491,6 +3600,9 @@ class RunAI(BaseAction):
         elif self.ai_function == 'classify':
             if self.can_classify():
                 self.classify()
+        elif self.ai_function == 'OCR':
+            if self.can_ocr():
+                self.ocr()
         else:
             auto_rule_logger.warning('ai function %s not supported', self.ai_function)
             return
@@ -4054,7 +4166,14 @@ class AutomationRule:
                                 'classify_prompt': action_info.get('classify_prompt'),
                                 'classify_output_column_key': action_info.get('classify_output_column_key'),
                             }
-                        }
+                        },
+                        'OCR': {
+                            'config': {
+                                'ocr_input_column_key': action_info.get('ocr_input_column_key'),
+                                'ocr_output_column_key': action_info.get('ocr_output_column_key'),
+                                'repo_id': action_info.get('repo_id'),
+                            }
+                        },
                     }
                     config = config_map.get(ai_function, {}).get('config')
                     RunAI(self, action_info.get('type'), self.data, ai_function, config).do_action()
