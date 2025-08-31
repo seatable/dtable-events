@@ -22,7 +22,7 @@ from dtable_events.automations.models import get_third_party_account
 from dtable_events.app.metadata_cache_managers import BaseMetadataCacheManager
 from dtable_events.app.event_redis import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, ENABLE_PYTHON_SCRIPT, SEATABLE_AI_SERVER_URL, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, \
-INNER_DTABLE_SERVER_URL, ENABLE_SEATABLE_AI
+INNER_DTABLE_SERVER_URL, ENABLE_SEATABLE_AI, AUTO_RULES_AI_CONTENT_MAX_LENGTH
 from dtable_events.dtable_io import send_wechat_msg, send_dingtalk_msg
 from dtable_events.convert_page.manager import conver_page_to_pdf_manager
 from dtable_events.app.log import auto_rule_logger
@@ -69,9 +69,6 @@ CONVERT_PAGE_TO_PDF_ROWS_LIMIT = 50
 AUTO_RULE_INVALID_MSG_TYPE = 'auto_rule_invalid'
 
 AUTO_RULE_CALCULATE_TYPES = ['calculate_accumulated_value', 'calculate_delta', 'calculate_rank', 'calculate_percentage']
-
-# AI content processing limits
-AI_CONTENT_MAX_LENGTH = 10000
 
 
 def email2list(email_str, split_pattern='[,，]'):
@@ -3317,8 +3314,7 @@ class RunAI(BaseAction):
 
         content = self.get_column_content(converted_row)
 
-        if len(content) > AI_CONTENT_MAX_LENGTH:
-            content = content[:AI_CONTENT_MAX_LENGTH]
+        content = content[:AUTO_RULES_AI_CONTENT_MAX_LENGTH]
 
         if not content.strip():
             summary_result = ''
@@ -3426,8 +3422,7 @@ class RunAI(BaseAction):
         }
 
         content = self.get_classify_content(converted_row)
-        if len(content) > AI_CONTENT_MAX_LENGTH:
-            content = content[:AI_CONTENT_MAX_LENGTH]
+        content = content[:AUTO_RULES_AI_CONTENT_MAX_LENGTH]
 
         if not content.strip():
             classification_result = []
@@ -3643,9 +3638,7 @@ class RunAI(BaseAction):
             if source_content is None:
                 auto_rule_logger.error(f'rule {self.auto_rule.rule_id} failed to get file content')
                 return
-                    
-        if len(source_content) > AI_CONTENT_MAX_LENGTH:
-            source_content = source_content[:AI_CONTENT_MAX_LENGTH]
+        source_content = source_content[:AUTO_RULES_AI_CONTENT_MAX_LENGTH]
                 
         # Build extraction content with target fields descriptions
         target_descriptions = {}
