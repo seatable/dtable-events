@@ -9,6 +9,7 @@ from datetime import datetime, date, timedelta
 from queue import Full
 from urllib.parse import unquote, urlparse, parse_qs
 from uuid import UUID
+from pathlib import Path
 
 from dtable_events.utils.dtable_ai_api import DTableAIAPI
 import jwt
@@ -21,13 +22,14 @@ from dtable_events.automations.models import get_third_party_account
 from dtable_events.app.metadata_cache_managers import BaseMetadataCacheManager
 from dtable_events.app.event_redis import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, ENABLE_PYTHON_SCRIPT, SEATABLE_AI_SERVER_URL, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, \
-INNER_DTABLE_SERVER_URL, ENABLE_SEATABLE_AI
+INNER_DTABLE_SERVER_URL, ENABLE_SEATABLE_AI, AUTO_RULES_AI_CONTENT_MAX_LENGTH
 from dtable_events.dtable_io import send_wechat_msg, send_dingtalk_msg
 from dtable_events.convert_page.manager import conver_page_to_pdf_manager
 from dtable_events.app.log import auto_rule_logger
 from dtable_events.notification_rules.notification_rules_utils import send_notification, fill_msg_blanks_with_sql_row
 from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, \
-    normalize_file_path, gen_file_get_url, gen_random_option, get_dtable_admins
+    normalize_file_path, gen_file_get_url, gen_random_option, get_dtable_admins, \
+    parse_docx, parse_pdf
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_web_api import DTableWebAPI
@@ -3312,6 +3314,8 @@ class RunAI(BaseAction):
 
         content = self.get_column_content(converted_row)
 
+        content = content[:AUTO_RULES_AI_CONTENT_MAX_LENGTH]
+
         if not content.strip():
             summary_result = ''
         else:
@@ -3384,7 +3388,7 @@ class RunAI(BaseAction):
         option_names = [option.get('name', '') for option in options if option.get('name')]
         target_content = ', '.join(option_names)
         # Build complete AI classification input content
-        content = f'Content to classify: {classify_content}\nAvailable options: {target_content}\nOption type: {target_column.get("type")}\n'
+        content = f'Available options: {target_content}\nOption type: {target_column.get("type")}\nContent to classify: {classify_content}\n'
         return content
             
     def summary(self):
@@ -3418,6 +3422,7 @@ class RunAI(BaseAction):
         }
 
         content = self.get_classify_content(converted_row)
+        content = content[:AUTO_RULES_AI_CONTENT_MAX_LENGTH]
 
         if not content.strip():
             classification_result = []
@@ -3536,6 +3541,143 @@ class RunAI(BaseAction):
             auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} update ocr result error: {e}')
             return
 
+
+    def parse_file(self, file_name, download_token):
+            
+        file_ext = Path(file_name).suffix.lower()
+        
+        # Download file content
+        file_url = gen_file_get_url(download_token, file_name)
+        response = requests.get(file_url, timeout=30)
+        if not response.ok:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} failed to download file: {file_name}')
+            return None
+        
+        file_content = response.content
+
+        # Parse based on file extension
+        if file_ext in ['.docx', '.doc']:
+            return parse_docx(file_content)
+        elif file_ext == '.pdf':
+            return parse_pdf(file_content)
+        elif file_ext in ['.md', '.markdown', '.txt']:
+            return file_content.decode()
+        else:
+            auto_rule_logger.warning(f'rule {self.auto_rule.rule_id} unsupported file type: {file_ext}')
+            return None
+
+    def get_file_content(self, file_data, repo_id):
+        """Get file content from file data"""
+        try:
+            first_file = file_data[0]
+            file_url = first_file.get('url')
+            file_name = first_file.get('name', os.path.basename(file_url))
+            
+            file_path = unquote('/'.join(file_url.split('/')[7:]).strip())
+            asset_path = normalize_file_path(os.path.join('/asset', uuid_str_to_36_chars(self.auto_rule.dtable_uuid), file_path))
+            
+            asset_id = seafile_api.get_file_id_by_path(repo_id, asset_path)
+            if not asset_id:
+                auto_rule_logger.warning(f'rule {self.auto_rule.rule_id} asset file does not exist: {file_path}')
+                return None
+            
+            # Get download token
+            download_token = seafile_api.get_fileserver_access_token(
+                repo_id, asset_id, 'download', self.username, use_onetime=True
+            )
+            if not download_token:
+                auto_rule_logger.error(f'rule {self.auto_rule.rule_id} failed to get download token')
+                return None
+            
+            # Parse file using the standard parsing method
+            return self.parse_file(file_name, download_token)
+                
+        except Exception as e:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} failed to get file content: {e}')
+            return None
+
+    def extract(self):
+        """Execute AI content extraction, extract specified information from source content to target columns"""
+        table_name = self.auto_rule.table_info['name']
+        
+        # Get source and target column configuration
+        extract_input_column_key = self.config.get('extract_input_column_key')
+        extract_output_columns = self.config.get('extract_output_columns', {})
+        
+        source_column = self.col_key_dict.get(extract_input_column_key)
+        if not source_column:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} source column not found')
+            return
+        
+        if not extract_output_columns:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} target columns not configured')
+            return
+        
+        # Get current row data
+        sql_row = self.auto_rule.get_sql_row()
+        if not sql_row:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} row data not found')
+            return
+        
+        # Get source content
+        source_content = sql_row.get(extract_input_column_key, '')
+        if not source_content:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} source content is empty')
+            return
+        
+        # Handle file content if source column is file type
+        source_column_type = source_column.get('type')
+        if source_column_type == ColumnTypes.FILE:
+            repo_id = self.config.get('repo_id')
+            if not repo_id:
+                auto_rule_logger.error(f'rule {self.auto_rule.rule_id} repo_id not found for file processing')
+                return
+            
+            # Get file content using dedicated method
+            source_content = self.get_file_content(source_content, repo_id)
+            if source_content is None:
+                auto_rule_logger.error(f'rule {self.auto_rule.rule_id} failed to get file content')
+                return
+        source_content = source_content[:AUTO_RULES_AI_CONTENT_MAX_LENGTH]
+                
+        # Build extraction content with target fields descriptions
+        target_descriptions = {}
+        
+        for target_column_key, description in extract_output_columns.items():
+            target_column = self.col_key_dict.get(target_column_key)
+            if target_column:
+                target_column_name = target_column.get('name')
+                target_descriptions[target_column_name] = description
+        
+        if not target_descriptions:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} no valid target columns found')
+            return
+                
+        # Call AI service for content extraction
+        extraction_result = {}
+        try:
+            seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, SEATABLE_AI_SERVER_URL)
+            # Use dedicated extract method
+            extraction_result = seatable_ai_api.extract(source_content, target_descriptions)
+                    
+        except Exception as e:
+            auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai extract error: {e}')
+            return
+        
+        # Build update data directly from target columns
+        update_data = {name: value for name, value in extraction_result.items() if name in target_descriptions}
+        
+        if not update_data:
+            auto_rule_logger.warning(f'rule {self.auto_rule.rule_id} no data to update')
+            return
+        
+        # Update row with extracted information
+        try:
+            self.auto_rule.dtable_server_api.update_row(table_name, self.data['row_id'], update_data)
+        except Exception as e:
+            auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} update extract result error: {e}')
+            return
+
     def can_summary(self):
         if not ENABLE_SEATABLE_AI:
             return False
@@ -3592,6 +3734,43 @@ class RunAI(BaseAction):
         except Exception as e:
             return False
         return True
+    def can_extract(self):
+        if not ENABLE_SEATABLE_AI:
+            return False
+        
+        extract_input_column_key = self.config.get('extract_input_column_key')
+        extract_output_columns = self.config.get('extract_output_columns', {})
+        
+        source_column = self.col_key_dict.get(extract_input_column_key)
+        if not source_column:
+            return False
+        
+        # Check source column type - should be text, long_text, or file
+        source_column_type = source_column.get('type')
+        valid_source_types = [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT, ColumnTypes.FILE]
+        if source_column_type not in valid_source_types:
+            return False
+        
+        # Check if target columns are configured and valid
+        if not extract_output_columns:
+            return False
+        
+        valid_target_types = [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT, ColumnTypes.NUMBER, ColumnTypes.DATE, ColumnTypes.NUMBER, ColumnTypes.GEOLOCATION, ColumnTypes.DURATION, ColumnTypes.CHECKBOX, ColumnTypes.URL, ColumnTypes.EMAIL, ColumnTypes.RATE]
+        for target_column_key in extract_output_columns.keys():
+            target_column = self.col_key_dict.get(target_column_key)
+            if not target_column or target_column.get('type') not in valid_target_types:
+                return False
+        
+        try:
+            result = self.auto_rule.dtable_web_api.ai_permission_check(self.auto_rule.dtable_uuid)
+            self.username = result.get('username')
+            if result.get('is_exceed'):
+                auto_rule_logger.info(f'rule {self.auto_rule.rule_id} dtable: {self.auto_rule.dtable_uuid} exceed ai limit')
+                return False
+        except Exception as e:
+            return False
+        
+        return True
         
     def do_action(self):
         if self.ai_function == 'summarize':
@@ -3603,6 +3782,9 @@ class RunAI(BaseAction):
         elif self.ai_function == 'OCR':
             if self.can_ocr():
                 self.ocr()
+        elif self.ai_function == 'extract':
+            if self.can_extract():
+                self.extract()
         else:
             auto_rule_logger.warning('ai function %s not supported', self.ai_function)
             return
@@ -4174,6 +4356,13 @@ class AutomationRule:
                                 'repo_id': action_info.get('repo_id'),
                             }
                         },
+                        'extract': {
+                            'config': {
+                                'extract_input_column_key': action_info.get('extract_input_column_key'),
+                                'extract_output_columns': action_info.get('extract_output_columns'),
+                                'repo_id': action_info.get('repo_id'),
+                            }
+                        }
                     }
                     config = config_map.get(ai_function, {}).get('config')
                     RunAI(self, action_info.get('type'), self.data, ai_function, config).do_action()
