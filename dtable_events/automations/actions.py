@@ -3256,7 +3256,33 @@ class RunAI(BaseAction):
         self.config = config
         self.col_key_dict = {col.get('key'): col for col in self.auto_rule.table_info['columns']}
 
-    def get_column_content(self, row_data):
+    def _format_column_value_for_ai(self, column_value, column_type, db_session):
+        if column_value is None:
+            return ''
+        
+        if column_type in [ColumnTypes.COLLABORATOR, ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
+            # Convert collaborator usernames to nicknames
+            if isinstance(column_value, list):
+                if not column_value:
+                    return ''
+                nicknames_dict = get_nickname_by_usernames(column_value, db_session)
+                nicknames = [nicknames_dict.get(user_id, user_id) for user_id in column_value]
+                return ', '.join(nicknames)
+            elif column_value:
+                # Single collaborator, convert to list and process
+                nicknames_dict = get_nickname_by_usernames([column_value], db_session)
+                return nicknames_dict.get(column_value, column_value)
+            else:
+                return ''
+        elif column_type == ColumnTypes.MULTIPLE_SELECT:
+            return ', '.join(column_value) if column_value else ''
+        elif column_type == ColumnTypes.FILE:
+            return ''
+        else:
+            # For other types, use the existing cell_data2str function
+            return cell_data2str(column_value) if column_value else ''
+
+    def get_summary_content(self, row_data):
         contents = []
         
         for col_id in self.config.get('summary_input_column_keys', []):
@@ -3266,29 +3292,16 @@ class RunAI(BaseAction):
 
             column_name = column.get('name')
             column_value = row_data.get(column_name)
+            column_type = column.get('type')
             
             if column_value is None:
                 continue
 
-            column_type = column.get('type')
-            if column_type in [ColumnTypes.COLLABORATOR, ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
-                # Convert collaborator usernames to nicknames
-                if isinstance(column_value, list):
-                    nicknames_dict = get_nickname_by_usernames(column_value, self.auto_rule.db_session)
-                    nicknames = [nicknames_dict.get(user_id, user_id) for user_id in column_value]
-                    column_value = ', '.join(nicknames)
-                elif column_value:
-                    # Single collaborator, convert to list and process
-                    nicknames_dict = get_nickname_by_usernames([column_value], self.auto_rule.db_session)
-                    column_value = nicknames_dict.get(column_value, column_value)
-            elif column_type == ColumnTypes.MULTIPLE_SELECT:
-                column_value = ', '.join(column_value) if column_value else ''
-            elif column_type == ColumnTypes.FILE:
-                continue
-            content_str = cell_data2str(column_value) if column_value else ''
-
-            if content_str.strip():
-                contents.append(f"{column_name}: {content_str}")
+            # Use the new unified method to format column value
+            formatted_value = self._format_column_value_for_ai(column_value, column_type, self.auto_rule.db_session)
+            
+            if formatted_value.strip():
+                contents.append(f"{column_name}: {formatted_value}")
         return '\n'.join(contents)
 
     def fill_summary_field(self):
@@ -3312,7 +3325,7 @@ class RunAI(BaseAction):
             for key in sql_row
         }
 
-        content = self.get_column_content(converted_row)
+        content = self.get_summary_content(converted_row)
 
         content = content[:AUTO_RULES_AI_CONTENT_MAX_LENGTH]
 
@@ -3353,29 +3366,16 @@ class RunAI(BaseAction):
 
             column_name = column.get('name')
             column_value = row_data.get(column_name)
+            column_type = column.get('type')
             
             if column_value is None:
                 continue
 
-            column_type = column.get('type')
-            if column_type in [ColumnTypes.COLLABORATOR, ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
-                # Convert collaborator usernames to nicknames
-                if isinstance(column_value, list):
-                    nicknames_dict = get_nickname_by_usernames(column_value, self.auto_rule.db_session)
-                    nicknames = [nicknames_dict.get(user_id, user_id) for user_id in column_value]
-                    column_value = ', '.join(nicknames)
-                elif column_value:
-                    # Single collaborator, convert to list and process
-                    nicknames_dict = get_nickname_by_usernames([column_value], self.auto_rule.db_session)
-                    column_value = nicknames_dict.get(column_value, column_value)
-            elif column_type == ColumnTypes.MULTIPLE_SELECT:
-                column_value = ', '.join(column_value) if column_value else ''
-            elif column_type == ColumnTypes.FILE:
-                continue
-            content_str = cell_data2str(column_value) if column_value else ''
-
-            if content_str.strip():
-                contents.append(f"{column_name}: {content_str}")
+            # Use the new unified method to format column value
+            formatted_value = self._format_column_value_for_ai(column_value, column_type, self.auto_rule.db_session)
+            
+            if formatted_value.strip():
+                contents.append(f"{column_name}: {formatted_value}")
         
         classify_content = '\n'.join(contents)
         
@@ -3390,6 +3390,35 @@ class RunAI(BaseAction):
         # Build complete AI classification input content
         content = f'Available options: {target_content}\nOption type: {target_column.get("type")}\nContent to classify: {classify_content}\n'
         return content
+    def fill_custom_prompt(self, custom_prompt, row_data):
+        """Fill custom_prompt with field values using the same pattern as notifications"""
+        if not custom_prompt:
+            return ''
+        
+        # Find all field placeholders like {field_name}
+        blanks = set(re.findall(r'\{([^{]*?)\}', custom_prompt))
+        col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
+        column_blanks = [blank for blank in blanks if blank in col_name_dict]
+        
+        filled_prompt = custom_prompt
+
+        for blank in column_blanks:
+            column_value = row_data.get(blank, '')
+
+            if column_value is None:
+                column_value = ''
+            
+            # Handle different column types using the unified method
+            column = col_name_dict.get(blank)
+            if column:
+                column_type = column.get('type')
+                formatted_value = self._format_column_value_for_ai(column_value, column_type, self.auto_rule.db_session)
+            else:
+                formatted_value = ''
+            
+            filled_prompt = filled_prompt.replace('{' + blank + '}', formatted_value)
+        
+        return filled_prompt
             
     def summary(self):
         self.fill_summary_field()
@@ -3677,6 +3706,54 @@ class RunAI(BaseAction):
         except Exception as e:
             auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} update extract result error: {e}')
             return
+        
+    def custom(self):
+        """Execute custom AI processing with custom_prompt and update custom_output_column_key"""
+        table_name = self.auto_rule.table_info['name']
+        
+        # Get target column config and info
+        custom_output_column_key = self.config.get('custom_output_column_key')
+        target_column = self.col_key_dict.get(custom_output_column_key)
+        if not target_column:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} target custom output column not found')
+            return
+
+        target_column_name = target_column.get('name')
+        
+        # Get current row data
+        sql_row = self.auto_rule.get_sql_row()
+        if not sql_row:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} row data not found')
+            return
+
+        # Convert column keys to column names and parse column values
+        converted_row = {
+            self.col_key_dict.get(key).get('name') if self.col_key_dict.get(key) else key:
+            self.parse_column_value(self.col_key_dict.get(key), sql_row.get(key)) if self.col_key_dict.get(key) else sql_row.get(key)
+            for key in sql_row
+        }
+
+        # Process custom_prompt with field replacements
+        custom_prompt = self.config.get('custom_prompt', '')
+        filled_prompt = self.fill_custom_prompt(custom_prompt, converted_row)
+        filled_prompt = filled_prompt[:AUTO_RULES_AI_CONTENT_MAX_LENGTH]
+        if not filled_prompt.strip():
+            custom_result = ''
+        else:
+            try:
+                seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, SEATABLE_AI_SERVER_URL)
+                custom_result = seatable_ai_api.custom(filled_prompt)
+            except Exception as e:
+                auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai custom processing error: {e}')
+                return 
+
+        update_data = {target_column_name: custom_result}
+
+        try:
+            self.auto_rule.dtable_server_api.update_row(table_name, self.data['row_id'], update_data)
+        except Exception as e:
+            auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} fill custom column error: {e}')
+            return
 
     def can_summary(self):
         if not ENABLE_SEATABLE_AI:
@@ -3771,6 +3848,36 @@ class RunAI(BaseAction):
             return False
         
         return True
+
+    def can_custom(self):
+        """Check if custom AI function can be executed"""
+        if not ENABLE_SEATABLE_AI:
+            return False
+        
+        custom_output_column_key = self.config.get('custom_output_column_key')
+        custom_prompt = self.config.get('custom_prompt')
+        
+        # verify output column
+        target_column = self.col_key_dict.get(custom_output_column_key)
+        if not custom_output_column_key or not target_column:
+            return False
+        if target_column.get('type') not in [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT]:
+            return False
+        
+        if not custom_prompt:
+            return False
+        
+        try:
+            result = self.auto_rule.dtable_web_api.ai_permission_check(self.auto_rule.dtable_uuid)
+            self.username = result.get('username')
+            if result.get('is_exceed'):
+                auto_rule_logger.info(f'rule {self.auto_rule.rule_id} dtable: {self.auto_rule.dtable_uuid} exceed ai limit')
+                return False
+        except Exception as e:
+            return False
+        
+        return True
+        
         
     def do_action(self):
         if self.ai_function == 'summarize':
@@ -3785,6 +3892,9 @@ class RunAI(BaseAction):
         elif self.ai_function == 'extract':
             if self.can_extract():
                 self.extract()
+        elif self.ai_function == 'custom':
+            if self.can_custom():
+                self.custom()
         else:
             auto_rule_logger.warning('ai function %s not supported', self.ai_function)
             return
@@ -4361,6 +4471,12 @@ class AutomationRule:
                                 'extract_input_column_key': action_info.get('extract_input_column_key'),
                                 'extract_output_columns': action_info.get('extract_output_columns'),
                                 'repo_id': action_info.get('repo_id'),
+                            }
+                        },
+                        'custom': {
+                            'config': {
+                                'custom_output_column_key': action_info.get('custom_output_column_key'),
+                                'custom_prompt': action_info.get('custom_prompt'),
                             }
                         }
                     }
