@@ -3665,16 +3665,7 @@ class RunAI(BaseAction):
             return
         
         # Build update data directly from target columns
-        update_data = {}
-        for target_column_key, description in extract_output_columns.items():
-            target_column = self.col_key_dict.get(target_column_key)
-            if target_column:
-                target_column_name = target_column.get('name')
-                
-                # Get extracted value for this field
-                extracted_value = extraction_result.get(target_column_name)
-                if extracted_value:
-                    update_data[target_column_name] = str(extracted_value)
+        update_data = {name: value for name, value in extraction_result.items() if name in target_descriptions}
         
         if not update_data:
             auto_rule_logger.warning(f'rule {self.auto_rule.rule_id} no data to update')
