@@ -3256,7 +3256,7 @@ class RunAI(BaseAction):
         self.config = config
         self.col_key_dict = {col.get('key'): col for col in self.auto_rule.table_info['columns']}
 
-    def _format_column_value_for_ai(self, column_value, column_type, db_session):
+    def _format_column_value_for_ai(self, column_value, column_type):
         if column_value is None:
             return ''
         
@@ -3265,12 +3265,12 @@ class RunAI(BaseAction):
             if isinstance(column_value, list):
                 if not column_value:
                     return ''
-                nicknames_dict = get_nickname_by_usernames(column_value, db_session)
+                nicknames_dict = get_nickname_by_usernames(column_value, self.auto_rule.db_session)
                 nicknames = [nicknames_dict.get(user_id, user_id) for user_id in column_value]
                 return ', '.join(nicknames)
             elif column_value:
                 # Single collaborator, convert to list and process
-                nicknames_dict = get_nickname_by_usernames([column_value], db_session)
+                nicknames_dict = get_nickname_by_usernames([column_value], self.auto_rule.db_session)
                 return nicknames_dict.get(column_value, column_value)
             else:
                 return ''
@@ -3298,7 +3298,7 @@ class RunAI(BaseAction):
                 continue
 
             # Use the new unified method to format column value
-            formatted_value = self._format_column_value_for_ai(column_value, column_type, self.auto_rule.db_session)
+            formatted_value = self._format_column_value_for_ai(column_value, column_type)
             
             if formatted_value.strip():
                 contents.append(f"{column_name}: {formatted_value}")
@@ -3372,7 +3372,7 @@ class RunAI(BaseAction):
                 continue
 
             # Use the new unified method to format column value
-            formatted_value = self._format_column_value_for_ai(column_value, column_type, self.auto_rule.db_session)
+            formatted_value = self._format_column_value_for_ai(column_value, column_type)
             
             if formatted_value.strip():
                 contents.append(f"{column_name}: {formatted_value}")
@@ -3404,15 +3404,12 @@ class RunAI(BaseAction):
 
         for blank in column_blanks:
             column_value = row_data.get(blank, '')
-
-            if column_value is None:
-                column_value = ''
             
             # Handle different column types using the unified method
             column = col_name_dict.get(blank)
             if column:
                 column_type = column.get('type')
-                formatted_value = self._format_column_value_for_ai(column_value, column_type, self.auto_rule.db_session)
+                formatted_value = self._format_column_value_for_ai(column_value, column_type)
             else:
                 formatted_value = ''
             
