@@ -115,3 +115,25 @@ class DTableAIAPI:
         else:
             logger.error(f"Failed to extract information: {response.text}")
             raise DTableAIAPIError()
+
+    def custom(self, content):
+        """Execute custom AI processing with user-defined prompt"""
+        if not content or not content.strip():
+            return ''
+        
+        data = {
+            'content': content,
+            'username': self.username,
+            'org_id': self.org_id,
+        }
+        
+        url = f'{self.seatable_ai_server_url}/api/v1/ai/custom/'
+        headers = gen_headers()
+        response = requests.post(url, json=data, headers=headers, timeout=30)
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result.get('result', '')
+        else:
+            logger.error(f"Failed to process custom AI request: {response.text}")
+            raise DTableAIAPIError()
