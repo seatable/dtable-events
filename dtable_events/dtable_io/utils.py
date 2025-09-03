@@ -86,7 +86,7 @@ def get_file_download_url(token, filename):
 def validate_cell_value(value, column_type):
     if column_type == ColumnTypes.IMAGE:
         if isinstance(value, list):
-            for idx in range(len(value), -1, -1):
+            for idx in range(len(value) - 1, -1, -1):
                 if not isinstance(value[idx], str) or not value[idx]:
                     value.pop(idx)
         else:
