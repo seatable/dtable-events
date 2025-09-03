@@ -83,6 +83,44 @@ def get_file_download_url(token, filename):
                                urlquote(filename))
 
 
+def validate_cell_value(value, column_type):
+    if column_type == ColumnTypes.IMAGE:
+        if isinstance(value, list):
+            for idx in range(len(value), -1, -1):
+                if not isinstance(value[idx], str) or not value[idx]:
+                    value.pop(idx)
+        else:
+            value = None
+
+    elif column_type == ColumnTypes.FILE:
+        if isinstance(value, list):
+            for idx in range(len(value) - 1, -1, -1):
+                if not isinstance(value[idx], dict):
+                    value.pop(idx)
+                    continue
+                file_item = value[idx]
+                if not file_item or not file_item.get('url') or not isinstance(file_item['url'], str):
+                    value.pop(idx)
+                    continue
+        else:
+            value = None
+
+    elif column_type == ColumnTypes.LONG_TEXT:
+        if isinstance(value, dict):
+            images = value.get('images')
+            if images:
+                if not isinstance(images, list):
+                    value['images'] = []
+                else:
+                    for idx in range(len(images) - 1, -1, -1):
+                        if not isinstance(images[idx], str) or not images[idx]:
+                            images.pop(idx)
+        elif not isinstance(value, str):
+            value = None
+
+    return value
+
+
 def convert_dtable_export_file_and_image_url(workspace_id, dtable_uuid, dtable_content):
     """ notice that this function receive a python dict and return a python dict
         json related operations are excluded
@@ -100,10 +138,11 @@ def convert_dtable_export_file_and_image_url(workspace_id, dtable_uuid, dtable_c
         dtable_io_logger.debug('table: %s rows: %s', table['_id'], len(rows))
         cols_dict = {col['key']: col for col in table.get('columns', [])}
         for row in rows:
-            for k, v in row.items():
+            for k in row.keys():
                 if k not in cols_dict:
                     continue
                 col = cols_dict[k]
+                v = row[k] = validate_cell_value(row[k], col['type'])
                 if col['type'] == ColumnTypes.IMAGE and isinstance(v, list) and v:
                     for idx, item in enumerate(v):
                         if isinstance(item, str) and old_file_part_path in item:
@@ -426,10 +465,11 @@ def convert_dtable_import_file_url(dtable_content, workspace_id, dtable_uuid):
         dtable_io_logger.debug('table: %s rows: %s', table['_id'], len(rows))
         cols_dict = {col['key']: col for col in table.get('columns', [])}
         for idx, row in enumerate(rows):
-            for k, v in row.items():
+            for k in row.keys():
                 if k not in cols_dict:
                     continue
                 col = cols_dict[k]
+                v = row[k] = validate_cell_value(row[k], col['type'])
                 if col['type'] == ColumnTypes.IMAGE and isinstance(v, list) and v:
                     for idx, item in enumerate(v):
                         if isinstance(item, str):
