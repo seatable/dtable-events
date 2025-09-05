@@ -8,6 +8,7 @@ from threading import Thread, Event, current_thread
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.app.log import auto_rule_logger
 from dtable_events.automations.auto_rules_utils import scan_triggered_automation_rules
+from dtable_events.celery_app.tasks.automation_rules import trigger_automation_rule
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import get_opt_from_conf_or_env
 
@@ -77,8 +78,9 @@ class AutomationRuleHandler(Thread):
                 message = subscriber.get_message()
                 if message is not None:
                     event = json.loads(message['data'])
-                    self.queue.put(event)
-                    auto_rule_logger.info(f"subscribe event {event}")
+                    # self.queue.put(event)
+                    # auto_rule_logger.info(f"subscribe event {event}")
+                    trigger_automation_rule.delay(event)
                 else:
                     time.sleep(0.5)
             except Exception as e:
