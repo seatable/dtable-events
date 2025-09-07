@@ -62,7 +62,7 @@ class App(object):
             self._metric_manager = MetricManager(config)
             self._universal_app_auto_backup = UniversalAppAutoBackup(config)
             # cron jobs
-            self._instant_notices_sender = InstantNoticeSender(config)
+            # self._instant_notices_sender = InstantNoticeSender(config)
             self._email_notices_sender = EmailNoticesSender(config)
             self._dtables_cleaner = DTablesCleaner(config)
             self._dtable_updates_sender = DTableUpdatesSender(config)
@@ -102,7 +102,7 @@ class App(object):
             self._api_calls_counter.start()                  # always True
             self._universal_app_auto_backup.start()          # always True
             # cron jobs
-            self._instant_notices_sender.start()             # default True
+            # self._instant_notices_sender.start()             # default True
             self._email_notices_sender.start()               # default True
             self._dtables_cleaner.start()                    # default True
             self._dtable_updates_sender.start()              # default True
@@ -127,11 +127,13 @@ class App(object):
             #metrics
             self._metric_manager.start()
 
-            # celery worker
+            # celery workers
             ## instant automation rules
             Process(target=app.worker_main, args=(['worker', '--loglevel=info', '-Q', 'trigger_automation_rule', '--concurrency', '1'],), daemon=True).start()
             ## interval automation rules
             Process(target=app.worker_main, args=(['worker', '--loglevel=info', '-Q', 'scan_automation_rules', '--concurrency', '1'],), daemon=True).start()
+            ## send instant notices
+            Process(target=app.worker_main, args=(['worker', '--loglevel=info', '-Q', 'send_instant_notices', '--concurrency', '1'],), daemon=True).start()
             # celery beat
             Process(target=app.Beat().run, daemon=True).start()
 
