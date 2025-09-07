@@ -1,4 +1,3 @@
-import logging
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from queue import Empty, Queue
@@ -10,18 +9,15 @@ from dtable_events.app.metadata_cache_managers import RuleIntervalMetadataCacheM
 from dtable_events.app.log import auto_rule_logger
 from dtable_events.automations.auto_rules_utils import scan_triggered_automation_rules, run_regular_execution_rule
 from dtable_events.celery_app.app import app
-from dtable_events.db import init_db_session_class
+from dtable_events.celery_app.tasks.base import DatabaseTask
 
 
-@app.task
-def trigger_automation_rule(event_data):
-    db_session = init_db_session_class(app.conf.get('config'))()
+@app.task(bind=True, base=DatabaseTask)
+def trigger_automation_rule(self, event_data):
     try:
-        scan_triggered_automation_rules(event_data, db_session)
+        scan_triggered_automation_rules(event_data, self.db_session)
     except Exception as e:
         auto_rule_logger.exception(e)
-    finally:
-        db_session.close()
 
 
 def trigger_rule(db_session_class, queue):
@@ -43,9 +39,8 @@ def trigger_rule(db_session_class, queue):
             db_session.close()
 
 
-@app.task
-def scan_automation_rules():
-    config = app.conf.get('config')
+@app.task(bind=True, base=DatabaseTask)
+def scan_automation_rules(self):
     sql = '''
             SELECT `dar`.`id`, `run_condition`, `trigger`, `actions`, `last_trigger_time`, `dtable_uuid`, `trigger_count`, `org_id`, dar.`creator` FROM dtable_automation_rules dar
             JOIN dtables d ON dar.dtable_uuid=d.uuid
@@ -57,8 +52,7 @@ def scan_automation_rules():
     per_day_check_time = datetime.now(timezone.utc) - timedelta(hours=23)
     per_week_check_time = datetime.now(timezone.utc) - timedelta(days=6)
     per_month_check_time = datetime.now(timezone.utc) - timedelta(days=27)  # consider the least month-days 28 in February (the 2nd month) in common years
-    db_session_class = init_db_session_class(config)
-    db_session = db_session_class()
+    db_session = self.db_session
     try:
         rules = db_session.execute(text(sql), {
             'per_day_check_time': per_day_check_time,
@@ -77,6 +71,6 @@ def scan_automation_rules():
         queue.put(rule)
     with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix='interval-auto-rules') as executor:
         for _ in range(max_workers):
-            executor.submit(trigger_rule, db_session_class, queue)
+            executor.submit(trigger_rule, app.db_session_class, queue)
 
     auto_rule_logger.info('all rules done')

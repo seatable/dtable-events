@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import time
+from multiprocessing import Process
 
 from dtable_events.activities.handlers import MessageHandler
 from dtable_events.app.stats_sender import StatsSender
@@ -127,8 +128,12 @@ class App(object):
             self._metric_manager.start()
 
             # celery worker
-            ## instant automation rule
-            app.worker_main(['worker', '--loglevel=info', '-Q', 'trigger_automation_rule', '--concurrency', '1'])
+            ## instant automation rules
+            Process(target=app.worker_main, args=(['worker', '--loglevel=info', '-Q', 'trigger_automation_rule', '--concurrency', '1'],), daemon=True).start()
+            ## interval automation rules
+            Process(target=app.worker_main, args=(['worker', '--loglevel=info', '-Q', 'scan_automation_rules', '--concurrency', '1'],), daemon=True).start()
+            # celery beat
+            Process(target=app.Beat().run, daemon=True).start()
 
         while True:
             time.sleep(60)
