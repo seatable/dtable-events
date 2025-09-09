@@ -129,11 +129,50 @@ class App(object):
 
             # celery workers
             ## instant automation rules
-            Process(target=app.worker_main, args=(['worker', '--loglevel=info', '-Q', 'trigger_automation_rule', '--concurrency', '1'],), daemon=True).start()
+            Process(
+                target=app.worker_main,
+                args=(
+                    [
+                        "worker",
+                        "--loglevel=info",
+                        "-Q",
+                        "trigger_automation_rule",
+                        "--concurrency",
+                        "1",
+                    ],
+                ),
+                daemon=True,
+            ).start()
             ## interval automation rules
-            Process(target=app.worker_main, args=(['worker', '--loglevel=info', '-Q', 'scan_automation_rules', '--concurrency', '1'],), daemon=True).start()
+            Process(
+                target=app.worker_main,
+                args=(
+                    [
+                        "worker",
+                        "--loglevel=info",
+                        "-Q",
+                        "scan_automation_rules",
+                        "--concurrency",
+                        "1",
+                    ],
+                ),
+                daemon=True,
+            ).start()
             ## send instant notices
-            Process(target=app.worker_main, args=(['worker', '--loglevel=info', '-Q', 'send_instant_notices', '--concurrency', '1'],), daemon=True).start()
+            Process(
+                target=app.worker_main,
+                args=(
+                    [
+                        "worker",
+                        "--loglevel=info",
+                        "-Q",
+                        "send_instant_notices",
+                        "--concurrency",
+                        "1",
+                    ],
+                ),
+                daemon=True,
+            ).start()
             # celery beat
             Process(target=app.Beat().run, daemon=True).start()
 

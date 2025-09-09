@@ -1,15 +1,18 @@
-from celery import Task, current_app
+from celery import Task
+
+from dtable_events.celery_app.app import SessionLocal
 
 
 class DatabaseTask(Task):
-    abstract = True
+    _db_session = None
 
-    def __init__(self):
-        super().__init__()
-        self.db_session = None
+    @property
+    def db_session(self):
+        if self._db_session is None:
+            self._db_session = SessionLocal()
+        return self._db_session
 
-    def before_start(self, task_id, args, kwargs):
-        self.db_session = current_app.db_session_class()
-
-    def after_return(self, status, retval, task_id, args, kwargs, einfo):
-        self.db_session.close()
+    def after_return(self, *args, **kwargs):
+        if self._db_session is not None:
+            self._db_session.close()
+            self._db_session = None

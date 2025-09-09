@@ -8,7 +8,7 @@ from sqlalchemy import text
 from dtable_events.app.metadata_cache_managers import RuleIntervalMetadataCacheManager
 from dtable_events.app.log import auto_rule_logger
 from dtable_events.automations.auto_rules_utils import scan_triggered_automation_rules, run_regular_execution_rule
-from dtable_events.celery_app.app import app
+from dtable_events.celery_app.app import app, SessionLocal
 from dtable_events.celery_app.tasks.base import DatabaseTask
 
 
@@ -20,7 +20,7 @@ def trigger_automation_rule(self, event_data):
         auto_rule_logger.exception(e)
 
 
-def trigger_rule(db_session_class, queue):
+def trigger_rules(db_session_class, queue):
     auto_rule_logger.info('thread %s start', current_thread().name)
     rule_interval_metadata_cache_manager = RuleIntervalMetadataCacheManager()
     while True:
@@ -71,6 +71,6 @@ def scan_automation_rules(self):
         queue.put(rule)
     with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix='interval-auto-rules') as executor:
         for _ in range(max_workers):
-            executor.submit(trigger_rule, app.db_session_class, queue)
+            executor.submit(trigger_rules, SessionLocal, queue)
 
     auto_rule_logger.info('all rules done')
