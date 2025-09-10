@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 import time
-from multiprocessing import Process
 
 from dtable_events.activities.handlers import MessageHandler
 from dtable_events.app.stats_sender import StatsSender
-from dtable_events.celery_app.app import app
+from dtable_events.celery_app.workers import CeleryWorkers
 from dtable_events.statistics.counter import UserActivityCounter
 from dtable_events.dtable_io.dtable_io_server import DTableIOServer
-from dtable_events.tasks.instant_notices_sender import InstantNoticeSender
+# from dtable_events.tasks.instant_notices_sender import InstantNoticeSender
 from dtable_events.tasks.email_notices_sender import EmailNoticesSender
 from dtable_events.tasks.dtables_cleaner import DTablesCleaner
 from dtable_events.tasks.dtable_updates_sender import DTableUpdatesSender
@@ -84,6 +83,8 @@ class App(object):
             conver_page_to_pdf_manager.init(config)
             # ai stats, listen redis and cron
             self.ai_stats_worker = AIStatsWorker(config)
+            # celery workers and beat
+            self.celery_workers = CeleryWorkers(config)
 
     def serve_forever(self):
 
@@ -126,55 +127,8 @@ class App(object):
             self.ai_stats_worker.start()                     # default False
             #metrics
             self._metric_manager.start()
-
             # celery workers
-            ## instant automation rules
-            Process(
-                target=app.worker_main,
-                args=(
-                    [
-                        "worker",
-                        "--loglevel=info",
-                        "-Q",
-                        "trigger_automation_rule",
-                        "--concurrency",
-                        "1",
-                    ],
-                ),
-                daemon=True,
-            ).start()
-            ## interval automation rules
-            Process(
-                target=app.worker_main,
-                args=(
-                    [
-                        "worker",
-                        "--loglevel=info",
-                        "-Q",
-                        "scan_automation_rules",
-                        "--concurrency",
-                        "1",
-                    ],
-                ),
-                daemon=True,
-            ).start()
-            ## send instant notices
-            Process(
-                target=app.worker_main,
-                args=(
-                    [
-                        "worker",
-                        "--loglevel=info",
-                        "-Q",
-                        "send_instant_notices",
-                        "--concurrency",
-                        "1",
-                    ],
-                ),
-                daemon=True,
-            ).start()
-            # celery beat
-            Process(target=app.Beat().run, daemon=True).start()
+            self.celery_workers.start()
 
         while True:
             time.sleep(60)

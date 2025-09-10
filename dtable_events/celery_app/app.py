@@ -10,9 +10,6 @@ app = Celery('dtable_events.celery_app')
 
 app.config_from_object('dtable_events.celery_app.celeryconfig')
 
-from dtable_events.celery_app.tasks import automation_rules
-from dtable_events.celery_app.tasks import command_tasks
-
 def init_app_config(config: configparser.ConfigParser):
     init_conf = {'config': config}
     if os.environ.get('BROKER_URL'):
@@ -26,3 +23,10 @@ SessionLocal = None
 def setup_worker_session_class(*args, **kwargs):
     global SessionLocal
     SessionLocal = init_db_session_class(app.conf.config)
+
+def get_session_class():
+    global SessionLocal
+    return SessionLocal
+
+from dtable_events.celery_app.tasks import automation_rules
+from dtable_events.celery_app.tasks import command_tasks
