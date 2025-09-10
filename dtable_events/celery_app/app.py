@@ -3,6 +3,8 @@ import configparser
 
 from celery import Celery, signals
 
+from dtable_events.app.config import get_config
+from dtable_events.app.event_redis import redis_cache
 from dtable_events.db import init_db_session_class
 
 # 创建 Celery 实例
@@ -22,7 +24,11 @@ SessionLocal = None
 @signals.worker_process_init.connect
 def setup_worker_session_class(*args, **kwargs):
     global SessionLocal
-    SessionLocal = init_db_session_class(app.conf.config)
+    conf_dir = os.environ.get('SEAFILE_CENTRAL_CONF_DIR')
+    events_conf_path = os.path.join(conf_dir, 'dtable-events.conf')
+    config = get_config(events_conf_path)
+    SessionLocal = init_db_session_class(config)
+    redis_cache.init_redis(config)
 
 def get_session_class():
     global SessionLocal
