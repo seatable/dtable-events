@@ -3683,8 +3683,9 @@ class RunAI(BaseAction):
         extraction_result = {}
         try:
             seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, SEATABLE_AI_SERVER_URL)
-            # Use dedicated extract method
-            extraction_result = seatable_ai_api.extract(source_content, target_descriptions)
+            # Use dedicated extract method with optional prompt
+            extract_prompt = self.config.get('extract_prompt')
+            extraction_result = seatable_ai_api.extract(source_content, target_descriptions, extract_prompt)
                     
         except Exception as e:
             auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai extract error: {e}')
@@ -4467,6 +4468,7 @@ class AutomationRule:
                             'config': {
                                 'extract_input_column_key': action_info.get('extract_input_column_key'),
                                 'extract_output_columns': action_info.get('extract_output_columns'),
+                                'extract_prompt': action_info.get('extract_prompt'),
                                 'repo_id': action_info.get('repo_id'),
                             }
                         },
