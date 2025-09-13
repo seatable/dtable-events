@@ -37,7 +37,7 @@ class AIStatsWorker:
         key_enabled = 'enabled'
 
         # enabled
-        enabled = get_opt_from_conf_or_env(config, section_name, key_enabled, default=False)
+        enabled = get_opt_from_conf_or_env(config, section_name, key_enabled, default=True)
         enabled = parse_bool(enabled)
         self._enabled = enabled
 
