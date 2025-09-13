@@ -251,3 +251,29 @@ class DTableWebAPI:
         headers = {'Authorization': 'Token ' + token}
         resp = requests.get(url, headers=headers)
         return parse_response(resp).get('roles', [])
+
+    def create_google_calendar_event(self, action_info):
+        logger.debug('create google calendar event action_info: %s', action_info)
+        url = '%(server_url)s/api/v2.1/dtables/%(dtable_uuid)s/google-calendar/events/' % {
+            'server_url': self.dtable_web_service_url,
+            'dtable_uuid': action_info.get('dtable_uuid')
+        }
+        payload = {
+            'exp': int(time.time()) + 60
+        }
+        header_token = 'Token ' + jwt.encode(payload, DTABLE_PRIVATE_KEY, 'HS256')
+        resp = requests.post(url, json=action_info, headers={'Authorization': header_token}, timeout=30)
+        return parse_response(resp)
+
+    def update_google_calendar_event(self, action_info):
+        logger.debug('update google calendar event action_info: %s', action_info)
+        url = '%(server_url)s/api/v2.1/dtables/%(dtable_uuid)s/google-calendar/events/' % {
+            'server_url': self.dtable_web_service_url,
+            'dtable_uuid': action_info.get('dtable_uuid'),
+        }
+        payload = {
+            'exp': int(time.time()) + 60
+        }
+        header_token = 'Token ' + jwt.encode(payload, DTABLE_PRIVATE_KEY, 'HS256')
+        resp = requests.put(url, json=action_info, headers={'Authorization': header_token}, timeout=30)
+        return parse_response(resp)

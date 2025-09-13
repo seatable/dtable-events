@@ -5,7 +5,7 @@ import re
 import time
 import os
 from copy import deepcopy
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from queue import Full
 from urllib.parse import unquote, urlparse, parse_qs
 from uuid import UUID
@@ -4073,6 +4073,301 @@ class RunAI(BaseAction):
             return
 
 
+class GoogleCalendar(BaseAction):
+    def __init__(self, auto_rule, action_type, data, config, function_type):
+        super().__init__(auto_rule, action_type, data)
+        self.config = config or {}
+        self.function_type = function_type
+        self.account_id = self.config.get('account_id')
+        self.calendar_id = self.config.get('calendar_id')
+
+    def update_event(self):  
+        event_id = self.config.get('event_id')
+        if not event_id:
+            auto_rule_logger.error('GoogleCalendar update_event: event_id is missing')
+            return
+        
+        try:
+            event_data = self._prepare_event_data()
+            if not event_data:
+                auto_rule_logger.error('GoogleCalendar update_event: event_data is empty')
+                return
+            
+            # Add event_id for update operation
+            event_data['event_id'] = event_id
+            
+            action_info = {
+                'dtable_uuid': self.auto_rule.dtable_uuid,
+                'account_id': self.account_id,
+                'event_data': event_data
+            }
+            
+            result = self.auto_rule.dtable_web_api.update_google_calendar_event(action_info)
+            if result:
+                auto_rule_logger.info('GoogleCalendar update_event success: %s', result)
+            else:
+                auto_rule_logger.error('GoogleCalendar update_event failed')
+                
+        except Exception as e:
+            auto_rule_logger.error('GoogleCalendar update_event error: %s', e)
+    def create_event(self):
+        try:
+            event_data = self._prepare_event_data()
+            if not event_data:
+                auto_rule_logger.error('GoogleCalendar create_event: event_data is empty')
+                return
+            
+            action_info = {
+                'dtable_uuid': self.auto_rule.dtable_uuid,
+                'account_id': self.account_id,
+                'event_data': event_data
+            }
+            
+            result = self.auto_rule.dtable_web_api.create_google_calendar_event(action_info)
+            if result:
+                auto_rule_logger.info('GoogleCalendar create_event success: %s', result)
+            else:
+                auto_rule_logger.error('GoogleCalendar create_event failed')
+                
+        except Exception as e:
+            auto_rule_logger.error('GoogleCalendar create_event error: %s', e)
+    
+    def _prepare_event_data(self):
+        try:
+            start_date_column_key = self.config.get('start_date_column')
+            end_date_column_key = self.config.get('end_date_column')
+            
+            start_time = self._get_field_value_by_column_key(start_date_column_key)
+            end_time = self._get_field_value_by_column_key(end_date_column_key)
+            
+            event_data = {
+                'summary': self._get_field_value('event_title'),
+                'start': self._format_datetime_object(start_time),
+                'end': self._format_datetime_object(end_time),
+                'calendar_id': self.calendar_id,
+                'description': self._get_field_value('event_description'),
+                'location': self._get_field_value('location'),
+                'attendees': self._format_attendees(self.config.get('attendees', [])),
+            }
+            
+            if self.config.get('guests_can_invite') is not None:
+                event_data['guestsCanInviteOthers'] = self.config.get('guests_can_invite')
+            if self.config.get('guests_can_modify') is not None:
+                event_data['guestsCanModify'] = self.config.get('guests_can_modify')
+            if self.config.get('guests_can_see_list') is not None:
+                event_data['guestsCanSeeOtherGuests'] = self.config.get('guests_can_see_list')
+            
+            if self.config.get('video_conferencing'):
+                event_data['conferenceData'] = {
+                    'createRequest': {
+                        'requestId': f"dtable_event_{self.auto_rule.rule_id}_{int(__import__('time').time())}",
+                        'conferenceSolutionKey': {
+                            'type': 'hangoutsMeet'
+                        }
+                    }
+                }
+            
+            return event_data
+            
+        except Exception as e:
+            auto_rule_logger.error('GoogleCalendar _prepare_event_data error: %s', e)
+            return None
+    
+    def _get_field_value_by_column_key(self, column_key):
+        if not column_key:
+            return None
+            
+        sql_row = self.auto_rule.get_sql_row()
+        if not sql_row:
+            return None
+            
+        return sql_row.get(column_key)
+    
+    def _get_field_value(self, field_name):
+        field_value = self.config.get(field_name)
+        
+        if field_value and isinstance(field_value, str) and '{' in field_value:
+            try:
+                # Get current row data
+                sql_row = self.auto_rule.get_sql_row()
+                if not sql_row:
+                    return field_value
+                
+                # Convert column keys to column names and parse column values
+                col_key_dict = {col.get('key'): col for col in self.auto_rule.table_info['columns']}
+                converted_row = {
+                    col_key_dict.get(key).get('name') if col_key_dict.get(key) else key:
+                    self.parse_column_value(col_key_dict.get(key), sql_row.get(key)) if col_key_dict.get(key) else sql_row.get(key)
+                    for key in sql_row
+                }
+                
+                return self._fill_field_template(field_value, converted_row)
+            except Exception as e:
+                auto_rule_logger.error('GoogleCalendar _get_field_value template fill error: %s', e)
+        
+        return field_value
+    
+    def _fill_field_template(self, template, row_data):
+        """Fill template with field values using {column_name} placeholders"""
+        if not template:
+            return ''
+        
+        # Find all field placeholders like {field_name}
+        blanks = set(re.findall(r'\{([^{]*?)\}', template))
+        col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
+        column_blanks = [blank for blank in blanks if blank in col_name_dict]
+        
+        filled_template = template
+
+        for blank in column_blanks:
+            column_value = row_data.get(blank, '')
+            
+            # Handle different column types
+            column = col_name_dict.get(blank)
+            if column:
+                column_type = column.get('type')
+                formatted_value = self._format_column_value_for_calendar(column_value, column_type)
+            else:
+                formatted_value = ''
+            
+            filled_template = filled_template.replace('{' + blank + '}', formatted_value)
+        
+        return filled_template
+    
+    def _format_column_value_for_calendar(self, column_value, column_type):
+        """Format column value for Google Calendar fields"""
+        if column_value is None:
+            return ''
+        
+        if column_type in [ColumnTypes.COLLABORATOR, ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
+            # Convert collaborator usernames to nicknames
+            if isinstance(column_value, list):
+                if not column_value:
+                    return ''
+                nicknames_dict = get_nickname_by_usernames(column_value, self.auto_rule.db_session)
+                nicknames = [nicknames_dict.get(user_id, user_id) for user_id in column_value]
+                return ', '.join(nicknames)
+            elif column_value:
+                # Single collaborator, convert to list and process
+                nicknames_dict = get_nickname_by_usernames([column_value], self.auto_rule.db_session)
+                return nicknames_dict.get(column_value, column_value)
+            else:
+                return ''
+        elif column_type == ColumnTypes.MULTIPLE_SELECT:
+            return ', '.join(column_value) if column_value else ''
+        elif column_type == ColumnTypes.FILE:
+            return ''
+        else:
+            # For other types, convert to string
+            return str(column_value) if column_value else ''
+    
+    def _format_datetime_object(self, datetime_str):
+        
+        if not datetime_str:
+            return None
+            
+        try:
+            if isinstance(datetime_str, str):
+                dt = datetime.fromisoformat(datetime_str.replace('Z', '+00:00'))
+            else:
+                dt = datetime_str
+            
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            
+            return {
+                'dateTime': dt.isoformat(),
+                'timeZone': 'UTC' if dt.tzinfo == timezone.utc else str(dt.tzinfo)
+            }
+            
+        except Exception as e:
+            auto_rule_logger.error('GoogleCalendar _format_datetime_object error: %s', e)
+            return None
+    
+    def _format_attendees(self, attendees):
+        if not attendees:
+            return []
+        
+        formatted_attendees = []
+        try:
+            # Convert usernames to contact emails
+            attendee_emails = self._convert_usernames_to_emails(attendees)
+            
+            for attendee in attendee_emails:
+                formatted_attendees.append({
+                    'email': attendee,
+                    'responseStatus': 'needsAction'
+                })
+                    
+        except Exception as e:
+            auto_rule_logger.error('GoogleCalendar _format_attendees error: %s', e)
+            
+        return formatted_attendees
+    
+    def _convert_usernames_to_emails(self, attendees):
+        """Convert usernames to contact emails."""
+        return_emails = []
+        usernames = []
+        for item in attendees:
+            if '@auth.local' in item:
+                usernames.append(item)
+                continue
+            if item in return_emails:
+                continue
+            return_emails.append(item)
+        if usernames:
+            sql = '''
+                SELECT `contact_email` FROM `profile_profile`
+                WHERE `user` IN :usernames AND `contact_email` IS NOT NULL AND `contact_email` != ''
+            '''
+            try:
+                results = self.auto_rule.db_session.execute(text(sql), {'usernames': usernames})
+            except Exception as e:
+                auto_rule_logger.error(f'query users {usernames} contact_emails error {e}')
+            else:
+                return_emails.extend([item.contact_email for item in results])
+        return return_emails
+    
+    def can_update_event(self):
+        if not self.account_id or not self.calendar_id:
+            auto_rule_logger.error('GoogleCalendar: missing account_id or calendar_id')
+            return False
+        
+        if not self.config.get('event_id'):
+            auto_rule_logger.error('GoogleCalendar: missing event_id for update')
+            return False
+        required_fields = ['start_date_column', 'end_date_column']
+        for field in required_fields:
+            if not self.config.get(field):
+                auto_rule_logger.error(f'GoogleCalendar: missing required field {field}')
+                return False
+        return True
+    
+    def can_create_event(self):
+        if not self.account_id or not self.calendar_id:
+            auto_rule_logger.error('GoogleCalendar: missing account_id or calendar_id')
+            return False
+        
+        required_fields = ['start_date_column', 'end_date_column']
+        for field in required_fields:
+            if not self.config.get(field):
+                auto_rule_logger.error(f'GoogleCalendar: missing required field {field}')
+                return False
+        return True
+    
+    def do_action(self):
+        if self.function_type == 'create_event':
+            if self.can_create_event():
+                self.create_event()
+        elif self.function_type == 'update_event':
+            if self.can_update_event():
+                self.update_event()
+        else:
+            auto_rule_logger.warning('google calendar action %s not supported', self.action_type)
+            return
+        
+
+
 class RuleInvalidException(Exception):
     """
     Exception which indicates rule need to be set is_valid=Fasle
@@ -4446,6 +4741,10 @@ class AutomationRule:
             if run_condition == PER_UPDATE:
                 return True
             return False
+        elif action_type == 'google_calendar':
+            if self.run_condition == PER_UPDATE:
+                return True
+            return False
         return False
 
     def do_actions(self, db_session, with_test=False):
@@ -4672,6 +4971,26 @@ class AutomationRule:
                     }
                     config = config_map.get(ai_function, {}).get('config')
                     RunAI(self, action_info.get('type'), self.data, ai_function, config).do_action()
+
+                elif action_info.get('type') == 'google_calendar':
+                    function_type = action_info.get('action_type')
+                    config =  {
+                        'account_id': action_info.get('account_id'),
+                        'calendar_id': action_info.get('calendar_id'),
+                        'dont_send_notifications': action_info.get('dont_send_notifications', False),
+                        'start_date_column': action_info.get('start_date_column'),
+                        'end_date_column': action_info.get('end_date_column'),
+                        'event_description': action_info.get('event_description', ''),
+                        'event_title': action_info.get('event_title'),
+                        'guests_can_invite': action_info.get('guests_can_invite', False),
+                        'guests_can_modify': action_info.get('guests_can_modify', False),
+                        'guests_can_see_list': action_info.get('guests_can_see_list', False),
+                        'location': action_info.get('location', ''),
+                        'video_conferencing': action_info.get('video_conferencing', False),
+                        'attendees': action_info.get('attendees', []),
+                        'event_id': action_info.get('event_id'),
+                    }
+                    GoogleCalendar(self, action_info.get('type'), self.data, config, function_type).do_action()
 
             except RuleInvalidException as e:
                 auto_rule_logger.warning('auto rule %s with data %s, invalid error: %s', self.rule_id, self.data, e)
