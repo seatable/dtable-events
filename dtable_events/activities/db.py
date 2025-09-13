@@ -71,7 +71,7 @@ def save_or_update_or_delete(session, event):
                 Activities.row_id == event['row_id'],
                 Activities.op_user == event['op_user'],
                 Activities.op_time > _timestamp
-            ).order_by(desc(Activities.id)).limit(1)
+            ).limit(1)
             row = session.scalars(stmt).first()
             if row:
                 detail = json.loads(row.detail)
