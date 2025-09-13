@@ -46,10 +46,9 @@ class AIStatsWorker:
         self.owner_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
 
     def save_to_memory(self, usage_info, session):
-        if not usage_info.get('model') or not usage_info.get('assistant_uuid'):
+        if not usage_info.get('model'):
             return
 
-        assistant_uuid = uuid_str_to_36_chars(usage_info.get('assistant_uuid'))
         model = usage_info['model']
         usage = usage_info.get('usage') or {}
 
@@ -70,16 +69,29 @@ class AIStatsWorker:
         if model in BAIDU_OCR_TOKENS:
             usage['output_tokens'] = BAIDU_OCR_TOKENS[model]
 
-        owner_info = self.query_assistant_owner(assistant_uuid, session)
-        if not owner_info:
-            logger.warning('assistant %s has no owner', assistant_uuid)
-            return
-        if owner_info['org_id'] != -1:
-            self.org_stats[owner_info['org_id']][model]['input_tokens'] += usage.get('input_tokens') or 0
-            self.org_stats[owner_info['org_id']][model]['output_tokens'] += usage.get('output_tokens') or 0
+        if usage_info.get('assistant_uuid'):
+            # for assistant call, set stat object to the assistant owner, i.e., table admin, group admin ...
+
+            assistant_uuid = uuid_str_to_36_chars(usage_info.get('assistant_uuid'))
+            
+            owner_info = self.query_assistant_owner(assistant_uuid, session)
+            if not owner_info:
+                logger.warning('assistant %s has no owner', assistant_uuid)
+                return
+            if owner_info['org_id'] != -1:
+                self.org_stats[owner_info['org_id']][model]['input_tokens'] += usage.get('input_tokens') or 0
+                self.org_stats[owner_info['org_id']][model]['output_tokens'] += usage.get('output_tokens') or 0
+            else:
+                self.owner_stats[owner_info['owner_id']][model]['input_tokens'] += usage.get('input_tokens') or 0
+                self.owner_stats[owner_info['owner_id']][model]['output_tokens'] += usage.get('output_tokens') or 0
         else:
-            self.owner_stats[owner_info['owner_id']][model]['input_tokens'] += usage.get('input_tokens') or 0
-            self.owner_stats[owner_info['owner_id']][model]['output_tokens'] += usage.get('output_tokens') or 0
+            # for non-assistant call, set stat obj to common user
+            if usage_info['org_id'] != -1:
+                self.org_stats[usage_info['org_id']][model]['input_tokens'] += usage.get('input_tokens') or 0
+                self.org_stats[usage_info['org_id']][model]['output_tokens'] += usage.get('output_tokens') or 0
+            else:
+                self.owner_stats[usage_info['username']][model]['input_tokens'] += usage.get('input_tokens') or 0
+                self.owner_stats[usage_info['username']][model]['output_tokens'] += usage.get('output_tokens') or 0
 
     def receive(self):
         logger.info('Starts to receive ai calls...')
