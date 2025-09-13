@@ -48,15 +48,11 @@ DOCUMENT_PLUGIN_FILE_RELATIVE_PATH = 'files/plugins/document'
 DOCUMENT_CONFIG_FILE_NAME = 'documents.json'
 
 def gen_inner_file_get_url(token, filename):
-    FILE_SERVER_PORT = task_manager.conf['file_server_port']
-    INNER_FILE_SERVER_ROOT = 'http://127.0.0.1:' + str(FILE_SERVER_PORT)
     return '%s/files/%s/%s' % (INNER_FILE_SERVER_ROOT, token,
                                urlquote(filename))
 
 
 def gen_inner_file_upload_url(token, op, replace=False):
-    FILE_SERVER_PORT = task_manager.conf['file_server_port']
-    INNER_FILE_SERVER_ROOT = 'http://127.0.0.1:' + str(FILE_SERVER_PORT)
     url = '%s/%s/%s' % (INNER_FILE_SERVER_ROOT, op, token)
     if replace is True:
         url += '?replace=1'
@@ -68,8 +64,6 @@ def gen_dir_zip_download_url(token):
     Generate fileserver file url.
     Format: http://<domain:port>/files/<token>/<filename>
     """
-    FILE_SERVER_PORT = task_manager.conf['file_server_port']
-    INNER_FILE_SERVER_ROOT = 'http://127.0.0.1:' + str(FILE_SERVER_PORT)
     return '%s/zip/%s' % (INNER_FILE_SERVER_ROOT, token)
 
 def get_file_download_url(token, filename):
@@ -77,8 +71,6 @@ def get_file_download_url(token, filename):
     Generate fileserver file url.
     Format: http://<domain:port>/files/<token>/<filename>
     """
-    FILE_SERVER_PORT = task_manager.conf['file_server_port']
-    INNER_FILE_SERVER_ROOT = 'http://127.0.0.1:' + str(FILE_SERVER_PORT)
     return '%s/files/%s/%s' % (INNER_FILE_SERVER_ROOT, token,
                                urlquote(filename))
 
