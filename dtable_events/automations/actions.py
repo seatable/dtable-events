@@ -4084,13 +4084,13 @@ class GoogleCalendar(BaseAction):
     def update_event(self):  
         event_id = self.config.get('event_id')
         if not event_id:
-            auto_rule_logger.error('GoogleCalendar update_event: event_id is missing')
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar update event failed: event ID is required but not provided')
             return
         
         try:
             event_data = self._prepare_event_data()
             if not event_data:
-                auto_rule_logger.error('GoogleCalendar update_event: event_data is empty')
+                auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar update event failed: unable to prepare event data from table row')
                 return
             
             # Add event_id for update operation
@@ -4103,18 +4103,14 @@ class GoogleCalendar(BaseAction):
             }
             
             result = self.auto_rule.dtable_web_api.update_google_calendar_event(action_info)
-            if result:
-                auto_rule_logger.info('GoogleCalendar update_event success: %s', result)
-            else:
-                auto_rule_logger.error('GoogleCalendar update_event failed')
                 
         except Exception as e:
-            auto_rule_logger.error('GoogleCalendar update_event error: %s', e)
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar update event failed with error: {e}')
     def create_event(self):
         try:
             event_data = self._prepare_event_data()
             if not event_data:
-                auto_rule_logger.error('GoogleCalendar create_event: event_data is empty')
+                auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar create event failed: unable to prepare event data from table row')
                 return
             
             action_info = {
@@ -4124,13 +4120,9 @@ class GoogleCalendar(BaseAction):
             }
             
             result = self.auto_rule.dtable_web_api.create_google_calendar_event(action_info)
-            if result:
-                auto_rule_logger.info('GoogleCalendar create_event success: %s', result)
-            else:
-                auto_rule_logger.error('GoogleCalendar create_event failed')
                 
         except Exception as e:
-            auto_rule_logger.error('GoogleCalendar create_event error: %s', e)
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar create event failed with error: {e}')
     
     def _prepare_event_data(self):
         try:
@@ -4170,7 +4162,7 @@ class GoogleCalendar(BaseAction):
             return event_data
             
         except Exception as e:
-            auto_rule_logger.error('GoogleCalendar _prepare_event_data error: %s', e)
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar prepare event data failed: {e}')
             return None
     
     def _get_field_value_by_column_key(self, column_key):
@@ -4203,7 +4195,7 @@ class GoogleCalendar(BaseAction):
                 
                 return self._fill_field_template(field_value, converted_row)
             except Exception as e:
-                auto_rule_logger.error('GoogleCalendar _get_field_value template fill error: %s', e)
+                auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar field template processing failed: {e}')
         
         return field_value
     
@@ -4281,7 +4273,7 @@ class GoogleCalendar(BaseAction):
             }
             
         except Exception as e:
-            auto_rule_logger.error('GoogleCalendar _format_datetime_object error: %s', e)
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar datetime formatting failed: {e}')
             return None
     
     def _format_attendees(self, attendees):
@@ -4300,7 +4292,7 @@ class GoogleCalendar(BaseAction):
                 })
                     
         except Exception as e:
-            auto_rule_logger.error('GoogleCalendar _format_attendees error: %s', e)
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar attendees formatting failed: {e}')
             
         return formatted_attendees
     
@@ -4323,35 +4315,35 @@ class GoogleCalendar(BaseAction):
             try:
                 results = self.auto_rule.db_session.execute(text(sql), {'usernames': usernames})
             except Exception as e:
-                auto_rule_logger.error(f'query users {usernames} contact_emails error {e}')
+                auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar failed to query user contact emails: {e}')
             else:
                 return_emails.extend([item.contact_email for item in results])
         return return_emails
     
     def can_update_event(self):
         if not self.account_id or not self.calendar_id:
-            auto_rule_logger.error('GoogleCalendar: missing account_id or calendar_id')
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar update event validation failed: Google account or calendar not configured')
             return False
         
         if not self.config.get('event_id'):
-            auto_rule_logger.error('GoogleCalendar: missing event_id for update')
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar update event validation failed: event ID is required but not provided')
             return False
         required_fields = ['start_date_column', 'end_date_column']
         for field in required_fields:
             if not self.config.get(field):
-                auto_rule_logger.error(f'GoogleCalendar: missing required field {field}')
+                auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar update event validation failed: required field "{field}" is not configured')
                 return False
         return True
     
     def can_create_event(self):
         if not self.account_id or not self.calendar_id:
-            auto_rule_logger.error('GoogleCalendar: missing account_id or calendar_id')
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar create event validation failed: Google account or calendar not configured')
             return False
         
         required_fields = ['start_date_column', 'end_date_column']
         for field in required_fields:
             if not self.config.get(field):
-                auto_rule_logger.error(f'GoogleCalendar: missing required field {field}')
+                auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar create event validation failed: required field "{field}" is not configured')
                 return False
         return True
     
