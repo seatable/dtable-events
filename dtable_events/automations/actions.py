@@ -4056,7 +4056,7 @@ class AutomationRule:
             sql_rows, _ = self.query(sql, convert=True)
             if not sql_rows:
                 query_times += 1
-                auto_rule_logger.warning('auto-rule %s query dtable %s table %s convert row %s not found, query count %s', self.rule_id, self.dtable_uuid, self.table_id, row_id, self._convert_sql_query_count)
+                auto_rule_logger.warning('auto-rule %s query dtable %s table %s convert row %s not found, query count %s', self.rule_id, self.dtable_uuid, self.table_id, row_id, query_times)
                 time.sleep(0.1)
                 continue
             return sql_rows[0]
@@ -4073,7 +4073,7 @@ class AutomationRule:
             sql_rows, _ = self.query(sql, convert=False)
             if not sql_rows:
                 query_times += 1
-                auto_rule_logger.warning('auto-rule %s query dtable %s table %s row %s not found, query count %s', self.rule_id, self.dtable_uuid, self.table_id, row_id, self._convert_sql_query_count)
+                auto_rule_logger.warning('auto-rule %s query dtable %s table %s row %s not found, query count %s', self.rule_id, self.dtable_uuid, self.table_id, row_id, query_times)
                 time.sleep(0.1)
                 continue
             return sql_rows[0]
