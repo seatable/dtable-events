@@ -1748,8 +1748,8 @@ def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_
                 c.number_format = number_format
             elif column.get('data').get('result_type') == FormulaResultType.DATE:
                 c = WriteOnlyCell(ws, value=format_time(cell_value))
-                if column.get('data'):
-                    c.number_format = column.get('data').get('format', '')
+                if column.get('data').get('format'):
+                    c.number_format = column.get('data').get('format')
                 else:
                     c.number_format = 'YYYY-MM-DD'
         elif col_type == ColumnTypes.IMAGE and cell_value and image_param['is_support']:
