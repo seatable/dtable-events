@@ -93,7 +93,7 @@ class DTableAIAPI:
             logger.error(f"Failed to ocr image: {response.text}")
             raise DTableAIAPIError()
 
-    def extract(self, content, extract_fields):
+    def extract(self, content, extract_fields, extract_prompt):
         """Extract specific information from content based on field descriptions"""
         if not content or not content.strip():
             return {}
@@ -103,6 +103,7 @@ class DTableAIAPI:
             'username': self.username,
             'org_id': self.org_id,
             'extract_fields': extract_fields,
+            'extract_prompt': extract_prompt,
         }
         
         url = f'{self.seatable_ai_server_url}/api/v1/ai/extract/'
