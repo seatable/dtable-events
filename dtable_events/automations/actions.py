@@ -4080,11 +4080,15 @@ class GoogleCalendar(BaseAction):
         self.function_type = function_type
         self.account_id = self.config.get('account_id')
         self.calendar_id = self.config.get('calendar_id')
+        self.col_key_dict = {col.get('key'): col for col in self.auto_rule.table_info['columns']}
 
     def update_event(self):  
-        event_id = self.config.get('event_id')
+        event_id_key = self.config.get('event_id_key')
+        
+        # Get event_id from the specified column
+        event_id = self._get_field_value_by_column_key(event_id_key)
         if not event_id:
-            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar update event failed: event ID is required but not provided')
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar update event failed: event ID not found.')
             return
         
         try:
@@ -4120,14 +4124,19 @@ class GoogleCalendar(BaseAction):
             }
             
             result = self.auto_rule.dtable_web_api.create_google_calendar_event(action_info)
+            
+            # If event created successfully, save event_id to the column
+            if result.get('success'):
+                event_id = result.get('event').get('id')
+                self._save_event_id_to_column(event_id)
                 
         except Exception as e:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar create event failed with error: {e}')
     
     def _prepare_event_data(self):
         try:
-            start_date_column_key = self.config.get('start_date_column')
-            end_date_column_key = self.config.get('end_date_column')
+            start_date_column_key = self.config.get('start_date_column_key')
+            end_date_column_key = self.config.get('end_date_column_key')
             
             start_time = self._get_field_value_by_column_key(start_date_column_key)
             end_time = self._get_field_value_by_column_key(end_date_column_key)
@@ -4320,31 +4329,66 @@ class GoogleCalendar(BaseAction):
                 return_emails.extend([item.contact_email for item in results])
         return return_emails
     
+    def _save_event_id_to_column(self, event_id):
+        """Save event_id to event_id column, create column if not exists"""
+        try:
+            table_name = self.auto_rule.table_info['name']
+            row_id = self.data['row_id']
+            
+            # Check if event_id column exists
+            event_id_column = None
+            for col in self.auto_rule.table_info['columns']:
+                if col.get('name') == 'event_id':
+                    event_id_column = col
+                    break
+            
+            # If column doesn't exist, create it with data
+            if not event_id_column:
+                column_data = {row_id: event_id}
+                self.auto_rule.dtable_server_api.insert_column(table_name, 'Event ID', 'text', column_data)
+                self.auto_rule.cache_clean()
+            else:
+                # Update the row with event_id
+                update_data = {'event_id': event_id}
+                self.auto_rule.dtable_server_api.update_row(table_name, row_id, update_data)
+            
+        except Exception as e:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar failed to save event_id: {e}')
+    
     def can_update_event(self):
         if not self.account_id or not self.calendar_id:
-            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar update event validation failed: Google account or calendar not configured')
+            return False
+
+        event_id_key = self.config.get('event_id_key')
+        start_date_column_key = self.config.get('start_date_column_key')
+        end_date_column_key = self.config.get('end_date_column_key')
+        
+        if not event_id_key or not start_date_column_key or not end_date_column_key:
             return False
         
-        if not self.config.get('event_id'):
-            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar update event validation failed: event ID is required but not provided')
+        event_id_column = self.col_key_dict.get(event_id_key)
+        if event_id_column and event_id_column.get('type') != ColumnTypes.TEXT:
             return False
-        required_fields = ['start_date_column', 'end_date_column']
-        for field in required_fields:
-            if not self.config.get(field):
-                auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar update event validation failed: required field "{field}" is not configured')
-                return False
+        start_date_column = self.col_key_dict.get(start_date_column_key)
+        end_date_column = self.col_key_dict.get(end_date_column_key)
+        if start_date_column and start_date_column.get('type') != ColumnTypes.DATE or end_date_column and end_date_column.get('type') != ColumnTypes.DATE:
+            return False
         return True
     
     def can_create_event(self):
         if not self.account_id or not self.calendar_id:
-            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar create event validation failed: Google account or calendar not configured')
             return False
         
-        required_fields = ['start_date_column', 'end_date_column']
-        for field in required_fields:
-            if not self.config.get(field):
-                auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar create event validation failed: required field "{field}" is not configured')
-                return False
+        start_date_column_key = self.config.get('start_date_column_key')
+        end_date_column_key = self.config.get('end_date_column_key')
+
+        if not start_date_column_key or not end_date_column_key:
+            return False
+        
+        start_date_column = self.col_key_dict.get(start_date_column_key)
+        end_date_column = self.col_key_dict.get(end_date_column_key)
+        if start_date_column and start_date_column.get('type') != ColumnTypes.DATE or end_date_column and end_date_column.get('type') != ColumnTypes.DATE:
+            return False
         return True
     
     def do_action(self):
@@ -4970,8 +5014,8 @@ class AutomationRule:
                         'account_id': action_info.get('account_id'),
                         'calendar_id': action_info.get('calendar_id'),
                         'dont_send_notifications': action_info.get('dont_send_notifications', False),
-                        'start_date_column': action_info.get('start_date_column'),
-                        'end_date_column': action_info.get('end_date_column'),
+                        'start_date_column_key': action_info.get('start_date_column_key'),
+                        'end_date_column_key': action_info.get('end_date_column_key'),
                         'event_description': action_info.get('event_description', ''),
                         'event_title': action_info.get('event_title'),
                         'guests_can_invite': action_info.get('guests_can_invite', False),
@@ -4980,7 +5024,7 @@ class AutomationRule:
                         'location': action_info.get('location', ''),
                         'video_conferencing': action_info.get('video_conferencing', False),
                         'attendees': action_info.get('attendees', []),
-                        'event_id': action_info.get('event_id'),
+                        'event_id_key': action_info.get('event_id_key'),
                     }
                     GoogleCalendar(self, action_info.get('type'), self.data, config, function_type).do_action()
 
