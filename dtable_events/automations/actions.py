@@ -4338,7 +4338,7 @@ class GoogleCalendar(BaseAction):
             # Check if event_id column exists
             event_id_column = None
             for col in self.auto_rule.table_info['columns']:
-                if col.get('name') == 'event_id':
+                if col.get('name') == 'Event ID':
                     event_id_column = col
                     break
             
