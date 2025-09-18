@@ -40,6 +40,7 @@ from dtable_events.utils.sql_generator import filter2sql, BaseSQLGenerator, Colu
     has_user_filter, is_user_filter
 from dtable_events.utils.universal_app_api import UniversalAppAPI
 from dtable_events.utils.email_sender import EmailSender
+from dtable_events.utils.google_calendar_manager import CalendarManager
 
 PER_DAY = 'per_day'
 PER_WEEK = 'per_week'
@@ -4100,13 +4101,13 @@ class GoogleCalendar(BaseAction):
             # Add event_id for update operation
             event_data['event_id'] = event_id
             
-            action_info = {
-                'dtable_uuid': self.auto_rule.dtable_uuid,
-                'account_id': self.account_id,
-                'event_data': event_data
-            }
+            manager = CalendarManager(self.account_id, db_session=self.auto_rule.db_session)
+            result = manager.update_event(event_data)
             
-            result = self.auto_rule.dtable_web_api.update_google_calendar_event(action_info)
+            if result.get('error_msg'):
+                auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar update event failed: {result["error_msg"]}')
+            else:
+                auto_rule_logger.info(f'rule {self.auto_rule.rule_id} GoogleCalendar update event success')
                 
         except Exception as e:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar update event failed with error: {e}')
@@ -4117,18 +4118,15 @@ class GoogleCalendar(BaseAction):
                 auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar create event failed: unable to prepare event data from table row')
                 return
             
-            action_info = {
-                'dtable_uuid': self.auto_rule.dtable_uuid,
-                'account_id': self.account_id,
-                'event_data': event_data
-            }
-            
-            result = self.auto_rule.dtable_web_api.create_google_calendar_event(action_info)
-            
+            manager = CalendarManager(self.account_id, db_session=self.auto_rule.db_session)
+            result = manager.create_event(event_data)
             # If event created successfully, save event_id to the column
-            if result.get('success'):
-                event_id = result.get('event').get('id')
+            if result.get('error_msg'):
+                auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar create event failed: {result["error_msg"]}')
+            elif result.get('id'):
+                event_id = result.get('id')
                 self._save_event_id_to_column(event_id)
+                auto_rule_logger.info(f'rule {self.auto_rule.rule_id} GoogleCalendar create event success, event_id: {event_id}')
                 
         except Exception as e:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar create event failed with error: {e}')
