@@ -4334,23 +4334,23 @@ class GoogleCalendar(BaseAction):
         try:
             table_name = self.auto_rule.table_info['name']
             row_id = self.data['row_id']
+            column_name = 'Event ID'
             
             # Check if event_id column exists
             event_id_column = None
             for col in self.auto_rule.table_info['columns']:
-                if col.get('name') == 'Event ID':
+                if col.get('name') == column_name:
                     event_id_column = col
                     break
             
-            # If column doesn't exist, create it with data
+            # If column doesn't exist, create it first, then update the row
             if not event_id_column:
-                column_data = {row_id: event_id}
-                self.auto_rule.dtable_server_api.insert_column(table_name, 'Event ID', 'text', column_data)
+                self.auto_rule.dtable_server_api.insert_column(table_name, column_name, 'text')
                 self.auto_rule.cache_clean()
-            else:
-                # Update the row with event_id
-                update_data = {'event_id': event_id}
-                self.auto_rule.dtable_server_api.update_row(table_name, row_id, update_data)
+            
+            # Update the row with event_id
+            update_data = {column_name: event_id}
+            self.auto_rule.dtable_server_api.update_row(table_name, row_id, update_data)
             
         except Exception as e:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar failed to save event_id: {e}')
