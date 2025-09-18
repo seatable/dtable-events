@@ -80,7 +80,10 @@ class BigDataStorageStatsTask(Thread):
             while 1:
                 dtable_db_api = DTableDBAPI('', None, INNER_DTABLE_DB_URL)
                 try:
-                    bases = dtable_db_api.list_bases(offset, limit)['bases']
+                    resp_json = dtable_db_api.list_bases(offset, limit)
+                    if not resp_json:
+                        break
+                    bases = resp_json.get('bases')
                     if bases and len(bases) > 0:
                         db_session = self.db_session_class()
                         try:
