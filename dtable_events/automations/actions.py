@@ -30,6 +30,7 @@ from dtable_events.notification_rules.notification_rules_utils import send_notif
 from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, \
     normalize_file_path, gen_file_get_url, gen_random_option, get_dtable_admins, \
     parse_docx, parse_pdf
+from dtable_events.dtable_io.utils import gen_inner_file_get_url
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_web_api import DTableWebAPI
@@ -3572,7 +3573,7 @@ class RunAI(BaseAction):
         file_ext = Path(file_name).suffix.lower()
         
         # Download file content
-        file_url = gen_file_get_url(download_token, file_name)
+        file_url = gen_inner_file_get_url(download_token, file_name)
         response = requests.get(file_url, timeout=30)
         if not response.ok:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} failed to download file: {file_name}')

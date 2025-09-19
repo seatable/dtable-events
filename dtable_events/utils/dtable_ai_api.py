@@ -1,7 +1,8 @@
 import requests
 import logging
 import time
-from dtable_events.utils import gen_file_get_url, get_file_ext
+from dtable_events.utils import get_file_ext
+from dtable_events.dtable_io.utils import gen_inner_file_get_url
 from dtable_events.utils.constants import EXTRACT_TEXT_SUPPORTED_FILES
 import jwt
 
@@ -75,7 +76,7 @@ class DTableAIAPI:
         if file_ext not in EXTRACT_TEXT_SUPPORTED_FILES:
             raise DTableAIAPIError("Unsupported file format")
         
-        file_url = gen_file_get_url(download_token, file_name)
+        file_url = gen_inner_file_get_url(download_token, file_name)
 
         data = {
             'username': self.username,
