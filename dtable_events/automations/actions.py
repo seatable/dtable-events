@@ -3495,7 +3495,7 @@ class RunAI(BaseAction):
         target_column = self.col_key_dict.get(ocr_output_column_key)
         
         if not image_column or not target_column:
-            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} image column or target column not found')
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} source column or target column not found')
             return
 
         target_column_name = target_column.get('name')
@@ -3506,22 +3506,21 @@ class RunAI(BaseAction):
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} row data not found')
             return
         
-        # Get image file list
-        image_files = sql_row.get(ocr_input_column_key, [])
-        if not image_files:
-            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} no images found in column')
+        file_list = sql_row.get(ocr_input_column_key, [])
+        if not file_list:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} no files found in column')
             return
 
-        # Process the first image
-        first_image = image_files[0] if image_files else None
-        if not first_image:
-            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} no first image found')
+        # Process the first file
+        first_file = file_list[0]
+        if not first_file:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} no first file found')
             return
         
-        file_url = first_image
+        file_url = first_file if isinstance(first_file, str) else first_file.get('url')
         file_name = os.path.basename(unquote(file_url.split('/')[-1]))
         if not file_name or not file_url:
-            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} first image missing name or url')
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} file missing name or url')
             return
 
         # Build file path and get download token
@@ -3796,7 +3795,7 @@ class RunAI(BaseAction):
         image_column = self.col_key_dict.get(self.config.get('ocr_input_column_key'))
         target_column = self.col_key_dict.get(self.config.get('ocr_output_column_key'))
         
-        if not image_column or image_column.get('type') != ColumnTypes.IMAGE:
+        if not image_column or image_column.get('type') not in [ColumnTypes.FILE, ColumnTypes.IMAGE]:
             return False
         if not target_column or target_column.get('type') not in [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT]:
             return False

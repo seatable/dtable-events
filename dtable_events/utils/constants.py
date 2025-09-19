@@ -144,7 +144,7 @@ DATE_COLUMN_TYPES = [
     ColumnTypes.MTIME
 ]
 
-EXTRACT_TEXT_SUPPORTED_IMAGES = ('.gif', '.jpeg', '.jpg', '.png', '.heic', '.ico', '.bmp', '.tif', '.tiff', '.psd', '.webp', '.jfif')
+EXTRACT_TEXT_SUPPORTED_FILES = ('.gif', '.jpeg', '.jpg', '.png', '.heic', '.ico', '.bmp', '.tif', '.tiff', '.psd', '.webp', '.jfif', '.pdf')
 
 class StatisticType:
     BAR = 'bar'
