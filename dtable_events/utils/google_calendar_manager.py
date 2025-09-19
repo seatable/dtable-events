@@ -314,7 +314,6 @@ class CalendarManager:
             self.close()
 
     def close(self):
-        # only for db_session = None in __init__
         if self.is_config_session:
             self.db_session.close()
 
