@@ -319,19 +319,8 @@ class CalendarManager:
 
 
 def get_google_calendar_list(account_id, detail):
-
-    result = {}
-    
     if not detail:
-        result['error_msg'] = 'detail is required'
-        return result
+        raise ValueError('detail is required')
         
-    try:
-        calendar_api = GoogleCalendarAPI(None, account_id, detail)
-        result = calendar_api.get_calendar_list()
-            
-    except Exception as e:
-        dtable_calendar_logger.exception(f'get calendar list failure: {e}')
-        result = {'error_msg': str(e)}
-    
-    return result
+    calendar_api = GoogleCalendarAPI(None, account_id, detail)
+    return calendar_api.get_calendar_list()
