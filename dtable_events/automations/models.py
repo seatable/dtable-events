@@ -10,7 +10,7 @@ import json
 
 logger = logging.getLogger(__name__)
 
-ENCRYPT_KEYS = ['password', 'webhook_url', 'api_key', 'secret_key', 'repo_api_token', 'client_secret']
+ENCRYPT_KEYS = ['password', 'webhook_url', 'api_key', 'secret_key', 'repo_api_token', 'client_secret', 'access_token', 'refresh_token']
 def _encrypt_detail(detail):
     detail_clone = deepcopy(detail)
     cryptor = AESPasswordHasher()
