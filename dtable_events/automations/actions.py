@@ -3765,6 +3765,7 @@ class RunAI(BaseAction):
                 auto_rule_logger.info(f'rule {self.auto_rule.rule_id} dtable: {self.auto_rule.dtable_uuid} exceed ai limit')
                 return False
         except Exception as e:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} AI permission check by calling dtable-web error: {e}')
             return False
 
         return True
@@ -3787,6 +3788,7 @@ class RunAI(BaseAction):
                 auto_rule_logger.info(f'rule {self.auto_rule.rule_id} dtable: {self.auto_rule.dtable_uuid} exceed ai limit')
                 return False
         except Exception as e:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} AI permission check by calling dtable-web error: {e}')
             return False
         return True
 
@@ -3807,6 +3809,7 @@ class RunAI(BaseAction):
                 auto_rule_logger.info(f'rule {self.auto_rule.rule_id} dtable: {self.auto_rule.dtable_uuid} exceed ai limit')
                 return False
         except Exception as e:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} AI permission check by calling dtable-web error: {e}')
             return False
         return True
     def can_extract(self):
@@ -3843,6 +3846,7 @@ class RunAI(BaseAction):
                 auto_rule_logger.info(f'rule {self.auto_rule.rule_id} dtable: {self.auto_rule.dtable_uuid} exceed ai limit')
                 return False
         except Exception as e:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} AI permission check by calling dtable-web error: {e}')
             return False
         
         return True
@@ -3872,6 +3876,7 @@ class RunAI(BaseAction):
                 auto_rule_logger.info(f'rule {self.auto_rule.rule_id} dtable: {self.auto_rule.dtable_uuid} exceed ai limit')
                 return False
         except Exception as e:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} AI permission check by calling dtable-web error: {e}')
             return False
         
         return True
