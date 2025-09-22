@@ -77,16 +77,24 @@ class DTableAIAPI:
             raise DTableAIAPIError("Unsupported file format")
         
         file_url = gen_inner_file_get_url(download_token, file_name)
+        try:
+            response = requests.get(file_url, timeout=30)
+            response.raise_for_status()
+            file_content = response.content
+        except Exception as e:
+            logger.error(f"Failed to read file content: {e}")
+            raise DTableAIAPIError("Failed to read file content")
 
         data = {
             'username': self.username,
             'org_id': self.org_id,
-            'file_url': file_url,
         }
         
         url = f'{self.seatable_ai_server_url}/api/v1/ai/ocr/'
         headers = gen_headers()
-        response = requests.post(url, json=data, headers=headers, timeout=30)
+        
+        files = {'file': (file_name, file_content)}
+        response = requests.post(url, data=data, files=files, headers=headers, timeout=30)
         
         if response.status_code == 200:
             result = response.json()
