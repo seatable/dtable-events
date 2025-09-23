@@ -1,8 +1,7 @@
 import requests
 import logging
 import time
-from dtable_events.utils import get_file_ext
-from dtable_events.dtable_io.utils import gen_inner_file_get_url
+from dtable_events.utils import get_file_ext, process_pdf_to_images
 from dtable_events.utils.constants import EXTRACT_TEXT_SUPPORTED_FILES
 import jwt
 
@@ -71,19 +70,19 @@ class DTableAIAPI:
             logger.error(f"Failed to classify text: {response.text}")
             raise DTableAIAPIError()
 
-    def ocr(self, file_name, download_token):
+    def ocr(self, file_name, file_content):
         file_ext = get_file_ext(file_name)
         if file_ext not in EXTRACT_TEXT_SUPPORTED_FILES:
-            raise DTableAIAPIError("Unsupported file format")
-        
-        file_url = gen_inner_file_get_url(download_token, file_name)
-        try:
-            response = requests.get(file_url, timeout=30)
-            response.raise_for_status()
-            file_content = response.content
-        except Exception as e:
-            logger.error(f"Failed to read file content: {e}")
-            raise DTableAIAPIError("Failed to read file content")
+            raise DTableAIAPIError(f"Unsupported file format: {file_ext}")
+
+        if file_ext.lower() == '.pdf':
+            try:
+                image_pages = process_pdf_to_images(file_content, max_pages=5)
+            except Exception as e:
+                logger.error(f"Failed to process PDF to images: {e}")
+                raise DTableAIAPIError(f"PDF processing failed: {e}")
+        else:
+            image_pages = [file_content]
 
         data = {
             'username': self.username,
@@ -93,7 +92,10 @@ class DTableAIAPI:
         url = f'{self.seatable_ai_server_url}/api/v1/ai/ocr/'
         headers = gen_headers()
         
-        files = {'file': (file_name, file_content)}
+        files = []
+        for i, image_data in enumerate(image_pages):
+            files.append(('file', (f'page_{i}.jpg', image_data, 'image/jpeg')))
+        
         response = requests.post(url, data=data, files=files, headers=headers, timeout=30)
         
         if response.status_code == 200:
