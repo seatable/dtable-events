@@ -10,3 +10,4 @@ imapclient==2.3.*
 Markdown==3.6.*
 mammoth==1.4.*
 pdfminer.six==20221105
+pdf2image~=1.17.0
