@@ -9,6 +9,7 @@ import uuid
 from dateutil import parser
 from datetime import datetime
 from pathlib import Path
+from pdf2image import convert_from_bytes
 
 import pytz
 import re
@@ -269,6 +270,26 @@ def parse_docx(file):
 def parse_pdf(file):
     text = extract_text(io.BytesIO(file))
     return text
+
+def process_pdf_to_images(file_content, max_pages=5):
+    images = convert_from_bytes(
+        file_content, 
+        dpi=300,
+        first_page=1,
+        last_page=max_pages,
+        fmt='JPEG'
+    )
+    
+    if not images:
+        raise ValueError("Failed to convert PDF to images")
+    
+    image_pages = []
+    for image in images:
+        img_buffer = io.BytesIO()
+        image.save(img_buffer, format='JPEG')
+        image_pages.append(img_buffer.getvalue())
+    
+    return image_pages
 
 def get_fileserver_root():
     """ Construct seafile fileserver address and port.

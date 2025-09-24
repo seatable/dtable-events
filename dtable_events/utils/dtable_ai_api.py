@@ -1,8 +1,8 @@
 import requests
 import logging
 import time
-from dtable_events.utils import gen_file_get_url, get_file_ext
-from dtable_events.utils.constants import EXTRACT_TEXT_SUPPORTED_IMAGES
+from dtable_events.utils import get_file_ext, process_pdf_to_images
+from dtable_events.utils.constants import EXTRACT_TEXT_SUPPORTED_FILES
 import jwt
 
 from dtable_events.app.config import DTABLE_PRIVATE_KEY
@@ -70,27 +70,39 @@ class DTableAIAPI:
             logger.error(f"Failed to classify text: {response.text}")
             raise DTableAIAPIError()
 
-    def ocr(self, file_name, download_token):
-        if get_file_ext(file_name) not in EXTRACT_TEXT_SUPPORTED_IMAGES:
-            raise DTableAIAPIError("Unsupported image format")
-        
-        img_url = gen_file_get_url(download_token, file_name)
+    def ocr(self, file_name, file_content):
+        file_ext = get_file_ext(file_name)
+        if file_ext not in EXTRACT_TEXT_SUPPORTED_FILES:
+            raise DTableAIAPIError(f"Unsupported file format: {file_ext}")
+
+        if file_ext.lower() == '.pdf':
+            try:
+                image_pages = process_pdf_to_images(file_content, max_pages=5)
+            except Exception as e:
+                logger.error(f"Failed to process PDF to images: {e}")
+                raise DTableAIAPIError(f"PDF processing failed: {e}")
+        else:
+            image_pages = [file_content]
 
         data = {
             'username': self.username,
             'org_id': self.org_id,
-            'img_url': img_url,
         }
         
         url = f'{self.seatable_ai_server_url}/api/v1/ai/ocr/'
         headers = gen_headers()
-        response = requests.post(url, json=data, headers=headers, timeout=30)
+        
+        files = []
+        for i, image_data in enumerate(image_pages):
+            files.append(('file', (f'page_{i}.jpg', image_data, 'image/jpeg')))
+        
+        response = requests.post(url, data=data, files=files, headers=headers, timeout=30)
         
         if response.status_code == 200:
             result = response.json()
             return result.get('ocr_result', '')
         else:
-            logger.error(f"Failed to ocr image: {response.text}")
+            logger.error(f"Failed to ocr file: {response.text}")
             raise DTableAIAPIError()
 
     def extract(self, content, extract_fields, extract_prompt):

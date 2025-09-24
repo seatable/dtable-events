@@ -30,6 +30,7 @@ from dtable_events.notification_rules.notification_rules_utils import send_notif
 from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, \
     normalize_file_path, gen_file_get_url, gen_random_option, get_dtable_admins, \
     parse_docx, parse_pdf
+from dtable_events.dtable_io.utils import gen_inner_file_get_url
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_web_api import DTableWebAPI
@@ -3495,7 +3496,7 @@ class RunAI(BaseAction):
         target_column = self.col_key_dict.get(ocr_output_column_key)
         
         if not image_column or not target_column:
-            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} image column or target column not found')
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} source column or target column not found')
             return
 
         target_column_name = target_column.get('name')
@@ -3506,43 +3507,20 @@ class RunAI(BaseAction):
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} row data not found')
             return
         
-        # Get image file list
-        image_files = sql_row.get(ocr_input_column_key, [])
-        if not image_files:
-            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} no images found in column')
+        file_list = sql_row.get(ocr_input_column_key, [])
+        if not file_list:
             return
 
-        # Process the first image
-        first_image = image_files[0] if image_files else None
-        if not first_image:
-            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} no first image found')
-            return
-        
-        file_url = first_image
-        file_name = os.path.basename(unquote(file_url.split('/')[-1]))
-        if not file_name or not file_url:
-            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} first image missing name or url')
+        # Get file download information
+        file_name, download_token = self.get_file_download_info(file_list, repo_id)
+        if not file_name or not download_token:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} failed to get file download info')
             return
 
-        # Build file path and get download token
-        try:
-            file_path = unquote('/'.join(file_url.split('/')[7:]).strip())
-            asset_path = normalize_file_path(os.path.join('/asset', uuid_str_to_36_chars(self.auto_rule.dtable_uuid), file_path))
-            
-            asset_id = seafile_api.get_file_id_by_path(repo_id, asset_path)
-            if not asset_id:
-                auto_rule_logger.warning(f'rule {self.auto_rule.rule_id} OCR asset file {file_name} does not exist')
-                return
-
-            download_token = seafile_api.get_fileserver_access_token(
-                repo_id, asset_id, 'download', self.username, use_onetime=True
-            )
-            if not download_token:
-                auto_rule_logger.error(f'rule {self.auto_rule.rule_id} failed to get download token for OCR')
-                return
-
-        except Exception as e:
-            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} failed to process file for OCR: {e}')
+        # Get file binary content for OCR processing
+        file_content = self.get_file_binary_content(file_name, download_token)
+        if file_content is None:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} failed to get file content')
             return
 
         ocr_result = ''
@@ -3551,7 +3529,7 @@ class RunAI(BaseAction):
         try:
             seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, SEATABLE_AI_SERVER_URL)
             
-            ocr_text = seatable_ai_api.ocr(file_name, download_token)
+            ocr_text = seatable_ai_api.ocr(file_name, file_content)
             if ocr_text.strip():
                 ocr_result = ocr_text.strip()
                             
@@ -3573,7 +3551,7 @@ class RunAI(BaseAction):
         file_ext = Path(file_name).suffix.lower()
         
         # Download file content
-        file_url = gen_file_get_url(download_token, file_name)
+        file_url = gen_inner_file_get_url(download_token, file_name)
         response = requests.get(file_url, timeout=30)
         if not response.ok:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} failed to download file: {file_name}')
@@ -3592,12 +3570,11 @@ class RunAI(BaseAction):
             auto_rule_logger.warning(f'rule {self.auto_rule.rule_id} unsupported file type: {file_ext}')
             return None
 
-    def get_file_content(self, file_data, repo_id):
-        """Get file content from file data"""
+    def get_file_download_info(self, file_data, repo_id):
         try:
             first_file = file_data[0]
-            file_url = first_file.get('url')
-            file_name = first_file.get('name', os.path.basename(file_url))
+            file_url = first_file.get('url') if isinstance(first_file, dict) else first_file
+            file_name = first_file.get('name', os.path.basename(file_url)) if isinstance(first_file, dict) else os.path.basename(file_url)
             
             file_path = unquote('/'.join(file_url.split('/')[7:]).strip())
             asset_path = normalize_file_path(os.path.join('/asset', uuid_str_to_36_chars(self.auto_rule.dtable_uuid), file_path))
@@ -3605,7 +3582,7 @@ class RunAI(BaseAction):
             asset_id = seafile_api.get_file_id_by_path(repo_id, asset_path)
             if not asset_id:
                 auto_rule_logger.warning(f'rule {self.auto_rule.rule_id} asset file does not exist: {file_path}')
-                return None
+                return None, None
             
             # Get download token
             download_token = seafile_api.get_fileserver_access_token(
@@ -3613,15 +3590,31 @@ class RunAI(BaseAction):
             )
             if not download_token:
                 auto_rule_logger.error(f'rule {self.auto_rule.rule_id} failed to get download token')
-                return None
+                return None, None
             
-            # Parse file using the standard parsing method
-            return self.parse_file(file_name, download_token)
+            return file_name, download_token
                 
         except Exception as e:
-            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} failed to get file content: {e}')
-            return None
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} failed to get file download info: {e}')
+            return None, None
 
+    def get_file_content(self, file_data, repo_id):
+        """Get file text content from file data"""
+        file_name, download_token = self.get_file_download_info(file_data, repo_id)
+        if not file_name or not download_token:
+            return None
+        
+        return self.parse_file(file_name, download_token)
+
+    def get_file_binary_content(self, file_name, download_token):
+        file_url = gen_inner_file_get_url(download_token, file_name)
+        response = requests.get(file_url, timeout=30)
+        if not response.ok:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} failed to download file: {file_name}')
+            return None
+        
+        return response.content
+      
     def extract(self):
         """Execute AI content extraction, extract specified information from source content to target columns"""
         table_name = self.auto_rule.table_info['name']
@@ -3798,7 +3791,7 @@ class RunAI(BaseAction):
         image_column = self.col_key_dict.get(self.config.get('ocr_input_column_key'))
         target_column = self.col_key_dict.get(self.config.get('ocr_output_column_key'))
         
-        if not image_column or image_column.get('type') != ColumnTypes.IMAGE:
+        if not image_column or image_column.get('type') not in [ColumnTypes.FILE, ColumnTypes.IMAGE]:
             return False
         if not target_column or target_column.get('type') not in [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT]:
             return False
