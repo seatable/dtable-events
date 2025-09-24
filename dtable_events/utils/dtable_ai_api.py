@@ -19,9 +19,10 @@ def gen_headers():
 
 
 class DTableAIAPI:
-    def __init__(self, username, org_id, seatable_ai_server_url):
+    def __init__(self, username, org_id, dtable_uuid, seatable_ai_server_url):
         self.username = username
         self.org_id = org_id
+        self.dtable_uuid = dtable_uuid
         self.seatable_ai_server_url = seatable_ai_server_url
 
 
@@ -33,6 +34,7 @@ class DTableAIAPI:
             'content': f'content:{content}',
             'username': self.username,
             'org_id': self.org_id,
+            'dtable_uuid': self.dtable_uuid,
             'summary_prompt': summary_prompt,
         }
         
@@ -55,6 +57,7 @@ class DTableAIAPI:
             'content': content,
             'username': self.username,
             'org_id': self.org_id,
+            'dtable_uuid': self.dtable_uuid,
             'classify_prompt': classify_prompt,
         }
         
@@ -87,6 +90,7 @@ class DTableAIAPI:
         data = {
             'username': self.username,
             'org_id': self.org_id,
+            'dtable_uuid': self.dtable_uuid,
         }
         
         url = f'{self.seatable_ai_server_url}/api/v1/ai/ocr/'
@@ -114,6 +118,7 @@ class DTableAIAPI:
             'content': content,
             'username': self.username,
             'org_id': self.org_id,
+            'dtable_uuid': self.dtable_uuid,
             'extract_fields': extract_fields,
             'extract_prompt': extract_prompt,
         }
@@ -138,6 +143,7 @@ class DTableAIAPI:
             'content': content,
             'username': self.username,
             'org_id': self.org_id,
+            'dtable_uuid': self.dtable_uuid,
         }
         
         url = f'{self.seatable_ai_server_url}/api/v1/ai/custom/'

@@ -3334,7 +3334,7 @@ class RunAI(BaseAction):
             summary_result = ''
         else:
             try:
-                seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, SEATABLE_AI_SERVER_URL)
+                seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, SEATABLE_AI_SERVER_URL)
                 summary_result = seatable_ai_api.summarize(content, self.config.get('summary_prompt'))
             except Exception as e:
                 auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai summarize error: {e}')
@@ -3455,7 +3455,7 @@ class RunAI(BaseAction):
             classification_result = []
         else:
             try:
-                seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, SEATABLE_AI_SERVER_URL)
+                seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, SEATABLE_AI_SERVER_URL)
                 classification_result = seatable_ai_api.classify(content, self.config.get('classify_prompt'))
             except Exception as e:
                 auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai classify error: {e}')
@@ -3527,7 +3527,7 @@ class RunAI(BaseAction):
         
         # Call AI service for OCR recognition
         try:
-            seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, SEATABLE_AI_SERVER_URL)
+            seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, SEATABLE_AI_SERVER_URL)
             
             ocr_text = seatable_ai_api.ocr(file_name, file_content)
             if ocr_text.strip():
@@ -3675,7 +3675,7 @@ class RunAI(BaseAction):
         # Call AI service for content extraction
         extraction_result = {}
         try:
-            seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, SEATABLE_AI_SERVER_URL)
+            seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, SEATABLE_AI_SERVER_URL)
             # Use dedicated extract method with optional prompt
             extract_prompt = self.config.get('extract_prompt')
             extraction_result = seatable_ai_api.extract(source_content, target_descriptions, extract_prompt)
@@ -3732,7 +3732,7 @@ class RunAI(BaseAction):
             custom_result = ''
         else:
             try:
-                seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, SEATABLE_AI_SERVER_URL)
+                seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, SEATABLE_AI_SERVER_URL)
                 custom_result = seatable_ai_api.custom(filled_prompt)
             except Exception as e:
                 auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai custom processing error: {e}')
@@ -3924,7 +3924,7 @@ class AutomationRule:
         self.dtable_server_api = DTableServerAPI(self.username, str(UUID(self.dtable_uuid)), INNER_DTABLE_SERVER_URL)
         self.dtable_db_api = DTableDBAPI(self.username, str(UUID(self.dtable_uuid)), INNER_DTABLE_DB_URL)
         self.dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
-        self.seatable_ai_api = DTableAIAPI(self.username, self.org_id, SEATABLE_AI_SERVER_URL)
+        self.seatable_ai_api = DTableAIAPI(self.username, self.org_id, self.dtable_uuid, SEATABLE_AI_SERVER_URL)
 
         self.query_stats = []
 
