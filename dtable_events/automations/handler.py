@@ -50,7 +50,7 @@ class AutomationRuleHandler(Thread):
     def scan(self):
         while True:
             event = self.queue.get()
-            publish_metric(self.queue.qsize(), 'instant_automation_rules_queue', INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP)
+            publish_metric(self.queue.qsize(), 'realtime_automation_queue_size', INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP)
             auto_rule_logger.info("Start to trigger rule %s in thread %s", event, current_thread().name)
             session = self._db_session_class()
             try:
@@ -74,14 +74,14 @@ class AutomationRuleHandler(Thread):
 
         self.start_threads()
 
-        publish_metric(self.queue.qsize(), 'instant_automation_rules_queue', INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP)
+        publish_metric(self.queue.qsize(), 'realtime_automation_queue_size', INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP)
         while not self._finished.is_set():
             try:
                 message = subscriber.get_message()
                 if message is not None:
                     event = json.loads(message['data'])
                     self.queue.put(event)
-                    publish_metric(self.queue.qsize(), 'instant_automation_rules_queue', INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP)
+                    publish_metric(self.queue.qsize(), 'realtime_automation_queue_size', INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP)
                     auto_rule_logger.info(f"subscribe event {event}")
                 else:
                     time.sleep(0.5)
