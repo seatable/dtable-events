@@ -10,6 +10,7 @@ from dtable_events.app.log import auto_rule_logger
 from dtable_events.automations.auto_rules_utils import scan_triggered_automation_rules
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import get_opt_from_conf_or_env
+from dtable_events.utils.utils_metric import publish_metric, INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP
 
 
 class AutomationRuleHandler(Thread):
@@ -49,6 +50,7 @@ class AutomationRuleHandler(Thread):
     def scan(self):
         while True:
             event = self.queue.get()
+            publish_metric(self.queue.qsize(), 'instant_automation_rules_queue', INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP)
             auto_rule_logger.info("Start to trigger rule %s in thread %s", event, current_thread().name)
             session = self._db_session_class()
             try:
@@ -72,12 +74,14 @@ class AutomationRuleHandler(Thread):
 
         self.start_threads()
 
+        publish_metric(self.queue.qsize(), 'instant_automation_rules_queue', INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP)
         while not self._finished.is_set():
             try:
                 message = subscriber.get_message()
                 if message is not None:
                     event = json.loads(message['data'])
                     self.queue.put(event)
+                    publish_metric(self.queue.qsize(), 'instant_automation_rules_queue', INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP)
                     auto_rule_logger.info(f"subscribe event {event}")
                 else:
                     time.sleep(0.5)
