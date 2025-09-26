@@ -238,7 +238,7 @@ def import_table_from_base(context):
 
         src_columns = src_table.get('columns', [])
         # These column types refer to the data of other columns, so not support to import.
-        unsupported_columns = ['link', 'formula', 'link-formula']
+        unsupported_columns = ['link', 'link-formula']
 
         src_views = src_table.get('views', [])
         src_view_structure = src_table.get('view_structure', {})
