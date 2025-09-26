@@ -36,7 +36,7 @@ from dtable_events.utils import is_valid_email, uuid_str_to_36_chars, gen_file_u
 from dtable_events.utils.dtable_server_api import DTableServerAPI, BaseExceedsException
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 from dtable_events.utils.exception import ExcelFormatError
-from dtable_events.utils.email_sender import EmailSender
+from dtable_events.utils.email_sender import toggle_send_email
 from dtable_events.dtable_io.utils import clear_tmp_dir, clear_tmp_file, clear_tmp_files_and_dirs, \
     SDOC_IMAGES_DIR, get_seadoc_download_link, gen_seadoc_base_dir, export_sdoc_prepare_images_folder,\
     batch_upload_sdoc_images, get_documents_config, save_documents_config
@@ -1176,12 +1176,7 @@ def plugin_email_send_email(context, config=None):
     thread_table_name = table_info.get('thread_table_name')
 
     # send email
-    sender = EmailSender(account_id, username, config)
-    result = sender.send(email_info)
-
-    if result.get('err_msg'):
-        dtable_plugin_email_logger.error('plugin email send failed, email account id: %s, username: %s', account_id, username)
-        return
+    toggle_send_email(account_id, email_info, username, config)
 
     send_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
@@ -1209,6 +1204,7 @@ def plugin_email_send_email(context, config=None):
         'Thread ID': thread_id,
     }
 
+    # sync email table after sending
     metadata = dtable_server_api.get_metadata()
 
     tables = metadata.get('tables', [])
@@ -1222,7 +1218,7 @@ def plugin_email_send_email(context, config=None):
         if email_table_id and link_table_id:
             break
     if not email_table_id or not link_table_id:
-        dtable_plugin_email_logger.error('email table: %s or link table: %s not found', email_table_name, thread_table_name)
+        dtable_plugin_email_logger.warning('Send email successfully but sync email table failure with email table: %s or link table: %s not found', email_table_name, thread_table_name)
         return
 
     email_link_id = dtable_server_api.get_column_link_id(email_table_name, 'Threads')
