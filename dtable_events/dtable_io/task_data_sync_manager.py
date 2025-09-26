@@ -3,8 +3,6 @@ import threading
 import time
 import uuid
 
-from dtable_events.utils.utils_metric import publish_metric, DATA_SYNC_TASK_MANAGER_METRIC_HELP
-
 class TaskDataSyncManager(object):
 
     def __init__(self):
@@ -31,7 +29,6 @@ class TaskDataSyncManager(object):
         task = (email_sync, (context, self.config))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
-        publish_metric(self.tasks_queue.qsize(), metric_name='data_sync_io_task_queue_size', metric_help=DATA_SYNC_TASK_MANAGER_METRIC_HELP)
 
         return task_id
 
@@ -66,7 +63,6 @@ class TaskDataSyncManager(object):
                 # run
                 task[0](*task[1])
                 self.tasks_map[task_id] = 'success'
-                publish_metric(self.tasks_queue.qsize(), metric_name='data_sync_io_task_queue_size', metric_help=DATA_SYNC_TASK_MANAGER_METRIC_HELP)
 
                 finish_time = time.time()
                 dtable_data_sync_logger.info('Run task success: %s cost %ds \n' % (task_info, int(finish_time - start_time)))
