@@ -117,7 +117,7 @@ class TaskMessageManager(object):
                         result['err_msg'] = 'Invalid_email_message'
                     elif isinstance(e, SendEmailFailure):
                         result['status_code'] = 403
-                        result['err_msg'] = 'send_email_failure_please_check_third_party_account_permissions'
+                        result['err_msg'] = 'send_email_failure'
                     else:
                         raise e
                 finally:
