@@ -431,10 +431,13 @@ def query_message_send_status():
     except Exception as e:
         dtable_io_logger.debug(e)  # task_id not found
         return make_response((e, 500))
-
-    resp = dict(is_finished=is_finished)
-    resp['result'] = result if result else {}
-    return make_response((resp, 200))
+    
+    if is_finished and 'err_msg' in result:
+        return make_response((result['err_msg'], result['status_code']))
+    else:
+        resp = dict(is_finished=is_finished)
+        resp['result'] = result if result else {}
+        return make_response((resp, 200))
 
 
 @app.route('/cancel-message-send-task', methods=['GET'])

@@ -23,7 +23,16 @@ class ThirdPartyAccountNotFound(Exception):
 class ThirdPartyAccountInvalid(Exception):
     pass
 
+class ThirdPartyAccountAuthorizationFailure(Exception):
+    pass
+
 class ThirdPartyAccountFetchTokenFailure(Exception):
+    pass
+
+class InvalidEmailMessage(ValueError):
+    pass
+
+class SendEmailFailure(Exception):
     pass
 
 def _check_and_raise_error(response):
@@ -50,7 +59,7 @@ class _SendEmailBaseClass(ABC):
         if not msg and not html_msg:
             dtable_message_logger.warning(
                 'Email message invalid. message: %s, html_message: %s' % (msg, html_msg))
-            raise ValueError('Email message invalid')
+            raise InvalidEmailMessage('Email message invalid')
 
         send_to = [formataddr(parseaddr(to)) for to in send_to]
         copy_to = [formataddr(parseaddr(to)) for to in copy_to]
@@ -107,14 +116,14 @@ class _SendEmailBaseClass(ABC):
         try:
             save_email_sending_records(self.db_session, self.operator, host, success)
         except Exception as e:
-            dtable_message_logger.exception(
+            dtable_message_logger.warning(
                 'Email sending log record error: %s' % e)
             
     def _save_batch_send_email_record(self, host, send_state_list):
         try:
             batch_save_email_sending_records(self.db_session, self.operator, host, send_state_list)
         except Exception as e:
-            dtable_message_logger.exception('Batch save email sending log error: %s' % e)
+            dtable_message_logger.warning('Batch save email sending log error: %s' % e)
 
     @abstractmethod
     def send(self, send_info): ...
@@ -136,38 +145,36 @@ class SMTPSendEmail(_SendEmailBaseClass):
         self.operator = operator
 
         if not all([self.email_host,  self.email_port, self.host_user, self.password]):
-            raise ThirdPartyAccountInvalid('Third party account %s is invalid.' % self.account_id) 
+            dtable_message_logger.exception('Third party account %s is invalid.' % self.account_id)
+            raise ThirdPartyAccountInvalid() 
     
     def send(self, send_info):
         copy_to = send_info.get('copy_to', [])
         send_to = send_info.get('send_to', [])
         
-        result = {}
         try:
             msg_obj = self._build_msg_obj(send_info)
         except Exception as e:
-            result['err_msg'] = 'Email message invalid'
-            return result
-
+            dtable_message_logger.exception(f'Build MIME object failure: {e}')
+            raise InvalidEmailMessage()
+        
         try:
             smtp = smtplib.SMTP(self.email_host, int(self.email_port), timeout=30)
-        except Exception as e:
-            dtable_message_logger.warning(
-                'Email server configured failed. host: %s, port: %s, error: %s' % (self.email_host, self.email_port, e))
-            result['err_msg'] = 'Email server host or port invalid'
-            return result
-        success = False
-
-        try:
             smtp.starttls()
             smtp.login(self.host_user, self.password)
+        except Exception as e:
+            dtable_message_logger.exception(
+                'Email server authorization failed. host: %s, port: %s, error: %s' % (self.email_host, self.email_port, e))
+            raise ThirdPartyAccountAuthorizationFailure()
+        
+        success = False
+        try:
             recevers = copy_to and send_to + copy_to or send_to
             smtp.sendmail(self.sender_email if self.sender_email else self.host_user, recevers, msg_obj.as_string())
             success = True
         except Exception as e:
-            dtable_message_logger.warning(
-                'Email sending failed. email: %s, error: %s' % (self.host_user, e))
-            result['err_msg'] = 'Email server username or password invalid'
+            dtable_message_logger.exception(
+                'Send email failure: email: %s, error: %s' % (self.host_user, e))
         else:
             dtable_message_logger.info('Email sending success!')
         finally:
@@ -175,23 +182,20 @@ class SMTPSendEmail(_SendEmailBaseClass):
 
         self._save_send_email_record(self.email_host, success)
 
-        return result
+        if not success:
+            raise SendEmailFailure()
+
+        return {'success': True}
 
     def batch_send(self, send_info_list):
         try:
             smtp = smtplib.SMTP(self.email_host, int(self.email_port), timeout=30)
-        except Exception as e:
-            dtable_message_logger.warning(
-                'Email server configured failed. host: %s, port: %s, error: %s' % (self.email_host, self.email_port, e))
-            return
-
-        try:
             smtp.starttls()
             smtp.login(self.host_user, self.password)
         except Exception as e:
-            dtable_message_logger.warning(
-                'Login smtp failed, host user: %s, error: %s' % (self.host_user, e))
-            return
+            dtable_message_logger.exception(
+                'Email server authorization failed. host: %s, port: %s, error: %s' % (self.email_host, self.email_port, e))
+            raise ThirdPartyAccountAuthorizationFailure()
 
         send_state_list = []
         for send_info in send_info_list:
@@ -199,11 +203,10 @@ class SMTPSendEmail(_SendEmailBaseClass):
             send_to = send_info.get('send_to', [])
             copy_to = send_info.get('copy_to', [])
 
-
             try:
                 msg_obj = self._build_msg_obj(send_info)
             except Exception as e:
-                dtable_message_logger.warning('Email message invalid')
+                dtable_message_logger.warning(f'Batch send emails: Build MIME object failure: {e}')
                 continue
 
             send_to = [formataddr(parseaddr(to)) for to in send_to]
@@ -214,14 +217,11 @@ class SMTPSendEmail(_SendEmailBaseClass):
                 smtp.sendmail(self.sender_email if self.sender_email else self.host_user, recevers, msg_obj.as_string())
                 success = True
             except Exception as e:
-                dtable_message_logger.warning('Email sending failed. email: %s, error: %s' % (self.host_user, e))
-            else:
-                dtable_message_logger.info('Email sending success!')
+                dtable_message_logger.warning('Batch send emails: email sending failed. email: %s, error: %s' % (self.host_user, e))
             send_state_list.append(success)
             time.sleep(0.5)
 
         smtp.quit()
-
         self._save_batch_send_email_record(self.email_host, send_state_list)
 
 class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
@@ -243,7 +243,8 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
         self.operator = operator
 
         if not all([self.client_id,  self.client_secret, self.refresh_token, self.host_user, self.token_url, self.scopes, self.operator]):
-            raise ThirdPartyAccountInvalid('Third party account %s is invalid.' % self.account_id)
+            dtable_message_logger.exception('Third party account %s is invalid.' % self.account_id)
+            raise ThirdPartyAccountInvalid()
         
         self._request_access_token()
         
@@ -261,10 +262,16 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
                 'Content-Type': 'application/x-www-form-urlencoded'
             }
             response = requests.post(self.token_url, headers=headers, data=parse.urlencode(params))
-            _check_and_raise_error(response)
-            response = response.json()
-            if not response.get('access_token'):
-                raise ThirdPartyAccountFetchTokenFailure(f'Failure to fetch access token, account_id: {self.account_id}')
+            try:
+                _check_and_raise_error(response)
+            except Exception as e:
+                dtable_message_logger.exception(f'Failure to fetch new access token, account_id: {self.account_id}, reason: {e}')
+                raise ThirdPartyAccountFetchTokenFailure()
+            else:
+                response = response.json()
+                if 'access_token' not in response:
+                    dtable_message_logger.exception(f'Failure to fetch new access token, account_id: {self.account_id}. There is not available access_token in response.')
+                    raise ThirdPartyAccountAuthorizationFailure()
             expires_at = 0
             if response.get('ext_expires_at'):
                 expires_at = response.get('ext_expires_at')
@@ -289,14 +296,11 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
     def _on_sending_email(self, /): ...
 
     def send(self, send_info):
-        result = {}
-        
         try:
             msg_obj = self._build_msg_obj(send_info)
         except Exception as e:
-            result['err_msg'] = 'Email message invalid'
-            dtable_message_logger.exception(e)
-            return result
+            dtable_message_logger.exception(f'Build MIME object failure: {e}')
+            raise InvalidEmailMessage()
         
         response = self._on_sending_email(msg_obj)
 
@@ -305,13 +309,14 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
             _check_and_raise_error(response)
             success = True
         except Exception as e:
-            dtable_message_logger.warning(
+            dtable_message_logger.exception(
                 'Email sending failed. email: %s, error: %s' % (self.host_user, e))
-            result['err_msg'] = 'Email server username or password invalid'
-        else:
-            dtable_message_logger.info(f'Email sending success: ({response.status_code}) {response.text}')
         
         self._save_send_email_record(self.host_user, success)
+        if not success:
+            raise SendEmailFailure()
+        
+        return {'success': True}
 
     def batch_send(self, send_info_list):
         send_state_list = []
@@ -321,7 +326,7 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
             try:
                 msg_obj = self._build_msg_obj(send_info)
             except Exception as e:
-                dtable_message_logger.warning('Email message invalid')
+                dtable_message_logger.warning(f'Batch send emails: Build MIME object failure: {e}')
                 continue
 
             response = self._on_sending_email(msg_obj)
@@ -330,9 +335,7 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
                 _check_and_raise_error(response)
                 success = True
             except Exception as e:
-                dtable_message_logger.warning('Email sending failed. email: %s, error: %s' % (self.host_user, e))
-            else:
-                dtable_message_logger.info(f'Email sending success: ({response.status_code}) {response.text}')
+                dtable_message_logger.warning('Batch send emails: Email sending failed. email: %s, error: %s' % (self.host_user, e))
 
             send_state_list.append(success)
             time.sleep(0.5)
@@ -490,10 +493,12 @@ class EmailSender:
     def _sender_init(self):
         account_info = get_third_party_account(self.db_session, self.account_id)
         if not account_info:
-            raise ThirdPartyAccountNotFound('Third party account %s does not exists.' % self.account_id)
+            dtable_message_logger.exception('Third party account %s does not exists.' % self.account_id)
+            raise ThirdPartyAccountNotFound()
         detail = account_info.get('detail')
         if account_info.get('account_type') != 'email' or not detail:
-            raise ThirdPartyAccountInvalid('Third party account %s is invalid.' % self.account_id)
+            dtable_message_logger.exception('Third party account %s is invalid.' % self.account_id)
+            raise ThirdPartyAccountInvalid()
 
         self.email_provider = detail.get('email_provider', 'GeneralEmailProvider')
 
@@ -504,26 +509,32 @@ class EmailSender:
         elif self.email_provider == 'Outlook':
             self.sender = MS365APISendEmail(self.db_session, self.account_id, detail, self.operator)
         else:
-            raise ThirdPartyAccountInvalid(f'Invalid third-party email-account account_id: {self.account_id} account type: {self.email_provider}')
+            dtable_message_logger.exception(f'Invalid third party account type: account_id: {self.account_id} account type: {self.email_provider}')
+            raise ThirdPartyAccountInvalid()
         
     def send(self, send_info):
+        exception = None
         try:
             return self.sender.send(send_info)
         except Exception as e:
-            dtable_message_logger.exception('account_id: %s send email error: %s', self.account_id, e)
-            return {
-                'error_msg': 'Email send failed'
-            }
+            exception = e
         finally:
             self.close()
 
+        if exception:
+            raise exception
+
     def batch_send(self, send_info_list):
+        exception = None
         try:
             return self.sender.batch_send(send_info_list)
         except Exception as e:
-            dtable_message_logger.exception('account_id: %s batch send email error: %s', self.account_id, e)
+            exception = e
         finally:
             self.close()
+        
+        if exception:
+            raise exception
 
     def close(self):
         # only for db_session = None in __init__
@@ -531,11 +542,4 @@ class EmailSender:
             self.db_session.close()
 
 def toggle_send_email(account_id, send_info, username, config):
-    result = {}
-    try:
-        sender = EmailSender(account_id, username, config)
-        result = sender.send(send_info)
-    except Exception as e:
-        dtable_message_logger.exception(f'toggle send email failure: {e}')
-        result['error_msg'] = e
-    return result
+    return EmailSender(account_id, username, config).send(send_info)

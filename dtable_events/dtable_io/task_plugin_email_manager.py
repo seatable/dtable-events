@@ -5,7 +5,6 @@ import time
 
 from dtable_events.utils.utils_metric import publish_metric, PLUGIN_EMAIL_TASK_MANAGER_METRIC_HELP
 
-
 class TaskPluginEmailManager(object):
 
     def __init__(self):
