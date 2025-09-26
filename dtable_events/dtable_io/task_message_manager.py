@@ -116,7 +116,7 @@ class TaskMessageManager(object):
                         result['status_code'] = 400
                         result['err_msg'] = 'Invalid email message'
                     elif isinstance(e, SendEmailFailure):
-                        result['status_code'] = 403
+                        result['status_code'] = 400
                         result['err_msg'] = 'Send email failure'
                     else:
                         raise e
