@@ -102,22 +102,22 @@ class TaskMessageManager(object):
                     result = {}
                     if isinstance(e, ThirdPartyAccountNotFound):
                         result['status_code'] = 404
-                        result['err_msg'] = 'Third_party_account_not_found'
+                        result['err_msg'] = 'Third-party account not found'
                     elif isinstance(e, ThirdPartyAccountInvalid):
                         result['status_code'] = 400
-                        result['err_msg'] = 'Third_party_account_is_invalid'
+                        result['err_msg'] = 'Third-party account is invalid'
                     elif isinstance(e, ThirdPartyAccountAuthorizationFailure):
                         result['status_code'] = 401
-                        result['err_msg'] = 'Third_party_account_authorization_failure'
+                        result['err_msg'] = 'Third-party account authorization failure'
                     elif isinstance(e, ThirdPartyAccountFetchTokenFailure):
                         result['status_code'] = 400
-                        result['err_msg'] = 'Third_party_account_fetch_token_failure'
+                        result['err_msg'] = 'Third-party account fetches token failure'
                     elif isinstance(e, InvalidEmailMessage):
                         result['status_code'] = 400
-                        result['err_msg'] = 'Invalid_email_message'
+                        result['err_msg'] = 'Invalid email message'
                     elif isinstance(e, SendEmailFailure):
                         result['status_code'] = 403
-                        result['err_msg'] = 'send_email_failure'
+                        result['err_msg'] = 'Send email failure'
                     else:
                         raise e
                 finally:
