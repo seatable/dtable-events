@@ -1105,6 +1105,7 @@ def create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, or
         return
 
     # create auto-rules
+    can_create_navigation = False
     src_des_id_dict = {}
     with open(auto_rules_json_path, 'r') as fp:
         auto_rules_json = fp.read()
@@ -1113,13 +1114,15 @@ def create_auto_rules_from_src_dtable(username, workspace_id, repo_id, owner, or
         if ('run_condition' not in auto_rule) or ('trigger' not in auto_rule) or ('actions' not in auto_rule):
             continue
         new_rule_id = add_a_auto_rule_to_db(username, auto_rule, workspace_id, repo_id, owner, org_id, dtable_uuid, old_new_workflow_token_dict, db_session)
-        src_des_id_dict[auto_rule['id']] = new_rule_id
+        if auto_rule.get('id'):
+            can_create_navigation = True
+            src_des_id_dict[auto_rule['id']] = new_rule_id
     dtable_server_api = DTableServerAPI('dtable-events', dtable_uuid, INNER_DTABLE_SERVER_URL)
     dtable_server_api.send_signal('automation-rules-changed')
 
     # create auto-rules navigation
     auto_rules_navigation_json_path = os.path.join(path, 'auto_rules_navigation.json')
-    if os.path.isfile(auto_rules_navigation_json_path):
+    if can_create_navigation and os.path.isfile(auto_rules_navigation_json_path):
         with open(auto_rules_navigation_json_path, 'r') as fp:
             try:
                 nav_detail = json.load(fp)
