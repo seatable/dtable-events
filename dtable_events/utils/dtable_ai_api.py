@@ -156,3 +156,24 @@ class DTableAIAPI:
         else:
             logger.error(f"Failed to process custom AI request: {response.text}")
             raise DTableAIAPIError()
+
+    def recognize_chinese_invoice(self, file_name, file_content):
+        data = {
+            'username': self.username,
+            'org_id': self.org_id,
+            'dtable_uuid': self.dtable_uuid,
+        }
+        
+        url = f'{self.seatable_ai_server_url}/api/v1/ai/invoice-recognition/'
+        headers = gen_headers()
+        
+        files = {'file': (file_name, file_content, 'application/octet-stream')}
+        
+        response = requests.post(url, data=data, files=files, headers=headers, timeout=30)
+        
+        if response.status_code == 200:
+            result = response.json()
+            return result.get('result', {})
+        else:
+            logger.error(f"Failed to recognize Chinese invoice: {response.text}")
+            raise DTableAIAPIError()

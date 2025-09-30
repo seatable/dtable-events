@@ -243,3 +243,20 @@ VALID_OPTION_TAGS = [
     {'color': '#46A1FD', 'border_color': '#3C8FE4', 'text_color': '#FFFFFF'},
     {'color': '#C2C2C2', 'border_color': '#ADADAD', 'text_color': '#FFFFFF'},
 ]
+
+# invoice types mapping
+INVOICE_TYPES = {
+    "vat_invoice": "增值税发票",
+    'taxi_receipt': '出租车票',
+    'train_ticket': '火车票',
+    'quota_invoice': '定额发票',
+    'air_ticket': '飞机行程单',
+    'roll_normal_invoice': '卷票',
+    'printed_invoice': '机打发票',
+    'bus_ticket': '汽车票',
+    'toll_invoice': '过路过桥费',
+    'ferry_ticket': '船票',
+    'motor_vehicle_invoice': '机动车销售发票',
+    'used_vehicle_invoice': '二手车销售发票',
+    'taxi_online_ticket': '网约车行程单'
+}
