@@ -40,7 +40,7 @@ class DTableAIAPI:
         
         url = f'{self.seatable_ai_server_url}/api/v1/ai/text-summarize/'
         headers = gen_headers()
-        response = requests.post(url, json=data, headers=headers, timeout=30)
+        response = requests.post(url, json=data, headers=headers, timeout=180)
         
         if response.status_code == 200:
             result = response.json()
@@ -63,7 +63,7 @@ class DTableAIAPI:
         
         url = f'{self.seatable_ai_server_url}/api/v1/ai/classification/'
         headers = gen_headers()
-        response = requests.post(url, json=data, headers=headers, timeout=30)
+        response = requests.post(url, json=data, headers=headers, timeout=180)
         
         if response.status_code == 200:
             result = response.json()
@@ -100,7 +100,7 @@ class DTableAIAPI:
         for i, image_data in enumerate(image_pages):
             files.append(('file', (f'page_{i}.jpg', image_data, 'image/jpeg')))
         
-        response = requests.post(url, data=data, files=files, headers=headers, timeout=30)
+        response = requests.post(url, data=data, files=files, headers=headers, timeout=180)
         
         if response.status_code == 200:
             result = response.json()
@@ -125,7 +125,7 @@ class DTableAIAPI:
         
         url = f'{self.seatable_ai_server_url}/api/v1/ai/extract/'
         headers = gen_headers()
-        response = requests.post(url, json=data, headers=headers, timeout=30)
+        response = requests.post(url, json=data, headers=headers, timeout=180)
         
         if response.status_code == 200:
             result = response.json()
@@ -148,7 +148,7 @@ class DTableAIAPI:
         
         url = f'{self.seatable_ai_server_url}/api/v1/ai/custom/'
         headers = gen_headers()
-        response = requests.post(url, json=data, headers=headers, timeout=30)
+        response = requests.post(url, json=data, headers=headers, timeout=180)
         
         if response.status_code == 200:
             result = response.json()
