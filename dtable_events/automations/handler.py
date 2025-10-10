@@ -28,9 +28,6 @@ class AutomationRuleHandler(Thread):
         self.log_none_message_count = 10
         self.none_messages_timeout = 10 * 60
 
-        self.none_message_time = None
-        self.resub_timeout = 5 * 10
-
         self._parse_config(config)
 
     def _parse_config(self, config):
