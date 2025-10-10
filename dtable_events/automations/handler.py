@@ -1,6 +1,7 @@
 import json
 import logging
 import time
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
 from threading import Thread, Event, current_thread
@@ -19,10 +20,16 @@ class AutomationRuleHandler(Thread):
         self._enabled = True
         self._finished = Event()
         self._db_session_class = init_db_session_class(config)
-        self._redis_client = RedisClient(config)
+        self._redis_client = RedisClient(config, socket_connect_timeout=5, socket_timeout=10)
 
         self.per_update_auto_rule_workers = 3
         self.queue = Queue()
+
+        self.log_none_message_count = 10
+        self.none_messages_timeout = 10 * 60
+
+        self.none_message_time = None
+        self.resub_timeout = 5 * 10
 
         self._parse_config(config)
 
@@ -75,6 +82,10 @@ class AutomationRuleHandler(Thread):
         self.start_threads()
 
         publish_metric(self.queue.qsize(), 'realtime_automation_queue_size', INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP)
+
+        none_message_count = 0
+        last_message_time = datetime.now()
+
         while not self._finished.is_set():
             try:
                 message = subscriber.get_message()
@@ -83,7 +94,18 @@ class AutomationRuleHandler(Thread):
                     self.queue.put(event)
                     publish_metric(self.queue.qsize(), 'realtime_automation_queue_size', INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP)
                     auto_rule_logger.info(f"subscribe event {event}")
+
+                    last_message_time = datetime.now()
+                    none_message_count = 0
                 else:
+                    none_message_count += 1
+                    if none_message_count >= self.log_none_message_count:
+                        auto_rule_logger.info('No message 10 times...')
+                        none_message_count = 0
+                    if (datetime.now() - last_message_time).seconds > self.none_messages_timeout:
+                        subscriber = self._redis_client.get_subscriber('automation-rule-triggered')
+                        auto_rule_logger.info(f'No message for {self.none_messages_timeout}s, get new subscriber')
+                        last_message_time = datetime.now()
                     time.sleep(0.5)
             except Exception as e:
                 auto_rule_logger.exception('Failed get automation rules message from redis: %s' % e)

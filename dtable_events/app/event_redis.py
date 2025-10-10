@@ -5,6 +5,8 @@ import logging
 import os
 import time
 import redis
+import socket
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +14,14 @@ REDIS_METRIC_KEY = 'metric'
 
 class RedisClient(object):
 
-    def __init__(self, config, socket_connect_timeout=30, socket_timeout=None):
+    def __init__(
+            self,config,
+            socket_connect_timeout=30,
+            socket_timeout=None,
+            health_check_interval=30,
+            enable_health_thread=True,
+            health_thread_interval=60
+        ):
         self._host = '127.0.0.1'
         self._port = 6379
         self._password = None
@@ -22,11 +31,35 @@ class RedisClient(object):
         By default, each Redis instance created will in turn create its own connection pool.
         Every caller using redis client will has it's own pool with config caller passed.
         """
-        self.connection = redis.Redis(
-            host=self._host, port=self._port, password=self._password,
-            socket_timeout=socket_timeout, socket_connect_timeout=socket_connect_timeout,
-            decode_responses=True
+
+        keepalive_opts = {
+            socket.TCP_KEEPIDLE: 60,
+            socket.TCP_KEEPINTVL: 10,
+            socket.TCP_KEEPCNT: 3,
+        }
+
+        self._pool = redis.ConnectionPool(
+            host=self._host,
+            port=self._port,
+            password=self._password,
+            decode_responses=True,
+            socket_connect_timeout=socket_connect_timeout,
+            socket_timeout=socket_timeout,
+            health_check_interval=health_check_interval,
+            socket_keepalive=True,
+            socket_keepalive_options=keepalive_opts,
+        )
+
+        self.connection = redis.Redis(connection_pool=self._pool)
+
+        if enable_health_thread:
+            t = threading.Thread(
+                target=self._health_check_loop,
+                args=(health_thread_interval,),
+                daemon=True
             )
+            t.start()
+            logger.info("Redis health check thread started")
 
     def _parse_config(self, config):
 
@@ -51,6 +84,20 @@ class RedisClient(object):
                 self._password = config.get('REDIS', 'password')
         else:
             self._password = redis_password
+
+    def _health_check_loop(self, interval):
+        while True:
+            try:
+                self.connection.ping()
+            except redis.ConnectionError as e:
+                logger.warning("Redis ping failed (%s), disconnecting pool", e)
+                try:
+                    self.connection.connection_pool.disconnect()
+                except Exception as ex:
+                    logger.debug("Ignore disconnect error: %s", ex)
+            except Exception as e:
+                logger.exception("Redis health check exception: %s", e)
+            time.sleep(interval)
 
     def get_subscriber(self, channel_name):
         while True:
