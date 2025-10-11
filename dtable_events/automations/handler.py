@@ -1,6 +1,7 @@
 import json
 import logging
 import time
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
 from threading import Thread, Event, current_thread
@@ -24,7 +25,7 @@ class AutomationRuleHandler(Thread):
         self.per_update_auto_rule_workers = 3
         self.queue = Queue()
 
-        self.log_none_message_count = 100
+        self.log_none_message_timeout = 10 * 60
 
         self._parse_config(config)
 
@@ -78,7 +79,7 @@ class AutomationRuleHandler(Thread):
 
         publish_metric(self.queue.qsize(), 'realtime_automation_queue_size', INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP)
 
-        none_message_count = 0
+        last_message_time = datetime.now()
 
         while not self._finished.is_set():
             try:
@@ -89,14 +90,13 @@ class AutomationRuleHandler(Thread):
                     publish_metric(self.queue.qsize(), 'realtime_automation_queue_size', INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP)
                     auto_rule_logger.info(f"subscribe event {event}")
 
-                    none_message_count = 0
+                    last_message_time = datetime.now()
                 else:
-                    none_message_count += 1
-                    if none_message_count >= self.log_none_message_count:
-                        auto_rule_logger.info(f'No message {self.log_none_message_count} times...')
-                        none_message_count = 0
+                    if (datetime.now() - last_message_time).seconds >= self.log_none_message_timeout:
+                        auto_rule_logger.info(f'No message for {self.log_none_message_timeout}s...')
+                        last_message_time = datetime.now()
                     time.sleep(0.5)
             except Exception as e:
                 auto_rule_logger.exception('Failed get automation rules message from redis: %s' % e)
                 subscriber = self._redis_client.get_subscriber('automation-rule-triggered')
-                none_message_count = 0
+                last_message_time = datetime.now()
