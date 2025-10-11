@@ -24,7 +24,7 @@ class AutomationRuleHandler(Thread):
         self.per_update_auto_rule_workers = 3
         self.queue = Queue()
 
-        self.log_none_message_count = 10
+        self.log_none_message_count = 100
 
         self._parse_config(config)
 
