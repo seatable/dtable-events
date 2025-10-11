@@ -99,3 +99,4 @@ class AutomationRuleHandler(Thread):
             except Exception as e:
                 auto_rule_logger.exception('Failed get automation rules message from redis: %s' % e)
                 subscriber = self._redis_client.get_subscriber('automation-rule-triggered')
+                none_message_count = 0
