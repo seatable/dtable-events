@@ -1,7 +1,6 @@
 import json
 import logging
 import time
-from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
 from threading import Thread, Event, current_thread
@@ -94,7 +93,7 @@ class AutomationRuleHandler(Thread):
                 else:
                     none_message_count += 1
                     if none_message_count >= self.log_none_message_count:
-                        auto_rule_logger.info('No message 10 times...')
+                        auto_rule_logger.info(f'No message {self.log_none_message_count} times...')
                         none_message_count = 0
                     time.sleep(0.5)
             except Exception as e:
