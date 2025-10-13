@@ -3746,7 +3746,7 @@ class RunAI(BaseAction):
             auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} fill custom column error: {e}')
             return
 
-    def invoice_recognition(self):
+    def chinese_invoice_recognition(self):
         table_name = self.auto_rule.table_info['name']
         invoice_input_column_key = self.config.get('invoice_input_column_key')
         invoice_output_columns = self.config.get('invoice_output_columns')
@@ -3936,7 +3936,7 @@ class RunAI(BaseAction):
         
         return True
 
-    def can_invoice_recognition(self):
+    def can_chinese_invoice_recognition(self):
         if not ENABLE_SEATABLE_AI:
             return False
         
@@ -3979,7 +3979,7 @@ class RunAI(BaseAction):
             if self.can_classify():
                 self.classify()
         elif self.ai_function == 'OCR':
-            if self.can_ocr():
+            if self.can_ocr():  
                 self.ocr()
         elif self.ai_function == 'extract':
             if self.can_extract():
@@ -3988,8 +3988,8 @@ class RunAI(BaseAction):
             if self.can_custom():
                 self.custom()
         elif self.ai_function == 'invoice_recognition':
-            if self.can_invoice_recognition():
-                self.invoice_recognition()
+            if self.can_chinese_invoice_recognition():
+                self.chinese_invoice_recognition()
         else:
             auto_rule_logger.warning('ai function %s not supported', self.ai_function)
             return
