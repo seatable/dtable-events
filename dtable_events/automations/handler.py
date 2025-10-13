@@ -11,7 +11,8 @@ from dtable_events.app.log import auto_rule_logger
 from dtable_events.automations.auto_rules_utils import scan_triggered_automation_rules
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import get_opt_from_conf_or_env
-from dtable_events.utils.utils_metric import publish_metric, INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP
+from dtable_events.utils.utils_metric import publish_metric, INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP, \
+    INSTANT_AUTOMATION_RULES_TRIGGERED_COUNT_HELP
 
 
 class AutomationRuleHandler(Thread):
@@ -77,9 +78,11 @@ class AutomationRuleHandler(Thread):
 
         self.start_threads()
 
-        publish_metric(self.queue.qsize(), 'realtime_automation_queue_size', INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP)
-
+        trigger_count = 0
         last_message_time = datetime.now()
+
+        publish_metric(self.queue.qsize(), 'realtime_automation_queue_size', INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP)
+        publish_metric(trigger_count, 'realtime_automation_triggered_count', INSTANT_AUTOMATION_RULES_TRIGGERED_COUNT_HELP)
 
         while not self._finished.is_set():
             try:
@@ -89,6 +92,9 @@ class AutomationRuleHandler(Thread):
                     self.queue.put(event)
                     publish_metric(self.queue.qsize(), 'realtime_automation_queue_size', INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP)
                     auto_rule_logger.info(f"subscribe event {event}")
+
+                    trigger_count += 1
+                    publish_metric(trigger_count, 'realtime_automation_triggered_count', INSTANT_AUTOMATION_RULES_TRIGGERED_COUNT_HELP)
 
                     last_message_time = datetime.now()
                 else:
