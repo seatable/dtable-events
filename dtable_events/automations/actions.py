@@ -31,7 +31,7 @@ from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, \
     normalize_file_path, gen_file_get_url, gen_random_option, get_dtable_admins, \
     parse_docx, parse_pdf
 from dtable_events.dtable_io.utils import gen_inner_file_get_url
-from dtable_events.utils.constants import ColumnTypes
+from dtable_events.utils.constants import ColumnTypes, INVOICE_TYPES
 from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 from dtable_events.utils.dtable_db_api import DTableDBAPI, RowsQueryError, Request429Error
@@ -3748,6 +3748,68 @@ class RunAI(BaseAction):
             auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} fill custom column error: {e}')
             return
 
+    def chinese_invoice_recognition(self):
+        table_name = self.auto_rule.table_info['name']
+        invoice_input_column_key = self.config.get('invoice_input_column_key')
+        invoice_output_columns = self.config.get('invoice_output_columns')
+        repo_id = self.config.get('repo_id')
+        
+        if not repo_id:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} repo_id not found in config')
+            return
+                    
+        sql_row = self.auto_rule.get_sql_row()
+        if not sql_row:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} row data not found')
+            return
+        
+        file_list = sql_row.get(invoice_input_column_key, [])
+        if not file_list:
+            return
+
+        file_name, download_token = self.get_file_download_info(file_list, repo_id)
+        if not file_name or not download_token:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} failed to get file download info')
+            return
+
+        file_content = self.get_file_binary_content(file_name, download_token)
+        if file_content is None:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} failed to get file content')
+            return
+
+        # Call AI service for Chinese invoice recognition
+        try:
+            seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, SEATABLE_AI_SERVER_URL)
+            invoice_result = seatable_ai_api.recognize_chinese_invoice(file_name, file_content)
+
+        except Exception as e:
+            auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai invoice recognition error: {e}')
+            return
+
+        # Build update data based on output_columns configuration
+        update_data = {}
+        for column_key, field_name in invoice_output_columns.items():
+            target_column = self.col_key_dict.get(column_key)
+            if target_column:
+                target_column_name = target_column.get('name')
+                field_value = invoice_result.get(field_name)
+                if not field_value:
+                    continue
+                if field_name == 'invoice_type' and field_value in INVOICE_TYPES:
+                    field_value = INVOICE_TYPES[field_value]
+                update_data[target_column_name] = field_value
+
+        if not update_data:
+            auto_rule_logger.warning(f'rule {self.auto_rule.rule_id} no data to update')
+            return
+
+        # Update row with extracted invoice information
+        try:
+            self.auto_rule.dtable_server_api.update_row(table_name, self.data['row_id'], update_data)
+        except Exception as e:
+            auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} update invoice recognition result error: {e}')
+            return
+
     def can_summary(self):
         if not ENABLE_SEATABLE_AI:
             return False
@@ -3875,6 +3937,40 @@ class RunAI(BaseAction):
             return False
         
         return True
+
+    def can_chinese_invoice_recognition(self):
+        if not ENABLE_SEATABLE_AI:
+            return False
+        
+        invoice_input_column_key = self.config.get('invoice_input_column_key')
+        invoice_output_columns = self.config.get('invoice_output_columns')
+        
+        invoice_input_column = self.col_key_dict.get(invoice_input_column_key)
+        if not invoice_input_column:
+            return False
+        if invoice_input_column.get('type') not in [ColumnTypes.FILE, ColumnTypes.IMAGE]:
+            return False
+        
+        if not invoice_output_columns:
+            return False
+        
+        valid_target_types = [ColumnTypes.TEXT, ColumnTypes.LONG_TEXT, ColumnTypes.NUMBER, ColumnTypes.DATE]
+        for column_key in invoice_output_columns.keys():
+            target_column = self.col_key_dict.get(column_key)
+            if not target_column or target_column.get('type') not in valid_target_types:
+                return False
+        
+        try:
+            result = self.auto_rule.dtable_web_api.ai_permission_check(self.auto_rule.dtable_uuid)
+            self.username = result.get('username')
+            if result.get('is_exceed'):
+                auto_rule_logger.info(f'rule {self.auto_rule.rule_id} dtable: {self.auto_rule.dtable_uuid} exceed ai limit')
+                return False
+        except Exception as e:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} AI permission check by calling dtable-web error: {e}')
+            return False
+        
+        return True
         
         
     def do_action(self):
@@ -3885,7 +3981,7 @@ class RunAI(BaseAction):
             if self.can_classify():
                 self.classify()
         elif self.ai_function == 'OCR':
-            if self.can_ocr():
+            if self.can_ocr():  
                 self.ocr()
         elif self.ai_function == 'extract':
             if self.can_extract():
@@ -3893,6 +3989,9 @@ class RunAI(BaseAction):
         elif self.ai_function == 'custom':
             if self.can_custom():
                 self.custom()
+        elif self.ai_function == 'invoice_recognition':
+            if self.can_chinese_invoice_recognition():
+                self.chinese_invoice_recognition()
         else:
             auto_rule_logger.warning('ai function %s not supported', self.ai_function)
             return
@@ -4476,6 +4575,13 @@ class AutomationRule:
                             'config': {
                                 'custom_output_column_key': action_info.get('custom_output_column_key'),
                                 'custom_prompt': action_info.get('custom_prompt'),
+                            }
+                        },
+                        'invoice_recognition': {
+                            'config': {
+                                'invoice_input_column_key': action_info.get('invoice_input_column_key'),
+                                'invoice_output_columns': action_info.get('invoice_output_columns'),
+                                'repo_id': action_info.get('repo_id'),
                             }
                         }
                     }
