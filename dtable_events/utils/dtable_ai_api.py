@@ -164,7 +164,7 @@ class DTableAIAPI:
             'dtable_uuid': self.dtable_uuid,
         }
         
-        url = f'{self.seatable_ai_server_url}/api/v1/ai/invoice-recognition/'
+        url = f'{self.seatable_ai_server_url}/api/v1/ai/chinese-invoice-recognition/'
         headers = gen_headers()
         
         files = {'file': (file_name, file_content, 'application/octet-stream')}
