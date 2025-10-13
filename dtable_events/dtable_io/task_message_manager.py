@@ -4,6 +4,9 @@ import time
 import uuid
 
 from dtable_events.utils.utils_metric import publish_metric, MESSAGE_TASK_MANAGER_METRIC_HELP
+from dtable_events.utils.email_sender import ThirdPartyAccountNotFound, ThirdPartyAccountInvalid, \
+    ThirdPartyAccountAuthorizationFailure, ThirdPartyAccountFetchTokenFailure, \
+    InvalidEmailMessage, SendEmailFailure
 
 class TaskMessageManager(object):
 
@@ -93,16 +96,40 @@ class TaskMessageManager(object):
                 start_time = time.time()
 
                 # run
-                result = task[0](*task[1])
-                self.tasks_map[task_id] = 'success'
-                self.tasks_result_map[task_id] = result
+                try:
+                    result = task[0](*task[1])
+                except Exception as e:
+                    result = {}
+                    if isinstance(e, ThirdPartyAccountNotFound):
+                        result['status_code'] = 404
+                        result['err_msg'] = 'Third-party account not found'
+                    elif isinstance(e, ThirdPartyAccountInvalid):
+                        result['status_code'] = 400
+                        result['err_msg'] = 'Third-party account is invalid'
+                    elif isinstance(e, ThirdPartyAccountAuthorizationFailure):
+                        result['status_code'] = 401
+                        result['err_msg'] = 'Third-party account authorization failure'
+                    elif isinstance(e, ThirdPartyAccountFetchTokenFailure):
+                        result['status_code'] = 400
+                        result['err_msg'] = 'Third-party account fetches token failure'
+                    elif isinstance(e, InvalidEmailMessage):
+                        result['status_code'] = 400
+                        result['err_msg'] = 'Invalid email message'
+                    elif isinstance(e, SendEmailFailure):
+                        result['status_code'] = 400
+                        result['err_msg'] = 'Send email failure'
+                    else:
+                        raise e
+                finally:
+                    self.tasks_map[task_id] = 'success'
+                    self.tasks_result_map[task_id] = result
                 publish_metric(self.tasks_queue.qsize(), metric_name='message_io_task_queue_size', metric_help=MESSAGE_TASK_MANAGER_METRIC_HELP)
 
                 finish_time = time.time()
                 dtable_message_logger.info('Run task success: %s cost %ds \n' % (self.current_task_info, int(finish_time - start_time)))
                 self.current_task_info = None
             except Exception as e:
-                dtable_message_logger.exception('Failed to handle task %s, error: %s \n' % (task_id, e))
+                dtable_message_logger.error('Failed to handle task %s, error: %s \n' % (task_id, e))
                 self.tasks_map.pop(task_id, None)
                 self.current_task_info = None
 
