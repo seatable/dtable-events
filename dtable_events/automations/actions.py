@@ -1569,6 +1569,8 @@ class LinkRecordsAction(BaseAction):
         other_column_data = other_column.get('data') or {}
 
         if column['type'] == ColumnTypes.TEXT:
+            if not cell_value:
+                return None
             if other_column['type'] in [
                 ColumnTypes.TEXT,
                 ColumnTypes.URL,
