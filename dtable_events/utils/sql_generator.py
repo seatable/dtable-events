@@ -1,7 +1,7 @@
 import logging
 import re
 import pytz
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from dateutil.relativedelta import relativedelta
 
@@ -1535,6 +1535,85 @@ class StatisticSQLGenerator(object):
             return 'COUNT(%s)' % valid_column_name
         return '%s(%s)' % (DTABLE_DB_SUMMARY_METHOD[summary_method], valid_column_name)
 
+    def _append_trend_filter_sql(self, condition):
+        if not condition:
+            return
+        if not self.filter_sql:
+            self.filter_sql = 'WHERE %s' % condition
+            return
+        if self.filter_sql.startswith('WHERE '):
+            self.filter_sql = '%s AND (%s)' % (self.filter_sql, condition)
+            return
+        self.filter_sql = 'WHERE (%s) AND (%s)' % (self.filter_sql, condition)
+
+    def _get_week_start(self, today, start_idx):
+        current_day_index = (today.weekday() + 1) % 7
+        delta = (current_day_index - start_idx) % 7
+        return today - timedelta(days=delta)
+
+    def _get_trend_period_range(self, date_granularity):
+        now = datetime.now(timezone.utc)
+        today = datetime(now.year, now.month, now.day)
+        granularity = (date_granularity or 'day').lower()
+        if granularity == 'days_7':
+            end = today
+            start = end - timedelta(days=7)
+            return start, end
+        if granularity == 'days_30':
+            end = today
+            start = end - timedelta(days=30)
+            return start, end
+        if granularity == 'day':
+            end = today
+            start = end - timedelta(days=1)
+            return start, end
+        if granularity == 'week':
+            start_of_week_map = {
+                'sunday': 0,
+                'monday': 1,
+                'tuesday': 2,
+                'wednesday': 3,
+                'thursday': 4,
+                'friday': 5,
+                'saturday': 6,
+            }
+            start_idx = start_of_week_map.get((self.start_of_week or 'sunday').lower(), 0)
+            current_week_start = self._get_week_start(today, start_idx)
+            end = current_week_start
+            start = current_week_start - timedelta(days=7)
+            return start, end
+        if granularity == 'month':
+            current_month_start = today.replace(day=1)
+            end = current_month_start
+            start = current_month_start - relativedelta(months=1)
+            return start, end
+        if granularity == 'quarter':
+            quarter_index = (today.month - 1) // 3
+            current_quarter_month = quarter_index * 3 + 1
+            current_quarter_start = today.replace(month=current_quarter_month, day=1)
+            end = current_quarter_start
+            start = current_quarter_start - relativedelta(months=3)
+            return start, end
+        if granularity == 'year':
+            current_year_start = today.replace(month=1, day=1)
+            end = current_year_start
+            start = current_year_start - relativedelta(years=1)
+            return start, end
+        return None, None
+
+    def _build_datetime_condition(self, column, start, end):
+        if not column or not start or not end:
+            return ''
+        if start >= end:
+            return ''
+        column_name = column.get('name') or ''
+        if not column_name:
+            return ''
+        column_expr = '`%s`' % column_name
+        start_str = start.strftime('%Y-%m-%d %H:%M:%S')
+        end_str = end.strftime('%Y-%m-%d %H:%M:%S')
+        return "%s >= '%s' AND %s < '%s'" % (column_expr, start_str, column_expr, end_str)
+
     def _get_detail_sql(self, groupby_columns_dict):
         detail_filters = self.detail_filter_conditions.get('filters') or []
         if self.detail_filter_conditions.get('filter_conjunction') and self.detail_filter_conditions.get('filter_conjunction').upper() == 'OR':
@@ -2195,6 +2274,19 @@ class StatisticSQLGenerator(object):
 
     def _basic_number_card_chart_statistic_2_sql(self):
         summary_type = self.statistic.get('summary_type') or ''
+        
+        if self.detail_filter_conditions is not None:
+            if summary_type == 'count':
+                self._update_filter_sql(True, None)
+            else:
+                numeric_column_key = self.statistic.get('numeric_column_key') or ''
+                numeric_column = self._get_column_by_key(numeric_column_key)
+                if numeric_column:
+                    self._update_filter_sql(True, numeric_column)
+                else:
+                    self._update_filter_sql(True, None)
+            return 'SELECT * FROM %s %s LIMIT 0, 5000' % (self.table_name, self.filter_sql)
+        
         if summary_type == 'count':
             self._update_filter_sql(True, None)
             return 'SELECT COUNT(*) FROM %s %s LIMIT 0, 5000' % (self.table_name, self.filter_sql)
@@ -2450,10 +2542,11 @@ class StatisticSQLGenerator(object):
             summary_method = summary_method.upper()
             summary_column_name = self._summary_column_2_sql(summary_method, summary_column)
 
-        if self.detail_filter_conditions:
-            return self._get_detail_sql({
-                date_column_key: {'groupby_name': groupby_column_name, 'group_by': { 'date_granularity': date_granularity, 'geolocation_granularity': '' }}
-            })
+        if self.detail_filter_conditions is not None:
+            start, end = self._get_trend_period_range(date_granularity)
+            condition = self._build_datetime_condition(groupby_column, start, end)
+            self._append_trend_filter_sql(condition)
+            return 'SELECT * FROM %s %s LIMIT 0, 5000' % (self.table_name, self.filter_sql)
         return 'SELECT %s, %s FROM %s %s GROUP BY %s LIMIT 0, 5000' % (groupby_column_name, summary_column_name, self.table_name, self.filter_sql, groupby_column_name)
 
     def _table_element_statistic_2_sql(self):
