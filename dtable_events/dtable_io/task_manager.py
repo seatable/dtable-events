@@ -525,6 +525,16 @@ class TaskManager(object):
         publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
         return task_id
 
+    @log_function_call
+    def add_import_airtable_task(self, context):
+        from dtable_events.dtable_io.import_airtable import import_airtable
+        task_id = str(uuid.uuid4())
+        task = (import_airtable, (context,))
+        self.tasks_queue.put(task_id)
+        self.tasks_map[task_id] = task
+        publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
+        return task_id
+
     def threads_is_alive(self):
         info = {}
         for t in self.threads:

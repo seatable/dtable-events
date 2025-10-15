@@ -1528,3 +1528,51 @@ def get_metrics():
         metric_info += '%s{%s} %s\n' % (metric_name, label, str(metric_value))
 
     return metric_info.encode()
+
+
+@app.route('/add-import-airtable-task', methods=['POST'])
+def add_import_airtable_task():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    if task_manager.tasks_queue.full():
+        dtable_io_logger.warning('dtable io server busy, queue size: %d, current tasks: %s, threads is_alive: %s'
+                                 % (task_manager.tasks_queue.qsize(), task_manager.current_task_info,
+                                    task_manager.threads_is_alive()))
+        return make_response(('dtable io server busy.', 400))
+
+    try:
+        request_data = json.loads(request.data)
+    except ValueError:
+        return make_response(('Invalid JSON data.', 400))
+
+    username = request_data.get('username')
+    dtable_uuid = request_data.get('dtable_uuid')
+    airtable_api_key = request_data.get('airtable_api_key')
+    airtable_base_id = request_data.get('airtable_base_id')
+    table_names = request_data.get('table_names', [])
+    first_columns = request_data.get('first_columns', [])
+    links = request_data.get('links', [])
+    workspace_id = request_data.get('workspace_id')
+    repo_id = request_data.get('repo_id')
+
+    context = {
+        'username': username,
+        'dtable_uuid': dtable_uuid,
+        'airtable_api_key': airtable_api_key,
+        'airtable_base_id': airtable_base_id,
+        'table_names': table_names,
+        'first_columns': first_columns,
+        'links': links,
+        'workspace_id': workspace_id,
+        'repo_id': repo_id
+    }
+        
+    try:
+        task_id = task_manager.add_import_airtable_task(context)
+    except Exception as e:
+        dtable_io_logger.error(e)
+        return make_response((str(e), 500))
+
+    return make_response(({'task_id': task_id}, 200))
