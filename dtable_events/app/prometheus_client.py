@@ -99,9 +99,11 @@ class MetricPusher:
         self.pushgateway_url = ''
         self.job_name = ''
         self.interval = 5
+        self.enabled = False
         self.parse_config()
 
     def parse_config(self):
+        self.enabled = self.config.getboolean('PUSHGATEWAY', 'enabled', fallback=False)
         self.pushgateway_url = self.config.get('PUSHGATEWAY', 'url')
         self.job_name = self.config.get('PUSHGATEWAY', 'job_name')
         print(f'self.pushgateway_url: {self.pushgateway_url}')
@@ -120,4 +122,7 @@ class MetricPusher:
             time.sleep(self.interval)
 
     def start(self):
+        if not self.enabled:
+            logger.warning(f"Can not start metric pusher: it is not enabled!")
+            return
         threading.Thread(target=self.push_loop, daemon=True).start()
