@@ -3,6 +3,7 @@ import time
 
 from dtable_events.activities.handlers import MessageHandler
 from dtable_events.app.stats_sender import StatsSender
+from dtable_events.app.prometheus_client import MetricPusher
 from dtable_events.statistics.counter import UserActivityCounter
 from dtable_events.dtable_io.dtable_io_server import DTableIOServer
 from dtable_events.tasks.instant_notices_sender import InstantNoticeSender
@@ -31,7 +32,6 @@ from dtable_events.api_calls.api_calls_counter import APICallsCounter
 from dtable_events.tasks.dtable_file_access_log_cleaner import DTableFileAccessLogCleaner
 from dtable_events.activities.dtable_update_handler import DTableUpdateHander
 from dtable_events.activities.dtable_update_cache_manager import DTableUpdateCacheManager
-from dtable_events.tasks.metrics import MetricManager
 from dtable_events.tasks.ai_stats_worker import AIStatsWorker
 
 
@@ -57,7 +57,7 @@ class App(object):
             self._workflow_actions_handler = WorkflowActionsHandler(config)
             self._webhooker = Webhooker(config)
             self._api_calls_counter = APICallsCounter(config)
-            self._metric_manager = MetricManager(config)
+            self._metric_pusher = MetricPusher(config)
             self._universal_app_auto_backup = UniversalAppAutoBackup(config)
             # cron jobs
             self._instant_notices_sender = InstantNoticeSender(config)
@@ -123,7 +123,7 @@ class App(object):
             # ai stats, listen redis and cron
             self.ai_stats_worker.start()                     # default False
             #metrics
-            self._metric_manager.start()
+            self._metric_pusher.start()
 
         while True:
             time.sleep(60)

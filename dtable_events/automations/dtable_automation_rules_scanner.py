@@ -9,10 +9,10 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 
 from dtable_events.app.log import auto_rule_logger
 from dtable_events.app.metadata_cache_managers import RuleIntervalMetadataCacheManager
+from dtable_events.app.prometheus_client import scheduled_automation_queue_size_gauge
 from dtable_events.automations.auto_rules_utils import run_regular_execution_rule
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool
-from dtable_events.utils.utils_metric import publish_metric, INTERVAL_AUTOMATION_RULES_QUEUE_METRIC_HELP
 
 
 __all__ = [
@@ -69,7 +69,7 @@ class DTableAutomationRulesScannerTimer(Thread):
                 rule = self.queue.get(timeout=1)
             except Empty:
                 return  # means no rules to trigger, finish thread
-            publish_metric(self.queue.qsize(), 'scheduled_automation_queue_size', INTERVAL_AUTOMATION_RULES_QUEUE_METRIC_HELP)
+            scheduled_automation_queue_size_gauge.set(self.queue.qsize())
             db_session = self.db_session_class()
             auto_rule_logger.info('thread %s start to handle rule %s dtable_uuid %s', current_thread().name, rule.id, rule.dtable_uuid)
             try:
@@ -107,7 +107,7 @@ class DTableAutomationRulesScannerTimer(Thread):
 
         for rule in rules:
             self.queue.put(rule)
-        publish_metric(self.queue.qsize(), 'scheduled_automation_queue_size', INTERVAL_AUTOMATION_RULES_QUEUE_METRIC_HELP)
+        scheduled_automation_queue_size_gauge.set(self.queue.qsize())
         with ThreadPoolExecutor(max_workers=self.max_workers, thread_name_prefix='interval-auto-rules') as executor:
             for _ in range(self.max_workers):
                 executor.submit(self.trigger_rule)
@@ -121,7 +121,7 @@ class DTableAutomationRulesScannerTimer(Thread):
         def timed_job():
             auto_rule_logger.info('Starts to scan automation rules...')
 
-            publish_metric(self.queue.qsize(), 'scheduled_automation_queue_size', INTERVAL_AUTOMATION_RULES_QUEUE_METRIC_HELP)
+            scheduled_automation_queue_size_gauge.set(self.queue.qsize())
             try:
                 self.scan_dtable_automation_rules()
             except Exception as e:

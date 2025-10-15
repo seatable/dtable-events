@@ -8,10 +8,10 @@ from threading import Thread, Event, current_thread
 
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.app.log import auto_rule_logger
+from dtable_events.app.prometheus_client import realtime_automation_queue_size_gauge, realtime_automation_heartbeat_gauge
 from dtable_events.automations.auto_rules_utils import scan_triggered_automation_rules
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import get_opt_from_conf_or_env
-from dtable_events.utils.utils_metric import publish_metric, INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP
 
 
 class AutomationRuleHandler(Thread):
@@ -53,7 +53,7 @@ class AutomationRuleHandler(Thread):
     def scan(self):
         while True:
             event = self.queue.get()
-            publish_metric(self.queue.qsize(), 'realtime_automation_queue_size', INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP)
+            realtime_automation_queue_size_gauge.set(self.queue.qsize())
             auto_rule_logger.info("Start to trigger rule %s in thread %s", event, current_thread().name)
             session = self._db_session_class()
             try:
@@ -77,7 +77,7 @@ class AutomationRuleHandler(Thread):
 
         self.start_threads()
 
-        publish_metric(self.queue.qsize(), 'realtime_automation_queue_size', INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP)
+        realtime_automation_queue_size_gauge.set(self.queue.qsize())
 
         last_message_time = datetime.now()
 
@@ -87,14 +87,17 @@ class AutomationRuleHandler(Thread):
                 if message is not None:
                     event = json.loads(message['data'])
                     self.queue.put(event)
-                    publish_metric(self.queue.qsize(), 'realtime_automation_queue_size', INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP)
+                    realtime_automation_queue_size_gauge.set(self.queue.qsize())
                     auto_rule_logger.info(f"subscribe event {event}")
 
                     last_message_time = datetime.now()
+
+                    realtime_automation_heartbeat_gauge.set(time.time())
                 else:
                     if (datetime.now() - last_message_time).seconds >= self.log_none_message_timeout:
                         auto_rule_logger.info(f'No message for {self.log_none_message_timeout}s...')
                         last_message_time = datetime.now()
+                    realtime_automation_heartbeat_gauge.set(time.time())
                     time.sleep(0.5)
             except Exception as e:
                 auto_rule_logger.exception('Failed get automation rules message from redis: %s' % e)
