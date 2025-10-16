@@ -58,9 +58,9 @@ class LinksConvertor(object):
 
 
 class FilesConvertor(object):
-    def __init__(self, airtable_api_key, base):
+    def __init__(self, airtable_access_token, base):
         self.airtable_api_headers = {
-            'Authorization': 'Bearer ' + airtable_api_key}
+            'Authorization': 'Bearer ' + airtable_access_token}
         self.base = base
 
     def upload_file(self, item, file_type):
@@ -383,17 +383,15 @@ class ColumnsParser(object):
 
 
 class AirtableAPI(object):
-    """Same as original AirtableAPI"""
-
-    def __init__(self, airtable_api_key, airtable_base_id):
-        self.airtable_api_key = airtable_api_key
+    def __init__(self, airtable_access_token, airtable_base_id):
+        self.airtable_access_token = airtable_access_token
         self.airtable_base_id = airtable_base_id
 
     def __str__(self):
         return '<Airtable API [ %s ]>' % (self.airtable_base_id)
 
     def list_rows(self, table_name, offset=''):
-        headers = {'Authorization': 'Bearer ' + self.airtable_api_key}
+        headers = {'Authorization': 'Bearer ' + self.airtable_access_token}
         url = AIRTABLE_API_URL + self.airtable_base_id + '/' + urllib.parse.quote(table_name, safe='')
         if offset:
             url = url + '?offset=' + offset
@@ -423,7 +421,7 @@ class AirtableAPI(object):
 
     def get_schema(self):
         url = f'{AIRTABLE_API_URL}meta/bases/{self.airtable_base_id}/tables'
-        headers = {'Authorization': 'Bearer ' + self.airtable_api_key}
+        headers = {'Authorization': 'Bearer ' + self.airtable_access_token}
 
         response = requests.get(url, headers=headers, timeout=60)
         if response.status_code >= 400:
@@ -433,27 +431,23 @@ class AirtableAPI(object):
 
 
 class AirtableConvertor(object):
-    """Complete implementation matching original AirtableConvertor"""
-
-    def __init__(self, airtable_api_key, airtable_base_id, base, table_names, first_columns=[], links=[], excluded_column_types=[], excluded_columns=[]):
-        self.airtable_api = AirtableAPI(airtable_api_key, airtable_base_id)
+    def __init__(self, airtable_access_token, airtable_base_id, base, excluded_column_types=[], excluded_columns=[]):
+        self.airtable_api = AirtableAPI(airtable_access_token, airtable_base_id)
         self.base = base
-        self.table_names = table_names
-        self.first_columns = first_columns
-        self.links = links
         self.excluded_column_types = excluded_column_types
         self.excluded_columns = excluded_columns
         self.manually_migrated_columns = []
         self.columns_parser = ColumnsParser()
-        self.files_convertor = FilesConvertor(airtable_api_key, base)
+        self.files_convertor = FilesConvertor(airtable_access_token, base)
         self.rows_convertor = RowsConvertor(self.files_convertor)
         self.links_convertor = LinksConvertor()
-        self.get_first_column_map()
-        self.get_link_map()
+        self.table_names = []
+        self.first_column_map = {}
+        self.link_map = {}
 
     def convert_airtable_to_seatable(self):        
-        # Get Airtable schema and data
         schema = self.airtable_api.get_schema()
+        self.extract_schema_info(schema)
         self.parse_airtable_schema(schema)
         self.get_airtable_row_map()
         
@@ -469,7 +463,6 @@ class AirtableConvertor(object):
     def parse_airtable_schema(self, schema):
         self.airtable_column_map = {}
 
-        # AirTable -> SeaTable
         COLUMN_MAPPING = {
             # From https://airtable.com/developers/web/api/model/field-type
             # Note: Commented out column types are not supported and must be manually created
@@ -575,7 +568,6 @@ class AirtableConvertor(object):
             self.airtable_column_map[table['name']] = columns
 
     def get_select_options(self, options):
-        """Same as original"""
         return [{
             'name': value['name'],
             'id': self.random_num_id(),
@@ -584,7 +576,6 @@ class AirtableConvertor(object):
         } for value in options]
 
     def random_num_id(self):
-        """Same as original"""
         num_str = '0123456789'
         num = ''
         for i in range(6):
@@ -592,7 +583,6 @@ class AirtableConvertor(object):
         return num
 
     def random_color(self):
-        """Same as original"""
         color_str = '0123456789ABCDEF'
         color = '#'
         for i in range(6):
@@ -600,7 +590,6 @@ class AirtableConvertor(object):
         return color
 
     def convert_tables(self):
-        """Same logic as original"""
         logger.info('Start adding tables and columns in SeaTable base')
         self.get_table_map()
         for table_name in self.table_names:
@@ -632,7 +621,6 @@ class AirtableConvertor(object):
         time.sleep(1)
 
     def add_helper_table(self):
-        """Same as original"""
         table_name = 'Columns to be migrated manually'
 
         columns = [
@@ -649,7 +637,6 @@ class AirtableConvertor(object):
         self.batch_append_rows(table_name, self.manually_migrated_columns)
 
     def convert_columns(self):
-        """Same logic as original"""
         logger.info('Start adding link columns in SeaTable base')
         self.get_table_map()
         for table_name in self.table_names:
@@ -693,6 +680,7 @@ class AirtableConvertor(object):
             return
         logger.info('Start adding links between records in SeaTable base')
         self.get_table_map()
+        logging.info("link map: %s", self.link_map)
         for table_name, column_names in self.link_map.items():
             table = self.table_map[table_name]
             airtable_rows = self.airtable_row_map[table_name]
@@ -704,24 +692,51 @@ class AirtableConvertor(object):
         logger.info('Links added between records in SeaTable base')
         time.sleep(1)
 
-    def get_first_column_map(self):
-        self.first_column_map = {}
-        for column in self.first_columns:
-            table_name = column[0]
-            column_name = column[1]
-            self.first_column_map[table_name] = column_name
-        return self.first_column_map
-
-    def get_link_map(self):
-        self.link_map = {}
-        for link in self.links:
-            table_name = link[0]
-            column_name = link[1]
-            other_table_name = link[2]
-            if not self.link_map.get(table_name):
-                self.link_map[table_name] = {}
-            self.link_map[table_name][column_name] = other_table_name
-        return self.link_map
+    def extract_schema_info(self, schema):
+        """Auto-extract table_names and link_map from schema"""
+        self.table_names = [table['name'] for table in schema]
+        table_id_map = {table['id']: table for table in schema}
+        for table in schema:
+            table_name = table['name']
+            primary_field_id = table['primaryFieldId']
+            
+            primary_field = next(
+                (field for field in table['fields'] if field['id'] == primary_field_id),
+                None
+            )
+            
+            if primary_field:
+                self.first_column_map[table_name] = primary_field['name']
+        
+        processed_field_pairs = set()
+        
+        for table in schema:
+            table_name = table['name']
+            
+            for field in table['fields']:
+                if field['type'] == 'multipleRecordLinks':
+                    linked_table_id = field['options']['linkedTableId']
+                    linked_table = table_id_map.get(linked_table_id)
+                    
+                    if linked_table:
+                        linked_table_name = linked_table['name']
+                        current_field_id = field['id']
+                        inverse_field_id = field['options'].get('inverseLinkFieldId')
+                        
+                        # Create a unique key for this specific field pair relationship
+                        if inverse_field_id:
+                            field_pair_key = tuple(sorted([current_field_id, inverse_field_id]))
+                            
+                            # Skip if we've already processed this specific field pair
+                            if field_pair_key in processed_field_pairs:
+                                continue
+                            
+                            processed_field_pairs.add(field_pair_key)
+                        
+                        # Add the current field to link map
+                        if table_name not in self.link_map:
+                            self.link_map[table_name] = {}
+                        self.link_map[table_name][field['name']] = linked_table_name
 
     def get_airtable_row_map(self):
         """Get all data from Airtable"""

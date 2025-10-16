@@ -1549,26 +1549,19 @@ def add_import_airtable_task():
 
     username = request_data.get('username')
     dtable_uuid = request_data.get('dtable_uuid')
-    airtable_api_key = request_data.get('airtable_api_key')
+    airtable_access_token = request_data.get('airtable_access_token')
     airtable_base_id = request_data.get('airtable_base_id')
-    table_names = request_data.get('table_names', [])
-    first_columns = request_data.get('first_columns', [])
-    links = request_data.get('links', [])
     workspace_id = request_data.get('workspace_id')
     repo_id = request_data.get('repo_id')
 
     context = {
         'username': username,
         'dtable_uuid': dtable_uuid,
-        'airtable_api_key': airtable_api_key,
+        'airtable_access_token': airtable_access_token,
         'airtable_base_id': airtable_base_id,
-        'table_names': table_names,
-        'first_columns': first_columns,
-        'links': links,
         'workspace_id': workspace_id,
         'repo_id': repo_id
     }
-        
     try:
         task_id = task_manager.add_import_airtable_task(context)
     except Exception as e:
