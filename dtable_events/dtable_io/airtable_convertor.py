@@ -618,7 +618,6 @@ class AirtableConvertor(object):
                 self.add_table(table_name, columns)
                 logger.info('Added table "%s" with %d columns', table_name, len(columns))
         logger.info('Tables and columns added in SeaTable base')
-        time.sleep(1)
 
     def add_helper_table(self):
         table_name = 'Columns to be migrated manually'
@@ -650,7 +649,6 @@ class AirtableConvertor(object):
                         table_name, column_name, column['type'], column['data'])
                     logger.info('Added column "%s" to table "%s"', column['name'], table_name)
         logger.info('Link columns added in SeaTable base')
-        time.sleep(1)
 
     def convert_rows(self):
         """Import all rows"""
@@ -672,7 +670,6 @@ class AirtableConvertor(object):
             rows = self.rows_convertor.convert(columns, airtable_rows)
             self.batch_append_rows(table_name, rows)
         logger.info('Rows appended in SeaTable base')
-        time.sleep(1)
 
     def convert_links(self):
         """Import all links"""
@@ -680,7 +677,6 @@ class AirtableConvertor(object):
             return
         logger.info('Start adding links between records in SeaTable base')
         self.get_table_map()
-        logging.info("link map: %s", self.link_map)
         for table_name, column_names in self.link_map.items():
             table = self.table_map[table_name]
             airtable_rows = self.airtable_row_map[table_name]
@@ -690,7 +686,6 @@ class AirtableConvertor(object):
                     column_name, link_data, airtable_rows)
                 self.batch_append_links(table_name, links)
         logger.info('Links added between records in SeaTable base')
-        time.sleep(1)
 
     def extract_schema_info(self, schema):
         """Auto-extract table_names and link_map from schema"""
@@ -762,26 +757,22 @@ class AirtableConvertor(object):
             for column in table['columns']:
                 column_name = column['name']
                 self.table_map[table_name][column_name] = column
-        time.sleep(0.1)
         return self.table_map
 
     def add_table(self, table_name, columns):
         table = self.base.add_table(table_name, columns=columns)
-        time.sleep(0.1)
         return table
 
     def add_column(self, table_name, column_name, column_type, column_data):
         try:
             column = self.base.insert_column(
                 table_name, column_name, column_type, column_data)
-            time.sleep(0.1)
             return column
         except Exception as e:
             logger.error('add column error: %s', e)
 
     def list_rows(self, table_name):
         rows = self.base.list_rows(table_name)
-        time.sleep(0.1)
         return rows
 
     def batch_append_rows(self, table_name, rows):
@@ -793,7 +784,6 @@ class AirtableConvertor(object):
                 break
             self.base.batch_append_rows(table_name, row_split)
             logger.info('Appended %d rows to table "%s"', len(row_split), table_name)
-            time.sleep(0.5)
 
     def batch_append_links(self, table_name, links):
         link_id = links['link_id']
