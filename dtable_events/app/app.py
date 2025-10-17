@@ -90,6 +90,7 @@ class App(object):
 
         if self._enable_background_tasks:
             # redis client subscriber
+            self._metric_manager.start()                     # always True, ready to collect metrics
             self._message_handler.start()                    # always True
             self._notification_rule_handler.start()          # always True
             self._automation_rule_handler.start()            # always True
@@ -122,8 +123,6 @@ class App(object):
             conver_page_to_pdf_manager.start()               # always True
             # ai stats, listen redis and cron
             self.ai_stats_worker.start()                     # default False
-            #metrics
-            self._metric_manager.start()
 
         while True:
             time.sleep(60)

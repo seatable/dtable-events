@@ -12,7 +12,8 @@ from dtable_events.app.metadata_cache_managers import RuleIntervalMetadataCacheM
 from dtable_events.automations.auto_rules_utils import run_regular_execution_rule
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool
-from dtable_events.utils.utils_metric import publish_metric, INTERVAL_AUTOMATION_RULES_QUEUE_METRIC_HELP
+from dtable_events.utils.utils_metric import publish_metric, INTERVAL_AUTOMATION_RULES_QUEUE_METRIC_HELP, \
+    INTERVAL_AUTOMATION_RULES_TRIGGERED_COUNT_HELP
 
 
 __all__ = [
@@ -61,6 +62,8 @@ class DTableAutomationRulesScannerTimer(Thread):
         self.max_workers = 3
         self.queue = Queue()
 
+        self.trigger_count = 0
+
     def trigger_rule(self):
         auto_rule_logger.info('thread %s start', current_thread().name)
         rule_interval_metadata_cache_manager = RuleIntervalMetadataCacheManager()
@@ -106,15 +109,19 @@ class DTableAutomationRulesScannerTimer(Thread):
             db_session.close()
 
         for rule in rules:
+            self.trigger_count += 1
             self.queue.put(rule)
         publish_metric(self.queue.qsize(), 'scheduled_automation_queue_size', INTERVAL_AUTOMATION_RULES_QUEUE_METRIC_HELP)
         with ThreadPoolExecutor(max_workers=self.max_workers, thread_name_prefix='interval-auto-rules') as executor:
             for _ in range(self.max_workers):
                 executor.submit(self.trigger_rule)
 
+        publish_metric(self.trigger_count, 'scheduled_automation_triggered_count', INTERVAL_AUTOMATION_RULES_TRIGGERED_COUNT_HELP)
+
         auto_rule_logger.info('all rules done')
 
     def run(self):
+        publish_metric(self.trigger_count, 'scheduled_automation_triggered_count', INTERVAL_AUTOMATION_RULES_TRIGGERED_COUNT_HELP)
         sched = BlockingScheduler()
         # fire at every hour in every day of week
         @sched.scheduled_job('cron', day_of_week='*', hour='*', misfire_grace_time=600)
