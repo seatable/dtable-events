@@ -89,6 +89,8 @@ class App(object):
             self._dtable_io_server.start()
 
         if self._enable_background_tasks:
+            #metrics
+            self._metric_manager.start()
             # redis client subscriber
             self._message_handler.start()                    # always True
             self._notification_rule_handler.start()          # always True
@@ -122,8 +124,6 @@ class App(object):
             conver_page_to_pdf_manager.start()               # always True
             # ai stats, listen redis and cron
             self.ai_stats_worker.start()                     # default False
-            #metrics
-            self._metric_manager.start()
 
         while True:
             time.sleep(60)
