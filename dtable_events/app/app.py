@@ -89,6 +89,8 @@ class App(object):
             self._dtable_io_server.start()
 
         if self._enable_background_tasks:
+            #metrics
+            self._metric_manager.start()
             # redis client subscriber
             self._metric_manager.start()                     # always True, ready to collect metrics
             self._message_handler.start()                    # always True
