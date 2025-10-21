@@ -13,7 +13,7 @@ from sqlalchemy import text
 from dtable_events.app.config import AI_PRICES, BAIDU_OCR_TOKENS
 from dtable_events.app.event_redis import RedisClient, redis_cache
 from dtable_events.db import init_db_session_class
-from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars
+from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars, uuid_str_to_32_chars
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,7 @@ class AIStatsWorker:
     def reset_stats(self):
         self.org_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
         self.owner_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
+        self.dtable_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
 
     def save_to_memory(self, usage_info, session):
         if not usage_info.get('model'):
@@ -92,6 +93,12 @@ class AIStatsWorker:
             else:
                 self.owner_stats[usage_info['username']][model]['input_tokens'] += usage.get('input_tokens') or 0
                 self.owner_stats[usage_info['username']][model]['output_tokens'] += usage.get('output_tokens') or 0
+
+        dtable_uuid = usage_info.get('dtable_uuid')
+        if dtable_uuid:
+            dtable_uuid = uuid_str_to_32_chars(usage_info['dtable_uuid'])
+            self.dtable_stats[usage_info['dtable_uuid']][model]['input_tokens'] += usage.get('input_tokens') or 0
+            self.dtable_stats[usage_info['dtable_uuid']][model]['output_tokens'] += usage.get('output_tokens') or 0
 
     def receive(self):
         logger.info('Starts to receive ai calls...')
@@ -142,6 +149,25 @@ class AIStatsWorker:
         redis_cache.set(cache_key, json.dumps(owner_info), timeout=self.owner_info_cache_timeout)
         return owner_info
 
+    def query_dtable_owners(self, dtable_uuids):
+        dtable_owners_dict = {}
+        if not dtable_uuids:
+            return dtable_owners_dict
+        sql = "SELECT d.uuid AS dtable_uuid, w.owner AS `owner`, w.org_id as org_id FROM dtables d JOIN workspaces w ON d.workspace_id=w.id WHERE d.uuid IN :dtable_uuids"
+        session = self._db_session_class()
+        try:
+            results = session.execute(text(sql), {'dtable_uuids': dtable_uuids})
+            for row in results:
+                dtable_owners_dict[row.dtable_uuid] = {
+                    'owner': row.owner,
+                    'org_id': row.org_id
+                }
+        except Exception as e:
+            logger.exception(e)
+        finally:
+            session.close()
+        return dtable_owners_dict
+
     def stats_worker(self):
         if not self.org_stats and not self.owner_stats:
             logger.info('There are no stats')
@@ -149,10 +175,12 @@ class AIStatsWorker:
         with self.stats_lock:
             org_stats = deepcopy(self.org_stats)
             owner_stats = deepcopy(self.owner_stats)
+            dtable_stats = deepcopy(self.dtable_stats)
             self.reset_stats()
 
         logger.info('There are %s org stats', len(org_stats))
         logger.info('There are %s owner stats (including groups with -1 org_id)', len(owner_stats))
+        logger.info('There are %s dtable stats', len(dtable_stats))
 
         month = datetime.today().replace(day=1).date()
 
@@ -220,12 +248,56 @@ class AIStatsWorker:
                 }
                 owner_data.append(params)
 
+        dtable_data = []
+        dtable_sql = '''
+        INSERT INTO `stats_ai_by_dtable`(`dtable_uuid`, `date`, `model`, `owner`, `org_id`, `input_tokens`, `output_tokens`, `cost`, `created_at`, `updated_at`)
+        VALUES (:dtable_uuid, :date, :model, :owner, :org_id, :input_tokens, :output_tokens, :cost, :created_at, :updated_at)
+        ON DUPLICATE KEY UPDATE `input_tokens`=`input_tokens`+VALUES(`input_tokens`),
+                                `output_tokens`=`output_tokens`+VALUES(`output_tokens`),
+                                `cost`=`cost`+VALUES(`cost`),
+                                `updated_at`=VALUES(`updated_at`)
+        '''
+        dtable_owners_dict = self.query_dtable_owners(list(dtable_stats.keys()))
+        for dtable_uuid, models_dict in dtable_stats.items():
+            for model, usage in models_dict.items():
+                input_tokens = usage.get('input_tokens') or 0
+                output_tokens = usage.get('output_tokens') or 0
+                owner_info = dtable_owners_dict.get(dtable_uuid)
+                if owner_info:
+                    owner = owner_info['owner']
+                    org_id = owner_info['org_id']
+                else:
+                    owner = None
+                    org_id = None
+
+                input_tokens_price = AI_PRICES[model].get('input_tokens_1k') or 0
+                output_tokens_price = AI_PRICES[model].get('output_tokens_1k') or 0
+                input_cost = input_tokens_price * (input_tokens / 1000)
+                output_cost = output_tokens_price * (output_tokens / 1000)
+                logger.info('dtable %s model %s, input_tokens %s cost %s, output_tokens %s cost %s', dtable_uuid, model, input_tokens, input_cost, output_tokens, output_cost)
+
+                params = {
+                    'dtable_uuid': dtable_uuid,
+                    'date': datetime.today().date(),
+                    'model': model,
+                    'owner': owner,
+                    'org_id': org_id,
+                    'input_tokens': input_tokens,
+                    'output_tokens': output_tokens,
+                    'cost': input_cost + output_cost,
+                    'created_at': datetime.now(),
+                    'updated_at': datetime.now()
+                }
+                dtable_data.append(params)
+
         session = self._db_session_class()
         try:
             if team_data:
                 session.execute(text(team_sql), team_data)
             if owner_data:
                 session.execute(text(owner_sql), owner_data)
+            if dtable_data:
+                session.execute(text(dtable_sql), dtable_data)
             session.commit()
         except Exception as e:
             logger.exception(e)
@@ -235,7 +307,7 @@ class AIStatsWorker:
     def stats(self):
         sched = BlockingScheduler()
         # fire per 5 mins
-        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='*/5', misfire_grace_time=120)
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='*/1', misfire_grace_time=120)
         def timed_job():
             logger.info('Starts to stats ai calls in memory...')
             self.stats_worker()
@@ -251,10 +323,12 @@ class AIStatsWorker:
             session = self._db_session_class()
             sql1 = "DELETE FROM `stats_ai_by_team` WHERE `month` < :clean_month"
             sql2 = "DELETE FROM `stats_ai_by_owner` WHERE `month` < :clean_month"
+            sql3 = "DELETE FROM `stats_ai_by_dtable` WHERE `date` < :clean_month"
             clean_month = (datetime.now() - relativedelta.relativedelta(months=self.keep_months)).strftime('%Y-%m-01')
             try:
                 session.execute(text(sql1), {'clean_month': clean_month})
                 session.execute(text(sql2), {'clean_month': clean_month})
+                session.execute(text(sql3), {'clean_month': clean_month})
             except Exception as e:
                 logger.exception(e)
             finally:
