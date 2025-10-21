@@ -4661,7 +4661,7 @@ class AutomationRule:
                 update_at=:trigger_time
             '''
             set_last_trigger_time_sql = '''
-                UPDATE dtable_automation_rules SET last_trigger_time=:trigger_time, trigger_count=:trigger_count+1 WHERE id=:rule_id;
+                UPDATE dtable_automation_rules SET last_trigger_time=:trigger_time, trigger_count=trigger_count+1 WHERE id=:rule_id;
             '''
 
             sqls = [set_last_trigger_time_sql]
@@ -4679,7 +4679,6 @@ class AutomationRule:
                     'rule_id': self.rule_id,
                     'trigger_time': datetime.utcnow(),
                     'trigger_date': trigger_date,
-                    'trigger_count': self.trigger_count + 1,
                     'username': self.creator,
                     'org_id': self.org_id
                 })
