@@ -283,8 +283,12 @@ class ColumnsParser(object):
             elif column_type == ColumnTypes.DATE:
                 column_data = {'format': 'YYYY-MM-DD'}
             elif column_type == ColumnTypes.LINK:
-                other_table_name = link_map[table_name][column_name]
-                column_data = {'other_table': other_table_name}
+                link_info = link_map.get(table_name, {}).get(column_name)
+                other_table_name = link_info.get('other_table') if link_info else None
+                if other_table_name:
+                    column_data = {'other_table': other_table_name}
+                else:
+                    column_type = ColumnTypes.TEXT
             elif column_type == ColumnTypes.MULTIPLE_SELECT:
                 select_list = []
                 for value in values:
@@ -534,13 +538,13 @@ class AirtableConvertor(object):
                     else:
                         column_data = {}
                 elif seatable_column_type == ColumnTypes.LINK:
-                    other_table_name = self.link_map.get(table['name'], {}).get(column_name)
+                    link_info = self.link_map.get(table['name'], {}).get(column_name)
 
-                    if other_table_name is None:
+                    if not link_info:
                         logger.warning('Column "%s" (table "%s") was not found in link map', column_name, table['name'])
                         continue
 
-                    column_data = {'other_table': other_table_name}
+                    column_data = {'other_table': link_info.get('other_table')}
                 elif seatable_column_type in [ColumnTypes.SINGLE_SELECT, ColumnTypes.MULTIPLE_SELECT]:
                     column_data = {
                         'options': self.get_select_options(field['options']['choices']),
@@ -645,8 +649,11 @@ class AirtableConvertor(object):
                 column_name = column['name']
                 exists_column = table.get(column_name)
                 if not exists_column:
-                    self.add_column(
+                    new_column = self.add_column(
                         table_name, column_name, column['type'], column['data'])
+                    if column['type'] == ColumnTypes.LINK:
+                        link_info = self.link_map.get(table_name, {}).get(column_name)
+                        self.sync_linked_column_name(table_name, column_name, link_info)
                     logger.info('Added column "%s" to table "%s"', column['name'], table_name)
         logger.info('Link columns added in SeaTable base')
 
@@ -678,13 +685,21 @@ class AirtableConvertor(object):
         logger.info('Start adding links between records in SeaTable base')
         self.get_table_map()
         for table_name, column_names in self.link_map.items():
-            table = self.table_map[table_name]
-            airtable_rows = self.airtable_row_map[table_name]
-            for column_name in column_names:
-                link_data = table[column_name]['data']
-                links = self.links_convertor.convert(
-                    column_name, link_data, airtable_rows)
-                self.batch_append_links(table_name, links)
+            try:
+                table = self.table_map[table_name]
+                airtable_rows = self.airtable_row_map[table_name]
+                for column_name in column_names:
+                    try:
+                        link_data = table[column_name]['data']
+                        links = self.links_convertor.convert(
+                            column_name, link_data, airtable_rows)
+                        self.batch_append_links(table_name, links)
+                    except Exception as e:
+                        logger.error('Failed to process links for column "%s" in table "%s": %s', column_name, table_name, e)
+                        continue
+            except Exception as e:
+                logger.error('Failed to process links for table "%s": %s', table_name, e)
+                continue
         logger.info('Links added between records in SeaTable base')
 
     def extract_schema_info(self, schema):
@@ -704,7 +719,16 @@ class AirtableConvertor(object):
                 self.first_column_map[table_name] = primary_field['name']
         
         processed_field_pairs = set()
-        
+
+        def add_link_mapping(src_table_name, src_field, dst_table_name, dst_field_name, dst_table):
+            if src_table_name not in self.link_map:
+                self.link_map[src_table_name] = {}
+            self.link_map[src_table_name][src_field['name']] = {
+                'other_table': dst_table_name,
+                'linked_field_name': dst_field_name,
+                'linked_table_id': dst_table.get('id') if dst_table else None,
+            }
+
         for table in schema:
             table_name = table['name']
             
@@ -712,26 +736,34 @@ class AirtableConvertor(object):
                 if field['type'] == 'multipleRecordLinks':
                     linked_table_id = field['options']['linkedTableId']
                     linked_table = table_id_map.get(linked_table_id)
-                    
-                    if linked_table:
-                        linked_table_name = linked_table['name']
-                        current_field_id = field['id']
-                        inverse_field_id = field['options'].get('inverseLinkFieldId')
-                        
-                        # Create a unique key for this specific field pair relationship
-                        if inverse_field_id:
-                            field_pair_key = tuple(sorted([current_field_id, inverse_field_id]))
-                            
-                            # Skip if we've already processed this specific field pair
-                            if field_pair_key in processed_field_pairs:
-                                continue
-                            
-                            processed_field_pairs.add(field_pair_key)
-                        
-                        # Add the current field to link map
-                        if table_name not in self.link_map:
-                            self.link_map[table_name] = {}
-                        self.link_map[table_name][field['name']] = linked_table_name
+                    if not linked_table:
+                        continue
+
+                    linked_table_name = linked_table['name']
+                    current_field_id = field['id']
+                    inverse_field_id = field['options'].get('inverseLinkFieldId')
+
+                    field_pair_key = None
+                    linked_field = None
+                    if inverse_field_id:
+                        linked_field = next(
+                            (f for f in linked_table['fields'] if f['id'] == inverse_field_id),
+                            None
+                        )
+                        field_pair_key = tuple(sorted([current_field_id, inverse_field_id]))
+
+                    if field_pair_key and field_pair_key in processed_field_pairs:
+                        continue
+
+                    if field_pair_key:
+                        processed_field_pairs.add(field_pair_key)
+
+                    linked_field_name = linked_field['name'] if linked_field else None
+
+                    add_link_mapping(table_name, field, linked_table_name, linked_field_name, linked_table)
+
+                    if linked_field:
+                        add_link_mapping(linked_table_name, linked_field, table_name, field['name'], table)
 
     def get_airtable_row_map(self):
         """Get all data from Airtable"""
@@ -771,6 +803,58 @@ class AirtableConvertor(object):
         except Exception as e:
             logger.error('add column error: %s', e)
 
+    def sync_linked_column_name(self, table_name, column_name, link_info):
+        if not link_info:
+            return
+
+        linked_field_name = link_info.get('linked_field_name')
+        linked_table_name = link_info.get('other_table')
+
+        if not linked_field_name or not linked_table_name:
+            return
+
+        try:
+            source_columns = self.base.list_columns(table_name)
+        except Exception as e:
+            logger.warning('Failed to list columns for table "%s" when syncing linked column "%s": %s', table_name, column_name, e)
+            return
+
+        source_column = next((col for col in source_columns if col.get('name') == column_name), None)
+        if not source_column:
+            logger.warning('Could not find inserted link column "%s" in table "%s" while syncing names', column_name, table_name)
+            return
+
+        link_data = source_column.get('data') or {}
+        link_id = link_data.get('link_id')
+        if not link_id:
+            logger.warning('Link column "%s" in table "%s" missing link_id, skip renaming linked column', column_name, table_name)
+            return
+
+        try:
+            linked_columns = self.base.list_columns(linked_table_name)
+        except Exception as e:
+            logger.warning('Failed to list columns for linked table "%s" when syncing link column "%s": %s', linked_table_name, column_name, e)
+            return
+
+        target_column = None
+        for col in linked_columns:
+            data = col.get('data') or {}
+            if data.get('link_id') == link_id:
+                target_column = col
+                break
+
+        if not target_column:
+            logger.warning('Linked column for link_id "%s" not found in table "%s"', link_id, linked_table_name)
+            return
+
+        if target_column.get('name') == linked_field_name:
+            return
+
+        try:
+            self.base.rename_column(linked_table_name, target_column['key'], linked_field_name)
+        except Exception as e:
+            logger.warning('Failed to rename linked column in table "%s" to "%s": %s', linked_table_name, linked_field_name, e)
+
     def list_rows(self, table_name):
         rows = self.base.list_rows(table_name)
         return rows
@@ -791,6 +875,10 @@ class AirtableConvertor(object):
         other_table_id = links['other_table_id']
         row_id_list = links['row_id_list']
         other_rows_ids_map = links['other_rows_ids_map']
+        
+        if not row_id_list:
+            return
+            
         offset = 0
         while True:
             row_id_split = row_id_list[offset: offset + LIMIT]
@@ -799,6 +887,9 @@ class AirtableConvertor(object):
                 break
             other_rows_ids_map_split = {
                 row_id: other_rows_ids_map[row_id] for row_id in row_id_split}
-            self.base.batch_update_links(
-                link_id, table_id, other_table_id, row_id_split, other_rows_ids_map_split)
-            logger.info('Added %d links to table "%s"', len(row_id_split), table_name)
+            try:
+                self.base.batch_update_links(
+                    link_id, table_id, other_table_id, row_id_split, other_rows_ids_map_split)
+            except Exception as e:
+                logger.warning('Failed to add %d links to table "%s": %s', len(row_id_split), table_name, e)
+                continue

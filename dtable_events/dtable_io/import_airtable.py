@@ -24,6 +24,10 @@ def import_airtable(context):
             repo_id=repo_id
         )
 
+        default_table_id = '0000'
+        temp_table_name = f'Table1__tmp__{int(time.time())}'
+        dtable_server_api.rename_table(temp_table_name, default_table_id)
+
         convertor = AirtableConvertor(
             airtable_access_token=airtable_access_token,
             airtable_base_id=airtable_base_id,
@@ -32,7 +36,17 @@ def import_airtable(context):
         
         convertor.convert_airtable_to_seatable()
 
+        try:
+            metadata = dtable_server_api.get_metadata() or {}
+            tables = metadata.get('tables') or []
+            has_temp_table = any(table.get('_id') == default_table_id for table in tables)
+            if has_temp_table and len(tables) > 1:
+                dtable_server_api.delete_table(table_id=default_table_id)
+                dtable_io_logger.info('Deleted temporary table "%s" after Airtable import', temp_table_name)
+        except Exception as e:
+            dtable_io_logger.warning('Failed to delete temporary table "%s": %s', temp_table_name, e)
+
     except Exception as e:
-        error_msg = f'Failed to import Airtable: {str(e)}'
+        error_msg = f'Import Airtable error: {str(e)}'
         dtable_io_logger.error(error_msg)
         raise Exception(error_msg)
