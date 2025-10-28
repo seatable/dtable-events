@@ -195,6 +195,22 @@ class DTableServerAPI(object):
         response = requests.post(url, json=json_data, headers=self.headers, timeout=self.timeout)
         return parse_response(response)
 
+    def delete_table(self, table_id):
+        url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/tables/?from=dtable_events'
+        json_data = {
+            'table_id': table_id
+        }
+        response = requests.delete(url, json=json_data, headers=self.headers, timeout=self.timeout)
+        return parse_response(response)
+
+    def rename_table(self, new_table_name, table_id):
+        url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/tables/?from=dtable_events'
+        json_data = {'new_table_name': new_table_name}
+        if table_id:
+            json_data['table_id'] = table_id
+        response = requests.put(url, json=json_data, headers=self.headers, timeout=self.timeout)
+        return parse_response(response)
+
     def import_excel(self, json_file, lang='en'):
         url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/import-excel/?from=dtable_events&lang=' + lang
         files = {
@@ -286,6 +302,17 @@ class DTableServerAPI(object):
         response = requests.post(url, json=json_data, headers=self.headers, timeout=self.timeout)
         data = parse_response(response)
         return data
+
+    def rename_column(self, table_name, column_key, new_column_name):
+        url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/columns/?from=dtable_events'
+        json_data = {
+            'op_type': 'rename_column',
+            'table_name': table_name,
+            'column': column_key,
+            'new_column_name': new_column_name,
+        }
+        response = requests.put(url, json=json_data, headers=self.headers, timeout=self.timeout)
+        return parse_response(response)
 
     def batch_append_columns_by_table_id(self, table_id, columns):
         logger.debug('batch append columns by table id table_id: %s columns: %s', table_id, columns)
