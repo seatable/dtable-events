@@ -418,6 +418,8 @@ class AirtableAPI(object):
         while True:
             rows, offset = self.list_rows(table_name, offset)
             all_rows.extend(rows)
+            if len(all_rows) >= 100000:
+                break
             logger.info('Retrieved %d rows from table "%s"', len(all_rows), table_name)
             if not offset:
                 break
@@ -867,6 +869,8 @@ class AirtableConvertor(object):
             if not row_split:
                 break
             self.base.batch_append_rows(table_name, row_split)
+            if offset >= 100000:
+                break
             logger.info('Appended %d rows to table "%s"', len(row_split), table_name)
 
     def batch_append_links(self, table_name, links):
