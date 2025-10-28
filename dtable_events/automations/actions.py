@@ -4697,9 +4697,9 @@ class AutomationRule:
                 'trigger_time': datetime.utcnow(),
                 'trigger_date': trigger_date,
                 'trigger_count': self.trigger_count + 1,
-                'username': self.creator,
+                'username': self.owner,
                 'org_id': self.org_id,
-                'month': str(date.today())[:7]
+                'month': trigger_date
             }
             for sql in sqls:
                 self.db_session.execute(text(sql), sql_data)

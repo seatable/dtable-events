@@ -6,6 +6,7 @@ import logging
 import configparser
 import subprocess
 import uuid
+import json
 from dateutil import parser
 from datetime import datetime
 from pathlib import Path
@@ -20,6 +21,7 @@ from pdfminer.high_level import extract_text
 import mammoth
 
 from dtable_events.app.config import INNER_FILE_SERVER_ROOT
+from dtable_events.app.event_redis import redis_cache
 
 logger = logging.getLogger(__name__)
 pyexec = None
@@ -363,3 +365,23 @@ def get_dtable_admins(dtable_uuid, db_session):
     else:
         members = ccnet_api.get_group_members(group_id)
         return [member.user_name for member in members if member.is_staff]
+
+
+def get_dtable_owner_org_id(dtable_uuid, db_session):
+    dtable_uuid = uuid_str_to_32_chars(dtable_uuid)
+    key = f'dtable:{dtable_uuid}:owner_org_id'
+    value = redis_cache.get(key)
+    if value:
+        try:
+            value = json.loads(value)
+        except:
+            pass
+        else:
+            return value
+    sql = "SELECT w.owner, w.org_id FROM dtables d JOIN workspaces w ON d.workspace_id=w.id WHERE d.uuid=:dtable_uuid"
+    result = db_session.execute(text(sql), {'dtable_uuid': dtable_uuid}).fetchone()
+    if not result:
+        return None
+    value = {'owner': result.owner, 'org_id': result.org_id}
+    redis_cache.set(key, json.dumps(value), timeout=6 * 60 * 60)
+    return value

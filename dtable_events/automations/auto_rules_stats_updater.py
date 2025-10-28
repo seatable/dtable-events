@@ -63,7 +63,7 @@ class AutoRulesStatsUpdater:
         :return: trigger_count -> int, has_sent_warning -> bool
         """
         sql = "SELECT trigger_count, has_sent_warning FROM user_auto_rules_statistics_per_month WHERE username=:username AND month=:month"
-        row = db_session.execute(text(sql), {'username': username, 'month': str(date.today())[:7]}).fetchone()
+        row = db_session.execute(text(sql), {'username': username, 'month': date.today().replace(day=1)}).fetchone()
         if not row:
             return 0, False
         return row.trigger_count, row.has_sent_warning
@@ -73,7 +73,7 @@ class AutoRulesStatsUpdater:
         :return: trigger_count -> int, has_sent_warning -> bool
         """
         sql = "SELECT trigger_count, has_sent_warning FROM org_auto_rules_statistics_per_month WHERE org_id=:org_id AND month=:month"
-        row = db_session.execute(text(sql), {'org_id': org_id, 'month': str(date.today())[:7]}).fetchone()
+        row = db_session.execute(text(sql), {'org_id': org_id, 'month': date.today().replace(day=1)}).fetchone()
         if not row:
             return 0, False
         return row.trigger_count, row.has_sent_warning
