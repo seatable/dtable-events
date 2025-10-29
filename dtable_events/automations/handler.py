@@ -8,11 +8,45 @@ from threading import Thread, Event, current_thread
 
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.app.log import auto_rule_logger
-from dtable_events.automations.auto_rules_utils import scan_triggered_automation_rules
+from dtable_events.automations.auto_rules_utils import scan_triggered_automation_rules, can_trigger_by_dtable
 from dtable_events.db import init_db_session_class
-from dtable_events.utils import get_opt_from_conf_or_env
+from dtable_events.utils import get_opt_from_conf_or_env, get_dtable_owner_org_id
 from dtable_events.utils.utils_metric import publish_metric, INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP, \
     INSTANT_AUTOMATION_RULES_TRIGGERED_COUNT_HELP
+
+
+class RateLimiter:
+
+    def __init__(self, window_secs = 60 * 5):
+        self.window_secs = window_secs
+        self.window_start = time.time()
+        self.counters = {}
+
+    def get_key(self, owner, org_id):
+        if org_id and org_id != -1:
+            return org_id
+        else:
+            if '@seafile_group' in owner:
+                return None
+            return owner
+
+    def is_allowed(self, owner, org_id):
+        limit_key = self.get_key(owner, org_id)
+        if not limit_key:
+            return True
+        now_time = time.time()
+        time_interval = now_time - self.window_start
+        if time_interval > self.window_secs:
+            self.window_start = now_time
+            return True
+        total_time = self.counters.get(limit_key, 0)
+        if total_time / time_interval > 0.25:
+            return False
+        return True
+
+    def record_time(self, owner, org_id, run_time):
+        limit_key = self.get_key(owner, org_id)
+        self.counters[limit_key] = self.counters.get(limit_key, 0) + run_time
 
 
 class AutomationRuleHandler(Thread):
@@ -27,6 +61,8 @@ class AutomationRuleHandler(Thread):
         self.queue = Queue()
 
         self.log_none_message_timeout = 10 * 60
+
+        self.rate_limiter = RateLimiter()
 
         self._parse_config(config)
 
@@ -57,12 +93,17 @@ class AutomationRuleHandler(Thread):
             publish_metric(self.queue.qsize(), 'realtime_automation_queue_size', INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP)
             auto_rule_logger.info("Start to trigger rule %s in thread %s", event, current_thread().name)
             session = self._db_session_class()
+            if not can_trigger_by_dtable(event['dtable_uuid'], session):
+                continue
+            start_time = time.time()
             try:
                 scan_triggered_automation_rules(event, session)
             except Exception as e:
                 auto_rule_logger.exception('Handle automation rule with data %s failed: %s', event, e)
             finally:
                 session.close()
+                end_time = time.time()
+            self.rate_limiter.record_time(end_time - start_time)
 
     def start_threads(self):
         executor = ThreadPoolExecutor(max_workers=self.per_update_auto_rule_workers, thread_name_prefix='instant-auto-rules')
@@ -89,6 +130,19 @@ class AutomationRuleHandler(Thread):
                 message = subscriber.get_message()
                 if message is not None:
                     event = json.loads(message['data'])
+
+                    db_session = self._db_session_class()
+                    try:
+                        dtable_uuid = event.get('dtable_uuid')
+                        owner_info = get_dtable_owner_org_id(dtable_uuid, db_session)
+                        if not self.rate_limiter.is_allowed(owner_info['owner'], owner_info['org_id']):
+                            continue
+                        event.update(owner_info)
+                    except Exception as e:
+                        auto_rule_logger.exception(e)
+                    finally:
+                        db_session.close()
+
                     self.queue.put(event)
                     publish_metric(self.queue.qsize(), 'realtime_automation_queue_size', INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP)
                     auto_rule_logger.info(f"subscribe event {event}")
