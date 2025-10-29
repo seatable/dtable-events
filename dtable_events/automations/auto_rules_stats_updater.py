@@ -89,7 +89,7 @@ class AutoRulesStatsUpdater:
             db_session.commit()
             return
         if not has_sent_warning and usage >= limit * 0.9:
-            self.dtable_web_api.internal_add_notification([username], 'autorule_trigger_reach_warning', {'limit': limit, 'usage': usage})
+            self.dtable_web_api.internal_add_notification([username], 'autorule_limits_reached_warning', {'limit': limit, 'usage': usage})
             sql = "UPDATE user_auto_rules_statistics_per_month SET has_sent_warning=1 WHERE username=:username"
             db_session.execute(text(sql), {'username': username})
             db_session.commit()
@@ -109,7 +109,7 @@ class AutoRulesStatsUpdater:
             sql = "SELECT email FROM %s.OrgUser WHERE org_id=:org_id AND is_staff=1" % self.ccnet_db_name
             for row in db_session.execute(text(sql), {'org_id': org_id}):
                 admins.append(row.email)
-            self.dtable_web_api.internal_add_notification(admins, 'autorule_trigger_reach_warning', {'limit': limit, 'usage': usage})
+            self.dtable_web_api.internal_add_notification(admins, 'autorule_limits_reached_warning', {'limit': limit, 'usage': usage})
             sql = "UPDATE org_auto_rules_statistics_per_month SET has_sent_warning=1 WHERE org_id=:org_id"
             db_session.execute(text(sql), {'org_id': org_id})
             db_session.commit()
