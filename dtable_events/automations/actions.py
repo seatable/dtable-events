@@ -4617,7 +4617,7 @@ class AutomationRule:
             auto_rule_logger.warning('the running time of rule %s is too long, for %s. SQL queries are %s', self.rule_id, duration, f"\n{'\n'.join(self.query_stats)}")
 
         if not with_test:
-            self.update_last_trigger_time()
+            self.update_stats()
 
         if not with_test:
             self.add_task_log()
@@ -4645,7 +4645,7 @@ class AutomationRule:
         except Exception as e:
             auto_rule_logger.error('set rule task log: %s error: %s', self.rule_id, e)
 
-    def update_last_trigger_time(self):
+    def update_stats(self):
         try:
             set_statistic_sql_user = '''
                 INSERT INTO user_auto_rules_statistics (username, trigger_date, trigger_count, update_at) VALUES 

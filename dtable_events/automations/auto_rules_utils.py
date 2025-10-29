@@ -59,9 +59,12 @@ def scan_triggered_automation_rules(event_data, db_session):
     if not rule:
         return
 
-    owner_info, can_trigger = can_trigger_by_dtable(dtable_uuid, db_session)
-    if not can_trigger:
-        return
+    # owner_info, can_trigger = can_trigger_by_dtable(dtable_uuid, db_session)
+    # if not can_trigger:
+    #     return
+
+    org_id = event_data['org_id']
+    owner = event_data['owner']
 
     rule_instant_metadata_cache_manager = RuleInstantMetadataCacheManger()
     options = {
@@ -69,10 +72,10 @@ def scan_triggered_automation_rules(event_data, db_session):
         'run_condition': rule.run_condition,
         'dtable_uuid': rule.dtable_uuid,
         'trigger_count': rule.trigger_count,
-        'org_id': owner_info['org_id'],
+        'org_id': org_id,
         'creator': rule.creator,
         'last_trigger_time': rule.last_trigger_time,
-        'owner': owner_info['owner']
+        'owner': owner
     }
     try:
         auto_rule_logger.info('run auto rule %s', rule.id)
