@@ -12,33 +12,33 @@ from dtable_events.utils import uuid_str_to_32_chars, get_dtable_owner_org_id
 
 def can_trigger_by_dtable(dtable_uuid, db_session):
     """
-    :return: workspace -> obj with `owner` and `org_id` or None, can_trigger -> bool
+    :return: can_trigger -> bool
     """
     owner_info = get_dtable_owner_org_id(dtable_uuid, db_session)
     owner, org_id = owner_info['owner'], owner_info['org_id']
     month = date.today().replace(day=1)
     if org_id == -1:
         if '@seafile_group' in owner:  # groups not belong to orgs can always trigger auto rules
-            return owner_info, True
+            return True
         sql = "SELECT is_exceed FROM user_auto_rules_statistics_per_month WHERE username=:username AND month=:month"
         try:
             user_per_month = db_session.execute(text(sql), {'username': owner, 'month': month}).fetchone()
         except Exception as e:
             auto_rule_logger.error('check user: %s auto rule per month error: %s', owner, e)
-            return owner_info, True
+            return True
         if not user_per_month:
-            return owner_info, True
-        return owner_info, not user_per_month.is_exceed
+            return True
+        return not user_per_month.is_exceed
     else:
         sql = "SELECT is_exceed FROM org_auto_rules_statistics_per_month WHERE org_id=:org_id AND month=:month"
         try:
             org_per_month = db_session.execute(text(sql), {'org_id': org_id, 'month': month}).fetchone()
         except Exception as e:
             auto_rule_logger.error('check org: %s auto rule per month error: %s', org_id, e)
-            return owner_info, True
+            return True
         if not org_per_month:
-            return owner_info, True
-        return owner_info, not org_per_month.is_exceed
+            return True
+        return not org_per_month.is_exceed
 
 
 def scan_triggered_automation_rules(event_data, db_session):

@@ -37,19 +37,19 @@ class AutoRulesStatsUpdater:
         return self.roles
 
     def get_user_quota(self, db_session, username):
-        sql = "SELECT username, auto_rules_limit_per_month FROM user_quota WHERE username=:username"
+        sql = "SELECT username, automation_rules_limit_per_month FROM user_quota WHERE username=:username"
         row = db_session.execute(text(sql), {'username': username}).fetchone()
-        if row and row.auto_rules_limit_per_month and row.auto_rules_limit_per_month != 0:
-            return row.auto_rules_limit_per_month
+        if row and row.automation_rules_limit_per_month and row.automation_rules_limit_per_month != 0:
+            return row.automation_rules_limit_per_month
         user = ccnet_api.get_emailuser(username)
         user_role = user.role
         return self.roles.get(user_role, {}).get('automation_rules_limit_per_month', -1)
 
     def get_org_quota(self, db_session, org_id):
-        sql = "SELECT org_id, auto_rules_limit_per_month FROM organizations_org_quota WHERE org_id=:org_id"
+        sql = "SELECT org_id, automation_rules_limit_per_month FROM organizations_org_quota WHERE org_id=:org_id"
         row = db_session.execute(text(sql), {'org_id': org_id}).fetchone()
-        if row and row.auto_rules_limit_per_month and row.auto_rules_limit_per_month != 0:
-            return row.auto_rules_limit_per_month
+        if row and row.automation_rules_limit_per_month and row.automation_rules_limit_per_month != 0:
+            return row.automation_rules_limit_per_month
         sql = "SELECT role FROM organizations_orgsettings WHERE org_id=:org_id"
         row = db_session.execute(text(sql), {'org_id': org_id}).fetchone()
         if not row:
