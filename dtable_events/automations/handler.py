@@ -96,10 +96,10 @@ class AutomationRuleHandler(Thread):
             publish_metric(self.queue.qsize(), 'realtime_automation_queue_size', INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP)
             auto_rule_logger.info("Start to trigger rule %s in thread %s", event, current_thread().name)
             session = self._db_session_class()
-            if not can_trigger_by_dtable(event['dtable_uuid'], session):
-                continue
             start_time = time.time()
             try:
+                if not can_trigger_by_dtable(event['dtable_uuid'], session):
+                    continue
                 scan_triggered_automation_rules(event, session)
             except Exception as e:
                 auto_rule_logger.exception('Handle automation rule with data %s failed: %s', event, e)
@@ -112,6 +112,7 @@ class AutomationRuleHandler(Thread):
         executor = ThreadPoolExecutor(max_workers=self.per_update_auto_rule_workers, thread_name_prefix='instant-auto-rules')
         for index in range(self.per_update_auto_rule_workers):
             executor.submit(self.scan)
+        Thread(target=self.record_time_worker, daemon=True, name='record-time-worker').start()
 
     def record_time_worker(self):
         while True:
