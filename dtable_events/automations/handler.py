@@ -140,6 +140,7 @@ class AutomationRuleHandler(Thread):
                         event.update(owner_info)
                     except Exception as e:
                         auto_rule_logger.exception(e)
+                        continue
                     finally:
                         db_session.close()
 
