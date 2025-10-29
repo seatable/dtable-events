@@ -59,10 +59,6 @@ def scan_triggered_automation_rules(event_data, db_session):
     if not rule:
         return
 
-    # owner_info, can_trigger = can_trigger_by_dtable(dtable_uuid, db_session)
-    # if not can_trigger:
-    #     return
-
     org_id = event_data['org_id']
     owner = event_data['owner']
 
