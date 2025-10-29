@@ -17,8 +17,9 @@ from dtable_events.utils.utils_metric import publish_metric, INSTANT_AUTOMATION_
 
 class RateLimiter:
 
-    def __init__(self, window_secs = 60 * 5):
+    def __init__(self, window_secs = 60 * 5, percent=25):
         self.window_secs = window_secs
+        self.percent = percent
         self.window_start = time.time()
         self.counters = {}
 
@@ -40,7 +41,7 @@ class RateLimiter:
             self.window_start = now_time
             return True
         total_time = self.counters.get(limit_key, 0)
-        if total_time / self.window_secs > 25 / 100:
+        if total_time / self.window_secs > self.percent / 100:
             return False
         return True
 
@@ -65,8 +66,6 @@ class AutomationRuleHandler(Thread):
 
         self.log_none_message_timeout = 10 * 60
 
-        self.rate_limiter = RateLimiter()
-
         self._parse_config(config)
 
     def _parse_config(self, config):
@@ -84,6 +83,24 @@ class AutomationRuleHandler(Thread):
         except Exception as e:
             auto_rule_logger.error('parse section: %s key: %s error: %s', section_name, per_update_auto_rule_workers, e)
             per_update_auto_rule_workers = 3
+
+        key_rate_limit_window_secs = 'rate_limit_window_secs'
+        rate_limit_window_secs = get_opt_from_conf_or_env(config, section_name, key_rate_limit_window_secs, default=5 * 60)
+        try:
+            rate_limit_window_secs = int(rate_limit_window_secs)
+        except Exception as e:
+            auto_rule_logger.error('parse section: %s key: %s error: %s', section_name, key_rate_limit_window_secs, e)
+            per_update_auto_rule_workers = 5 * 60
+        self.rate_limiter = RateLimiter(rate_limit_window_secs)
+
+        key_rate_limit_percent = 'rate_limit_percent'
+        rate_limit_percent = get_opt_from_conf_or_env(config, section_name, key_rate_limit_percent, default=25)
+        try:
+            rate_limit_percent = int(rate_limit_percent)
+        except Exception as e:
+            auto_rule_logger.error('parse section: %s key: %s error: %s', section_name, key_rate_limit_percent, e)
+            per_update_auto_rule_workers = 25
+        self.rate_limiter = RateLimiter(rate_limit_window_secs, rate_limit_percent)
 
         self.per_update_auto_rule_workers = per_update_auto_rule_workers
 
