@@ -40,11 +40,13 @@ class RateLimiter:
             self.window_start = now_time
             return True
         total_time = self.counters.get(limit_key, 0)
-        if total_time / time_interval > 0.25:
+        if total_time / self.window_secs > 25 / 100:
             return False
         return True
 
     def record_time(self, owner, org_id, run_time):
+        if time.time() - self.window_start > self.window_secs:
+            self.counters = {}
         limit_key = self.get_key(owner, org_id)
         self.counters[limit_key] = self.counters.get(limit_key, 0) + run_time
 
@@ -59,6 +61,7 @@ class AutomationRuleHandler(Thread):
 
         self.per_update_auto_rule_workers = 3
         self.queue = Queue()
+        self.time_queue = Queue()
 
         self.log_none_message_timeout = 10 * 60
 
@@ -103,12 +106,17 @@ class AutomationRuleHandler(Thread):
             finally:
                 session.close()
                 end_time = time.time()
-            self.rate_limiter.record_time(end_time - start_time)
+            self.time_queue.put({'event': event, 'run_time': end_time - start_time})
 
-    def start_threads(self):
+    def start_workers(self):
         executor = ThreadPoolExecutor(max_workers=self.per_update_auto_rule_workers, thread_name_prefix='instant-auto-rules')
         for index in range(self.per_update_auto_rule_workers):
             executor.submit(self.scan)
+
+    def record_time_worker(self):
+        while True:
+            time_info = self.time_queue.get()
+            self.rate_limiter.record_time(time_info['event']['owner'], time_info['event']['org_id'], time_info['run_time'])
 
     def run(self):
         if not self.is_enabled():
@@ -117,7 +125,7 @@ class AutomationRuleHandler(Thread):
         auto_rule_logger.info('Starting handle automation rules...')
         subscriber = self._redis_client.get_subscriber('automation-rule-triggered')
 
-        self.start_threads()
+        self.start_workers()
 
         trigger_count = 0
         last_message_time = datetime.now()
