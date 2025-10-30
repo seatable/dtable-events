@@ -1,4 +1,4 @@
-import logging
+from datetime import date
 from threading import current_thread
 
 from sqlalchemy import text
@@ -7,6 +7,38 @@ from dtable_events import init_db_session_class
 from dtable_events.app.log import auto_rule_logger
 from dtable_events.app.metadata_cache_managers import RuleInstantMetadataCacheManger, RuleIntervalMetadataCacheManager
 from dtable_events.automations.actions import AutomationRule, auto_rule_logger
+from dtable_events.utils import uuid_str_to_32_chars, get_dtable_owner_org_id
+
+
+def can_trigger_by_dtable(dtable_uuid, db_session):
+    """
+    :return: can_trigger -> bool
+    """
+    owner_info = get_dtable_owner_org_id(dtable_uuid, db_session)
+    owner, org_id = owner_info['owner'], owner_info['org_id']
+    month = date.today().replace(day=1)
+    if org_id == -1:
+        if '@seafile_group' in owner:  # groups not belong to orgs can always trigger auto rules
+            return True
+        sql = "SELECT is_exceed FROM user_auto_rules_statistics_per_month WHERE username=:username AND month=:month"
+        try:
+            user_per_month = db_session.execute(text(sql), {'username': owner, 'month': month}).fetchone()
+        except Exception as e:
+            auto_rule_logger.error('check user: %s auto rule per month error: %s', owner, e)
+            return True
+        if not user_per_month:
+            return True
+        return not user_per_month.is_exceed
+    else:
+        sql = "SELECT is_exceed FROM org_auto_rules_statistics_per_month WHERE org_id=:org_id AND month=:month"
+        try:
+            org_per_month = db_session.execute(text(sql), {'org_id': org_id, 'month': month}).fetchone()
+        except Exception as e:
+            auto_rule_logger.error('check org: %s auto rule per month error: %s', org_id, e)
+            return True
+        if not org_per_month:
+            return True
+        return not org_per_month.is_exceed
 
 
 def scan_triggered_automation_rules(event_data, db_session):
@@ -24,6 +56,11 @@ def scan_triggered_automation_rules(event_data, db_session):
     if not rule:
         auto_rule_logger.info('rule %s not found', automation_rule_id)
         return
+    if not rule:
+        return
+
+    org_id = event_data['org_id']
+    owner = event_data['owner']
 
     rule_instant_metadata_cache_manager = RuleInstantMetadataCacheManger()
     options = {
@@ -31,9 +68,10 @@ def scan_triggered_automation_rules(event_data, db_session):
         'run_condition': rule.run_condition,
         'dtable_uuid': rule.dtable_uuid,
         'trigger_count': rule.trigger_count,
-        'org_id': rule.org_id,
+        'org_id': org_id,
         'creator': rule.creator,
         'last_trigger_time': rule.last_trigger_time,
+        'owner': owner
     }
     try:
         auto_rule_logger.info('run auto rule %s', rule.id)
@@ -53,8 +91,9 @@ def run_regular_execution_rule(rule, db_session, metadata_cache_manager):
     options['last_trigger_time'] = rule[4]
     options['dtable_uuid'] = rule[5]
     options['trigger_count'] = rule[6]
-    options['org_id'] = rule[7]
-    options['creator'] = rule[8]
+    options['creator'] = rule[7]
+    options['owner'] = rule[8]
+    options['org_id'] = rule[9]
     try:
         auto_rule_logger.info('start to run regular auto rule: %s in thread %s', options['rule_id'], current_thread().name)
         auto_rule = AutomationRule(None, db_session, trigger, actions, options, metadata_cache_manager)

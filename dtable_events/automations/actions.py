@@ -19,6 +19,7 @@ from sqlalchemy import text
 
 from seaserv import seafile_api
 from dtable_events.automations.models import get_third_party_account
+from dtable_events.automations.auto_rules_stats_updater import auto_rules_stats_updater
 from dtable_events.app.metadata_cache_managers import BaseMetadataCacheManager
 from dtable_events.app.event_redis import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, ENABLE_PYTHON_SCRIPT, SEATABLE_AI_SERVER_URL, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, \
@@ -59,10 +60,10 @@ MESSAGE_TYPE_AUTOMATION_RULE = 'automation_rule'
 
 MINUTE_TIMEOUT = 60
 
-NOTIFICATION_CONDITION_ROWS_LIMIT = 50
+NOTIFICATION_CONDITION_ROWS_LIMIT = 200
 EMAIL_CONDITION_ROWS_LIMIT = 50
 CONDITION_ROWS_LOCKED_LIMIT = 200
-CONDITION_ROWS_UPDATE_LIMIT = 50
+CONDITION_ROWS_UPDATE_LIMIT = 200
 WECHAT_CONDITION_ROWS_LIMIT = 20
 DINGTALK_CONDITION_ROWS_LIMIT = 20
 CONVERT_PAGE_TO_PDF_ROWS_LIMIT = 50
@@ -4017,6 +4018,7 @@ class AutomationRule:
         self.trigger_count = options.get('trigger_count', None)
         self.org_id = options.get('org_id', None)
         self.creator = options.get('creator', None)
+        self.owner = options.get('owner', None)
         self.data = data
         self.db_session = db_session
 
@@ -4047,7 +4049,7 @@ class AutomationRule:
 
         self.metadata_cache_manager = metadata_cache_manager
 
-        self.cache_key = 'AUTOMATION_RULE:%s' % self.rule_id
+        self.cache_key = 'AUTOMATION_RULE:%s' % uuid_str_to_36_chars(self.dtable_uuid)
         self.task_run_success = True
 
         self.load_trigger_and_actions(raw_trigger, raw_actions)
@@ -4615,7 +4617,7 @@ class AutomationRule:
             auto_rule_logger.warning('the running time of rule %s is too long, for %s. SQL queries are %s', self.rule_id, duration, f"\n{'\n'.join(self.query_stats)}")
 
         if not with_test:
-            self.update_last_trigger_time()
+            self.update_stats()
 
         if not with_test:
             self.add_task_log()
@@ -4643,7 +4645,7 @@ class AutomationRule:
         except Exception as e:
             auto_rule_logger.error('set rule task log: %s error: %s', self.rule_id, e)
 
-    def update_last_trigger_time(self):
+    def update_stats(self):
         try:
             set_statistic_sql_user = '''
                 INSERT INTO user_auto_rules_statistics (username, trigger_date, trigger_count, update_at) VALUES 
@@ -4652,13 +4654,26 @@ class AutomationRule:
                 trigger_count=trigger_count+1,
                 update_at=:trigger_time
             '''
-
             set_statistic_sql_org = '''
                 INSERT INTO org_auto_rules_statistics (org_id, trigger_date, trigger_count, update_at) VALUES
                 (:org_id, :trigger_date, 1, :trigger_time)
                 ON DUPLICATE KEY UPDATE
                 trigger_count=trigger_count+1,
                 update_at=:trigger_time
+            '''
+            set_statistic_sql_user_per_month = '''
+                INSERT INTO user_auto_rules_statistics_per_month(username, trigger_count, month, updated_at) VALUES
+                (:username, 1, :month, :trigger_time)
+                ON DUPLICATE KEY UPDATE
+                trigger_count=trigger_count+1,
+                updated_at=:trigger_time
+            '''
+            set_statistic_sql_org_per_month = '''
+                INSERT INTO org_auto_rules_statistics_per_month(org_id, trigger_count, month, updated_at) VALUES
+                (:org_id, 1, :month, :trigger_time)
+                ON DUPLICATE KEY UPDATE
+                trigger_count=trigger_count+1,
+                updated_at=:trigger_time
             '''
             set_last_trigger_time_sql = '''
                 UPDATE dtable_automation_rules SET last_trigger_time=:trigger_time, trigger_count=:trigger_count+1 WHERE id=:rule_id;
@@ -4667,25 +4682,31 @@ class AutomationRule:
             sqls = [set_last_trigger_time_sql]
             if self.org_id:
                 if self.org_id == -1:
-                    sqls.append(set_statistic_sql_user)
+                    if '@seafile_group' not in self.owner:
+                        sqls.append(set_statistic_sql_user)
+                        sqls.append(set_statistic_sql_user_per_month)
                 else:
                     sqls.append(set_statistic_sql_org)
+                    sqls.append(set_statistic_sql_org_per_month)
 
             cur_date = datetime.now().date()
             cur_year, cur_month = cur_date.year, cur_date.month
             trigger_date = date(year=cur_year, month=cur_month, day=1)
+            sql_data = {
+                'rule_id': self.rule_id,
+                'trigger_time': datetime.utcnow(),
+                'trigger_date': trigger_date,
+                'trigger_count': self.trigger_count + 1,
+                'username': self.owner,
+                'org_id': self.org_id,
+                'month': trigger_date
+            }
             for sql in sqls:
-                self.db_session.execute(text(sql), {
-                    'rule_id': self.rule_id,
-                    'trigger_time': datetime.utcnow(),
-                    'trigger_date': trigger_date,
-                    'trigger_count': self.trigger_count + 1,
-                    'username': self.creator,
-                    'org_id': self.org_id
-                })
+                self.db_session.execute(text(sql), sql_data)
             self.db_session.commit()
         except Exception as e:
             auto_rule_logger.exception('set rule: %s error: %s', self.rule_id, e)
+        auto_rules_stats_updater.add_info(sql_data)
 
     def set_invalid(self, e: RuleInvalidException):
         try:

@@ -246,14 +246,15 @@ class TaskManager(object):
         return task_id
 
     @log_function_call
-    def add_run_auto_rule_task(self, automation_rule_id, username, org_id, dtable_uuid, run_condition, trigger, actions):
+    def add_run_auto_rule_task(self, automation_rule_id, creator, owner, org_id, dtable_uuid, run_condition, trigger, actions):
         from dtable_events.automations.auto_rules_utils import run_auto_rule_task
         task_id = str(uuid.uuid4())
         options = {
             'run_condition': run_condition,
             'dtable_uuid': dtable_uuid,
             'org_id': org_id,
-            'creator': username,
+            'owner': owner,
+            'creator': creator,
             'rule_id': automation_rule_id
         }
 
