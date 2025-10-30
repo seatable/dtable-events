@@ -140,7 +140,6 @@ class BrowserWorker(Thread):
         page.on("console", lambda msg: logger.debug(f"Console [{msg.type}]: {msg.text}"))
         try:
             await page.goto(url, wait_until="load")
-            await page.wait_for_load_state('networkidle', timeout=180*1000)
             await wait_for_images(page)
             content = await page.pdf(**get_pdf_print_options())
         except TimeoutError:
@@ -245,6 +244,7 @@ class BrowserWorker(Thread):
         try:
             await page.goto(url, wait_until="load")
             await page.wait_for_load_state('networkidle', timeout=180*1000)
+            await page.wait_for_selector('#document-render-complete', timeout=60*1000)
             await wait_for_images(page)
             pdf_content = await page.pdf(**get_pdf_print_options())
         except TimeoutError:
