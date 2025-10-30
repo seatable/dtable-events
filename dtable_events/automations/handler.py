@@ -66,6 +66,8 @@ class AutomationRuleHandler(Thread):
 
         self.log_none_message_timeout = 10 * 60
 
+        self.rate_limiter = RateLimiter()
+
         self._parse_config(config)
 
     def _parse_config(self, config):
@@ -91,7 +93,6 @@ class AutomationRuleHandler(Thread):
         except Exception as e:
             auto_rule_logger.error('parse section: %s key: %s error: %s', section_name, key_rate_limit_window_secs, e)
             per_update_auto_rule_workers = 5 * 60
-        self.rate_limiter = RateLimiter(rate_limit_window_secs)
 
         key_rate_limit_percent = 'rate_limit_percent'
         rate_limit_percent = get_opt_from_conf_or_env(config, section_name, key_rate_limit_percent, default=25)
@@ -100,7 +101,9 @@ class AutomationRuleHandler(Thread):
         except Exception as e:
             auto_rule_logger.error('parse section: %s key: %s error: %s', section_name, key_rate_limit_percent, e)
             per_update_auto_rule_workers = 25
-        self.rate_limiter = RateLimiter(rate_limit_window_secs, rate_limit_percent)
+
+        self.rate_limiter.window_secs = rate_limit_window_secs
+        self.rate_limiter.percent = rate_limit_percent
 
         self.per_update_auto_rule_workers = per_update_auto_rule_workers
 
