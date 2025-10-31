@@ -169,7 +169,7 @@ class AIStatsWorker:
         return dtable_owners_dict
 
     def stats_worker(self):
-        if not self.org_stats and not self.owner_stats:
+        if not self.org_stats and not self.owner_stats and not self.dtable_stats:
             logger.info('There are no stats')
             return
         with self.stats_lock:
@@ -306,8 +306,8 @@ class AIStatsWorker:
 
     def stats(self):
         sched = BlockingScheduler()
-        # fire per 5 mins
-        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='*/1', misfire_grace_time=120)
+        # fire per 1 min
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='*/1', misfire_grace_time=30, max_instances=1)
         def timed_job():
             logger.info('Starts to stats ai calls in memory...')
             self.stats_worker()
