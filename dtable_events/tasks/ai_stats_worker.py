@@ -97,8 +97,8 @@ class AIStatsWorker:
         dtable_uuid = usage_info.get('dtable_uuid')
         if dtable_uuid:
             dtable_uuid = uuid_str_to_32_chars(usage_info['dtable_uuid'])
-            self.dtable_stats[usage_info['dtable_uuid']][model]['input_tokens'] += usage.get('input_tokens') or 0
-            self.dtable_stats[usage_info['dtable_uuid']][model]['output_tokens'] += usage.get('output_tokens') or 0
+            self.dtable_stats[dtable_uuid][model]['input_tokens'] += usage.get('input_tokens') or 0
+            self.dtable_stats[dtable_uuid][model]['output_tokens'] += usage.get('output_tokens') or 0
 
     def receive(self):
         logger.info('Starts to receive ai calls...')
