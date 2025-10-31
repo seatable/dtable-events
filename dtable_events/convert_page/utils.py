@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import io
 import json
@@ -173,3 +174,32 @@ def get_documents_config(repo_id, dtable_uuid, username):
     resp = requests.get(url)
     documents_config = json.loads(resp.content)
     return documents_config
+
+
+def get_pdf_print_options():
+    return {
+        'landscape': False,
+        'display_header_footer': False,
+        'print_background': True,
+        'prefer_css_page_size': True,
+    }
+
+
+async def wait_for_images(page):
+    await page.evaluate("""() => {
+        window.scrollTo(0, document.body.scrollHeight);
+    }""")
+    await page.evaluate("""
+        () => {
+            const images = Array.from(document.images);
+            return Promise.all(
+                images.map(img => {
+                    if (img.complete) return Promise.resolve();
+                    return new Promise(resolve => {
+                        img.onload = img.onerror = resolve;
+                    });
+                })
+            );
+        }
+    """)
+
