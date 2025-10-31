@@ -941,6 +941,7 @@ def convert_page_design_to_pdf(dtable_uuid, page_id, row_id, username, config):
                 page.on("response", lambda response: dtable_io_logger.debug(f"Response: {response.status} {response.url}"))
                 page.on("console", lambda msg: dtable_io_logger.debug(f"Console [{msg.type}]: {msg.text}"))
                 await page.goto(url, wait_until="load")
+                await page.wait_for_selector('#page-design-render-complete', state="attached", timeout=60*1000)
                 await wait_for_images(page)
                 await page.pdf(path=target_path, **get_pdf_print_options())
             except TimeoutError:
@@ -988,7 +989,7 @@ def convert_document_to_pdf(dtable_uuid, doc_uuid, row_id, username, config):
                 page.on("response", lambda response: dtable_io_logger.debug(f"Response: {response.status} {response.url}"))
                 page.on("console", lambda msg: dtable_io_logger.debug(f"Console [{msg.type}]: {msg.text}"))
                 await page.goto(url, wait_until="load")
-                await page.wait_for_selector('#document-render-complete', timeout=60*1000)
+                await page.wait_for_selector('#document-render-complete', state='attached', timeout=60*1000)
                 await wait_for_images(page)
                 await page.pdf(path=target_path, **get_pdf_print_options())
             except TimeoutError:

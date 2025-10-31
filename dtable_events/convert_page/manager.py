@@ -133,13 +133,15 @@ class BrowserWorker(Thread):
             'row_ids': row_ids
         }, None
 
-    async def row_page_to_pdf(self, url, context, row_id, action_type, per_converted_callbacks):
+    async def row_page_to_pdf(self, url, context, row_id, plugin_type, action_type, per_converted_callbacks):
         page = await context.new_page()
         page.on("request", lambda request: logger.debug(f"Request: {request.method} {request.url}"))
         page.on("response", lambda response: logger.debug(f"Response: {response.status} {response.url}"))
         page.on("console", lambda msg: logger.debug(f"Console [{msg.type}]: {msg.text}"))
         try:
             await page.goto(url, wait_until="load")
+            if plugin_type == 'page-design':
+                await page.wait_for_selector('#page-design-render-complete', state="attached", timeout=60*1000)
             await wait_for_images(page)
             content = await page.pdf(**get_pdf_print_options())
         except TimeoutError:
@@ -194,7 +196,7 @@ class BrowserWorker(Thread):
                     continue
                 url += '?access-token=%s&need_convert=%s' % (dtable_server_api.internal_access_token, 0)
 
-                tasks.append(self.row_page_to_pdf(url, context, row_id, action_type, per_converted_callbacks))
+                tasks.append(self.row_page_to_pdf(url, context, row_id, plugin_type, action_type, per_converted_callbacks))
 
             results = await asyncio.gather(*tasks, return_exceptions=True)
             for result in results:
@@ -244,7 +246,8 @@ class BrowserWorker(Thread):
         try:
             await page.goto(url, wait_until="load")
             await page.wait_for_load_state('networkidle', timeout=180*1000)
-            await page.wait_for_selector('#document-render-complete', timeout=60*1000)
+            if plugin_type == 'document':
+                await page.wait_for_selector('#document-render-complete', state='attached', timeout=60*1000)
             await wait_for_images(page)
             pdf_content = await page.pdf(**get_pdf_print_options())
         except TimeoutError:
