@@ -1,4 +1,3 @@
-import logging
 from datetime import date
 from types import SimpleNamespace
 
@@ -7,9 +6,8 @@ from sqlalchemy import text
 from seaserv import ccnet_api
 
 from dtable_events.app.config import CCNET_DB_NAME, DTABLE_WEB_SERVICE_URL
+from dtable_events.app.log import auto_rule_logger
 from dtable_events.utils.dtable_web_api import DTableWebAPI
-
-logger = logging.getLogger(__name__)
 
 
 class AutoRulesStatsHelper:
@@ -105,7 +103,7 @@ class AutoRulesStatsHelper:
             elif org_id != -1:
                 self.update_org(db_session, org_id)
         except Exception as e:
-            logger.exception('update stats info: %s error: %s', auto_rule_info, e)
+            auto_rule_logger.exception('update stats info: %s error: %s', auto_rule_info, e)
 
 
 auto_rules_stats_helper = AutoRulesStatsHelper()

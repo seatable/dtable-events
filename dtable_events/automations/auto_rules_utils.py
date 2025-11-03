@@ -24,8 +24,6 @@ def scan_triggered_automation_rules(event_data, db_session):
     if not rule:
         auto_rule_logger.info('rule %s not found', automation_rule_id)
         return
-    if not rule:
-        return
 
     org_id = event_data['org_id']
     owner = event_data['owner']
