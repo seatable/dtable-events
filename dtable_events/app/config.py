@@ -57,8 +57,7 @@ try:
     AUTO_RULES_AI_CONTENT_MAX_LENGTH = getattr(seahub_settings, 'AUTO_RULES_AI_CONTENT_MAX_LENGTH', 10000)
 
     # env
-    ENV_SEAFILE_CENTRAL_CONF_DIR = os.environ.get('SEAFILE_CENTRAL_CONF_DIR', '')
-    ENV_CCNET_CONF_PATH = os.path.join(ENV_SEAFILE_CENTRAL_CONF_DIR, 'ccnet.conf')
+    CCNET_DB_NAME = os.environ.get('SEATABLE_MYSQL_DB_CCNET_DB_NAME', 'ccnet_db')
 except Exception as e:
     logger.critical("Can not import dtable_web settings: %s." % e)
     raise RuntimeError("Can not import dtable_web settings: %s" % e)

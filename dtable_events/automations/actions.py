@@ -19,7 +19,7 @@ from sqlalchemy import text
 
 from seaserv import seafile_api
 from dtable_events.automations.models import get_third_party_account
-from dtable_events.automations.auto_rules_stats_updater import auto_rules_stats_updater
+from dtable_events.automations.auto_rules_stats_helper import auto_rules_stats_helper
 from dtable_events.app.metadata_cache_managers import BaseMetadataCacheManager
 from dtable_events.app.event_redis import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, ENABLE_PYTHON_SCRIPT, SEATABLE_AI_SERVER_URL, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, \
@@ -4676,7 +4676,7 @@ class AutomationRule:
                 updated_at=:trigger_time
             '''
             set_last_trigger_time_sql = '''
-                UPDATE dtable_automation_rules SET last_trigger_time=:trigger_time, trigger_count=:trigger_count+1 WHERE id=:rule_id;
+                UPDATE dtable_automation_rules SET last_trigger_time=:trigger_time, trigger_count=trigger_count+1 WHERE id=:rule_id;
             '''
 
             sqls = [set_last_trigger_time_sql]
@@ -4696,7 +4696,6 @@ class AutomationRule:
                 'rule_id': self.rule_id,
                 'trigger_time': datetime.utcnow(),
                 'trigger_date': trigger_date,
-                'trigger_count': self.trigger_count + 1,
                 'username': self.owner,
                 'org_id': self.org_id,
                 'month': trigger_date
@@ -4706,7 +4705,7 @@ class AutomationRule:
             self.db_session.commit()
         except Exception as e:
             auto_rule_logger.exception('set rule: %s error: %s', self.rule_id, e)
-        auto_rules_stats_updater.add_info(sql_data)
+        auto_rules_stats_helper.update_stats(self.db_session, {'org_id': self.org_id, 'owner': self.owner})
 
     def set_invalid(self, e: RuleInvalidException):
         try:

@@ -8,7 +8,8 @@ from threading import Thread, Event, current_thread
 
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.app.log import auto_rule_logger
-from dtable_events.automations.auto_rules_utils import scan_triggered_automation_rules, can_trigger_by_dtable
+from dtable_events.automations.auto_rules_utils import scan_triggered_automation_rules
+from dtable_events.automations.auto_rules_stats_helper import auto_rules_stats_helper
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import get_opt_from_conf_or_env, get_dtable_owner_org_id
 from dtable_events.utils.utils_metric import publish_metric, INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP, \
@@ -52,6 +53,25 @@ class RateLimiter:
         self.counters[limit_key] = self.counters.get(limit_key, 0) + run_time
 
 
+class TriggerCountLimiter:
+
+    def is_allowed(self, db_session, owner, org_id):
+        if org_id == -1:
+            if '@seafile_group' in owner:
+                return True
+            quota = auto_rules_stats_helper.get_user_quota(db_session, owner)
+            if quota < 0:
+                return True
+            usage = auto_rules_stats_helper.get_user_usage(db_session, owner).trigger_count
+            return quota > usage
+        else:
+            quota = auto_rules_stats_helper.get_org_quota(db_session, owner)
+            if quota < 0:
+                return True
+            usage = auto_rules_stats_helper.get_org_usage(db_session, org_id).trigger_count
+            return quota > usage
+
+
 class AutomationRuleHandler(Thread):
     def __init__(self, config):
         Thread.__init__(self)
@@ -67,6 +87,7 @@ class AutomationRuleHandler(Thread):
         self.log_none_message_timeout = 10 * 60
 
         self.rate_limiter = RateLimiter()
+        self.trigger_count_limiter = TriggerCountLimiter()
 
         self._parse_config(config)
 
@@ -118,8 +139,6 @@ class AutomationRuleHandler(Thread):
             session = self._db_session_class()
             start_time = time.time()
             try:
-                if not can_trigger_by_dtable(event['dtable_uuid'], session):
-                    continue
                 scan_triggered_automation_rules(event, session)
             except Exception as e:
                 auto_rule_logger.exception('Handle automation rule with data %s failed: %s', event, e)
@@ -165,6 +184,10 @@ class AutomationRuleHandler(Thread):
                         dtable_uuid = event.get('dtable_uuid')
                         owner_info = get_dtable_owner_org_id(dtable_uuid, db_session)
                         if not self.rate_limiter.is_allowed(owner_info['owner'], owner_info['org_id']):
+                            auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} rate limit exceed event {event} will not trigger")
+                            continue
+                        if not self.trigger_count_limiter.is_allowed(db_session, owner_info['owner'], owner_info['org_id']):
+                            auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} trigger count limit exceed {event} will not trigger")
                             continue
                         event.update(owner_info)
                     except Exception as e:
