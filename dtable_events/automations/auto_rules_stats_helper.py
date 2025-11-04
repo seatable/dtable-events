@@ -99,7 +99,7 @@ class AutoRulesStatsHelper:
                 admins.append(row.email)
             self.dtable_web_api.internal_add_notification(admins, 'autorule_limit_reached_warning', {'limit': limit, 'usage': usage.trigger_count})
             sql = "UPDATE org_auto_rules_statistics_per_month SET has_sent_warning=1, warning_limit=:warning_limit WHERE org_id=:org_id AND month=:month"
-            db_session.execute(text(sql), {'org_id': org_id, 'warning_limit': limit, 'month': date.today()})
+            db_session.execute(text(sql), {'org_id': org_id, 'warning_limit': limit, 'month': date.today().replace(day=1)})
             db_session.commit()
 
     def update_stats(self, db_session, auto_rule_info):
