@@ -10,6 +10,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from dtable_events.app.log import auto_rule_logger
 from dtable_events.app.metadata_cache_managers import RuleIntervalMetadataCacheManager
 from dtable_events.automations.auto_rules_utils import run_regular_execution_rule
+from dtable_events.automations.auto_rules_stats_helper import auto_rules_stats_helper
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool
 from dtable_events.utils.utils_metric import publish_metric, INTERVAL_AUTOMATION_RULES_QUEUE_METRIC_HELP, \
@@ -83,10 +84,25 @@ class DTableAutomationRulesScannerTimer(Thread):
             finally:
                 db_session.close()
 
+    def is_exceed(self, db_session, exceed_limit_keys_set, owner, org_id):
+        if org_id != -1 and org_id in exceed_limit_keys_set:
+            return True
+        if owner in exceed_limit_keys_set:
+            return True
+        is_exceed = auto_rules_stats_helper.is_exceed(db_session, owner, org_id)
+        if is_exceed:
+            if org_id != -1:
+                exceed_limit_keys_set.add(org_id)
+            else:
+                exceed_limit_keys_set.add(owner)
+        return is_exceed
+
     def scan_dtable_automation_rules(self):
+        exceed_limit_keys_set = set()
         sql = '''
-                SELECT `dar`.`id`, `run_condition`, `trigger`, `actions`, `last_trigger_time`, `dtable_uuid`, `trigger_count`, `org_id`, dar.`creator` FROM dtable_automation_rules dar
+                SELECT `dar`.`id`, `run_condition`, `trigger`, `actions`, `last_trigger_time`, `dtable_uuid`, `trigger_count`, w.`owner`, w.`org_id`, dar.`creator` FROM dtable_automation_rules dar
                 JOIN dtables d ON dar.dtable_uuid=d.uuid
+                JOIN workspaces w ON d.workspace_id=w.id
                 WHERE ((run_condition='per_day' AND (last_trigger_time<:per_day_check_time OR last_trigger_time IS NULL))
                 OR (run_condition='per_week' AND (last_trigger_time<:per_week_check_time OR last_trigger_time IS NULL))
                 OR (run_condition='per_month' AND (last_trigger_time<:per_month_check_time OR last_trigger_time IS NULL)))
@@ -109,6 +125,9 @@ class DTableAutomationRulesScannerTimer(Thread):
             db_session.close()
 
         for rule in rules:
+            if self.is_exceed(db_session, exceed_limit_keys_set, rule.owner, rule.org_id):
+                auto_rule_logger.info(f"owner {rule.owner} org {rule.org_id} trigger count limit exceed rule {rule.id} will not trigger")
+                continue
             self.trigger_count += 1
             self.queue.put(rule)
         publish_metric(self.queue.qsize(), 'scheduled_automation_queue_size', INTERVAL_AUTOMATION_RULES_QUEUE_METRIC_HELP)
@@ -124,7 +143,7 @@ class DTableAutomationRulesScannerTimer(Thread):
         publish_metric(self.trigger_count, 'scheduled_automation_triggered_count', INTERVAL_AUTOMATION_RULES_TRIGGERED_COUNT_HELP)
         sched = BlockingScheduler()
         # fire at every hour in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='*', misfire_grace_time=600)
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='22', misfire_grace_time=600)
         def timed_job():
             auto_rule_logger.info('Starts to scan automation rules...')
 

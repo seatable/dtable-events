@@ -53,25 +53,6 @@ class RateLimiter:
         self.counters[limit_key] = self.counters.get(limit_key, 0) + run_time
 
 
-class TriggerCountLimiter:
-
-    def is_allowed(self, db_session, owner, org_id):
-        if org_id == -1:
-            if '@seafile_group' in owner:
-                return True
-            quota = auto_rules_stats_helper.get_user_quota(db_session, owner)
-            if quota < 0:
-                return True
-            usage = auto_rules_stats_helper.get_user_usage(db_session, owner).trigger_count
-            return quota > usage
-        else:
-            quota = auto_rules_stats_helper.get_org_quota(db_session, owner)
-            if quota < 0:
-                return True
-            usage = auto_rules_stats_helper.get_org_usage(db_session, org_id).trigger_count
-            return quota > usage
-
-
 class AutomationRuleHandler(Thread):
     def __init__(self, config):
         Thread.__init__(self)
@@ -87,7 +68,6 @@ class AutomationRuleHandler(Thread):
         self.log_none_message_timeout = 10 * 60
 
         self.rate_limiter = RateLimiter()
-        self.trigger_count_limiter = TriggerCountLimiter()
 
         self._parse_config(config)
 
@@ -186,7 +166,7 @@ class AutomationRuleHandler(Thread):
                         if not self.rate_limiter.is_allowed(owner_info['owner'], owner_info['org_id']):
                             auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} rate limit exceed event {event} will not trigger")
                             continue
-                        if not self.trigger_count_limiter.is_allowed(db_session, owner_info['owner'], owner_info['org_id']):
+                        if auto_rules_stats_helper.is_exceed(db_session, owner_info['owner'], owner_info['org_id']):
                             auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} trigger count limit exceed {event} will not trigger")
                             continue
                         event.update(owner_info)

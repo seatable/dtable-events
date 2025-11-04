@@ -4705,7 +4705,7 @@ class AutomationRule:
             self.db_session.commit()
         except Exception as e:
             auto_rule_logger.exception('set rule: %s error: %s', self.rule_id, e)
-        auto_rules_stats_helper.update_stats(self.db_session, {'org_id': self.org_id, 'owner': self.owner})
+        auto_rules_stats_helper.add_stats({'org_id': self.org_id, 'owner': self.owner})
 
     def set_invalid(self, e: RuleInvalidException):
         try:

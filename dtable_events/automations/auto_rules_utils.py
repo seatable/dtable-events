@@ -48,18 +48,18 @@ def scan_triggered_automation_rules(event_data, db_session):
 
 
 def run_regular_execution_rule(rule, db_session, metadata_cache_manager):
-    trigger = rule[2]
-    actions = rule[3]
+    trigger = rule.trigger
+    actions = rule.actions
 
     options = {}
-    options['rule_id'] = rule[0]
-    options['run_condition'] = rule[1]
-    options['last_trigger_time'] = rule[4]
-    options['dtable_uuid'] = rule[5]
-    options['trigger_count'] = rule[6]
-    options['creator'] = rule[7]
-    options['owner'] = rule[8]
-    options['org_id'] = rule[9]
+    options['rule_id'] = rule.id
+    options['run_condition'] = rule.run_condition
+    options['last_trigger_time'] = rule.last_trigger_time
+    options['dtable_uuid'] = rule.dtable_uuid
+    options['trigger_count'] = rule.trigger_count
+    options['creator'] = rule.creator
+    options['owner'] = rule.owner
+    options['org_id'] = rule.org_id
     try:
         auto_rule_logger.info('start to run regular auto rule: %s in thread %s', options['rule_id'], current_thread().name)
         auto_rule = AutomationRule(None, db_session, trigger, actions, options, metadata_cache_manager)

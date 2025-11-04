@@ -1,4 +1,6 @@
 from datetime import date
+from queue import Queue
+from threading import Thread
 from types import SimpleNamespace
 
 from sqlalchemy import text
@@ -7,6 +9,7 @@ from seaserv import ccnet_api
 
 from dtable_events.app.config import CCNET_DB_NAME, DTABLE_WEB_SERVICE_URL
 from dtable_events.app.log import auto_rule_logger
+from dtable_events.db import init_db_session_class
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 
 
@@ -15,8 +18,13 @@ class AutoRulesStatsHelper:
     def __init__(self):
         self.dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
         self.roles = None
+        self.queue = Queue()
 
         self.ccnet_db_name = CCNET_DB_NAME
+
+    def init(self, config):
+        self.config = config
+        self.db_session_class = init_db_session_class(self.config)
 
     def get_roles(self):
         if self.roles:
@@ -30,7 +38,7 @@ class AutoRulesStatsHelper:
         if row and row.automation_rules_limit_per_month and row.automation_rules_limit_per_month != 0:
             return row.automation_rules_limit_per_month
         user = ccnet_api.get_emailuser(username)
-        user_role = user.role
+        user_role = user.role if user.role else 'default'  # check from dtable-web/seahub/role_permissions/settings DEFAULT_ENABLED_ROLE_PERMISSIONS[DEFAULT_USER]
         return self.get_roles().get(user_role, {}).get('automation_rules_limit_per_month', -1)
 
     def get_org_quota(self, db_session, org_id):
@@ -104,6 +112,39 @@ class AutoRulesStatsHelper:
                 self.update_org(db_session, org_id)
         except Exception as e:
             auto_rule_logger.exception('update stats info: %s error: %s', auto_rule_info, e)
+
+    def is_exceed(self, db_session, owner, org_id):
+        if org_id == -1:
+            if '@seafile_group' in owner:
+                return False
+            quota = auto_rules_stats_helper.get_user_quota(db_session, owner)
+            if quota < 0:
+                return False
+            usage = auto_rules_stats_helper.get_user_usage(db_session, owner).trigger_count
+            return quota <= usage
+        else:
+            quota = auto_rules_stats_helper.get_org_quota(db_session, owner)
+            if quota < 0:
+                return False
+            usage = auto_rules_stats_helper.get_org_usage(db_session, org_id).trigger_count
+            return quota <= usage
+
+    def add_stats(self, auto_rule_info):
+        self.queue.put(auto_rule_info)
+
+    def update_warning(self):
+        while True:
+            auto_rule_info = self.queue.get()
+            db_session = self.db_session_class()
+            try:
+                self.update_stats(db_session, auto_rule_info)
+            except Exception as e:
+                auto_rule_logger.exception(e)
+            finally:
+                db_session.close()
+
+    def start_warning_worker(self):
+        Thread(target=self.update_warning, daemon=True, name='update_warning_thread').start()
 
 
 auto_rules_stats_helper = AutoRulesStatsHelper()
