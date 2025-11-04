@@ -143,7 +143,7 @@ class DTableAutomationRulesScannerTimer(Thread):
         publish_metric(self.trigger_count, 'scheduled_automation_triggered_count', INTERVAL_AUTOMATION_RULES_TRIGGERED_COUNT_HELP)
         sched = BlockingScheduler()
         # fire at every hour in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='22', misfire_grace_time=600)
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', misfire_grace_time=600)
         def timed_job():
             auto_rule_logger.info('Starts to scan automation rules...')
 
