@@ -117,7 +117,7 @@ class AutoRulesStatsHelper:
         if org_id == -1:
             if '@seafile_group' in owner:
                 return False
-            quota = self..get_user_quota(db_session, owner)
+            quota = self.get_user_quota(db_session, owner)
             if quota < 0:
                 return False
             usage = self.get_user_usage(db_session, owner).trigger_count
