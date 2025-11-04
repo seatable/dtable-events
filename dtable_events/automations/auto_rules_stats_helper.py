@@ -123,7 +123,7 @@ class AutoRulesStatsHelper:
             usage = self.get_user_usage(db_session, owner).trigger_count
             return quota <= usage
         else:
-            quota = self.get_org_quota(db_session, owner)
+            quota = self.get_org_quota(db_session, org_id)
             if quota < 0:
                 return False
             usage = self.get_org_usage(db_session, org_id).trigger_count
