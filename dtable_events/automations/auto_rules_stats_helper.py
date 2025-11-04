@@ -117,16 +117,16 @@ class AutoRulesStatsHelper:
         if org_id == -1:
             if '@seafile_group' in owner:
                 return False
-            quota = auto_rules_stats_helper.get_user_quota(db_session, owner)
+            quota = self..get_user_quota(db_session, owner)
             if quota < 0:
                 return False
-            usage = auto_rules_stats_helper.get_user_usage(db_session, owner).trigger_count
+            usage = self.get_user_usage(db_session, owner).trigger_count
             return quota <= usage
         else:
-            quota = auto_rules_stats_helper.get_org_quota(db_session, owner)
+            quota = self.get_org_quota(db_session, owner)
             if quota < 0:
                 return False
-            usage = auto_rules_stats_helper.get_org_usage(db_session, org_id).trigger_count
+            usage = self.get_org_usage(db_session, org_id).trigger_count
             return quota <= usage
 
     def add_stats(self, auto_rule_info):
