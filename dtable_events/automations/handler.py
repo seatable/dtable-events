@@ -1,5 +1,5 @@
 import json
-import logging
+import os
 import time
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
@@ -11,7 +11,7 @@ from dtable_events.app.log import auto_rule_logger
 from dtable_events.automations.auto_rules_utils import scan_triggered_automation_rules
 from dtable_events.automations.auto_rules_stats_helper import auto_rules_stats_helper
 from dtable_events.db import init_db_session_class
-from dtable_events.utils import get_opt_from_conf_or_env, get_dtable_owner_org_id
+from dtable_events.utils import get_dtable_owner_org_id
 from dtable_events.utils.utils_metric import publish_metric, INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP, \
     INSTANT_AUTOMATION_RULES_TRIGGERED_COUNT_HELP
 
@@ -74,39 +74,28 @@ class AutomationRuleHandler(Thread):
     def _parse_config(self, config):
         """parse send email related options from config file
         """
-        section_name = 'AUTOMATION'
 
-        if not config.has_section(section_name):
-            return
-
-        key_per_update_auto_rule_workers = 'per_update_auto_rule_workers'
-        per_update_auto_rule_workers = get_opt_from_conf_or_env(config, section_name, key_per_update_auto_rule_workers, default=3)
         try:
-            per_update_auto_rule_workers = int(per_update_auto_rule_workers)
-        except Exception as e:
-            auto_rule_logger.error('parse section: %s key: %s error: %s', section_name, per_update_auto_rule_workers, e)
+            per_update_auto_rule_workers = int(os.environ.get('AUTOMATION_PER_UPDATE_WORKERS', '3'))
+        except:
             per_update_auto_rule_workers = 3
 
-        key_rate_limit_window_secs = 'rate_limit_window_secs'
-        rate_limit_window_secs = get_opt_from_conf_or_env(config, section_name, key_rate_limit_window_secs, default=5 * 60)
         try:
-            rate_limit_window_secs = int(rate_limit_window_secs)
-        except Exception as e:
-            auto_rule_logger.error('parse section: %s key: %s error: %s', section_name, key_rate_limit_window_secs, e)
-            per_update_auto_rule_workers = 5 * 60
+            rate_limit_window_secs = int(os.environ.get('AUTOMATION_RATE_LIMIT_WINDOW_SECS', '300'))
+        except:
+            rate_limit_window_secs = 300
 
-        key_rate_limit_percent = 'rate_limit_percent'
-        rate_limit_percent = get_opt_from_conf_or_env(config, section_name, key_rate_limit_percent, default=25)
         try:
-            rate_limit_percent = int(rate_limit_percent)
-        except Exception as e:
-            auto_rule_logger.error('parse section: %s key: %s error: %s', section_name, key_rate_limit_percent, e)
-            per_update_auto_rule_workers = 25
+            rate_limit_percent = int(os.environ.get('AUTOMATION_RATE_LIMIT_PERCENT', '25'))
+        except:
+            rate_limit_percent = 25
 
         self.rate_limiter.window_secs = rate_limit_window_secs
         self.rate_limiter.percent = rate_limit_percent
 
         self.per_update_auto_rule_workers = per_update_auto_rule_workers
+
+        self._enabled = os.environ.get('AUTOMATION_ENABLED', 'true').lower() == 'true'
 
     def is_enabled(self):
         return self._enabled
