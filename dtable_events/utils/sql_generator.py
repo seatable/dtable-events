@@ -1495,6 +1495,7 @@ class StatisticSQLGenerator(object):
     def _statistic_column_name_to_sql(self, column, group_by):
         column_name = column.get('name') or ''
         valid_column_name = '`%s`' % column_name
+        column_type = column.get('type') or ''
         if self._check_is_date_granularity_column(column):
             date_granularity = group_by.get('date_granularity') or ''
             date_granularity = date_granularity.upper()
@@ -1513,7 +1514,7 @@ class StatisticSQLGenerator(object):
             if date_granularity == 'MIN':
                 return 'MIN(%s)' % valid_column_name
             return 'ISOMONTH(%s)' % valid_column_name
-        if type == ColumnTypes.GEOLOCATION:
+        if column_type == ColumnTypes.GEOLOCATION:
             geolocation_granularity = group_by.get('geolocation_granularity') or ''
             geolocation_granularity = geolocation_granularity.upper()
             if geolocation_granularity == 'PROVINCE':
