@@ -33,26 +33,26 @@ class AutoRulesStatsHelper:
         return self.roles
 
     def get_user_quota(self, db_session, username):
-        sql = "SELECT username, automation_rules_limit_per_month FROM user_quota WHERE username=:username"
+        sql = "SELECT username, automation_limit_per_month FROM user_quota WHERE username=:username"
         row = db_session.execute(text(sql), {'username': username}).fetchone()
-        if row and row.automation_rules_limit_per_month and row.automation_rules_limit_per_month != 0:
-            return row.automation_rules_limit_per_month
+        if row and row.automation_limit_per_month and row.automation_limit_per_month != 0:
+            return row.automation_limit_per_month
         user = ccnet_api.get_emailuser(username)
         user_role = user.role if user.role else 'default'  # check from dtable-web/seahub/role_permissions/settings DEFAULT_ENABLED_ROLE_PERMISSIONS[DEFAULT_USER]
-        return self.get_roles().get(user_role, {}).get('automation_rules_limit_per_month', -1)
+        return self.get_roles().get(user_role, {}).get('automation_limit_per_month', -1)
 
     def get_org_quota(self, db_session, org_id):
-        sql = "SELECT org_id, automation_rules_limit_per_month FROM organizations_org_quota WHERE org_id=:org_id"
+        sql = "SELECT org_id, automation_limit_per_month FROM organizations_org_quota WHERE org_id=:org_id"
         row = db_session.execute(text(sql), {'org_id': org_id}).fetchone()
-        if row and row.automation_rules_limit_per_month and row.automation_rules_limit_per_month != 0:
-            return row.automation_rules_limit_per_month
+        if row and row.automation_limit_per_month and row.automation_limit_per_month != 0:
+            return row.automation_limit_per_month
         sql = "SELECT role FROM organizations_orgsettings WHERE org_id=:org_id"
         row = db_session.execute(text(sql), {'org_id': org_id}).fetchone()
         if not row:
             org_role = 'org_default'  # check from dtable-web/seahub/role_permissions/settings DEFAULT_ENABLED_ROLE_PERMISSIONS[ORG_DEFAULT]
         else:
             org_role = row.role
-        return self.get_roles().get(org_role, {}).get('automation_rules_limit_per_month', -1)
+        return self.get_roles().get(org_role, {}).get('automation_limit_per_month', -1)
 
     def get_user_usage(self, db_session, username):
         """
