@@ -2327,6 +2327,10 @@ class StatisticSQLGenerator(object):
         if not total_summary_method:
             self.error = 'Total summary method is not valid'
             return ''
+        if self.detail_filter_conditions is not None:
+            self._update_filter_sql(True, target_column)
+            return 'SELECT * FROM %s %s LIMIT 0, 5000' % (self.table_name, self.filter_sql)
+
         self._update_filter_sql(True, target_column)
         total_summary_method = total_summary_method.upper()
         total_summary_column_name = self._summary_column_2_sql(total_summary_method, total_column)
