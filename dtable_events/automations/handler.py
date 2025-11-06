@@ -95,8 +95,6 @@ class AutomationRuleHandler(Thread):
 
         self.per_update_auto_rule_workers = per_update_auto_rule_workers
 
-        self._enabled = os.environ.get('AUTOMATION_ENABLED', 'true').lower() == 'true'
-
     def is_enabled(self):
         return self._enabled
 

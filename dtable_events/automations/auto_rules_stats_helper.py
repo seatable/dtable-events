@@ -81,7 +81,7 @@ class AutoRulesStatsHelper:
         usage = self.get_user_usage(db_session, username)
         if (not usage.has_sent_warning and usage.trigger_count >= limit * 0.9) \
             or (usage.has_sent_warning and usage.trigger_count >= limit * 0.9 and usage.warning_limit != limit):
-            self.dtable_web_api.internal_add_notification([username], 'autorule_limit_reached_warning', {'limit': limit, 'usage': usage.trigger_count})
+            self.dtable_web_api.internal_add_notification([username], 'automation_limit_reach_warning', {'limit': limit, 'usage': usage.trigger_count})
             sql = "UPDATE user_auto_rules_statistics_per_month SET has_sent_warning=1, warning_limit=:warning_limit WHERE username=:username AND month=:month"
             db_session.execute(text(sql), {'username': username, 'warning_limit': limit, 'month': date.today().replace(day=1)})
             db_session.commit()
@@ -97,7 +97,7 @@ class AutoRulesStatsHelper:
             sql = "SELECT email FROM %s.OrgUser WHERE org_id=:org_id AND is_staff=1" % self.ccnet_db_name
             for row in db_session.execute(text(sql), {'org_id': org_id}):
                 admins.append(row.email)
-            self.dtable_web_api.internal_add_notification(admins, 'autorule_limit_reached_warning', {'limit': limit, 'usage': usage.trigger_count})
+            self.dtable_web_api.internal_add_notification(admins, 'automation_limit_reach_warning', {'limit': limit, 'usage': usage.trigger_count})
             sql = "UPDATE org_auto_rules_statistics_per_month SET has_sent_warning=1, warning_limit=:warning_limit WHERE org_id=:org_id AND month=:month"
             db_session.execute(text(sql), {'org_id': org_id, 'warning_limit': limit, 'month': date.today().replace(day=1)})
             db_session.commit()
