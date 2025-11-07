@@ -126,8 +126,8 @@ class App(object):
             conver_page_to_pdf_manager.start()               # always True
             # ai stats, listen redis and cron
             self.ai_stats_worker.start()                     # default False
-            # automation update warning worker
-            auto_rules_stats_helper.start_warning_worker()   # always True
+            # automation stats worker
+            auto_rules_stats_helper.start_stats_worker()     # always True
 
         while True:
             time.sleep(60)

@@ -6,6 +6,8 @@ from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
 from threading import Thread, Event, current_thread
 
+from sqlalchemy import text
+
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.app.log import auto_rule_logger
 from dtable_events.automations.auto_rules_utils import scan_triggered_automation_rules
@@ -69,9 +71,9 @@ class AutomationRuleHandler(Thread):
 
         self.rate_limiter = RateLimiter()
 
-        self._parse_config(config)
+        self._parse_config()
 
-    def _parse_config(self, config):
+    def _parse_config(self):
         """parse send email related options from config file
         """
 
@@ -106,13 +108,14 @@ class AutomationRuleHandler(Thread):
             session = self._db_session_class()
             start_time = time.time()
             try:
-                scan_triggered_automation_rules(event, session)
+                result = scan_triggered_automation_rules(event, session)
             except Exception as e:
                 auto_rule_logger.exception('Handle automation rule with data %s failed: %s', event, e)
             finally:
                 session.close()
                 end_time = time.time()
-            self.time_queue.put({'event': event, 'run_time': end_time - start_time})
+                if result:
+                    self.time_queue.put({'result': result, 'run_time': end_time - start_time})
 
     def start_workers(self):
         executor = ThreadPoolExecutor(max_workers=self.per_update_auto_rule_workers, thread_name_prefix='instant-auto-rules')
@@ -123,7 +126,21 @@ class AutomationRuleHandler(Thread):
     def record_time_worker(self):
         while True:
             time_info = self.time_queue.get()
-            self.rate_limiter.record_time(time_info['event']['owner'], time_info['event']['org_id'], time_info['run_time'])
+            if time_info.get('result'):
+                self.rate_limiter.record_time(time_info['result']['owner'], time_info['result']['org_id'], time_info['run_time'])
+                auto_rules_stats_helper.add_stats(time_info['result'])
+
+    def is_allowed(self, db_session, event):
+        dtable_uuid = event.get('dtable_uuid')
+        owner_info = get_dtable_owner_org_id(dtable_uuid, db_session)
+        if not self.rate_limiter.is_allowed(owner_info['owner'], owner_info['org_id']):
+            auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} rate limit exceed event {event} will not trigger")
+            return False
+        if auto_rules_stats_helper.is_exceed(db_session, owner_info['owner'], owner_info['org_id']):
+            auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} trigger count limit exceed {event} will not trigger")
+            return False
+        event.update(owner_info)
+        return True
 
     def run(self):
         if not self.is_enabled():
@@ -148,15 +165,8 @@ class AutomationRuleHandler(Thread):
 
                     db_session = self._db_session_class()
                     try:
-                        dtable_uuid = event.get('dtable_uuid')
-                        owner_info = get_dtable_owner_org_id(dtable_uuid, db_session)
-                        if not self.rate_limiter.is_allowed(owner_info['owner'], owner_info['org_id']):
-                            auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} rate limit exceed event {event} will not trigger")
+                        if not self.is_allowed(db_session, event):
                             continue
-                        if auto_rules_stats_helper.is_exceed(db_session, owner_info['owner'], owner_info['org_id']):
-                            auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} trigger count limit exceed {event} will not trigger")
-                            continue
-                        event.update(owner_info)
                     except Exception as e:
                         auto_rule_logger.exception(e)
                         continue
