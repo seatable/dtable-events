@@ -38,10 +38,7 @@ class RateLimiter:
         limit_key = self.get_key(owner, org_id)
         if not limit_key:
             return True
-        now_time = time.time()
-        time_interval = now_time - self.window_start
-        if time_interval > self.window_secs:
-            self.window_start = now_time
+        if time.time() - self.window_start > self.window_secs:
             return True
         total_time = self.counters.get(limit_key, 0)
         if total_time / self.window_secs > self.percent / 100:
@@ -49,8 +46,10 @@ class RateLimiter:
         return True
 
     def record_time(self, owner, org_id, run_time):
-        if time.time() - self.window_start > self.window_secs:
+        now_time = time.time()
+        if now_time - self.window_start > self.window_secs:
             self.counters = {}
+            self.window_start = now_time
         limit_key = self.get_key(owner, org_id)
         self.counters[limit_key] = self.counters.get(limit_key, 0) + run_time
 
