@@ -77,7 +77,9 @@ class DTableAutomationRulesScannerTimer(Thread):
             db_session = self.db_session_class()
             auto_rule_logger.info('thread %s start to handle rule %s dtable_uuid %s', current_thread().name, rule.id, rule.dtable_uuid)
             try:
-                run_regular_execution_rule(rule, db_session, rule_interval_metadata_cache_manager)
+                auto_rule_result = run_regular_execution_rule(rule, db_session, rule_interval_metadata_cache_manager)
+                if auto_rule_result:
+                    auto_rules_stats_helper.add_stats(auto_rule_result)
             except Exception as e:
                 auto_rule_logger.exception(e)
                 auto_rule_logger.error(f'check rule failed. {rule}, error: {e}')

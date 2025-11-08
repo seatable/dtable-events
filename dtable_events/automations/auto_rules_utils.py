@@ -7,7 +7,6 @@ from dtable_events import init_db_session_class
 from dtable_events.app.log import auto_rule_logger
 from dtable_events.app.metadata_cache_managers import RuleInstantMetadataCacheManger, RuleIntervalMetadataCacheManager
 from dtable_events.automations.actions import AutomationRule, auto_rule_logger
-from dtable_events.automations.auto_rules_stats_helper import auto_rules_stats_helper
 
 
 def scan_triggered_automation_rules(event_data, db_session):
@@ -64,9 +63,7 @@ def run_regular_execution_rule(rule, db_session, metadata_cache_manager):
     try:
         auto_rule_logger.info('start to run regular auto rule: %s in thread %s', options['rule_id'], current_thread().name)
         auto_rule = AutomationRule(None, db_session, trigger, actions, options, metadata_cache_manager)
-        auto_rule_result = auto_rule.do_actions()
-        if auto_rule_result:
-            auto_rules_stats_helper.add_stats(auto_rule_result)
+        return auto_rule.do_actions()
     except Exception as e:
         auto_rule_logger.exception('auto rule: %s do actions error: %s', options['rule_id'], e)
 
