@@ -6,8 +6,6 @@ from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
 from threading import Thread, Event, current_thread
 
-from sqlalchemy import text
-
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.app.log import auto_rule_logger
 from dtable_events.automations.auto_rules_utils import scan_triggered_automation_rules
@@ -106,6 +104,7 @@ class AutomationRuleHandler(Thread):
             auto_rule_logger.info("Start to trigger rule %s in thread %s", event, current_thread().name)
             session = self._db_session_class()
             start_time = time.time()
+            result = None
             try:
                 result = scan_triggered_automation_rules(event, session)
             except Exception as e:
