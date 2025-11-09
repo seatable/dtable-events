@@ -1,7 +1,5 @@
 import json
 from datetime import date
-from queue import Queue
-from threading import Thread
 from types import SimpleNamespace
 
 from sqlalchemy import text
@@ -11,23 +9,16 @@ from dtable_events.utils import get_dtable_admins
 from seaserv import ccnet_api
 
 from dtable_events.app.config import CCNET_DB_NAME, DTABLE_WEB_SERVICE_URL
-from dtable_events.app.log import auto_rule_logger
-from dtable_events.db import init_db_session_class
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 
 
-class AutoRulesStatsHelper:
+class AutomationsStatsHelper:
 
     def __init__(self):
         self.dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
         self.roles = None
-        self.queue = Queue()
 
         self.ccnet_db_name = CCNET_DB_NAME
-
-    def init(self, config):
-        self.config = config
-        self.db_session_class = init_db_session_class(self.config)
 
     def get_roles(self):
         if self.roles:
@@ -207,23 +198,3 @@ class AutoRulesStatsHelper:
                     'invalid_type': invalid_type
                 }
             } for user in admins])
-
-    def add_stats(self, auto_rule_result):
-        self.queue.put(auto_rule_result)
-
-    def update_warning(self):
-        while True:
-            auto_rule_result = self.queue.get()
-            db_session = self.db_session_class()
-            try:
-                self.update_stats(db_session, auto_rule_result)
-            except Exception as e:
-                auto_rule_logger.exception(e)
-            finally:
-                db_session.close()
-
-    def start_stats_worker(self):
-        Thread(target=self.update_warning, daemon=True, name='update_warning_thread').start()
-
-
-auto_rules_stats_helper = AutoRulesStatsHelper()

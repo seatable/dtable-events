@@ -19,7 +19,6 @@ from sqlalchemy import text
 
 from seaserv import seafile_api
 from dtable_events.automations.models import get_third_party_account
-from dtable_events.automations.auto_rules_stats_helper import auto_rules_stats_helper
 from dtable_events.app.metadata_cache_managers import metadata_cache_manager
 from dtable_events.app.event_redis import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, ENABLE_PYTHON_SCRIPT, SEATABLE_AI_SERVER_URL, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, \
@@ -3991,20 +3990,17 @@ class RuleInvalidException(Exception):
 
 class AutomationRule:
 
-    def __init__(self, data, db_session, raw_trigger, raw_actions, options):
+    def __init__(self, data, raw_trigger, raw_actions, options):
         self.rule_id = options.get('rule_id', None)
         self.rule_name = ''
         self.run_condition = options.get('run_condition', None)
         self.dtable_uuid = options.get('dtable_uuid', None)
         self.trigger = None
         self.action_infos = []
-        self.last_trigger_time = options.get('last_trigger_time', None)
-        self.trigger_count = options.get('trigger_count', None)
         self.org_id = options.get('org_id', None)
-        self.creator = options.get('creator', None)
         self.owner = options.get('owner', None)
         self.data = data
-        self.db_session = db_session
+        self.db_session = None
 
         self.username = 'Automation Rule'
 
@@ -4031,7 +4027,6 @@ class AutomationRule:
 
         self._sql_query_max = 3
 
-        self.cache_key = 'AUTOMATION_RULE:%s' % uuid_str_to_36_chars(self.dtable_uuid)
         self.task_run_success = True
 
         self.load_trigger_and_actions(raw_trigger, raw_actions)
@@ -4361,7 +4356,7 @@ class AutomationRule:
             return False
         return False
 
-    def do_actions(self, with_test=False):
+    def do_actions(self, db_session, with_test=False):
         if with_test:
             auto_rule_logger.info('rule: %s run_condition: %s trigger_condition: %s start, a test run', self.rule_id, self.run_condition, self.trigger.get('condition'))
         else:
@@ -4369,6 +4364,8 @@ class AutomationRule:
         if (not self.can_do_actions()) and (not with_test):
             auto_rule_logger.info('rule: %s can not do actions', self.rule_id)
             return
+
+        self.db_session = db_session
 
         auto_rule_result = {
             'rule_id': self.rule_id,
@@ -4378,7 +4375,8 @@ class AutomationRule:
             'org_id': self.org_id,
             'owner': self.owner,
             'trigger_time': datetime.utcnow(),
-            'month': date.today().replace(day=1)
+            'month': date.today().replace(day=1),
+            'with_test': with_test,
         }
 
         do_actions_start = datetime.now()

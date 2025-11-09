@@ -17,9 +17,10 @@ from dtable_events.tasks.universal_app_auto_buckup import UniversalAppAutoBackup
 from dtable_events.tasks.virus_scanner import VirusScanner
 from dtable_events.notification_rules.handler import NotificationRuleHandler
 from dtable_events.notification_rules.dtable_notification_rules_scanner import DTableNofiticationRulesScanner
-from dtable_events.automations.handler import AutomationRuleHandler
-from dtable_events.automations.dtable_automation_rules_scanner import DTableAutomationRulesScanner
-from dtable_events.automations.auto_rules_stats_helper import auto_rules_stats_helper
+# from dtable_events.automations.handler import AutomationRuleHandler
+# from dtable_events.automations.dtable_automation_rules_scanner import DTableAutomationRulesScanner
+# from dtable_events.automations.auto_rules_stats_helper import auto_rules_stats_helper
+from dtable_events.automations.automations_pipeline import AutomationsPipeline
 from dtable_events.webhook.webhook import Webhooker
 from dtable_events.common_dataset.common_dataset_syncer import CommonDatasetSyncer
 from dtable_events.tasks.big_data_storage_stats_worker import BigDataStorageStatsWorker
@@ -52,7 +53,7 @@ class App(object):
             # redis client subscriber
             self._message_handler = MessageHandler(self, config)
             self._notification_rule_handler = NotificationRuleHandler(config)
-            self._automation_rule_handler = AutomationRuleHandler(config)
+            # self._automation_rule_handler = AutomationRuleHandler(config)
             self._user_activity_counter = UserActivityCounter(config)
             self._dtable_real_time_rows_counter = DTableRealTimeRowsCounter(config)
             self._workflow_actions_handler = WorkflowActionsHandler(config)
@@ -66,7 +67,7 @@ class App(object):
             self._dtables_cleaner = DTablesCleaner(config)
             self._dtable_updates_sender = DTableUpdatesSender(config)
             self._dtable_notification_rules_scanner = DTableNofiticationRulesScanner(config)
-            self._dtable_automation_rules_scanner = DTableAutomationRulesScanner(config)
+            # self._dtable_automation_rules_scanner = DTableAutomationRulesScanner(config)
             self._ldap_syncer = LDAPSyncer(config)
             self._common_dataset_syncer = CommonDatasetSyncer(self, config)
             self._big_data_storage_stats_worker = BigDataStorageStatsWorker(config)
@@ -84,7 +85,9 @@ class App(object):
             # ai stats, listen redis and cron
             self.ai_stats_worker = AIStatsWorker(config)
             # automation update warning worker
-            auto_rules_stats_helper.init(config)
+            # auto_rules_stats_helper.init(config)
+            # automations pipeline
+            self._automations_pipeline = AutomationsPipeline(config)
 
     def serve_forever(self):
 
@@ -96,7 +99,7 @@ class App(object):
             self._metric_manager.start()                     # always True, ready to collect metrics
             self._message_handler.start()                    # always True
             self._notification_rule_handler.start()          # always True
-            self._automation_rule_handler.start()            # always True
+            # self._automation_rule_handler.start()            # always True
             self._user_activity_counter.start()              # always True
             self._dtable_real_time_rows_counter.start()      # default True
             self._workflow_actions_handler.start()           # always True
@@ -109,7 +112,7 @@ class App(object):
             self._dtables_cleaner.start()                    # default True
             self._dtable_updates_sender.start()              # default True
             self._dtable_notification_rules_scanner.start()  # default True
-            self._dtable_automation_rules_scanner.start()    # default True
+            # self._dtable_automation_rules_scanner.start()    # default True
             self._ldap_syncer.start()                        # default False
             self._common_dataset_syncer.start()              # default True
             self._big_data_storage_stats_worker.start()      # always True
@@ -127,7 +130,9 @@ class App(object):
             # ai stats, listen redis and cron
             self.ai_stats_worker.start()                     # default False
             # automation stats worker
-            auto_rules_stats_helper.start_stats_worker()     # always True
+            # auto_rules_stats_helper.start_stats_worker()     # always True
+            # automations pipeline
+            self._automations_pipeline.start()
 
         while True:
             time.sleep(60)

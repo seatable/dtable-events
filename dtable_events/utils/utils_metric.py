@@ -13,10 +13,9 @@ PLUGIN_EMAIL_TASK_MANAGER_METRIC_HELP = "The number of plugin email tasks in the
 COMMON_DATASET_TOTAL_ROW_COUNT_METRIC_HELP = "Total rows processed in common-dataset syncs"
 COMMON_DATASET_OPERATIONS_COUNT_METRIC_HELP = "Common-dataset syncs count"
 COMMON_DATASET_ELAPSED_TIME_METRIC_HELP = "Time taken (in seconds) to complete common-dataset syncs job"
-INSTANT_AUTOMATION_RULES_QUEUE_METRIC_HELP = "The number of triggered realtime automations in the queue"
-INSTANT_AUTOMATION_RULES_TRIGGERED_COUNT_HELP = "The number of triggered realtime automations since start up"
-INTERVAL_AUTOMATION_RULES_QUEUE_METRIC_HELP = "The number of triggered scheduled automations in the queue"
-INTERVAL_AUTOMATION_RULES_TRIGGERED_COUNT_HELP = "The number of triggered scheduled automations since start up"
+REALTIME_AUTOMATION_RULES_TRIGGERED_COUNT_HELP = "The number of triggered realtime automations since start up"
+SCHEDULED_AUTOMATION_RULES_TRIGGERED_COUNT_HELP = "The number of triggered scheduled automations since start up"
+AUTOMATION_RULES_QUEUE_METRIC_HELP = "The number of automations in the queue"
 
 
 def publish_metric(value, metric_name, metric_help):
