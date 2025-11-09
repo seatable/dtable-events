@@ -79,6 +79,8 @@ class AutomationsPipeline:
         self.realtime_trigger_count = 0
         self.scheduled_trigger_count = 0
 
+        self.parse_config()
+
     def parse_config(self):
         try:
             self.workers = int(os.environ.get('AUTOMATION_WORKERS', self.workers))
