@@ -20,7 +20,7 @@ from sqlalchemy import text
 from seaserv import seafile_api
 from dtable_events.automations.models import get_third_party_account
 from dtable_events.automations.auto_rules_stats_helper import auto_rules_stats_helper
-from dtable_events.app.metadata_cache_managers import BaseMetadataCacheManager
+from dtable_events.app.metadata_cache_managers import metadata_cache_manager
 from dtable_events.app.event_redis import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, ENABLE_PYTHON_SCRIPT, SEATABLE_AI_SERVER_URL, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, \
 INNER_DTABLE_SERVER_URL, ENABLE_SEATABLE_AI, AUTO_RULES_AI_CONTENT_MAX_LENGTH
@@ -3991,7 +3991,7 @@ class RuleInvalidException(Exception):
 
 class AutomationRule:
 
-    def __init__(self, data, db_session, raw_trigger, raw_actions, options, metadata_cache_manager: BaseMetadataCacheManager):
+    def __init__(self, data, db_session, raw_trigger, raw_actions, options):
         self.rule_id = options.get('rule_id', None)
         self.rule_name = ''
         self.run_condition = options.get('run_condition', None)
@@ -4031,8 +4031,6 @@ class AutomationRule:
 
         self._sql_query_max = 3
 
-        self.metadata_cache_manager = metadata_cache_manager
-
         self.cache_key = 'AUTOMATION_RULE:%s' % uuid_str_to_36_chars(self.dtable_uuid)
         self.task_run_success = True
 
@@ -4065,12 +4063,12 @@ class AutomationRule:
         self._view_info = None
         self._dtable_metadata = None
         self._view_columns = None
-        self.metadata_cache_manager.clean_metadata(self.dtable_uuid)
+        metadata_cache_manager.clean_metadata(self.dtable_uuid)
 
     @property
     def dtable_metadata(self):
         if not self._dtable_metadata:
-            self._dtable_metadata = self.metadata_cache_manager.get_metadata(self.dtable_uuid)
+            self._dtable_metadata = metadata_cache_manager.get_metadata(self.dtable_uuid)
         return self._dtable_metadata
 
     @property

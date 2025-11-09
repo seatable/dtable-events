@@ -11,7 +11,7 @@ import requests
 
 from dtable_events.utils.sql_generator import filter2sql, has_user_filter
 from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
-from dtable_events.app.metadata_cache_managers import RuleInstantMetadataCacheManger, RuleIntervalMetadataCacheManager
+from dtable_events.app.metadata_cache_managers import metadata_cache_manager
 from dtable_events.utils import is_valid_email
 from dtable_events.utils.constants import ColumnTypes, FormulaResultType
 from dtable_events.utils.dtable_server_api import DTableServerAPI
@@ -56,10 +56,9 @@ def scan_triggered_notification_rules(event_data, db_session):
           "AND dtable_uuid=:dtable_uuid AND is_valid=1 AND id=:rule_id"
     rules = db_session.execute(text(sql), {'dtable_uuid': message_dtable_uuid, 'rule_id': rule_id})
 
-    rule_instant_metadata_cache_manager = RuleInstantMetadataCacheManger()
     for rule in rules:
         try:
-            trigger_notification_rule(rule, table_id, row_id, db_session, op_type, rule_instant_metadata_cache_manager)
+            trigger_notification_rule(rule, table_id, row_id, db_session, op_type)
         except Exception as e:
             logger.exception(e)
             logger.error(f'check rule failed. {rule}, error: {e}')
@@ -246,7 +245,7 @@ def get_column_by_key(dtable_metadata, table_id, column_key):
     return None
 
 
-def trigger_notification_rule(rule, message_table_id, row_id, db_session, op_type, rule_instant_metadata_cache_manager: RuleInstantMetadataCacheManger):
+def trigger_notification_rule(rule, message_table_id, row_id, db_session, op_type):
     rule_id = rule[0]
     trigger = rule[1]
     action = rule[2]
@@ -268,7 +267,7 @@ def trigger_notification_rule(rule, message_table_id, row_id, db_session, op_typ
     dtable_server_api = DTableServerAPI('notification-rule', dtable_uuid, INNER_DTABLE_SERVER_URL, access_token_timeout=3600)
     dtable_db_api = DTableDBAPI('notification-rule', dtable_uuid, INNER_DTABLE_DB_URL)
     dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
-    dtable_metadata = rule_instant_metadata_cache_manager.get_metadata(dtable_uuid)
+    dtable_metadata = metadata_cache_manager.get_metadata(dtable_uuid)
     target_table, target_view = None, None
     for table in dtable_metadata['tables']:
         if table['_id'] == table_id:
@@ -390,7 +389,7 @@ def trigger_notification_rule(rule, message_table_id, row_id, db_session, op_typ
     update_rule_last_trigger_time(rule_id, db_session)
 
 
-def trigger_near_deadline_notification_rule(rule, db_session, rule_interval_metadata_cache_manager: RuleIntervalMetadataCacheManager):
+def trigger_near_deadline_notification_rule(rule, db_session):
     rule_id = rule[0]
     trigger = rule[1]
     action = rule[2]
@@ -411,7 +410,7 @@ def trigger_near_deadline_notification_rule(rule, db_session, rule_interval_meta
     dtable_server_api = DTableServerAPI('notification-rule', dtable_uuid, INNER_DTABLE_SERVER_URL, access_token_timeout=3600)
     dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
     dtable_db_api = DTableDBAPI('dtable-events', dtable_uuid, INNER_DTABLE_DB_URL)
-    dtable_metadata = rule_interval_metadata_cache_manager.get_metadata(dtable_uuid)
+    dtable_metadata = metadata_cache_manager.get_metadata(dtable_uuid)
     target_table, target_view = None, None
     for table in dtable_metadata['tables']:
         if table['_id'] == table_id:

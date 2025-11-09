@@ -8,7 +8,6 @@ from sqlalchemy import text
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from dtable_events.app.log import auto_rule_logger
-from dtable_events.app.metadata_cache_managers import RuleIntervalMetadataCacheManager
 from dtable_events.automations.auto_rules_utils import run_regular_execution_rule
 from dtable_events.automations.auto_rules_stats_helper import auto_rules_stats_helper
 from dtable_events.db import init_db_session_class
@@ -67,7 +66,6 @@ class DTableAutomationRulesScannerTimer(Thread):
 
     def trigger_rule(self):
         auto_rule_logger.info('thread %s start', current_thread().name)
-        rule_interval_metadata_cache_manager = RuleIntervalMetadataCacheManager()
         while True:
             try:
                 rule = self.queue.get(timeout=1)
@@ -77,7 +75,7 @@ class DTableAutomationRulesScannerTimer(Thread):
             db_session = self.db_session_class()
             auto_rule_logger.info('thread %s start to handle rule %s dtable_uuid %s', current_thread().name, rule.id, rule.dtable_uuid)
             try:
-                auto_rule_result = run_regular_execution_rule(rule, db_session, rule_interval_metadata_cache_manager)
+                auto_rule_result = run_regular_execution_rule(rule, db_session)
                 if auto_rule_result:
                     auto_rules_stats_helper.add_stats(auto_rule_result)
             except Exception as e:
@@ -145,7 +143,7 @@ class DTableAutomationRulesScannerTimer(Thread):
         publish_metric(self.trigger_count, 'scheduled_automation_triggered_count', INTERVAL_AUTOMATION_RULES_TRIGGERED_COUNT_HELP)
         sched = BlockingScheduler()
         # fire at every hour in every day of week
-        @sched.scheduled_job('cron', day_of_week='*', hour='*', misfire_grace_time=600)
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='44', misfire_grace_time=600)
         def timed_job():
             auto_rule_logger.info('Starts to scan automation rules...')
 

@@ -7,7 +7,6 @@ from sqlalchemy import text
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from dtable_events.app.config import TIME_ZONE
-from dtable_events.app.metadata_cache_managers import RuleIntervalMetadataCacheManager
 from dtable_events.db import init_db_session_class
 from dtable_events.notification_rules.notification_rules_utils import trigger_near_deadline_notification_rule
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool
@@ -80,12 +79,11 @@ def scan_dtable_notification_rules(db_session):
     })
     # each base's metadata only requested once and recorded in memory
     # The reason why it doesn't cache metadata in redis is metadatas in interval rules need to be up-to-date
-    rule_interval_metadata_cache_manager = RuleIntervalMetadataCacheManager()
     for rule in rules:
         if not rule[4]:  # filter and ignore non-dtable-uuid records(some old records)
             continue
         try:
-            trigger_near_deadline_notification_rule(rule, db_session, rule_interval_metadata_cache_manager)
+            trigger_near_deadline_notification_rule(rule, db_session)
         except Exception as e:
             logging.exception(e)
             logging.error(f'check rule failed. {rule}, error: {e}')
