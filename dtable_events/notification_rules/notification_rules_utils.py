@@ -11,7 +11,7 @@ import requests
 
 from dtable_events.utils.sql_generator import filter2sql, has_user_filter
 from dtable_events.app.config import DTABLE_PRIVATE_KEY, DTABLE_WEB_SERVICE_URL, INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
-from dtable_events.app.metadata_cache_managers import metadata_cache_manager
+from dtable_events.app.metadata_cache_manager import MetadataCacheManger
 from dtable_events.utils import is_valid_email
 from dtable_events.utils.constants import ColumnTypes, FormulaResultType
 from dtable_events.utils.dtable_server_api import DTableServerAPI
@@ -267,6 +267,7 @@ def trigger_notification_rule(rule, message_table_id, row_id, db_session, op_typ
     dtable_server_api = DTableServerAPI('notification-rule', dtable_uuid, INNER_DTABLE_SERVER_URL, access_token_timeout=3600)
     dtable_db_api = DTableDBAPI('notification-rule', dtable_uuid, INNER_DTABLE_DB_URL)
     dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+    metadata_cache_manager = MetadataCacheManger()
     dtable_metadata = metadata_cache_manager.get_metadata(dtable_uuid)
     target_table, target_view = None, None
     for table in dtable_metadata['tables']:
@@ -410,6 +411,7 @@ def trigger_near_deadline_notification_rule(rule, db_session):
     dtable_server_api = DTableServerAPI('notification-rule', dtable_uuid, INNER_DTABLE_SERVER_URL, access_token_timeout=3600)
     dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
     dtable_db_api = DTableDBAPI('dtable-events', dtable_uuid, INNER_DTABLE_DB_URL)
+    metadata_cache_manager = MetadataCacheManger()
     dtable_metadata = metadata_cache_manager.get_metadata(dtable_uuid)
     target_table, target_view = None, None
     for table in dtable_metadata['tables']:

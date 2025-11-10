@@ -9,7 +9,7 @@ from dtable_events.utils.dtable_server_api import DTableServerAPI
 logger = logging.getLogger(__name__)
 
 
-class RuleInstantMetadataCacheManger:
+class MetadataCacheManger:
 
     def get_key(self, dtable_uuid):
         dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
@@ -33,6 +33,3 @@ class RuleInstantMetadataCacheManger:
     def clean_metadata(self, dtable_uuid):
         key = self.get_key(uuid_str_to_36_chars(dtable_uuid))
         redis_cache.delete(key)
-
-
-metadata_cache_manager = RuleInstantMetadataCacheManger()
