@@ -60,7 +60,7 @@ class RateLimiter:
 class AutomationsPipeline:
 
     def __init__(self, config):
-        self.workers = 30
+        self.workers = 5
         self.automations_queue: Queue[AutomationRule] = Queue()
         self.results_queue: Queue[Dict] = Queue()
 
