@@ -4,9 +4,9 @@ from types import SimpleNamespace
 
 from sqlalchemy import text
 
+from dtable_events.ccnet.user import get_user_role
 from dtable_events.notification_rules.notification_rules_utils import send_notification
 from dtable_events.utils import get_dtable_admins
-from seaserv import ccnet_api
 
 from dtable_events.app.config import CCNET_DB_NAME, DTABLE_WEB_SERVICE_URL
 from dtable_events.utils.dtable_web_api import DTableWebAPI
@@ -31,8 +31,7 @@ class AutomationsStatsHelper:
         row = db_session.execute(text(sql), {'username': username}).fetchone()
         if row and row.automation_limit_per_month and row.automation_limit_per_month != 0:
             return row.automation_limit_per_month
-        user = ccnet_api.get_emailuser(username)
-        user_role = user.role if user.role else 'default'  # check from dtable-web/seahub/role_permissions/settings DEFAULT_ENABLED_ROLE_PERMISSIONS[DEFAULT_USER]
+        user_role = get_user_role(db_session, username)
         return self.get_roles().get(user_role, {}).get('automation_limit_per_month', -1)
 
     def get_org_quota(self, db_session, org_id):
@@ -43,7 +42,7 @@ class AutomationsStatsHelper:
         sql = "SELECT role FROM organizations_orgsettings WHERE org_id=:org_id"
         row = db_session.execute(text(sql), {'org_id': org_id}).fetchone()
         if not row:
-            org_role = 'org_default'  # check from dtable-web/seahub/role_permissions/settings DEFAULT_ENABLED_ROLE_PERMISSIONS[ORG_DEFAULT]
+            org_role = 'org_default'
         else:
             org_role = row.role
         return self.get_roles().get(org_role, {}).get('automation_limit_per_month', -1)
