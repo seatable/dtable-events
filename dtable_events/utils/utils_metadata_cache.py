@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 
 
 def get_key(dtable_uuid):
-        dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
-        return f'dtable:{dtable_uuid}:metadata'
+    dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
+    return f'dtable:{dtable_uuid}:metadata'
 
 def get_metadata(dtable_uuid):
     key = get_key(dtable_uuid)
