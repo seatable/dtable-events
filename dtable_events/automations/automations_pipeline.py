@@ -4,7 +4,7 @@ import time
 from datetime import datetime, timedelta
 from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
-from threading import Thread
+from threading import Thread, Lock
 from typing import Dict
 
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -26,6 +26,7 @@ class RateLimiter:
         self.percent = percent
         self.window_start = time.time()
         self.counters = {}
+        self.counters_lock = Lock()
 
     def get_key(self, owner, org_id):
         if org_id and org_id != -1:
@@ -37,24 +38,26 @@ class RateLimiter:
         limit_key = self.get_key(owner, org_id)
         if isinstance(limit_key, str) and '@seafile_group' in limit_key:
             return True
-        if time.time() - self.window_start > self.window_secs:
+        with self.counters_lock:
+            if time.time() - self.window_start > self.window_secs:
+                return True
+            total_time = self.counters.get(limit_key, 0)
+            if total_time / self.window_secs > self.percent / 100:
+                return False
             return True
-        total_time = self.counters.get(limit_key, 0)
-        if total_time / self.window_secs > self.percent / 100:
-            return False
-        return True
 
     def record_time(self, owner, org_id, run_time):
-        now_time = time.time()
-        if now_time - self.window_start > self.window_secs:
-            self.counters = {}
-            self.window_start = now_time
-        limit_key = self.get_key(owner, org_id)
-        self.counters[limit_key] = self.counters.get(limit_key, 0) + run_time
+        with self.counters_lock:
+            now_time = time.time()
+            if now_time - self.window_start > self.window_secs:
+                self.counters.clear()
+                self.window_start = now_time
+            limit_key = self.get_key(owner, org_id)
+            self.counters[limit_key] = self.counters.get(limit_key, 0) + run_time
 
     def get_percent(self, owner, org_id):
         limit_key = self.get_key(owner, org_id)
-        return self.counters[limit_key] / self.window_secs
+        return self.counters.get(limit_key, 0) / self.window_secs
 
 
 class AutomationsPipeline:
@@ -78,6 +81,8 @@ class AutomationsPipeline:
         # metrics
         self.realtime_trigger_count = 0
         self.scheduled_trigger_count = 0
+        ## metric_times record the lastest publish times of metrics
+        self.metric_times = {}
 
         self.parse_config()
 
@@ -98,6 +103,13 @@ class AutomationsPipeline:
             self.rate_limiter.percent = rate_limit_percent
         except:
             pass
+
+    def publish_metrics(self):
+        while True:
+            publish_metric(self.realtime_trigger_count, 'realtime_automation_triggered_count', REALTIME_AUTOMATION_RULES_TRIGGERED_COUNT_HELP)
+            publish_metric(self.scheduled_trigger_count, 'scheduled_automation_triggered_count', SCHEDULED_AUTOMATION_RULES_TRIGGERED_COUNT_HELP)
+            publish_metric(self.automations_queue.qsize(), 'automation_queue_size', AUTOMATION_RULES_QUEUE_METRIC_HELP)
+            time.sleep(10)
 
     def get_automation_rule(self, db_session, event_data):
         sql = "SELECT `trigger`, `actions`, `run_condition`, `dtable_uuid` FROM dtable_automation_rules where id=:rule_id"
@@ -143,8 +155,6 @@ class AutomationsPipeline:
                             continue
                         self.automations_queue.put(automation_rule)
                         self.realtime_trigger_count += 1
-                        publish_metric(self.realtime_trigger_count, 'realtime_automation_triggered_count', REALTIME_AUTOMATION_RULES_TRIGGERED_COUNT_HELP)
-                        publish_metric(self.automations_queue.qsize(), 'automation_queue_size', AUTOMATION_RULES_QUEUE_METRIC_HELP)
                     except Exception as e:
                         auto_rule_logger.exception(e)
                     finally:
@@ -162,7 +172,6 @@ class AutomationsPipeline:
     def worker(self):
         while True:
             automation = self.automations_queue.get()
-            publish_metric(self.automations_queue.qsize(), 'automation_queue_size', AUTOMATION_RULES_QUEUE_METRIC_HELP)
             auto_rule_logger.info(f"Automation {automation.rule_id} with data {automation.data} triggering")
             db_session = self._db_session_class()
             try:
@@ -231,16 +240,12 @@ class AutomationsPipeline:
                 if isinstance(exceed_key, str) and '@seafile_group' in exceed_key:
                     self.automations_queue.put(automation)
                     self.scheduled_trigger_count += 1
-                    publish_metric(self.scheduled_trigger_count, 'scheduled_automation_triggered_count', SCHEDULED_AUTOMATION_RULES_TRIGGERED_COUNT_HELP)
-                    publish_metric(self.automations_queue.qsize(), 'automation_queue_size', AUTOMATION_RULES_QUEUE_METRIC_HELP)
                     continue
                 if self.automations_stats_helper.is_exceed(db_session, rule.owner, rule.org_id):
                     cached_exceed_keys_set.add(exceed_key)
                     continue
                 self.automations_queue.put(automation)
                 self.scheduled_trigger_count += 1
-                publish_metric(self.scheduled_trigger_count, 'scheduled_automation_triggered_count', SCHEDULED_AUTOMATION_RULES_TRIGGERED_COUNT_HELP)
-                publish_metric(self.automations_queue.qsize(), 'automation_queue_size', AUTOMATION_RULES_QUEUE_METRIC_HELP)
         except Exception as e:
             auto_rule_logger.exception(e)
         finally:
@@ -269,7 +274,7 @@ class AutomationsPipeline:
                 org_id = result.get('org_id')
                 run_time = result.get('run_time')
                 self.rate_limiter.record_time(owner, org_id, run_time)
-                auto_rule_logger.info(f"owner {owner} org_id {org_id} usage percent {self.rate_limiter.get_percent(owner, org_id)}")
+                auto_rule_logger.debug(f"owner {owner} org_id {org_id} usage percent {self.rate_limiter.get_percent(owner, org_id)}")
             db_session = self._db_session_class()
             try:
                 self.automations_stats_helper.update_stats(db_session, result)
@@ -284,7 +289,4 @@ class AutomationsPipeline:
         Thread(target=self.receive, daemon=True).start()
         Thread(target=self.scheduled_scan, daemon=True).start()
         Thread(target=self.stats, daemon=True).start()
-        # publish init metrics
-        publish_metric(self.realtime_trigger_count, 'realtime_automation_triggered_count', REALTIME_AUTOMATION_RULES_TRIGGERED_COUNT_HELP)
-        publish_metric(self.scheduled_trigger_count, 'scheduled_automation_triggered_count', SCHEDULED_AUTOMATION_RULES_TRIGGERED_COUNT_HELP)
-        publish_metric(self.automations_queue.qsize(), 'automation_queue_size', AUTOMATION_RULES_QUEUE_METRIC_HELP)
+        Thread(target=self.publish_metrics, daemon=True).start()
