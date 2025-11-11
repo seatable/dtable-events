@@ -19,7 +19,7 @@ from sqlalchemy import text
 
 from seaserv import seafile_api
 from dtable_events.automations.models import get_third_party_account
-from dtable_events.app.metadata_cache_managers import BaseMetadataCacheManager
+from dtable_events.utils.utils_metadata_cache import clean_metadata, get_metadata
 from dtable_events.app.event_redis import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, ENABLE_PYTHON_SCRIPT, SEATABLE_AI_SERVER_URL, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, \
 INNER_DTABLE_SERVER_URL, ENABLE_SEATABLE_AI, AUTO_RULES_AI_CONTENT_MAX_LENGTH
@@ -59,10 +59,10 @@ MESSAGE_TYPE_AUTOMATION_RULE = 'automation_rule'
 
 MINUTE_TIMEOUT = 60
 
-NOTIFICATION_CONDITION_ROWS_LIMIT = 50
+NOTIFICATION_CONDITION_ROWS_LIMIT = 200
 EMAIL_CONDITION_ROWS_LIMIT = 50
 CONDITION_ROWS_LOCKED_LIMIT = 200
-CONDITION_ROWS_UPDATE_LIMIT = 50
+CONDITION_ROWS_UPDATE_LIMIT = 200
 WECHAT_CONDITION_ROWS_LIMIT = 20
 DINGTALK_CONDITION_ROWS_LIMIT = 20
 CONVERT_PAGE_TO_PDF_ROWS_LIMIT = 50
@@ -1046,8 +1046,6 @@ class SendWechatAction(BaseAction):
                 auto_rule_logger.exception('send wechat error: %s', e)
 
     def do_action(self):
-        if not self.auto_rule.current_valid:
-            return
         if self.auto_rule.run_condition == PER_UPDATE:
             self.per_update_notify()
         elif self.auto_rule.run_condition in CRON_CONDITIONS:
@@ -1116,8 +1114,6 @@ class SendDingtalkAction(BaseAction):
                 auto_rule_logger.error('send dingtalk error: %s', e)
 
     def do_action(self):
-        if not self.auto_rule.current_valid:
-            return
         if self.auto_rule.run_condition == PER_UPDATE:
             self.per_update_notify()
         elif self.auto_rule.run_condition in CRON_CONDITIONS:
@@ -1409,8 +1405,6 @@ class SendEmailAction(BaseAction):
                 auto_rule_logger.error('batch send email error: %s', e)
 
     def do_action(self):
-        if not self.auto_rule.current_valid:
-            return
         if self.auto_rule.run_condition == PER_UPDATE:
             self.per_update_notify()
         elif self.auto_rule.run_condition in CRON_CONDITIONS:
@@ -2635,8 +2629,6 @@ class CalculateAction(BaseAction):
                 self.update_rows.append({'row_id': row_id, 'row': result_row})
 
     def can_do_action(self):
-        if not self.auto_rule.current_valid:
-            return False
         if not self.calculate_column_key or not self.result_column_key:
             return False
         return True
@@ -2832,8 +2824,6 @@ class LookupAndCopyAction(BaseAction):
             self.update_rows.append({'row_id': copy_to_row['_id'], 'row': row})
 
     def can_do_action(self):
-        if not self.auto_rule.current_valid:
-            return False
         if not self.table_condition or not self.equal_column_conditions or not self.fill_column_conditions:
             return False
         return True
@@ -2982,8 +2972,6 @@ class ExtractUserNameAction(BaseAction):
                 self.update_rows.append({'row_id': user_row.get('_id'), 'row': {result_column_name: update_result_value}})
 
     def can_do_action(self):
-        if not self.auto_rule.current_valid:
-            return False
         if not self.extract_column_key or not self.result_column_key:
             return False
         return True
@@ -3018,8 +3006,6 @@ class ConvertPageToPDFAction(BaseAction):
         self.row_pdfs = {}
 
     def can_do_action(self):
-        if not self.auto_rule.current_valid:
-            return False
         return True
 
     def fill_msg_blanks_with_sql(self, column_blanks, col_name_dict, row):
@@ -3112,8 +3098,6 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
         self.workspace_id = workspace_id
 
     def can_do_action(self):
-        if not self.auto_rule.current_valid:
-            return False
         # save to custom
         self.save_config['can_do'] = self.save_config.get('is_save_to_custom')
         # send wechat robot
@@ -4006,19 +3990,17 @@ class RuleInvalidException(Exception):
 
 class AutomationRule:
 
-    def __init__(self, data, db_session, raw_trigger, raw_actions, options, metadata_cache_manager: BaseMetadataCacheManager):
+    def __init__(self, data, raw_trigger, raw_actions, options):
         self.rule_id = options.get('rule_id', None)
         self.rule_name = ''
         self.run_condition = options.get('run_condition', None)
         self.dtable_uuid = options.get('dtable_uuid', None)
         self.trigger = None
         self.action_infos = []
-        self.last_trigger_time = options.get('last_trigger_time', None)
-        self.trigger_count = options.get('trigger_count', None)
         self.org_id = options.get('org_id', None)
-        self.creator = options.get('creator', None)
+        self.owner = options.get('owner', None)
         self.data = data
-        self.db_session = db_session
+        self.db_session = None
 
         self.username = 'Automation Rule'
 
@@ -4045,9 +4027,6 @@ class AutomationRule:
 
         self._sql_query_max = 3
 
-        self.metadata_cache_manager = metadata_cache_manager
-
-        self.cache_key = 'AUTOMATION_RULE:%s' % self.rule_id
         self.task_run_success = True
 
         self.load_trigger_and_actions(raw_trigger, raw_actions)
@@ -4079,12 +4058,12 @@ class AutomationRule:
         self._view_info = None
         self._dtable_metadata = None
         self._view_columns = None
-        self.metadata_cache_manager.clean_metadata(self.dtable_uuid)
+        clean_metadata(self.dtable_uuid)
 
     @property
     def dtable_metadata(self):
         if not self._dtable_metadata:
-            self._dtable_metadata = self.metadata_cache_manager.get_metadata(self.dtable_uuid)
+            self._dtable_metadata = get_metadata(self.dtable_uuid)
         return self._dtable_metadata
 
     @property
@@ -4377,7 +4356,7 @@ class AutomationRule:
             return False
         return False
 
-    def do_actions(self, with_test=False):
+    def do_actions(self, db_session, with_test=False):
         if with_test:
             auto_rule_logger.info('rule: %s run_condition: %s trigger_condition: %s start, a test run', self.rule_id, self.run_condition, self.trigger.get('condition'))
         else:
@@ -4385,6 +4364,20 @@ class AutomationRule:
         if (not self.can_do_actions()) and (not with_test):
             auto_rule_logger.info('rule: %s can not do actions', self.rule_id)
             return
+
+        self.db_session = db_session
+
+        auto_rule_result = {
+            'rule_id': self.rule_id,
+            'rule_name': self.rule_name,
+            'dtable_uuid': self.dtable_uuid,
+            'run_condition': self.run_condition,
+            'org_id': self.org_id,
+            'owner': self.owner,
+            'trigger_time': datetime.utcnow(),
+            'month': date.today().replace(day=1),
+            'with_test': with_test,
+        }
 
         do_actions_start = datetime.now()
         for action_info in self.action_infos:
@@ -4591,8 +4584,8 @@ class AutomationRule:
             except RuleInvalidException as e:
                 auto_rule_logger.warning('auto rule %s with data %s, invalid error: %s', self.rule_id, self.data, e)
                 self.task_run_success = False
+                self.current_valid = False
                 if not with_test:
-                    self.set_invalid(e)
                     if len(e.args) == 2:
                         invalid_type = e.args[1]
                     else:
@@ -4603,6 +4596,7 @@ class AutomationRule:
                         'type': 'rule_invalid',
                         'invalid_type': invalid_type
                     })
+                    auto_rule_result.update({'invalid_type': invalid_type})
                 break
             except Exception as e:
                 self.task_run_success = False
@@ -4615,111 +4609,10 @@ class AutomationRule:
             auto_rule_logger.warning('the running time of rule %s is too long, for %s. SQL queries are %s', self.rule_id, duration, f"\n{'\n'.join(self.query_stats)}")
 
         if not with_test:
-            self.update_last_trigger_time()
+            auto_rule_result.update({
+                'success': self.task_run_success,
+                'warnings': self.warnings,
+                'is_valid': self.current_valid
+            })
 
-        if not with_test:
-            self.add_task_log()
-
-    def add_task_log(self):
-        if not self.org_id:
-            return
-        try:
-            set_task_log_sql = """
-                INSERT INTO auto_rules_task_log (trigger_time, success, rule_id, run_condition, dtable_uuid, org_id, owner, warnings) VALUES
-                (:trigger_time, :success, :rule_id, :run_condition, :dtable_uuid, :org_id, :owner, :warnings)
-            """
-            if self.run_condition in ALL_CONDITIONS:
-                self.db_session.execute(text(set_task_log_sql), {
-                    'trigger_time': datetime.utcnow(),
-                    'success': self.task_run_success,
-                    'rule_id': self.rule_id,
-                    'run_condition': self.run_condition,
-                    'dtable_uuid': self.dtable_uuid,
-                    'org_id': self.org_id,
-                    'owner': self.creator,
-                    'warnings': json.dumps(self.warnings) if self.warnings else None
-                })
-                self.db_session.commit()
-        except Exception as e:
-            auto_rule_logger.error('set rule task log: %s error: %s', self.rule_id, e)
-
-    def update_last_trigger_time(self):
-        try:
-            set_statistic_sql_user = '''
-                INSERT INTO user_auto_rules_statistics (username, trigger_date, trigger_count, update_at) VALUES 
-                (:username, :trigger_date, 1, :trigger_time)
-                ON DUPLICATE KEY UPDATE
-                trigger_count=trigger_count+1,
-                update_at=:trigger_time
-            '''
-
-            set_statistic_sql_org = '''
-                INSERT INTO org_auto_rules_statistics (org_id, trigger_date, trigger_count, update_at) VALUES
-                (:org_id, :trigger_date, 1, :trigger_time)
-                ON DUPLICATE KEY UPDATE
-                trigger_count=trigger_count+1,
-                update_at=:trigger_time
-            '''
-            set_last_trigger_time_sql = '''
-                UPDATE dtable_automation_rules SET last_trigger_time=:trigger_time, trigger_count=:trigger_count+1 WHERE id=:rule_id;
-            '''
-
-            sqls = [set_last_trigger_time_sql]
-            if self.org_id:
-                if self.org_id == -1:
-                    sqls.append(set_statistic_sql_user)
-                else:
-                    sqls.append(set_statistic_sql_org)
-
-            cur_date = datetime.now().date()
-            cur_year, cur_month = cur_date.year, cur_date.month
-            trigger_date = date(year=cur_year, month=cur_month, day=1)
-            for sql in sqls:
-                self.db_session.execute(text(sql), {
-                    'rule_id': self.rule_id,
-                    'trigger_time': datetime.utcnow(),
-                    'trigger_date': trigger_date,
-                    'trigger_count': self.trigger_count + 1,
-                    'username': self.creator,
-                    'org_id': self.org_id
-                })
-            self.db_session.commit()
-        except Exception as e:
-            auto_rule_logger.exception('set rule: %s error: %s', self.rule_id, e)
-
-    def set_invalid(self, e: RuleInvalidException):
-        try:
-            self.current_valid = False
-            set_invalid_sql = '''
-                UPDATE dtable_automation_rules SET is_valid=0 WHERE id=:rule_id
-            '''
-            self.db_session.execute(text(set_invalid_sql), {'rule_id': self.rule_id})
-            self.db_session.commit()
-        except Exception as e:
-            auto_rule_logger.error('set rule: %s invalid error: %s', self.rule_id, e)
-
-        # send warning notifications
-        ## query admins
-        try:
-            admins = get_dtable_admins(self.dtable_uuid, self.db_session)
-        except Exception as e:
-            auto_rule_logger.exception('get dtable: %s admins error: %s', self.dtable_uuid, e)
-        else:
-            ## send notifications
-            if len(e.args) == 2:
-                invalid_type = e.args[1]
-            else:
-                invalid_type = ''
-            try:
-                send_notification(self.dtable_uuid, [{
-                    'to_user': user,
-                    'msg_type': AUTO_RULE_INVALID_MSG_TYPE,
-                    'detail': {
-                        'author': 'Automation Rule',
-                        'rule_id': self.rule_id,
-                        'rule_name': self.rule_name,
-                        'invalid_type': invalid_type
-                    }
-                } for user in admins])
-            except Exception as e:
-                auto_rule_logger.exception('send auto-rule: %s invalid notifiaction to admins error: %s', self.rule_id, e)
+        return auto_rule_result
