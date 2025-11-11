@@ -35,11 +35,13 @@ class MetricReceiver(Thread):
                         component_name = metric_data.get('component_name')
                         node_name = metric_data.get('node_name', 'default')
                         metric_name = metric_data.get('metric_name')
+                        metric_labels = metric_data.get('metric_labels') or []
                         key_name = f"{component_name}:{node_name}:{metric_name}"
                         metric_details = metric_data.get('details') or {}
                         metric_details['metric_value'] = metric_data.get('metric_value')
                         metric_details['metric_type'] = metric_data.get('metric_type')
                         metric_details['metric_help'] = metric_data.get('metric_help')
+                        metric_details['metric_labels'] = metric_labels
                         local_metric['metrics'][key_name] = metric_details
                     except Exception as e:
                         logging.error('Error when handling metric data: %s' % e)

@@ -1526,6 +1526,9 @@ def get_metrics():
         if metric_type:
             metric_info += "# TYPE " + metric_name + " " + metric_type + '\n'
         label = 'component="%s",node="%s",collected_at="%s"' % (component_name, node_name, collected_at)
+        metric_labels = metric_detail.get('metric_labels') or []
+        if metric_labels:
+            label += ',' + ','.join(map(lambda label_info: f"{label_info['label_name']}=\"{label_info['label']}\"", metric_labels))
         metric_info += '%s{%s} %s\n' % (metric_name, label, str(metric_value))
 
     return metric_info.encode()
