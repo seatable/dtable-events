@@ -14,6 +14,7 @@ COMMON_DATASET_TOTAL_ROW_COUNT_METRIC_HELP = "Total rows processed in common-dat
 COMMON_DATASET_OPERATIONS_COUNT_METRIC_HELP = "Common-dataset syncs count"
 COMMON_DATASET_ELAPSED_TIME_METRIC_HELP = "Time taken (in seconds) to complete common-dataset syncs job"
 REALTIME_AUTOMATION_RULES_TRIGGERED_COUNT_HELP = "The number of triggered realtime automations since start up"
+REALTIME_AUTOMATION_RULES_HEARTBEAT_HELP = "Heartbeat timestamp of realtime automations"
 SCHEDULED_AUTOMATION_RULES_TRIGGERED_COUNT_HELP = "The number of triggered scheduled automations since start up"
 AUTOMATION_RULES_QUEUE_METRIC_HELP = "The number of automations in the queue"
 
@@ -23,7 +24,7 @@ def publish_metric(value, metric_name, metric_help):
         "metric_name": metric_name,
         "metric_type": "gauge",
         "metric_help": metric_help,
-        "component_name": 'dtable-events',
+        "component_name": 'dtable_events',
         "node_name": NODE_NAME,
         "metric_value": value,
         "details": {}
