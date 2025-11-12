@@ -3386,6 +3386,11 @@ class RunAI(BaseAction):
                 summary_result = seatable_ai_api.summarize(content, self.config.get('summary_prompt'))
             except Exception as e:
                 auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai summarize error: {e}')
+                self.auto_rule.append_warning({
+                    'type': 'run_ai_error',
+                    'action_type': self.action_type,
+                    'ai_function': 'summarize'
+                })
                 return 
 
         update_data = {target_column_name: summary_result}
@@ -3507,6 +3512,11 @@ class RunAI(BaseAction):
                 classification_result = seatable_ai_api.classify(content, self.config.get('classify_prompt'))
             except Exception as e:
                 auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai classify error: {e}')
+                self.auto_rule.append_warning({
+                    'type': 'run_ai_error',
+                    'action_type': self.action_type,
+                    'ai_function': 'classify'
+                })
                 return 
         if not classification_result:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} no suitable options found')
@@ -3583,6 +3593,11 @@ class RunAI(BaseAction):
                             
         except Exception as e:
             auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai ocr error: {e}')
+            self.auto_rule.append_warning({
+                'type': 'run_ai_error',
+                'action_type': self.action_type,
+                'ai_function': 'ocr'
+            })
             return
 
         update_data = {target_column_name: ocr_result}
@@ -3730,6 +3745,11 @@ class RunAI(BaseAction):
                     
         except Exception as e:
             auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai extract error: {e}')
+            self.auto_rule.append_warning({
+                'type': 'run_ai_error',
+                'action_type': self.action_type,
+                'ai_function': 'extract'
+            })
             return
         
         # Build update data directly from target columns
@@ -3784,6 +3804,11 @@ class RunAI(BaseAction):
                 custom_result = seatable_ai_api.custom(filled_prompt)
             except Exception as e:
                 auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai custom processing error: {e}')
+                self.auto_rule.append_warning({
+                    'type': 'run_ai_error',
+                    'action_type': self.action_type,
+                    'ai_function': 'custom'
+                })
                 return 
 
         update_data = {target_column_name: custom_result}
@@ -3830,6 +3855,11 @@ class RunAI(BaseAction):
 
         except Exception as e:
             auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai invoice recognition error: {e}')
+            self.auto_rule.append_warning({
+                'type': 'run_ai_error',
+                'action_type': self.action_type,
+                'ai_function': 'summarize'
+            })
             return
 
         # Build update data based on output_columns configuration
