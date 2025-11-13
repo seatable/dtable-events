@@ -2,10 +2,11 @@ import datetime
 import json
 import jwt
 import logging
+from zoneinfo import ZoneInfo
 
 from flask import Flask, request, make_response
 
-from dtable_events.app.config import DTABLE_PRIVATE_KEY
+from dtable_events.app.config import DTABLE_PRIVATE_KEY, TIME_ZONE
 from dtable_events.dtable_io import dtable_io_logger
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.dtable_io.task_message_manager import message_task_manager
@@ -1521,7 +1522,7 @@ def get_metrics():
         metric_value = metric_detail.pop('metric_value', None)
         metric_type = metric_detail.pop('metric_type', None)
         metric_help = metric_detail.pop('metric_help', None)
-        collected_at = metric_detail.pop('collected_at', datetime.datetime.now().isoformat())
+        collected_at = metric_detail.pop('collected_at', datetime.datetime.now(tz=ZoneInfo(TIME_ZONE)).isoformat())
         if metric_help:
             metric_info += "# HELP " + metric_name + " " + metric_help + '\n'
         if metric_type:

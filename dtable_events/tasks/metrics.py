@@ -3,9 +3,11 @@ import logging
 import time
 from threading import Thread, Event
 import json
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 
+from dtable_events.app.config import TIME_ZONE
 from dtable_events.app.event_redis import redis_cache, REDIS_METRIC_KEY, RedisClient
 from dtable_events.utils.utils_metric import METRIC_CHANNEL_NAME
 
@@ -64,12 +66,12 @@ class MetricSaver(Thread):
                 if local_metric['metrics']:
                     logging.info('Start saving metrics... ')
                     for key, metric_detail in local_metric.get('metrics').items():
-                        metric_detail['collected_at'] = datetime.datetime.now().isoformat()
+                        metric_detail['collected_at'] = datetime.datetime.now(tz=ZoneInfo(TIME_ZONE)).isoformat()
                     redis_cache.create_or_update(REDIS_METRIC_KEY, local_metric.get('metrics'))
                     local_metric['metrics'].clear()
             except Exception as e:
                 logging.error('metric collect error: %s' % e)
-                
+
         schedule.start()
 
 
