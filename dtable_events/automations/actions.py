@@ -24,7 +24,7 @@ from dtable_events.app.event_redis import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, ENABLE_PYTHON_SCRIPT, SEATABLE_AI_SERVER_URL, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, \
 INNER_DTABLE_SERVER_URL, ENABLE_SEATABLE_AI, AUTO_RULES_AI_CONTENT_MAX_LENGTH
 from dtable_events.dtable_io import send_wechat_msg, send_dingtalk_msg
-from dtable_events.convert_page.manager import playwright_manager
+from dtable_events.convert_page.manager import get_playwright_manager
 from dtable_events.app.log import auto_rule_logger
 from dtable_events.notification_rules.notification_rules_utils import send_notification, fill_msg_blanks_with_sql_row
 from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, \
@@ -3094,7 +3094,7 @@ class ConvertPageToPDFAction(BaseAction):
         # export pdfs to file system
         output_dir = '/tmp/dtable-io/convert-page-to-pdf/'
         try:
-            playwright_manager.batch_urls_to_pdf_sync(url_infos, output_dir=output_dir)
+            get_playwright_manager().batch_urls_to_pdf_sync(url_infos, output_dir=output_dir)
         except Exception as e:
             auto_rule_logger.exception(f"rule {self.auto_rule.rule_id} batch convert pages to pdfs error {e}")
             return
@@ -3282,7 +3282,7 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
         output_dir = '/tmp/dtable-io/convert-page-to-pdf/'
         filename = f'{self.doc_uuid}:{time.time()}.pdf'
         try:
-            playwright_manager.batch_urls_to_pdf_sync([{'url': url, 'filename': filename, 'selector': '#document-render-complete'}], output_dir=output_dir)
+            get_playwright_manager().batch_urls_to_pdf_sync([{'url': url, 'filename': filename, 'selector': '#document-render-complete'}], output_dir=output_dir)
         except Exception as e:
             auto_rule_logger.exception(f"rule {self.auto_rule.rule_id} batch convert pages to pdfs error {e}")
             return

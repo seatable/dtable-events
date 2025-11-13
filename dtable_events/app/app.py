@@ -25,7 +25,7 @@ from dtable_events.tasks.clean_db_records_worker import CleanDBRecordsWorker
 from dtable_events.data_sync.data_syncer import DataSyncer
 from dtable_events.workflow.workflow_actions import WorkflowActionsHandler
 from dtable_events.workflow.workflow_schedules_scanner import WorkflowSchedulesScanner
-from dtable_events.convert_page.manager import playwright_manager
+from dtable_events.convert_page.manager import get_playwright_manager
 from dtable_events.api_calls.api_calls_counter import APICallsCounter
 from dtable_events.tasks.dtable_file_access_log_cleaner import DTableFileAccessLogCleaner
 from dtable_events.activities.dtable_update_handler import DTableUpdateHander
@@ -42,6 +42,8 @@ class App(object):
         self.dtable_update_cache = DTableUpdateCacheManager()
 
         self._stats_sender = StatsSender(config)
+
+        self._playwright_manager = get_playwright_manager()
 
         if self._enable_foreground_tasks:
             self._dtable_io_server = DTableIOServer(self, config)
@@ -83,9 +85,10 @@ class App(object):
 
     def serve_forever(self):
 
+        self._playwright_manager.start()
+
         if self._enable_foreground_tasks:
-            self._dtable_io_server.start()
-            playwright_manager.start()                       # always True
+            self._dtable_io_server.start()                   # always True
 
         if self._enable_background_tasks:
             # redis client subscriber

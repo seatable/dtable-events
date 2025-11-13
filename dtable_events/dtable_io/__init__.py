@@ -45,7 +45,7 @@ from dtable_events.dtable_io.utils import clear_tmp_dir, clear_tmp_file, clear_t
     batch_upload_sdoc_images, get_documents_config, save_documents_config
 from dtable_events.app.log import setup_logger
 from dtable_events.convert_page.utils import get_pdf_print_options, wait_for_images
-from dtable_events.convert_page.manager import playwright_manager
+from dtable_events.convert_page.manager import get_playwright_manager
 
 dtable_io_logger = setup_logger('dtable_events_io', propagate=False)
 dtable_message_logger = setup_logger('dtable_events_message', propagate=False)
@@ -927,7 +927,7 @@ def convert_page_design_to_pdf(dtable_uuid, page_id, row_id, username, config):
     url += '?access-token=%s&need_convert=%s' % (access_token, 0)
     filename = '%s_%s_%s.pdf' % (dtable_uuid, page_id, row_id)
     try:
-        playwright_manager.batch_urls_to_pdf_sync([{'url': url, 'filename': filename}], target_dir)
+        get_playwright_manager().batch_urls_to_pdf_sync([{'url': url, 'filename': filename}], target_dir)
     except Exception as e:
         dtable_io_logger.exception('dtable: %s plugin: page-design page: %s row: %s error: %s', dtable_uuid, page_id, row_id, e)
 
@@ -954,7 +954,7 @@ def convert_document_to_pdf(dtable_uuid, doc_uuid, row_id, username, config):
     url += '?access-token=%s&need_convert=%s' % (access_token, 0)
     filename = '%s_%s_%s.pdf' % (dtable_uuid, doc_uuid, row_id)
     try:
-        playwright_manager.batch_urls_to_pdf_sync([{'url': url, 'filename': filename}], target_dir)
+        get_playwright_manager().batch_urls_to_pdf_sync([{'url': url, 'filename': filename}], target_dir)
     except Exception as e:
         dtable_io_logger.exception('dtable: %s plugin: document doc_uuid: %s row: %s error: %s', dtable_uuid, doc_uuid, row_id, e)
 

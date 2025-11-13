@@ -369,4 +369,10 @@ class RobustPlaywrightManager:
             except Exception:
                 pass
 
-playwright_manager = RobustPlaywrightManager()
+playwright_manager = None
+
+def get_playwright_manager():
+    global playwright_manager
+    if not playwright_manager:
+        playwright_manager = RobustPlaywrightManager()
+    return playwright_manager
