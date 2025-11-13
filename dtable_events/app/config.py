@@ -58,6 +58,7 @@ try:
 
     # env
     CCNET_DB_NAME = os.environ.get('SEATABLE_MYSQL_DB_CCNET_DB_NAME', 'ccnet_db')
+    TIME_ZONE = os.environ.get('TIME_ZONE', 'UTC')
 except Exception as e:
     logger.critical("Can not import dtable_web settings: %s." % e)
     raise RuntimeError("Can not import dtable_web settings: %s" % e)
