@@ -16,7 +16,8 @@ from dtable_events.automations.actions import AutomationRule
 from dtable_events.automations.automations_stats_helper import AutomationsStatsHelper
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import get_dtable_owner_org_id
-from dtable_events.utils.utils_metric import AUTOMATION_RULES_QUEUE_METRIC_HELP, REALTIME_AUTOMATION_RULES_TRIGGERED_COUNT_HELP, SCHEDULED_AUTOMATION_RULES_TRIGGERED_COUNT_HELP, publish_metric
+from dtable_events.utils.utils_metric import AUTOMATION_RULES_QUEUE_METRIC_HELP, REALTIME_AUTOMATION_RULES_HEARTBEAT_HELP, \
+    REALTIME_AUTOMATION_RULES_TRIGGERED_COUNT_HELP, SCHEDULED_AUTOMATION_RULES_TRIGGERED_COUNT_HELP, publish_metric
 
 
 class RateLimiter:
@@ -81,6 +82,7 @@ class AutomationsPipeline:
         # metrics
         self.realtime_trigger_count = 0
         self.scheduled_trigger_count = 0
+        self.realtime_automation_heartbeat = time.time()
         ## metric_times record the lastest publish times of metrics
         self.metric_times = {}
 
@@ -109,6 +111,7 @@ class AutomationsPipeline:
             publish_metric(self.realtime_trigger_count, 'realtime_automation_triggered_count', REALTIME_AUTOMATION_RULES_TRIGGERED_COUNT_HELP)
             publish_metric(self.scheduled_trigger_count, 'scheduled_automation_triggered_count', SCHEDULED_AUTOMATION_RULES_TRIGGERED_COUNT_HELP)
             publish_metric(self.automations_queue.qsize(), 'automation_queue_size', AUTOMATION_RULES_QUEUE_METRIC_HELP)
+            publish_metric(self.realtime_automation_heartbeat, 'realtime_automation_heartbeat', REALTIME_AUTOMATION_RULES_HEARTBEAT_HELP)
             time.sleep(10)
 
     def get_automation_rule(self, db_session, event_data):
@@ -133,6 +136,7 @@ class AutomationsPipeline:
         while True:
             try:
                 message = subscriber.get_message()
+                self.realtime_automation_heartbeat = time.time()
                 if message is not None:
                     event = json.loads(message['data'])
                     auto_rule_logger.info(f"subscribe event {event}")

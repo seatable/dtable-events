@@ -1507,14 +1507,15 @@ def get_metrics():
     is_valid, error = check_auth_token(request)
     if not is_valid:
         return make_response((error, 403))
-    
+    is_label_collected_at = request.args.get('is_label_collected_at', 'false').lower() == 'true'
     metrics = redis_cache.get(REDIS_METRIC_KEY)
     if not metrics:
         return ''
     metrics = json.loads(metrics)
     metric_info = ''
     for key, metric_detail in metrics.items():
-        metric_name = "%s_%s" % (key.split(':')[0], key.split(':')[2])
+        metric_name = key.split(':')[2]
+        # metric_name = "%s_%s" % (key.split(':')[0], key.split(':')[2])
         node_name = key.split(':')[1]
         component_name = key.split(':')[0]
         metric_value = metric_detail.pop('metric_value', None)
@@ -1525,7 +1526,9 @@ def get_metrics():
             metric_info += "# HELP " + metric_name + " " + metric_help + '\n'
         if metric_type:
             metric_info += "# TYPE " + metric_name + " " + metric_type + '\n'
-        label = 'component="%s",node="%s",collected_at="%s"' % (component_name, node_name, collected_at)
+        label = 'component="%s",node="%s"' % (component_name, node_name)
+        if is_label_collected_at:
+            label += ',collected_at="%s"' % (collected_at,)
         metric_info += '%s{%s} %s\n' % (metric_name, label, str(metric_value))
 
     return metric_info.encode()
