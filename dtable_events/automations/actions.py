@@ -3059,7 +3059,7 @@ class ConvertPageToPDFAction(BaseAction):
         return True
 
     def get_page_row_url(self, row_id, internal_access_token):
-        url = f'{DTABLE_WEB_SERVICE_URL.strip('/')}/dtable/{uuid_str_to_36_chars(self.auto_rule.dtable_uuid)}/page-design/{self.page_id}/row/{row_id}'
+        url = f'{DTABLE_WEB_SERVICE_URL.strip("/")}/dtable/{uuid_str_to_36_chars(self.auto_rule.dtable_uuid)}/page-design/{self.page_id}/row/{row_id}'
         url += f'?access-token={internal_access_token}&need_convert=0'
         return url
 
@@ -3277,7 +3277,7 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
             return
         kwargs = None
         dtable_server_api = DTableServerAPI(self.auto_rule.username, self.auto_rule.dtable_uuid, INNER_DTABLE_SERVER_URL, DTABLE_WEB_SERVICE_URL, self.repo_id, self.workspace_id, kwargs=kwargs)
-        url = f'{DTABLE_WEB_SERVICE_URL.strip('/')}/dtable/{uuid_str_to_36_chars(self.auto_rule.dtable_uuid)}/document/{self.doc_uuid}/row/None/'
+        url = f'{DTABLE_WEB_SERVICE_URL.strip("/")}/dtable/{uuid_str_to_36_chars(self.auto_rule.dtable_uuid)}/document/{self.doc_uuid}/row/None/'
         url += f'?access-token={dtable_server_api.internal_access_token}&need_convert=0'
         output_dir = '/tmp/dtable-io/convert-page-to-pdf/'
         filename = f'{self.doc_uuid}:{time.time()}.pdf'
@@ -4668,6 +4668,7 @@ class AutomationRule:
         duration = datetime.now() - do_actions_start
         if duration.seconds >= 5:
             auto_rule_logger.warning('the running time of rule %s is too long, for %s. SQL queries are %s', self.rule_id, duration, f"\n{'\n'.join(self.query_stats)}")
+
 
         if not with_test:
             auto_rule_result.update({
