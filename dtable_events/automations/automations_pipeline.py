@@ -73,6 +73,8 @@ class AutomationsPipeline:
         self._redis_client = RedisClient(config, socket_timeout=10)
         self.per_update_channel = 'automation-rule-triggered'
 
+        self.missing_count_channel = 'automation-rule-missing'
+
         self.rate_limiter = RateLimiter()
 
         self.automations_stats_helper = AutomationsStatsHelper()
@@ -170,7 +172,7 @@ class AutomationsPipeline:
                     time.sleep(0.5)
             except Exception as e:
                 auto_rule_logger.exception('Failed get automation rules message from redis: %s' % e)
-                subscriber = self._redis_client.get_subscriber('automation-rule-triggered')
+                subscriber = self._redis_client.get_subscriber(self.per_update_channel)
                 last_message_time = datetime.now()
 
     def worker(self):
@@ -287,6 +289,34 @@ class AutomationsPipeline:
             finally:
                 db_session.close()
 
+    def update_missing_stats(self, db_session, missing_count_dict):
+        data = []
+        for rule_id, missing_count in missing_count_dict.items():
+            data.append({
+                'rule_id': int(rule_id),
+                'missing_count': missing_count
+            })
+            auto_rule_logger.info(f"rule {rule_id} missing {missing_count}")
+        sql = "UPDATE dtable_automation_rules SET missing_count=missing_count+:missing_count WHERE id=:rule_id"
+        db_session.execute(text(sql), data)
+        db_session.commit()
+
+    def receive_and_stats_missing(self):
+        auto_rule_logger.info("Start to receive missing rules from redis")
+        subscriber = self._redis_client.get_subscriber(self.missing_count_channel)
+        while True:
+            try:
+                message = subscriber.get_message()
+                if message is not None:
+                    event = json.loads(message['data'])
+                    auto_rule_logger.info(f"subscribe missing event {event}")
+
+                    db_session = self._db_session_class()
+                    self.update_missing_stats(db_session, event)
+            except Exception as e:
+                auto_rule_logger.exception('Failed get missing automation rules message from redis: %s' % e)
+                subscriber = self._redis_client.get_subscriber(self.missing_count_channel)
+
     def start(self):
         auto_rule_logger.info("Start automations pipeline")
         self.start_workers()
@@ -294,3 +324,4 @@ class AutomationsPipeline:
         Thread(target=self.scheduled_scan, daemon=True).start()
         Thread(target=self.stats, daemon=True).start()
         Thread(target=self.publish_metrics, daemon=True).start()
+        Thread(target=self.receive_and_stats_missing, daemon=True).start()
