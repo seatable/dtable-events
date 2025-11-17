@@ -1012,16 +1012,17 @@ class SendWechatAction(BaseAction):
         self.column_blanks = [blank for blank in blanks if blank in self.col_name_dict]
         self.webhook_url = account_dict.get('detail', {}).get('webhook_url', '')
 
-    def fill_msg_blanks_with_sql(self, row):
+    def fill_msg_blanks_with_sql(self, row, is_markdown=False):
         msg, column_blanks, col_name_dict = self.msg, self.column_blanks, self.col_name_dict
         db_session = self.auto_rule.db_session
-        return fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, row, db_session)
+        return fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, row, db_session, is_markdown=is_markdown)
 
     def per_update_notify(self):
         sql_row = self.auto_rule.get_sql_row()
         msg = self.msg
         if self.column_blanks:
-            msg = self.fill_msg_blanks_with_sql(sql_row)
+            is_markdown = self.msg_type == 'markdown'
+            msg = self.fill_msg_blanks_with_sql(sql_row, is_markdown=is_markdown)
         try:
             send_wechat_msg(self.webhook_url, msg, self.msg_type)
         except Exception as e:

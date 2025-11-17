@@ -186,7 +186,35 @@ def convert_zero_in_value(value):
     return value
 
 
-def fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, row, db_session, **format_options):
+def escape_markdown_value(value):
+    """escapse markdown special chars"""
+    if not value:
+        return value
+
+    value = str(value)
+
+    # first: escape all markdown special chars
+    md_special_chars = [
+        '\\', '`', '*', '_', '{', '}', '[', ']', 
+        '(', ')', '#', '+', '-', '.', '!', '|', 
+        '~', '>', '$', '%', '^', '&', '=', ':'
+    ]
+    for char in md_special_chars:
+        value = value.replace(char, '\\' + char)
+    
+    # Special handling of sequences that may disrupt the context
+    # Avoid accidentally creating tables, lists, etc
+    value = re.sub(r'^\s*[-*+]\s+', r'\\- ', value)  # Initial list tag
+    value = re.sub(r'^\s*\d+\.\s+', r'1\\. ', value)  # There is a sequence table at the beginning of the line
+    value = re.sub(r'^\s*#+\s+', r'\\# ', value)  # Initial title
+    value = re.sub(r'^\s*>\s+', r'\\> ', value)  # Initial citation
+
+    return value
+
+
+
+def fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, row, db_session, is_markdown=False, **format_options):
+    variables = {}
     for blank in column_blanks:
         value = row.get(col_name_dict[blank]['key'])
         column_type = col_name_dict[blank]['type']
@@ -196,14 +224,22 @@ def fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, row, db_sess
         format_options['db_session'] = db_session
         if value is None:
             message = formatter_class(col_name_dict[blank], **format_options).format_empty_message()
-            msg = msg.replace('{' + blank + '}', str(message))
-            continue
-        try:
-            message = formatter_class(col_name_dict[blank], **format_options).format_message(value)
-            msg = msg.replace('{' + blank + '}', str(message))
-        except Exception as e:
-            logger.exception(e)
-            msg = msg.replace('{' + blank + '}', '')
+            blank_msg = str(message)
+        else:
+            try:
+                message = formatter_class(col_name_dict[blank], **format_options).format_message(value)
+                blank_msg = str(message)
+            except Exception as e:
+                logger.exception(e)
+                blank_msg = ''
+        variables[blank] = blank_msg
+
+    # return msg
+    for blank, blank_msg in variables.items():
+        if is_markdown:
+            msg = msg.replace('{' + blank + '}', escape_markdown_value(blank_msg))
+        else:
+            msg = msg.replace('{' + blank + '}', blank_msg)
 
     return msg
 
