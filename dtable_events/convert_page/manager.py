@@ -529,7 +529,7 @@ def get_playwright_manager():
         except:
             num_browsers = 2
         try:
-            contexts_per_browser = int(os.environ.get('CONVERT_PDF_CONTEXTS_PER_BROWSER', '3'))
+            contexts_per_browser = int(os.environ.get('CONVERT_PDF_SESSIONS_PER_BROWSER', '3'))
         except:
             contexts_per_browser = 3
         playwright_manager = RobustPlaywrightManager(
