@@ -186,183 +186,31 @@ def convert_zero_in_value(value):
     return value
 
 
-def safe_markdown_template_fill(markdown_text, variables):
-
-    def escape_markdown_value(value):
-        """escapse markdown special chars"""
-        if not value:
-            return value
-
-        value = str(value)
-
-        # first: escape all markdown special chars
-        md_special_chars = [
-            '\\', '`', '*', '_', '{', '}', '[', ']', 
-            '(', ')', '#', '+', '-', '.', '!', '|', 
-            '~', '>', '$', '%', '^', '&', '=', ':'
-        ]
-        for char in md_special_chars:
-            value = value.replace(char, '\\' + char)
-        
-        # Special handling of sequences that may disrupt the context
-        # Avoid accidentally creating tables, lists, etc
-        value = re.sub(r'^\s*[-*+]\s+', r'\\- ', value)  # Initial list tag
-        value = re.sub(r'^\s*\d+\.\s+', r'1\\. ', value)  # There is a sequence table at the beginning of the line
-        value = re.sub(r'^\s*#+\s+', r'\\# ', value)  # Initial title
-        value = re.sub(r'^\s*>\s+', r'\\> ', value)  # Initial citation
-
+def escape_markdown_value(value):
+    """escapse markdown special chars"""
+    if not value:
         return value
 
-    def safe_replace(match):
-        var_name = match.group(1)
+    value = str(value)
 
-        if var_name not in variables:
-            return match.group(0)
+    # first: escape all markdown special chars
+    md_special_chars = [
+        '\\', '`', '*', '_', '{', '}', '[', ']', 
+        '(', ')', '#', '+', '-', '.', '!', '|', 
+        '~', '>', '$', '%', '^', '&', '=', ':'
+    ]
+    for char in md_special_chars:
+        value = value.replace(char, '\\' + char)
+    
+    # Special handling of sequences that may disrupt the context
+    # Avoid accidentally creating tables, lists, etc
+    value = re.sub(r'^\s*[-*+]\s+', r'\\- ', value)  # Initial list tag
+    value = re.sub(r'^\s*\d+\.\s+', r'1\\. ', value)  # There is a sequence table at the beginning of the line
+    value = re.sub(r'^\s*#+\s+', r'\\# ', value)  # Initial title
+    value = re.sub(r'^\s*>\s+', r'\\> ', value)  # Initial citation
 
-        return escape_markdown_value(variables[var_name])
+    return value
 
-    # parse text struct
-    lines = markdown_text.split('\n')
-    result_lines = []
-
-    in_code_block = False
-    in_html_block = False
-    in_math_block = False
-    in_link_definition = False
-    in_table = False
-    current_indent = 0
-    code_block_language = ""
-
-    link_definitions = {}
-    table_alignments = []
-
-    for i, line in enumerate(lines):
-        stripped = line.strip()
-        leading_spaces = len(line) - len(line.lstrip())
-
-        # Detect various block states
-        if not in_code_block and stripped.startswith('```'):
-            in_code_block = True
-            code_block_language = stripped[3:].strip()
-            result_lines.append(line)
-            continue
-        elif in_code_block and stripped.startswith('```'):
-            in_code_block = False
-            code_block_language = ""
-            result_lines.append(line)
-            continue
-
-        # Detecting HTML Blocks
-        if not in_code_block and re.match(r'^\s*<(\w+)[^>]*>', stripped):
-            if not re.match(r'^\s*</\w+>', stripped):
-                in_html_block = True
-        elif in_html_block and re.match(r'^\s*</\w+>', stripped):
-            in_html_block = False
-
-        # Detecting mathematical formula blocks
-        if not in_code_block and stripped.startswith('$$'):
-            in_math_block = not in_math_block
-            result_lines.append(line)
-            continue
-
-        # Detecting link definition [id]: URL
-        if not in_code_block and re.match(r'^\s*\[[^\]]+\]:', stripped):
-            in_link_definition = True
-            result_lines.append(line)
-            continue
-        elif in_link_definition and stripped == '':
-            in_link_definition = False
-
-        # Detecting table
-        if not in_code_block and '|' in stripped:
-            if re.match(r'^\s*\|[^|]+\|', stripped) and not re.match(r'^\s*\|[-:|]+\|', stripped):
-                in_table = True
-                # Analyze table alignment method
-                if i > 0 and '|' in lines[i-1]:
-                    table_alignments = []
-                    for cell in lines[i-1].split('|')[1:-1]:
-                        cell = cell.strip()
-                        if cell.startswith(':') and cell.endswith(':'):
-                            table_alignments.append('center')
-                        elif cell.endswith(':'):
-                            table_alignments.append('right')
-                        elif cell.startswith(':'):
-                            table_alignments.append('left')
-                        else:
-                            table_alignments.append('left')
-            elif re.match(r'^\s*\|[-:|]+\|', stripped):
-                # Separate rows in the table
-                result_lines.append(line)
-                continue
-            elif stripped == '':
-                in_table = False
-                table_alignments = []
-
-        # Do not replace in special blocks
-        if (in_code_block or in_html_block or in_math_block or 
-            in_link_definition or in_table):
-            result_lines.append(line)
-            continue
-
-        # Handling special syntax within the line
-
-        # 1. Handling inline code ` code`
-        if '`' in line:
-            parts = re.split(r'(`+[^`]*`+)', line)
-            for j, part in enumerate(parts):
-                if part.startswith('`') and part.endswith('`'):
-                    # In line code, not replaced
-                    continue
-                # Normal text, secure replacement
-                parts[j] = re.sub(r'\{(\w+)\}', safe_replace, part)
-            processed_line = ''.join(parts)
-            result_lines.append(processed_line)
-            continue
-
-        # 2. Handling the mathematical formula $formula within the line$
-        if '$' in line and not in_math_block:
-            parts = re.split(r'(\$[^$]+\$)', line)
-            for j, part in enumerate(parts):
-                if part.startswith('$') and part.endswith('$'):
-                    # Mathematical formulas, not replaceable
-                    continue
-                # Normal text, secure replacement
-                parts[j] = re.sub(r'\{(\w+)\}', safe_replace, part)
-            processed_line = ''.join(parts)
-            result_lines.append(processed_line)
-            continue
-
-        # 3. Handling links and images [text] (URL)
-        if '[' in line and ']' in line:
-            # Avoid replacing the content in link text and URL
-            def replace_outside_links(text):
-                parts = re.split(r'(\[[^\]]*\]\([^)]*\))', text)
-                for k, part in enumerate(parts):
-                    if re.match(r'\[[^\]]*\]\([^)]*\)', part):
-                        continue
-                    parts[k] = re.sub(r'\{(\w+)\}', safe_replace, part)
-                return ''.join(parts)
-
-            processed_line = replace_outside_links(line)
-            result_lines.append(processed_line)
-            continue
-
-        # 4. Handling automatic links<url>
-        if '<' in line and '>' in line:
-            parts = re.split(r'(<[^>]+>)', line)
-            for j, part in enumerate(parts):
-                if part.startswith('<') and part.endswith('>'):
-                    continue
-                parts[j] = re.sub(r'\{(\w+)\}', safe_replace, part)
-            processed_line = ''.join(parts)
-            result_lines.append(processed_line)
-            continue
-
-        # Normal line, directly replace safely
-        processed_line = re.sub(r'\{(\w+)\}', safe_replace, line)
-        result_lines.append(processed_line)
-
-    return '\n'.join(result_lines)
 
 
 def fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, row, db_session, is_markdown=False, **format_options):
@@ -387,10 +235,10 @@ def fill_msg_blanks_with_sql_row(msg, column_blanks, col_name_dict, row, db_sess
         variables[blank] = blank_msg
 
     # return msg
-    if is_markdown:
-        msg = safe_markdown_template_fill(msg, variables)
-    else:
-        for blank, blank_msg in variables.items():
+    for blank, blank_msg in variables.items():
+        if is_markdown:
+            msg = msg.replace('{' + blank + '}', escape_markdown_value(blank_msg))
+        else:
             msg = msg.replace('{' + blank + '}', blank_msg)
 
     return msg
