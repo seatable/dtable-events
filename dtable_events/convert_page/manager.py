@@ -14,7 +14,6 @@ import logging
 import threading
 import time
 import os
-import traceback
 from typing import List, Dict, Optional, Any, Tuple
 from concurrent.futures import Future, wait as wait_futures, FIRST_EXCEPTION
 import queue
@@ -25,10 +24,6 @@ from playwright.async_api import async_playwright, Playwright, Browser
 from dtable_events.convert_page.utils import wait_for_images
 
 logger = logging.getLogger(__name__)
-
-
-class TaskCancelled(Exception):
-    pass
 
 
 class RobustPlaywrightManager:
@@ -157,8 +152,8 @@ class RobustPlaywrightManager:
         """Thread target: setup and run asyncio event loop."""
         try:
             asyncio.run(self._worker_main())
-        except Exception:
-            traceback.print_exc()
+        except Exception as e:
+            logger.exception(e)
         finally:
             self._worker_ready.clear()
 
@@ -167,8 +162,8 @@ class RobustPlaywrightManager:
         self._loop = asyncio.get_event_loop()
         try:
             self._playwright = await async_playwright().start()
-        except Exception:
-            traceback.print_exc()
+        except Exception as e:
+            logger.exception(e)
             raise
 
         # launch browsers
@@ -176,8 +171,8 @@ class RobustPlaywrightManager:
         for i in range(self.num_browsers):
             try:
                 self._browsers[i] = await self._launch_browser(i)
-            except Exception:
-                traceback.print_exc()
+            except Exception as e:
+                logger.exception(e)
                 self._browsers[i] = None
 
         # slot queue contains browser indices for available page slots
@@ -254,8 +249,8 @@ class RobustPlaywrightManager:
                 }
             except asyncio.CancelledError:
                 return
-            except Exception:
-                traceback.print_exc()
+            except Exception as e:
+                logger.exception(e)
 
     def _aggregate_browser_process_stats(self) -> Tuple[float, float]:
         try:
@@ -294,8 +289,8 @@ class RobustPlaywrightManager:
                 asyncio.create_task(self._handle_task(task_dict, fut))
             except asyncio.CancelledError:
                 break
-            except Exception:
-                traceback.print_exc()
+            except Exception as e:
+                logger.exception(e)
                 await asyncio.sleep(0.1)
 
     async def _handle_task(self, task: Dict[str, Any], fut: Future):
@@ -374,5 +369,16 @@ playwright_manager = None
 def get_playwright_manager():
     global playwright_manager
     if not playwright_manager:
-        playwright_manager = RobustPlaywrightManager()
+        try:
+            num_browsers = int(os.environ.get('CONVERT_PDF_BROWSERS', '2'))
+        except:
+            num_browsers = 2
+        try:
+            pages_per_browser = int(os.environ.get('CONVERT_PDF_PAGES_PER_BROWSER', '3'))
+        except:
+            pages_per_browser = 3
+        playwright_manager = RobustPlaywrightManager(
+            num_browsers=num_browsers,
+            pages_per_browser=pages_per_browser
+        )
     return playwright_manager
