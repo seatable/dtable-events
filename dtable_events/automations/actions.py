@@ -4375,7 +4375,7 @@ class AutomationRule:
             'org_id': self.org_id,
             'owner': self.owner,
             'trigger_time': datetime.utcnow(),
-            'month': date.today().replace(day=1),
+            'trigger_date': date.today().replace(day=1),
             'with_test': with_test,
         }
 
