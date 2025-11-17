@@ -25,7 +25,7 @@ from dtable_events.tasks.clean_db_records_worker import CleanDBRecordsWorker
 from dtable_events.data_sync.data_syncer import DataSyncer
 from dtable_events.workflow.workflow_actions import WorkflowActionsHandler
 from dtable_events.workflow.workflow_schedules_scanner import WorkflowSchedulesScanner
-from dtable_events.convert_page.manager import conver_page_to_pdf_manager
+from dtable_events.convert_page.manager import get_playwright_manager
 from dtable_events.api_calls.api_calls_counter import APICallsCounter
 from dtable_events.tasks.dtable_file_access_log_cleaner import DTableFileAccessLogCleaner
 from dtable_events.activities.dtable_update_handler import DTableUpdateHander
@@ -42,6 +42,8 @@ class App(object):
         self.dtable_update_cache = DTableUpdateCacheManager()
 
         self._stats_sender = StatsSender(config)
+
+        self._playwright_manager = get_playwright_manager()
 
         if self._enable_foreground_tasks:
             self._dtable_io_server = DTableIOServer(self, config)
@@ -76,8 +78,6 @@ class App(object):
             self._dtable_update_handler = DTableUpdateHander(self, config)
             # interval
             self._virus_scanner = VirusScanner(config, seafile_config)
-            # convert pdf manager
-            conver_page_to_pdf_manager.init(config)
             # ai stats, listen redis and cron
             self.ai_stats_worker = AIStatsWorker(config)
             # automations pipeline
@@ -85,8 +85,10 @@ class App(object):
 
     def serve_forever(self):
 
+        self._playwright_manager.start()
+
         if self._enable_foreground_tasks:
-            self._dtable_io_server.start()
+            self._dtable_io_server.start()                   # always True
 
         if self._enable_background_tasks:
             # redis client subscriber
@@ -118,8 +120,6 @@ class App(object):
             self._dtable_update_handler.start()              # always True
             # interval
             self._virus_scanner.start()                      # default False
-            # convert pdf manager
-            conver_page_to_pdf_manager.start()               # always True
             # ai stats, listen redis and cron
             self.ai_stats_worker.start()                     # default False
             # automations pipeline

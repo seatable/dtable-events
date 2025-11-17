@@ -518,6 +518,46 @@ class DTableServerAPI(object):
             'url': url
         }
 
+    def upload_local_file(self, name, file_path, relative_path=None, file_type=None, replace=False):
+        """
+        relative_path: relative path for upload, if None, default {file_type}s/{date of this month} eg: files/2020-09
+        file_type: if relative is None, file type must in ['image', 'file'], default 'file'
+        return: info dict of uploaded file
+        """
+        upload_link_dict = self.get_file_upload_link()
+        parent_dir = upload_link_dict['parent_path']
+        upload_link = upload_link_dict['upload_link'] + '?ret-json=1'
+        if not relative_path:
+            if file_type and file_type not in ['image', 'file']:
+                raise Exception('relative or file_type invalid.')
+            if not file_type:
+                file_type = 'file'
+            relative_path = '%ss/%s' % (file_type, str(datetime.today())[:7])
+        else:
+            relative_path = relative_path.strip('/')
+        response = requests.post(upload_link, data={
+            'parent_dir': parent_dir,
+            'relative_path': relative_path,
+            'replace': 1 if replace else 0
+        }, files={
+            'file': (name, open(file_path, 'rb'))
+        }, timeout=120)
+
+        d = response.json()[0]
+        url = '%(server)s/workspace/%(workspace_id)s/asset/%(dtable_uuid)s/%(relative_path)s/%(filename)s' % {
+            'server': self.server_url.strip('/'),
+            'workspace_id': self.workspace_id,
+            'dtable_uuid': str(UUID(self.dtable_uuid)),
+            'relative_path': parse.quote(relative_path.strip('/')),
+            'filename': parse.quote(d.get('name', name))
+        }
+        return {
+            'type': file_type,
+            'size': d.get('size'),
+            'name': d.get('name'),
+            'url': url
+        }
+
     def upload_email_attachment(self, name, content: bytes, email_id):
         file_type = 'file'
         attach_path = os.path.join('emails', str(datetime.today())[:7], email_id)

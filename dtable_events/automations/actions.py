@@ -24,7 +24,7 @@ from dtable_events.app.event_redis import redis_cache
 from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, ENABLE_PYTHON_SCRIPT, SEATABLE_AI_SERVER_URL, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, \
 INNER_DTABLE_SERVER_URL, ENABLE_SEATABLE_AI, AUTO_RULES_AI_CONTENT_MAX_LENGTH
 from dtable_events.dtable_io import send_wechat_msg, send_dingtalk_msg
-from dtable_events.convert_page.manager import conver_page_to_pdf_manager
+from dtable_events.convert_page.manager import get_playwright_manager
 from dtable_events.app.log import auto_rule_logger
 from dtable_events.notification_rules.notification_rules_utils import send_notification, fill_msg_blanks_with_sql_row
 from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, \
@@ -3005,9 +3005,6 @@ class ConvertPageToPDFAction(BaseAction):
         self.file_names_dict = {}
         self.row_pdfs = {}
 
-    def can_do_action(self):
-        return True
-
     def fill_msg_blanks_with_sql(self, column_blanks, col_name_dict, row):
         return fill_msg_blanks_with_sql_row(self.file_name, column_blanks, col_name_dict, row, self.auto_rule.db_session)
 
@@ -3043,43 +3040,104 @@ class ConvertPageToPDFAction(BaseAction):
         except Exception as e:
             auto_rule_logger.exception('rule: %s dtable: %s page: %s rows: %s update rows error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.page_id, self.row_pdfs, e)
 
+    def can_do_action(self):
+        if not self.auto_rule.current_valid:
+            return False
+        dtable_metadata = self.auto_rule.dtable_server_api.get_metadata_plugin('page-design')
+        plugin_settings = dtable_metadata.get('plugin_settings')
+        if not plugin_settings:
+            return False
+        plugin = plugin_settings.get('page-design')
+        if not plugin:
+            return False
+        self.page = next(filter(lambda page: page.get('page_id') == self.page_id, plugin), None)
+        if not self.page:
+            return False
+        self.target_column = next(filter(lambda column: column['key'] == self.target_column_key, self.auto_rule.table_info['columns']), None)
+        if not self.target_column:
+            return False
+        return True
+
+    def get_page_row_url(self, row_id, internal_access_token):
+        url = f'{DTABLE_WEB_SERVICE_URL.strip("/")}/dtable/{uuid_str_to_36_chars(self.auto_rule.dtable_uuid)}/page-design/{self.page_id}/row/{row_id}'
+        url += f'?access-token={internal_access_token}&need_convert=0'
+        return url
+
     def do_action(self):
         if not self.can_do_action():
             return
         rows = self.auto_rule.get_trigger_conditions_rows(self, warning_rows=CONVERT_PAGE_TO_PDF_ROWS_LIMIT)[:CONVERT_PAGE_TO_PDF_ROWS_LIMIT]
         if not rows:
             return
+
+        kwargs = None
+        dtable_server_api = DTableServerAPI(self.auto_rule.username, self.auto_rule.dtable_uuid, INNER_DTABLE_SERVER_URL, DTABLE_WEB_SERVICE_URL, self.repo_id, self.workspace_id, kwargs=kwargs)
+
+        # generate filenames
         file_names_dict = {}
+        file_names_in_path = {}
+        file_infos_dict = {}
         blanks = set(re.findall(r'\{([^{]*?)\}', self.file_name))
         col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
         column_blanks = [blank for blank in blanks if blank in col_name_dict]
+        url_infos = []
         for row in rows:
-            file_name = self.fill_msg_blanks_with_sql(column_blanks, col_name_dict, row)
+            file_name = f"{self.fill_msg_blanks_with_sql(column_blanks, col_name_dict, row)}.pdf"
             file_names_dict[row['_id']] = file_name
-        self.file_names_dict = file_names_dict
-        task_info = {
-            'dtable_uuid': self.auto_rule.dtable_uuid,
-            'page_id': self.page_id,
-            'row_ids': [row['_id'] for row in rows],
-            'repo_id': self.repo_id,
-            # 'workspace_id': self.workspace_id,
-            # 'file_names_dict': file_names_dict,
-            'target_column_key': self.target_column_key,
-            'table_id': self.auto_rule.table_id,
-            'plugin_type': 'page-design',
-            'action_type': self.action_type,
-            'per_converted_callbacks': [self.upload_pdf_cb],
-            'all_converted_callbacks': [self.update_rows_cb]
-        }
-        try:
-            # put resources check to the place before convert page,
-            # because there is a distance between putting task to queue and converting page
-            conver_page_to_pdf_manager.add_task(task_info)
-        except Full:
-            self.auto_rule.append_warning({
-                'type': 'convert_page_to_pdf_server_busy',
-                'page_id': self.page_id
+            file_names_in_path[row['_id']] = f"{row['_id']}:{time.time()}.pdf"
+            url_infos.append({
+                'url': self.get_page_row_url(row['_id'], dtable_server_api.internal_access_token),
+                'filename': file_names_in_path[row['_id']],
+                'selector': '#page-design-render-complete'
             })
+
+        # export pdfs to file system
+        output_dir = '/tmp/dtable-io/convert-page-to-pdf/'
+        try:
+            get_playwright_manager().batch_urls_to_pdf_sync(url_infos, output_dir=output_dir)
+        except Exception as e:
+            auto_rule_logger.exception(f"rule {self.auto_rule.rule_id} batch convert pages to pdfs error {e}")
+            return
+
+        # upload pdfs
+        for url_info in url_infos:
+            try:
+                file_path = os.path.join(output_dir, url_info['filename'])
+                if not os.path.exists(file_path):
+                    continue
+                row_id = url_info['filename'].split('.')[0].split(':')[0]
+                file_infos_dict[row_id] = dtable_server_api.upload_local_file(file_names_dict[row_id], file_path)
+                os.remove(file_path)
+            except Exception as e:
+                auto_rule_logger.exception(f"rule {self.auto_rule.rule_id} upload file {file_path} error {e}")
+
+        # update rows
+        row_ids_str = ', '.join(map(lambda row: f"'{row['_id']}'", rows))
+        sql = f"SELECT `_id`, `{self.target_column['name']}` FROM `{self.auto_rule.table_info['name']}` WHERE _id IN ({row_ids_str})"
+        rows = self.auto_rule.query(sql, convert=False)[0]
+        updates = []
+        for row in rows:
+            if row['_id'] not in file_infos_dict:
+                continue
+            files = row.get(self.target_column_key)
+            if not files:
+                files = [file_infos_dict[row['_id']]]
+                updates.append({
+                    'row_id': row['_id'],
+                    "row": {self.target_column['name']: files}
+                })
+            else:
+                if isinstance(files, list):
+                    files.append(file_infos_dict[row['_id']])
+                    updates.append({
+                        'row_id': row['_id'],
+                        "row": {self.target_column['name']: files}
+                    })
+        if updates:
+            try:
+                dtable_server_api.batch_update_rows(self.auto_rule.table_info['name'], updates)
+            except Exception as e:
+                auto_rule_logger.exception(f"rule {self.auto_rule.rule_id} update rows error {e}")
 
 
 class ConvertDocumentToPDFAndSendAction(BaseAction):
@@ -3169,7 +3227,7 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
             'file_contents': {file_name: pdf_content}
         }
         try:
-            sender = EmailSender(account_id, 'automation-rules', conver_page_to_pdf_manager.config)
+            sender = EmailSender(account_id, 'automation-rules', db_session=self.auto_rule.db_session)
             sender.send(send_info)
         except Exception as e:
             auto_rule_logger.exception('rule: %s dtable: %s doc: %s send email: %s error: %s', self.auto_rule.rule_id, self.auto_rule.dtable_uuid, self.doc_uuid, send_info, e)
@@ -3217,23 +3275,26 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
     def do_action(self):
         if not self.can_do_action():
             return
-        task_info = {
-            'repo_id': self.repo_id,
-            'dtable_uuid': self.auto_rule.dtable_uuid,
-            'doc_uuid': self.doc_uuid,
-            'plugin_type': self.plugin_type,
-            'action_type': self.action_type,
-            'per_converted_callbacks': [self.save_to_custom_cb, self.send_email_cb, self.send_wechat_robot_cb]
-        }
+        kwargs = None
+        dtable_server_api = DTableServerAPI(self.auto_rule.username, self.auto_rule.dtable_uuid, INNER_DTABLE_SERVER_URL, DTABLE_WEB_SERVICE_URL, self.repo_id, self.workspace_id, kwargs=kwargs)
+        url = f'{DTABLE_WEB_SERVICE_URL.strip("/")}/dtable/{uuid_str_to_36_chars(self.auto_rule.dtable_uuid)}/document/{self.doc_uuid}/row/None/'
+        url += f'?access-token={dtable_server_api.internal_access_token}&need_convert=0'
+        output_dir = '/tmp/dtable-io/convert-page-to-pdf/'
+        filename = f'{self.doc_uuid}:{time.time()}.pdf'
         try:
-            # put resources check to the place before convert doc,
-            # because there is a distance between putting task to queue and converting doc
-            conver_page_to_pdf_manager.add_task(task_info)
-        except Full:
-            self.auto_rule.append_warning({
-                'type': 'convert_document_to_pdf_server_busy',
-                'doc_uuid': self.doc_uuid
-            })
+            get_playwright_manager().batch_urls_to_pdf_sync([{'url': url, 'filename': filename, 'selector': '#document-render-complete'}], output_dir=output_dir)
+        except Exception as e:
+            auto_rule_logger.exception(f"rule {self.auto_rule.rule_id} batch convert pages to pdfs error {e}")
+            return
+        file_path = os.path.join(output_dir, filename)
+        if not os.path.exists(file_path):
+            return
+        with open(file_path, 'rb') as f:
+            pdf_content = f.read()
+            self.save_to_custom_cb(pdf_content)
+            self.send_email_cb(pdf_content)
+            self.send_wechat_robot_cb(pdf_content)
+        os.remove(file_path)
 
 
 class RunAI(BaseAction):
@@ -4607,6 +4668,7 @@ class AutomationRule:
         duration = datetime.now() - do_actions_start
         if duration.seconds >= 5:
             auto_rule_logger.warning('the running time of rule %s is too long, for %s. SQL queries are %s', self.rule_id, duration, f"\n{'\n'.join(self.query_stats)}")
+
 
         if not with_test:
             auto_rule_result.update({
