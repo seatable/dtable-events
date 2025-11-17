@@ -51,8 +51,8 @@ class AutomationsStatsHelper:
         """
         :return: row with (trigger_count, has_sent_warning, warning_limit)
         """
-        sql = "SELECT trigger_count, has_sent_warning, warning_limit FROM user_auto_rules_statistics_per_month WHERE username=:username AND month=:month"
-        row = db_session.execute(text(sql), {'username': username, 'month': date.today().replace(day=1)}).fetchone()
+        sql = "SELECT trigger_count, has_sent_warning, warning_limit FROM user_auto_rules_statistics WHERE username=:username AND trigger_date=:trigger_date"
+        row = db_session.execute(text(sql), {'username': username, 'trigger_date': date.today().replace(day=1)}).fetchone()
         if not row:
             return SimpleNamespace(**{'trigger_count': 0, 'has_sent_warning': 0, 'warning_limit': None})
         return row
@@ -61,8 +61,8 @@ class AutomationsStatsHelper:
         """
         :return: trigger_count -> int, has_sent_warning -> bool
         """
-        sql = "SELECT trigger_count, has_sent_warning, warning_limit FROM org_auto_rules_statistics_per_month WHERE org_id=:org_id AND month=:month"
-        row = db_session.execute(text(sql), {'org_id': org_id, 'month': date.today().replace(day=1)}).fetchone()
+        sql = "SELECT trigger_count, has_sent_warning, warning_limit FROM org_auto_rules_statistics WHERE org_id=:org_id AND trigger_date=:trigger_date"
+        row = db_session.execute(text(sql), {'org_id': org_id, 'trigger_date': date.today().replace(day=1)}).fetchone()
         if not row:
             return SimpleNamespace(**{'trigger_count': 0, 'has_sent_warning': 0, 'warning_limit': None})
         return row
@@ -91,8 +91,8 @@ class AutomationsStatsHelper:
         if (not usage.has_sent_warning and usage.trigger_count >= limit * 0.9) \
             or (usage.has_sent_warning and usage.trigger_count >= limit * 0.9 and usage.warning_limit != limit):
             self.dtable_web_api.internal_add_notification([username], 'automation_limit_reach_warning', {'limit': limit, 'usage': usage.trigger_count})
-            sql = "UPDATE user_auto_rules_statistics_per_month SET has_sent_warning=1, warning_limit=:warning_limit WHERE username=:username AND month=:month"
-            db_session.execute(text(sql), {'username': username, 'warning_limit': limit, 'month': date.today().replace(day=1)})
+            sql = "UPDATE user_auto_rules_statistics SET has_sent_warning=1, warning_limit=:warning_limit WHERE username=:username AND trigger_date=:trigger_date"
+            db_session.execute(text(sql), {'username': username, 'warning_limit': limit, 'trigger_date': date.today().replace(day=1)})
             db_session.commit()
 
     def check_org_reach_warning(self, db_session, org_id):
@@ -107,8 +107,8 @@ class AutomationsStatsHelper:
             for row in db_session.execute(text(sql), {'org_id': org_id}):
                 admins.append(row.email)
             self.dtable_web_api.internal_add_notification(admins, 'automation_limit_reach_warning', {'limit': limit, 'usage': usage.trigger_count})
-            sql = "UPDATE org_auto_rules_statistics_per_month SET has_sent_warning=1, warning_limit=:warning_limit WHERE org_id=:org_id AND month=:month"
-            db_session.execute(text(sql), {'org_id': org_id, 'warning_limit': limit, 'month': date.today().replace(day=1)})
+            sql = "UPDATE org_auto_rules_statistics SET has_sent_warning=1, warning_limit=:warning_limit WHERE org_id=:org_id AND trigger_date=:trigger_date"
+            db_session.execute(text(sql), {'org_id': org_id, 'warning_limit': limit, 'trigger_date': date.today().replace(day=1)})
             db_session.commit()
 
     def update_stats(self, db_session, auto_rule_result):
@@ -127,20 +127,6 @@ class AutomationsStatsHelper:
             trigger_count=trigger_count+1,
             update_at=:trigger_time
         '''
-        statistic_sql_user_per_month = '''
-            INSERT INTO user_auto_rules_statistics_per_month(username, trigger_count, month, updated_at) VALUES
-            (:username, 1, :month, :trigger_time)
-            ON DUPLICATE KEY UPDATE
-            trigger_count=trigger_count+1,
-            updated_at=:trigger_time
-        '''
-        statistic_sql_org_per_month = '''
-            INSERT INTO org_auto_rules_statistics_per_month(org_id, trigger_count, month, updated_at) VALUES
-            (:org_id, 1, :month, :trigger_time)
-            ON DUPLICATE KEY UPDATE
-            trigger_count=trigger_count+1,
-            updated_at=:trigger_time
-        '''
         update_rule_sql = '''
             UPDATE dtable_automation_rules SET last_trigger_time=:trigger_time, is_valid=:is_valid, trigger_count=trigger_count+1 WHERE id=:rule_id;
         '''
@@ -155,10 +141,8 @@ class AutomationsStatsHelper:
             if org_id == -1:
                 if '@seafile_group' not in owner:
                     sqls.append(statistic_sql_user)
-                    sqls.append(statistic_sql_user_per_month)
             else:
                 sqls.append(statistic_sql_org)
-                sqls.append(statistic_sql_org_per_month)
         params = {
             'rule_id': auto_rule_result.get('rule_id'),
             'username': owner,
@@ -166,8 +150,7 @@ class AutomationsStatsHelper:
             'org_id': org_id,
             'owner': auto_rule_result.get('owner'),
             'trigger_time': auto_rule_result.get('trigger_time'),
-            'trigger_date': auto_rule_result.get('month'),
-            'month': auto_rule_result.get('month'),
+            'trigger_date': auto_rule_result.get('trigger_date'),
             'is_valid': auto_rule_result.get('is_valid'),
             'success': 1 if auto_rule_result.get('success') else 0,
             'run_condition': auto_rule_result.get('run_condition'),
