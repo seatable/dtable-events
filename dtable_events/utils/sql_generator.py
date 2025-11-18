@@ -1324,7 +1324,7 @@ class StatisticSQLGenerator(object):
             shown_column_keys = column_keys
 
         self.column_key_map = {}
-        for column in shown_columns:
+        for column in columns:
             self.column_key_map[column['key']] = column
 
         # filters
