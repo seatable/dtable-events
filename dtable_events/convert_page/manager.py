@@ -1,12 +1,10 @@
 """
 RobustPlaywrightManager
 - Runs a dedicated worker thread with an asyncio event loop that owns Playwright and browser instances.
-- Exposes synchronous thread-safe APIs for callers to submit PDF tasks (list of {"url","filename"}).
-- Configurable number of browser instances and pages-per-browser concurrency.
+- Exposes synchronous thread-safe APIs for callers to submit PDF tasks (list of {"url","filename"[,"selector"]}).
+- Configurable number of browser instances and contexts-per-browser concurrency.
 - Saves PDFs to local files.
 - Auto-restarts browser instances when they fail, without losing queued tasks.
-
-Usage example is included at the bottom.
 """
 
 import asyncio
@@ -15,7 +13,7 @@ import threading
 import time
 import os
 from typing import List, Dict, Optional, Any, Tuple
-from concurrent.futures import Future, wait as wait_futures, FIRST_EXCEPTION
+from concurrent.futures import Future, wait as wait_futures
 import queue
 import uuid
 
@@ -29,13 +27,13 @@ logger = logging.getLogger(__name__)
 
 class RobustPlaywrightManager:
     """
-    Manager: background thread + asyncio loop + multiple browsers.
+    Manager runs a background worker thread that owns an asyncio loop and Playwright.
 
-    Differences from prior version:
-      - Automatic batch model: one API call -> one batch_id
-      - Each batch gets its own BrowserContext (shared by pages of that batch)
-      - A browser can host multiple batch contexts concurrently
-      - Context lifecycle tied to batch: created at batch start, closed after all tasks of batch finish
+    Key config:
+      num_browsers: number of browser processes to launch in worker
+      contexts_per_browser: concurrent contexts per browser
+      page_timeout: default timeout per page operation in ms
+      launch_args: list of chromium args or executable_path via dict
     """
 
     def __init__(
@@ -282,6 +280,7 @@ class RobustPlaywrightManager:
                     'cpu_percent': total_cpu,
                     'timestamp': time.time(),
                 }
+                logger.info(f"playwright health: {self._last_health}")
             except asyncio.CancelledError:
                 return
             except Exception as e:
@@ -373,7 +372,7 @@ class RobustPlaywrightManager:
             browser = self._browsers[browser_idx]
 
             # create a new context for the batch
-            context = await browser.new_context(viewport={'width': 1920, 'height': 1080}, ignore_https_errors=True)
+            context = await browser.new_context(ignore_https_errors=True)
 
             # register context
             self._contexts[browser_idx].append(context)
@@ -447,6 +446,9 @@ class RobustPlaywrightManager:
 
             # create only page — reuse batch context
             page = await context.new_page()
+            page.on("console", lambda msg: logger.debug("Console [%s]: %s", msg.type, msg.text))
+            page.on("request", lambda req: logger.debug("Request: %s %s", req.method, req.url))
+            page.on("response", lambda res: logger.debug("Response: %d %s", res.status, res.url))
             try:
                 page.set_default_timeout(timeout_ms)
                 await page.goto(url, wait_until='load', timeout=timeout_ms)
@@ -461,7 +463,9 @@ class RobustPlaywrightManager:
                     path=dest_path,
                     format='A4',
                     print_background=True,
-                    margin={'top': '0.5cm', 'right': '0.5cm', 'bottom': '0.5cm', 'left': '0.5cm'},
+                    landscape=False,
+                    display_header_footer=False,
+                    prefer_css_page_size=True
                 )
 
                 fut.set_result(dest_path)
