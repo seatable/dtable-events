@@ -237,7 +237,7 @@ class RobustPlaywrightManager:
 
     async def _launch_browser(self, idx: int) -> Browser:
         """Launch a single Chromium browser instance. Isolated to worker loop."""
-        kwargs = dict(executable_path='/usr/bin/google-chrome', headless=True)
+        kwargs = dict(executable_path=os.environ.get('CONVERT_PDF_CHROME_PATH', '/usr/bin/google-chrome'), headless=True)
         kwargs.update(self.browser_launch_kwargs)
         # safe defaults
         if 'args' not in kwargs:
