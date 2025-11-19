@@ -3596,7 +3596,7 @@ class RunAI(BaseAction):
             self.auto_rule.append_warning({
                 'type': 'run_ai_error',
                 'action_type': self.action_type,
-                'ai_function': 'ocr'
+                'ai_function': 'OCR'
             })
             return
 
@@ -3858,7 +3858,7 @@ class RunAI(BaseAction):
             self.auto_rule.append_warning({
                 'type': 'run_ai_error',
                 'action_type': self.action_type,
-                'ai_function': 'summarize'
+                'ai_function': 'invoice_recognition'
             })
             return
 
