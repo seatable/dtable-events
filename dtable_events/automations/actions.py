@@ -4111,6 +4111,7 @@ class GoogleCalendar(BaseAction):
                 
         except Exception as e:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar update event failed with error: {e}')
+
     def create_event(self):
         try:
             event_data = self._prepare_event_data()
@@ -4362,7 +4363,7 @@ class GoogleCalendar(BaseAction):
         
         if not event_id_column or event_id_column.get('type') != ColumnTypes.TEXT:
             return False
-        if start_date_column and start_date_column.get('type') != ColumnTypes.DATE or end_date_column and end_date_column.get('type') != ColumnTypes.DATE:
+        if (start_date_column and start_date_column.get('type') != ColumnTypes.DATE) or (end_date_column and end_date_column.get('type') != ColumnTypes.DATE):
             return False
 
         start_time = self._get_field_value_by_column_key(start_date_column_key)
