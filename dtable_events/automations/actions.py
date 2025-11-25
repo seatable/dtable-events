@@ -4184,82 +4184,13 @@ class GoogleCalendar(BaseAction):
     
     def _get_field_value(self, field_name):
         field_value = self.config.get(field_name)
-        
-        if field_value and isinstance(field_value, str) and '{' in field_value:
-            try:
-                # Get current row data
-                sql_row = self.auto_rule.get_sql_row()
-                if not sql_row:
-                    return field_value
-                
-                # Convert column keys to column names and parse column values
-                col_key_dict = {col.get('key'): col for col in self.auto_rule.table_info['columns']}
-                converted_row = {
-                    col_key_dict.get(key).get('name') if col_key_dict.get(key) else key:
-                    self.parse_column_value(col_key_dict.get(key), sql_row.get(key)) if col_key_dict.get(key) else sql_row.get(key)
-                    for key in sql_row
-                }
-                
-                return self._fill_field_template(field_value, converted_row)
-            except Exception as e:
-                auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar field template processing failed: {e}')
-        
-        return field_value
-    
-    def _fill_field_template(self, template, row_data):
-        """Fill template with field values using {column_name} placeholders"""
-        if not template:
+        if field_value and not isinstance(field_value, str):
             return ''
-        
-        # Find all field placeholders like {field_name}
-        blanks = set(re.findall(r'\{([^{]*?)\}', template))
-        col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
-        column_blanks = [blank for blank in blanks if blank in col_name_dict]
-        
-        filled_template = template
+        blanks = set(re.findall(r'\{([^{]*?)\}', field_value))
+        col_name_dict = {col['name']: col for col in self.auto_rule.table_info['columns']}
+        sql_row = self.auto_rule.get_sql_row()
+        return fill_msg_blanks_with_sql_row(field_value, blanks, col_name_dict, sql_row, self.auto_rule.db_session)
 
-        for blank in column_blanks:
-            column_value = row_data.get(blank, '')
-            
-            # Handle different column types
-            column = col_name_dict.get(blank)
-            if column:
-                column_type = column.get('type')
-                formatted_value = self._format_column_value_for_calendar(column_value, column_type)
-            else:
-                formatted_value = ''
-            
-            filled_template = filled_template.replace('{' + blank + '}', formatted_value)
-        
-        return filled_template
-    
-    def _format_column_value_for_calendar(self, column_value, column_type):
-        """Format column value for Google Calendar fields"""
-        if column_value is None:
-            return ''
-        
-        if column_type in [ColumnTypes.COLLABORATOR, ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER]:
-            # Convert collaborator usernames to nicknames
-            if isinstance(column_value, list):
-                if not column_value:
-                    return ''
-                nicknames_dict = get_nickname_by_usernames(column_value, self.auto_rule.db_session)
-                nicknames = [nicknames_dict.get(user_id, user_id) for user_id in column_value]
-                return ', '.join(nicknames)
-            elif column_value:
-                # Single collaborator, convert to list and process
-                nicknames_dict = get_nickname_by_usernames([column_value], self.auto_rule.db_session)
-                return nicknames_dict.get(column_value, column_value)
-            else:
-                return ''
-        elif column_type == ColumnTypes.MULTIPLE_SELECT:
-            return ', '.join(column_value) if column_value else ''
-        elif column_type == ColumnTypes.FILE:
-            return ''
-        else:
-            # For other types, convert to string
-            return str(column_value) if column_value else ''
-    
     def _format_datetime_object(self, datetime_str):
         
         if not datetime_str:
@@ -4308,6 +4239,8 @@ class GoogleCalendar(BaseAction):
         return_emails = []
         usernames = []
         for item in attendees:
+            if is_valid_email(item):
+                continue
             if '@auth.local' in item:
                 usernames.append(item)
                 continue
