@@ -4,11 +4,10 @@ import requests
 from urllib import parse
 from abc import ABC, abstractmethod
 
-from dtable_events.app.log import setup_logger
 from dtable_events.automations.models import get_third_party_account, update_third_party_account_detail
 from dtable_events.db import init_db_session_class
 
-dtable_calendar_logger = setup_logger('dtable_events_calendar', propagate=False)
+dtable_calendar_logger = logging.getLogger(__name__)
 
 class ThirdPartyAccountNotFound(Exception):
     pass
