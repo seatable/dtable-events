@@ -4296,7 +4296,9 @@ class GoogleCalendar(BaseAction):
         
         if not event_id_column or event_id_column.get('type') != ColumnTypes.TEXT:
             return False
-        if (start_date_column and start_date_column.get('type') != ColumnTypes.DATE) or (end_date_column and end_date_column.get('type') != ColumnTypes.DATE):
+        if not start_date_column or start_date_column.get('type') != ColumnTypes.DATE:
+            return False
+        if not end_date_column or end_date_column.get('type') != ColumnTypes.DATE:
             return False
 
         start_time = self._get_field_value_by_column_key(start_date_column_key)
