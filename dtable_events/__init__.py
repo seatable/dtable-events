@@ -8,4 +8,5 @@ from dtable_events.dtable_io.utils import update_page_design_static_image, renam
 from dtable_events.utils.sql_generator import filter2sql, statistic2sql, linkRecords2sql, SQLGeneratorOptionInvalidError, \
     DateTimeQueryInvalidError, ColumnFilterInvalidError, BaseSQLGenerator
 from dtable_events.utils.dtable_db_api import convert_db_rows
+from dtable_events.utils.google_calendar_manager import get_google_calendar_list
 from dtable_events.virus_scanner import *
