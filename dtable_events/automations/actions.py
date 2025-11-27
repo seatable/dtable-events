@@ -4148,7 +4148,9 @@ class GoogleCalendar(BaseAction):
                 'location': self._get_field_value('location'),
                 'attendees': self._format_attendees(self.config.get('attendees', [])),
             }
-            
+
+            if not self.config.get('dont_send_notifications'):
+                event_data['sendUpdates'] = 'all'
             if self.config.get('guests_can_invite') is not None:
                 event_data['guestsCanInviteOthers'] = self.config.get('guests_can_invite')
             if self.config.get('guests_can_modify') is not None:
@@ -4157,6 +4159,7 @@ class GoogleCalendar(BaseAction):
                 event_data['guestsCanSeeOtherGuests'] = self.config.get('guests_can_see_list')
             
             if self.config.get('video_conferencing'):
+                event_data['conferenceDataVersion'] = 1
                 event_data['conferenceData'] = {
                     'createRequest': {
                         'requestId': f"dtable_event_{self.auto_rule.rule_id}_{int(time.time())}",
@@ -4239,7 +4242,7 @@ class GoogleCalendar(BaseAction):
         return_emails = []
         usernames = []
         for item in attendees:
-            if is_valid_email(item):
+            if not is_valid_email(item):
                 continue
             if '@auth.local' in item:
                 usernames.append(item)

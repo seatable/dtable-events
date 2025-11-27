@@ -143,8 +143,14 @@ class GoogleCalendarAPI(_ThirdpartyAPICalendarBase):
 
     def create_event(self, event_data):
         calendar_id = event_data.get('calendar_id', 'primary')
+        params = {}
+        conferenceDataVersion = event_data.get('conferenceDataVersion')
+        sendUpdates = event_data.get('sendUpdates')
+        if conferenceDataVersion:
+            params['conferenceDataVersion'] = conferenceDataVersion
+        if sendUpdates:
+            params['sendUpdates'] = sendUpdates
         url = f"{self.base_url}/calendars/{parse.quote(calendar_id)}/events"
-        params = {'conferenceDataVersion': 1}
         
         response = self._make_api_request('POST', url, data=event_data, params=params)
         
@@ -158,13 +164,19 @@ class GoogleCalendarAPI(_ThirdpartyAPICalendarBase):
     def update_event(self, event_data):
         calendar_id = event_data.get('calendar_id', 'primary')
         event_id = event_data.get('event_id')
-        
+        params = {}
+        conferenceDataVersion = event_data.get('conferenceDataVersion')
+        sendUpdates = event_data.get('sendUpdates')
+        if conferenceDataVersion:
+            params['conferenceDataVersion'] = conferenceDataVersion
+        if sendUpdates:
+            params['sendUpdates'] = sendUpdates
         if not event_id:
             raise ValueError("Event ID is required for updating")
         
         url = f"{self.base_url}/calendars/{parse.quote(calendar_id)}/events/{event_id}"
         
-        response = self._make_api_request('PUT', url, data=event_data)
+        response = self._make_api_request('PUT', url, data=event_data, params=params)
         
         try:
             _check_and_raise_error(response)
