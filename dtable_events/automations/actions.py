@@ -4321,8 +4321,81 @@ class GoogleCalendar(BaseAction):
         else:
             auto_rule_logger.warning('google calendar action %s not supported', self.action_type)
             return
-        
 
+
+class ArchiveAction(BaseAction):
+
+    def __init__(self, auto_rule, action_type, data):
+        super().__init__(auto_rule, action_type, data)
+
+    def can_do_action(self):
+        permissions = self.auto_rule.dtable_web_api.internal_dtable_permissions(self.auto_rule.dtable_uuid)
+        if not permissions.get('enable_big_data_feature'):
+            return False
+
+    def cron_notify(self):
+        view_filters = self.auto_rule.view_info.get('filters', [])
+        if view_filters:
+            view_filter_conjunction = self.auto_rule.view_info.get('filter_conjunction', 'And')
+            view_filter_conditions = {
+                'filters': view_filters,
+                'filter_conjunction': view_filter_conjunction
+            }
+            where_clause = BaseSQLGenerator(self.auto_rule.table_info['name'], self.auto_rule.table_info['columns'], filter_conditions=view_filter_conditions)._filter2sql()
+            if where_clause:
+                where = where_clause[len('WHERE'):]
+            else:
+                where = ''
+        else:
+            where = ''
+        resp_json = self.auto_rule.dtable_db_api.import_archive(self.auto_rule.table_info['name'], where)
+        task_id = resp_json['task_id']
+        success = resp_json['success']
+        error_message = resp_json['error_message']
+        if not success:
+            raise Exception(error_message or 'import archive failed')
+        auto_rule_logger.info(f"rule {self.auto_rule.rule_id} archive task_id {task_id}")
+        while True:
+            resp_json = self.auto_rule.dtable_db_api.query_archive_task(task_id)
+            task_status = resp_json.get('status')
+            auto_rule_logger.info(f"rule {self.auto_rule.rule_id} archive task_id {task_id} status {task_status}")
+            if task_status == 'success':
+                break
+            elif task_status == 'failure':
+                break
+            time.sleep(0.2)
+
+    def condition_cron_notify(self):
+        view_filters = self.auto_rule.view_info.get('filters', [])
+        view_filter_conjunction = self.auto_rule.view_info.get('filter_conjunction', 'And')
+        view_filter_conditions = {
+            'filters': view_filters,
+            'filter_conjunction': view_filter_conjunction
+        }
+        filters = self.auto_rule.trigger.get('filters', [])
+        filter_conjunction = self.auto_rule.trigger.get('filter_conjunction', 'And')
+        rule_filter_conditions = {
+            'filters': filters,
+            'filter_conjunction': filter_conjunction
+        }
+        # TODO: group filters
+        BaseSQLGenerator()
+        resp_json = self.auto_rule.dtable_db_api.import_archive(self.auto_rule.table_info['name'], 'where')
+        task_id = resp_json['task_id']
+        success = resp_json['success']
+        error_message = resp_json['error_message']
+        if not success:
+            raise Exception(error_message or 'import archive failed')
+        auto_rule_logger.info(f"rule {self.auto_rule.rule_id} archive task_id {task_id}")
+        while True:
+            resp_json = self.auto_rule.dtable_db_api.query_archive_task(task_id)
+            task_status = resp_json.get('status')
+            auto_rule_logger.info(f"rule {self.auto_rule.rule_id} archive task_id {task_id} status {task_status}")
+            if task_status == 'success':
+                break
+            elif task_status == 'failure':
+                break
+            time.sleep(0.2)
 
 class RuleInvalidException(Exception):
     """
@@ -4724,6 +4797,9 @@ class AutomationRule:
             if self.run_condition == PER_UPDATE:
                 return True
             return False
+        elif action_type == 'archive':
+            if self.run_condition in CRON_CONDITIONS:
+                return True
         return False
 
     def do_actions(self, db_session, with_test=False):

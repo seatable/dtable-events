@@ -295,3 +295,18 @@ class DTableDBAPI(object):
         url = '%s/api/v1/backup/%s/task/?from=dtable_events' % (self.dtable_db_url, self.dtable_uuid)
         response = requests.get(url, headers=self.admin_headers)
         return parse_response(response)
+
+    def import_archive(self, table_name, where):
+        url = '%s/api/v1/import/%s/?from=dtable_events' % (self.dtable_db_url, self.dtable_uuid)
+        data = {
+            'table_name': table_name,
+            'where': where
+        }
+        response = requests.post(url, headers=self.admin_headers, json=data)
+        return parse_response(response)
+    
+    def query_archive_task(self, task_id):
+        url = '%s/api/v1/import/%s/task/?from=dtable_events' % (self.dtable_db_url, self.dtable_uuid)
+        params = {'task_id': task_id}
+        response = requests.get(url, headers=self.admin_headers, params=params)
+        return parse_response(response)
