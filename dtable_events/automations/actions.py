@@ -4343,7 +4343,7 @@ class ArchiveAction(BaseAction):
             }
             where_clause = BaseSQLGenerator(self.auto_rule.table_info['name'], self.auto_rule.table_info['columns'], filter_conditions=view_filter_conditions)._filter2sql()
             if where_clause:
-                where = where_clause[len('WHERE'):]
+                where = where_clause[where_clause.find('WHERE')+len('WHERE'):]
             else:
                 where = ''
         else:
@@ -4378,9 +4378,18 @@ class ArchiveAction(BaseAction):
             'filters': filters,
             'filter_conjunction': filter_conjunction
         }
-        # TODO: group filters
-        BaseSQLGenerator()
-        resp_json = self.auto_rule.dtable_db_api.import_archive(self.auto_rule.table_info['name'], 'where')
+        filter_conditions = {
+            'filter_groups': [view_filter_conditions, rule_filter_conditions],
+            'group_conjunction': 'And',
+            'start': 0,
+            'limit': 500,
+        }
+        where_clause = BaseSQLGenerator(self.auto_rule.table_info['name'], self.auto_rule.table_info['columns'], filter_conditions)._groupfilter2sql()
+        if where_clause:
+            where = where_clause[where_clause.find('WHERE')+len('WHERE'):]
+        else:
+            where = ''
+        resp_json = self.auto_rule.dtable_db_api.import_archive(self.auto_rule.table_info['name'], where)
         task_id = resp_json['task_id']
         success = resp_json['success']
         error_message = resp_json['error_message']
