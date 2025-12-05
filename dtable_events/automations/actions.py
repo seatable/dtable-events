@@ -4350,17 +4350,24 @@ class ArchiveAction(BaseAction):
         else:
             where = ''
         auto_rule_logger.info(f"rule {self.auto_rule.rule_id} archive WHERE={where}")
-        resp_json = self.auto_rule.dtable_db_api.import_archive(self.auto_rule.table_info['name'], where)
-        task_id = resp_json['task_id']
-        success = resp_json['success']
-        error_message = resp_json['error_message']
-        if not success:
+        try:
+            resp_json = self.auto_rule.dtable_db_api.import_archive(self.auto_rule.table_info['name'], where)
+            task_id = resp_json.get('task_id')
+            success = resp_json.get('success')
+            if not success:
+                self.auto_rule.append_warning({
+                    'type': 'archive_failed',
+                    'action_type': self.action_type
+                })
+                auto_rule_logger.error(f"rule {self.auto_rule.rule_id} archive where {where} error resp {resp_json}")
+            else:
+                auto_rule_logger.info(f"rule {self.auto_rule.rule_id} archive task_id {task_id}")
+        except Exception as e:
             self.auto_rule.append_warning({
                 'type': 'archive_failed',
                 'action_type': self.action_type
             })
-            raise Exception(error_message or 'import archive failed')
-        auto_rule_logger.info(f"rule {self.auto_rule.rule_id} archive task_id {task_id}")
+            auto_rule_logger.exception(f"rule {self.auto_rule.rule_id} archive where {where} error {e}")
 
     def condition_cron_archive(self):
         view_filters = self.auto_rule.view_info.get('filters', [])
@@ -4387,17 +4394,24 @@ class ArchiveAction(BaseAction):
         else:
             where = ''
         auto_rule_logger.info(f"rule {self.auto_rule.rule_id} archive WHERE={where}")
-        resp_json = self.auto_rule.dtable_db_api.import_archive(self.auto_rule.table_info['name'], where)
-        task_id = resp_json['task_id']
-        success = resp_json['success']
-        error_message = resp_json['error_message']
-        if not success:
+        try:
+            resp_json = self.auto_rule.dtable_db_api.import_archive(self.auto_rule.table_info['name'], where)
+            task_id = resp_json.get('task_id')
+            success = resp_json.get('success')
+            if not success:
+                self.auto_rule.append_warning({
+                    'type': 'archive_failed',
+                    'action_type': self.action_type
+                })
+                auto_rule_logger.error(f"rule {self.auto_rule.rule_id} archive where {where} error resp {resp_json}")
+            else:
+                auto_rule_logger.info(f"rule {self.auto_rule.rule_id} archive task_id {task_id}")
+        except Exception as e:
             self.auto_rule.append_warning({
                 'type': 'archive_failed',
                 'action_type': self.action_type
             })
-            raise Exception(error_message or 'import archive failed')
-        auto_rule_logger.info(f"rule {self.auto_rule.rule_id} archive task_id {task_id}")
+            auto_rule_logger.exception(f"rule {self.auto_rule.rule_id} archive where {where} error {e}")
 
     def do_action(self):
         if not self.can_do_action():
