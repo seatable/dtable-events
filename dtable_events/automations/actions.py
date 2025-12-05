@@ -4329,11 +4329,12 @@ class ArchiveAction(BaseAction):
         super().__init__(auto_rule, action_type, data)
 
     def can_do_action(self):
-        permissions = self.auto_rule.dtable_web_api.internal_dtable_permissions(self.auto_rule.dtable_uuid)
+        permissions = self.auto_rule.dtable_web_api.internal_dtable_permission(self.auto_rule.dtable_uuid, 'enable_big_data_feature')
         if not permissions.get('enable_big_data_feature'):
             return False
+        return True
 
-    def cron_notify(self):
+    def cron_archive(self):
         view_filters = self.auto_rule.view_info.get('filters', [])
         if view_filters:
             view_filter_conjunction = self.auto_rule.view_info.get('filter_conjunction', 'And')
@@ -4348,24 +4349,20 @@ class ArchiveAction(BaseAction):
                 where = ''
         else:
             where = ''
+        auto_rule_logger.info(f"rule {self.auto_rule.rule_id} archive WHERE={where}")
         resp_json = self.auto_rule.dtable_db_api.import_archive(self.auto_rule.table_info['name'], where)
         task_id = resp_json['task_id']
         success = resp_json['success']
         error_message = resp_json['error_message']
         if not success:
+            self.auto_rule.append_warning({
+                'type': 'archive_failed',
+                'action_type': self.action_type
+            })
             raise Exception(error_message or 'import archive failed')
         auto_rule_logger.info(f"rule {self.auto_rule.rule_id} archive task_id {task_id}")
-        while True:
-            resp_json = self.auto_rule.dtable_db_api.query_archive_task(task_id)
-            task_status = resp_json.get('status')
-            auto_rule_logger.info(f"rule {self.auto_rule.rule_id} archive task_id {task_id} status {task_status}")
-            if task_status == 'success':
-                break
-            elif task_status == 'failure':
-                break
-            time.sleep(0.2)
 
-    def condition_cron_notify(self):
+    def condition_cron_archive(self):
         view_filters = self.auto_rule.view_info.get('filters', [])
         view_filter_conjunction = self.auto_rule.view_info.get('filter_conjunction', 'And')
         view_filter_conditions = {
@@ -4384,27 +4381,32 @@ class ArchiveAction(BaseAction):
             'start': 0,
             'limit': 500,
         }
-        where_clause = BaseSQLGenerator(self.auto_rule.table_info['name'], self.auto_rule.table_info['columns'], filter_conditions)._groupfilter2sql()
+        where_clause = BaseSQLGenerator(self.auto_rule.table_info['name'], self.auto_rule.table_info['columns'], filter_condition_groups=filter_conditions)._groupfilter2sql()
         if where_clause:
             where = where_clause[where_clause.find('WHERE')+len('WHERE'):]
         else:
             where = ''
+        auto_rule_logger.info(f"rule {self.auto_rule.rule_id} archive WHERE={where}")
         resp_json = self.auto_rule.dtable_db_api.import_archive(self.auto_rule.table_info['name'], where)
         task_id = resp_json['task_id']
         success = resp_json['success']
         error_message = resp_json['error_message']
         if not success:
+            self.auto_rule.append_warning({
+                'type': 'archive_failed',
+                'action_type': self.action_type
+            })
             raise Exception(error_message or 'import archive failed')
         auto_rule_logger.info(f"rule {self.auto_rule.rule_id} archive task_id {task_id}")
-        while True:
-            resp_json = self.auto_rule.dtable_db_api.query_archive_task(task_id)
-            task_status = resp_json.get('status')
-            auto_rule_logger.info(f"rule {self.auto_rule.rule_id} archive task_id {task_id} status {task_status}")
-            if task_status == 'success':
-                break
-            elif task_status == 'failure':
-                break
-            time.sleep(0.2)
+
+    def do_action(self):
+        if not self.can_do_action():
+            return
+        if self.auto_rule.trigger.get('condition') == CONDITION_PERIODICALLY_BY_CONDITION:
+            self.condition_cron_archive()
+        else:
+            self.cron_archive()
+
 
 class RuleInvalidException(Exception):
     """
@@ -5055,6 +5057,9 @@ class AutomationRule:
                         'event_id_key': action_info.get('event_id_key'),
                     }
                     GoogleCalendar(self, action_info.get('type'), self.data, config, function_type).do_action()
+
+                elif action_info.get('type') == 'archive':
+                    ArchiveAction(self, action_info.get('type'), self.data).do_action()
 
             except RuleInvalidException as e:
                 auto_rule_logger.warning('auto rule %s with data %s, invalid error: %s', self.rule_id, self.data, e)
