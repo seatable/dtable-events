@@ -13,7 +13,7 @@ from sqlalchemy import text
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.app.log import auto_rule_logger
 from dtable_events.automations.actions import AutomationRule
-from dtable_events.automations.automations_stats_helper import AutomationsStatsHelper
+from dtable_events.automations.automations_stats_manager import AutomationsStatsManager
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import get_dtable_owner_org_id
 from dtable_events.utils.utils_metric import AUTOMATION_RULES_QUEUE_METRIC_HELP, REALTIME_AUTOMATION_RULES_HEARTBEAT_HELP, \
@@ -75,7 +75,7 @@ class AutomationsPipeline:
 
         self.rate_limiter = RateLimiter()
 
-        self.automations_stats_helper = AutomationsStatsHelper()
+        self.automations_stats_manager = AutomationsStatsManager()
 
         self.log_none_message_timeout = 10 * 60
 
@@ -149,7 +149,7 @@ class AutomationsPipeline:
                         if not self.rate_limiter.is_allowed(owner_info['owner'], owner_info['org_id']):
                             auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} rate limit exceed, event {event} will not trigger")
                             continue
-                        if self.automations_stats_helper.is_exceed(db_session, owner_info['owner'], owner_info['org_id']):
+                        if self.automations_stats_manager.is_exceed(db_session, owner_info['owner'], owner_info['org_id']):
                             auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} trigger count limit exceed, {event} will not trigger")
                             continue
                         event.update(owner_info)
@@ -245,7 +245,7 @@ class AutomationsPipeline:
                     self.automations_queue.put(automation)
                     self.scheduled_trigger_count += 1
                     continue
-                if self.automations_stats_helper.is_exceed(db_session, rule.owner, rule.org_id):
+                if self.automations_stats_manager.is_exceed(db_session, rule.owner, rule.org_id):
                     cached_exceed_keys_set.add(exceed_key)
                     continue
                 self.automations_queue.put(automation)
@@ -281,7 +281,7 @@ class AutomationsPipeline:
                 auto_rule_logger.debug(f"owner {owner} org_id {org_id} usage percent {self.rate_limiter.get_percent(owner, org_id)}")
             db_session = self._db_session_class()
             try:
-                self.automations_stats_helper.update_stats(db_session, result)
+                self.automations_stats_manager.update_stats(db_session, result)
             except Exception as e:
                 auto_rule_logger.exception(e)
             finally:

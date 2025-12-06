@@ -12,7 +12,7 @@ from dtable_events.app.config import CCNET_DB_NAME, DTABLE_WEB_SERVICE_URL
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 
 
-class AutomationsStatsHelper:
+class AutomationsStatsManager:
 
     def __init__(self):
         self.dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
