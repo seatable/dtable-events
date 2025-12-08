@@ -137,13 +137,18 @@ class AutomationsStatsManager:
         '''
         org_id = auto_rule_result.org_id
         owner = auto_rule_result.owner
-        sqls = [update_rule_sql, insert_rule_log]
-        if org_id:
-            if org_id == -1:
-                if '@seafile_group' not in owner:
-                    sqls.append(statistic_sql_user)
-            else:
-                sqls.append(statistic_sql_org)
+        sqls = []
+        if not auto_rule_result.is_exceed_rate_limit:
+            sqls.append(update_rule_sql)
+            sqls.append(insert_rule_log)
+            if org_id:
+                if org_id == -1:
+                    if '@seafile_group' not in owner:
+                        sqls.append(statistic_sql_user)
+                else:
+                    sqls.append(statistic_sql_org)
+        else:
+            sqls.append(insert_rule_log)
         params = {
             'rule_id': auto_rule_result.rule_id,
             'username': owner,

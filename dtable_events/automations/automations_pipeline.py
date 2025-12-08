@@ -146,14 +146,28 @@ class AutomationsPipeline:
                     try:
                         dtable_uuid = event.get('dtable_uuid')
                         owner_info = get_dtable_owner_org_id(dtable_uuid, db_session)
+                        event.update(owner_info)
+                        automation_rule = self.get_automation_rule(db_session, event)
                         if not self.rate_limiter.is_allowed(owner_info['owner'], owner_info['org_id']):
                             auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} rate limit exceed, event {event} will not trigger")
+                            automation_rule.append_warning({'type': 'exceed_rate_limit'})
+                            self.results_queue.put(AutomationResult(
+                                rule_id=automation_rule.rule_id,
+                                rule_name=automation_rule.rule_name,
+                                dtable_uuid=automation_rule.dtable_uuid,
+                                run_condition=automation_rule.run_condition,
+                                org_id=automation_rule.org_id,
+                                owner=automation_rule.owner,
+                                with_test=False,
+                                success=False,
+                                is_exceed_rate_limit=True,
+                                trigger_time=datetime.utcnow(),
+                                warnings=automation_rule.warnings
+                            ))
                             continue
                         if self.automations_stats_manager.is_exceed(db_session, owner_info['owner'], owner_info['org_id']):
                             auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} trigger count limit exceed, {event} will not trigger")
                             continue
-                        event.update(owner_info)
-                        automation_rule = self.get_automation_rule(db_session, event)
                         if not automation_rule.can_do_actions():
                             auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} trigger run condition missed, {event} will not trigger")
                             continue
@@ -273,7 +287,7 @@ class AutomationsPipeline:
         auto_rule_logger.info("Start to stats thread")
         while True:
             result = self.results_queue.get()
-            if result.run_condition == 'per_update':
+            if result.run_condition == 'per_update' and not result.is_exceed_rate_limit:
                 owner = result.owner
                 org_id = result.org_id
                 run_time = result.run_time

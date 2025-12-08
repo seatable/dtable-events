@@ -4341,6 +4341,8 @@ class AutomationResult:
     owner: str
     with_test: bool
 
+    is_exceed_rate_limit: bool = False
+
     run_time: float = 0.0
     trigger_time: datetime = None
     trigger_date: date = None
