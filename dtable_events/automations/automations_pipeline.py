@@ -12,7 +12,7 @@ from sqlalchemy import text
 
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.app.log import auto_rule_logger
-from dtable_events.automations.actions import AutomationRule
+from dtable_events.automations.actions import AutomationRule, AutomationResult
 from dtable_events.automations.automations_stats_manager import AutomationsStatsManager
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import get_dtable_owner_org_id
@@ -66,7 +66,7 @@ class AutomationsPipeline:
     def __init__(self, config):
         self.workers = 5
         self.automations_queue: Queue[AutomationRule] = Queue()
-        self.results_queue: Queue[Dict] = Queue()
+        self.results_queue: Queue[AutomationResult] = Queue()
 
         self._db_session_class = init_db_session_class(config)
 
@@ -184,7 +184,7 @@ class AutomationsPipeline:
                 run_time = time.time() - start_time
                 auto_rule_logger.info(f"Automation {automation.rule_id} with data {automation.data} result is {result} run for {run_time}")
                 if result:
-                    result['run_time'] = run_time
+                    result.run_time = run_time
                     self.results_queue.put(result)
             except Exception as e:
                 auto_rule_logger.exception('Handle automation rule with data %s failed: %s', automation.data, e)
@@ -273,10 +273,10 @@ class AutomationsPipeline:
         auto_rule_logger.info("Start to stats thread")
         while True:
             result = self.results_queue.get()
-            if result.get('run_condition') == 'per_update':
-                owner = result.get('owner')
-                org_id = result.get('org_id')
-                run_time = result.get('run_time')
+            if result.run_condition == 'per_update':
+                owner = result.owner
+                org_id = result.org_id
+                run_time = result.run_time
                 self.rate_limiter.record_time(owner, org_id, run_time)
                 auto_rule_logger.debug(f"owner {owner} org_id {org_id} usage percent {self.rate_limiter.get_percent(owner, org_id)}")
             db_session = self._db_session_class()

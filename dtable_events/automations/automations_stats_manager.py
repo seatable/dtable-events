@@ -9,6 +9,7 @@ from dtable_events.notification_rules.notification_rules_utils import send_notif
 from dtable_events.utils import get_dtable_admins
 
 from dtable_events.app.config import CCNET_DB_NAME, DTABLE_WEB_SERVICE_URL
+from dtable_events.automations.actions import AutomationResult
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 
 
@@ -111,7 +112,7 @@ class AutomationsStatsManager:
             db_session.execute(text(sql), {'org_id': org_id, 'warning_limit': limit, 'trigger_date': date.today().replace(day=1)})
             db_session.commit()
 
-    def update_stats(self, db_session, auto_rule_result):
+    def update_stats(self, db_session, auto_rule_result: AutomationResult):
         # update rule, rule_log, stats
         statistic_sql_user = '''
             INSERT INTO user_auto_rules_statistics (username, trigger_date, trigger_count, update_at) VALUES 
@@ -134,8 +135,8 @@ class AutomationsStatsManager:
             INSERT INTO auto_rules_task_log (trigger_time, success, rule_id, run_condition, dtable_uuid, org_id, owner, warnings) VALUES
             (:trigger_time, :success, :rule_id, :run_condition, :dtable_uuid, :org_id, :owner, :warnings)
         '''
-        org_id = auto_rule_result.get('org_id')
-        owner = auto_rule_result.get('owner')
+        org_id = auto_rule_result.org_id
+        owner = auto_rule_result.owner
         sqls = [update_rule_sql, insert_rule_log]
         if org_id:
             if org_id == -1:
@@ -144,17 +145,17 @@ class AutomationsStatsManager:
             else:
                 sqls.append(statistic_sql_org)
         params = {
-            'rule_id': auto_rule_result.get('rule_id'),
+            'rule_id': auto_rule_result.rule_id,
             'username': owner,
-            'dtable_uuid': auto_rule_result.get('dtable_uuid'),
+            'dtable_uuid': auto_rule_result.dtable_uuid,
             'org_id': org_id,
-            'owner': auto_rule_result.get('owner'),
-            'trigger_time': auto_rule_result.get('trigger_time'),
-            'trigger_date': auto_rule_result.get('trigger_date'),
-            'is_valid': auto_rule_result.get('is_valid'),
-            'success': 1 if auto_rule_result.get('success') else 0,
-            'run_condition': auto_rule_result.get('run_condition'),
-            'warnings': json.dumps(auto_rule_result.get('warnings')) if json.dumps(auto_rule_result.get('warnings')) else None
+            'owner': auto_rule_result.owner,
+            'trigger_time': auto_rule_result.trigger_time,
+            'trigger_date': auto_rule_result.trigger_date,
+            'is_valid': auto_rule_result.is_valid,
+            'success': 1 if auto_rule_result.success else 0,
+            'run_condition': auto_rule_result.run_condition,
+            'warnings': json.dumps(auto_rule_result.warnings) if auto_rule_result.warnings else None
         }
         for sql in sqls:
             db_session.execute(text(sql), params)
@@ -167,16 +168,16 @@ class AutomationsStatsManager:
             self.check_org_reach_warning(db_session, org_id)
 
         # send invalid warning
-        if auto_rule_result.get('is_valid') == False:
-            admins = get_dtable_admins(auto_rule_result.get('dtable_uuid'), db_session)
-            invalid_type = auto_rule_result.get('invalid_type') or ''
-            send_notification(auto_rule_result.get('dtable_uuid'), [{
+        if auto_rule_result.is_valid == False:
+            admins = get_dtable_admins(auto_rule_result.dtable_uuid, db_session)
+            invalid_type = auto_rule_result.invalid_type or ''
+            send_notification(auto_rule_result.dtable_uuid, [{
                 'to_user': user,
                 'msg_type': 'auto_rule_invalid',
                 'detail': {
                     'author': 'Automation Rule',
-                    'rule_id': auto_rule_result.get('rule_id'),
-                    'rule_name': auto_rule_result.get('rule_name'),
+                    'rule_id': auto_rule_result.rule_id,
+                    'rule_name': auto_rule_result.rule_name,
                     'invalid_type': invalid_type
                 }
             } for user in admins])
