@@ -138,7 +138,7 @@ class AutomationsStatsManager:
         org_id = auto_rule_result.org_id
         owner = auto_rule_result.owner
         sqls = []
-        if not auto_rule_result.is_exceed_rate_limit:
+        if not auto_rule_result.is_exceed_system_limit:
             sqls.append(update_rule_sql)
             sqls.append(insert_rule_log)
             if org_id:

@@ -10,12 +10,15 @@ from typing import Dict
 from apscheduler.schedulers.blocking import BlockingScheduler
 from sqlalchemy import text
 
+from dtable_events.app.config import DTABLE_WEB_SERVICE_URL
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.app.log import auto_rule_logger
 from dtable_events.automations.actions import AutomationRule, AutomationResult
 from dtable_events.automations.automations_stats_manager import AutomationsStatsManager
+from dtable_events.ccnet.organization import get_org_admins
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import get_dtable_owner_org_id
+from dtable_events.utils.dtable_web_api import DTableWebAPI
 from dtable_events.utils.utils_metric import AUTOMATION_RULES_QUEUE_METRIC_HELP, REALTIME_AUTOMATION_RULES_HEARTBEAT_HELP, \
     REALTIME_AUTOMATION_RULES_TRIGGERED_COUNT_HELP, SCHEDULED_AUTOMATION_RULES_TRIGGERED_COUNT_HELP, publish_metric
 
@@ -88,6 +91,24 @@ class AutomationsPipeline:
 
         self.parse_config()
 
+        self.exceed_system_limit_entities = None
+        self.reset_exceed_system_limit_entities()
+
+    def reset_exceed_system_limit_entities(self):
+        self.exceed_system_limit_entities = {'orgs_map': {}, 'owners_map': {}}
+
+    def add_exceed_system_limit_entity(self, owner, org_id):
+        if org_id != -1:
+            if org_id in self.exceed_system_limit_entities['orgs_map']:
+                self.exceed_system_limit_entities['orgs_map'][org_id] += 1
+            else:
+                self.exceed_system_limit_entities['orgs_map'][org_id] = 0
+        else:
+            if owner in self.exceed_system_limit_entities['owners_map']:
+                self.exceed_system_limit_entities['owners_map'][owner] += 1
+            else:
+                self.exceed_system_limit_entities['owners_map'][owner] = 0
+
     def parse_config(self):
         try:
             self.workers = int(os.environ.get('AUTOMATION_WORKERS', self.workers))
@@ -148,9 +169,11 @@ class AutomationsPipeline:
                         owner_info = get_dtable_owner_org_id(dtable_uuid, db_session)
                         event.update(owner_info)
                         automation_rule = self.get_automation_rule(db_session, event)
+                        if not automation_rule:
+                            continue
                         if not self.rate_limiter.is_allowed(owner_info['owner'], owner_info['org_id']):
                             auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} rate limit exceed, event {event} will not trigger")
-                            automation_rule.append_warning({'type': 'exceed_rate_limit'})
+                            automation_rule.append_warning({'type': 'exceed_system_limit'})
                             self.results_queue.put(AutomationResult(
                                 rule_id=automation_rule.rule_id,
                                 rule_name=automation_rule.rule_name,
@@ -160,10 +183,11 @@ class AutomationsPipeline:
                                 owner=automation_rule.owner,
                                 with_test=False,
                                 success=False,
-                                is_exceed_rate_limit=True,
+                                is_exceed_system_limit=True,
                                 trigger_time=datetime.utcnow(),
                                 warnings=automation_rule.warnings
                             ))
+                            self.add_exceed_system_limit_entity(automation_rule.owner, automation_rule.org_id)
                             continue
                         if self.automations_stats_manager.is_exceed(db_session, owner_info['owner'], owner_info['org_id']):
                             auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} trigger count limit exceed, {event} will not trigger")
@@ -287,7 +311,7 @@ class AutomationsPipeline:
         auto_rule_logger.info("Start to stats thread")
         while True:
             result = self.results_queue.get()
-            if result.run_condition == 'per_update' and not result.is_exceed_rate_limit:
+            if result.run_condition == 'per_update' and not result.is_exceed_system_limit:
                 owner = result.owner
                 org_id = result.org_id
                 run_time = result.run_time
@@ -301,6 +325,30 @@ class AutomationsPipeline:
             finally:
                 db_session.close()
 
+    def send_exceed_system_limit_notifications(self):
+        sched = BlockingScheduler()
+
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='10/*', misfire_grace_time=60)
+        def timed_job():
+            orgs_map = self.exceed_system_limit_entities['orgs_map']
+            db_session = self._db_session_class()
+            dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+            try:
+                for org_id, missing_count in orgs_map.items():
+                    admins = get_org_admins(db_session, org_id)
+                    if admins:
+                        dtable_web_api.internal_add_notification(admins, 'automation_exceed_system_limit', {'missing_count': missing_count})
+                owners_map = self.exceed_system_limit_entities['owners_map']
+                for owner, missing_count in owners_map.items():
+                    dtable_web_api.internal_add_notification([owner], 'automation_exceed_system_limit', {'missing_count': missing_count})
+            except Exception as e:
+                auto_rule_logger.exception(e)
+            finally:
+                db_session.close()
+            self.reset_exceed_system_limit_entities()
+
+        sched.start()
+
     def start(self):
         auto_rule_logger.info("Start automations pipeline")
         self.start_workers()
@@ -308,3 +356,4 @@ class AutomationsPipeline:
         Thread(target=self.scheduled_scan, daemon=True).start()
         Thread(target=self.stats, daemon=True).start()
         Thread(target=self.publish_metrics, daemon=True).start()
+        Thread(target=self.send_exceed_system_limit_notifications, daemon=True).start()
