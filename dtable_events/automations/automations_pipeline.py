@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
 from threading import Thread, Lock
-from typing import Dict
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 from sqlalchemy import text
