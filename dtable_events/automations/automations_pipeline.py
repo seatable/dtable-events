@@ -328,7 +328,7 @@ class AutomationsPipeline:
     def send_exceed_system_limit_notifications(self):
         sched = BlockingScheduler()
 
-        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='10/*', misfire_grace_time=60)
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='*/10', misfire_grace_time=60)
         def timed_job():
             orgs_map = self.exceed_system_limit_entities['orgs_map']
             db_session = self._db_session_class()

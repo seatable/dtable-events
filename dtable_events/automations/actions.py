@@ -4999,8 +4999,7 @@ class AutomationRule:
         if duration.seconds >= 5:
             auto_rule_logger.warning('the running time of rule %s is too long, for %s. SQL queries are %s', self.rule_id, duration, f"\n{'\n'.join(self.query_stats)}")
 
-        if not with_test:
-            auto_rule_result.success = self.task_run_success
-            auto_rule_result.warnings = self.warnings
+        auto_rule_result.success = self.task_run_success
+        auto_rule_result.warnings = self.warnings
 
         return auto_rule_result
