@@ -38,6 +38,7 @@ class RateLimiter:
             return owner
 
     def is_allowed(self, owner, org_id):
+        return False
         limit_key = self.get_key(owner, org_id)
         if isinstance(limit_key, str) and '@seafile_group' in limit_key:
             return True
@@ -90,23 +91,23 @@ class AutomationsPipeline:
 
         self.parse_config()
 
-        self.exceed_system_limit_entities = None
-        self.reset_exceed_system_limit_entities()
+        self.exceed_system_resource_limit_entities = None
+        self.reset_exceed_system_resource_limit_entities()
 
-    def reset_exceed_system_limit_entities(self):
-        self.exceed_system_limit_entities = {'orgs_map': {}, 'owners_map': {}}
+    def reset_exceed_system_resource_limit_entities(self):
+        self.exceed_system_resource_limit_entities = {'orgs_map': {}, 'owners_map': {}}
 
-    def add_exceed_system_limit_entity(self, owner, org_id):
+    def add_exceed_system_resource_limit_entity(self, owner, org_id):
         if org_id != -1:
-            if org_id in self.exceed_system_limit_entities['orgs_map']:
-                self.exceed_system_limit_entities['orgs_map'][org_id] += 1
+            if org_id in self.exceed_system_resource_limit_entities['orgs_map']:
+                self.exceed_system_resource_limit_entities['orgs_map'][org_id] += 1
             else:
-                self.exceed_system_limit_entities['orgs_map'][org_id] = 0
+                self.exceed_system_resource_limit_entities['orgs_map'][org_id] = 0
         else:
-            if owner in self.exceed_system_limit_entities['owners_map']:
-                self.exceed_system_limit_entities['owners_map'][owner] += 1
+            if owner in self.exceed_system_resource_limit_entities['owners_map']:
+                self.exceed_system_resource_limit_entities['owners_map'][owner] += 1
             else:
-                self.exceed_system_limit_entities['owners_map'][owner] = 0
+                self.exceed_system_resource_limit_entities['owners_map'][owner] = 0
 
     def parse_config(self):
         try:
@@ -172,7 +173,7 @@ class AutomationsPipeline:
                             continue
                         if not self.rate_limiter.is_allowed(owner_info['owner'], owner_info['org_id']):
                             auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} rate limit exceed, event {event} will not trigger")
-                            automation_rule.append_warning({'type': 'exceed_system_limit'})
+                            automation_rule.append_warning({'type': 'exceed_system_resource_limit'})
                             self.results_queue.put(AutomationResult(
                                 rule_id=automation_rule.rule_id,
                                 rule_name=automation_rule.rule_name,
@@ -182,11 +183,11 @@ class AutomationsPipeline:
                                 owner=automation_rule.owner,
                                 with_test=False,
                                 success=False,
-                                is_exceed_system_limit=True,
+                                is_exceed_system_resource_limit=True,
                                 trigger_time=datetime.utcnow(),
                                 warnings=automation_rule.warnings
                             ))
-                            self.add_exceed_system_limit_entity(automation_rule.owner, automation_rule.org_id)
+                            self.add_exceed_system_resource_limit_entity(automation_rule.owner, automation_rule.org_id)
                             continue
                         if self.automations_stats_manager.is_exceed(db_session, owner_info['owner'], owner_info['org_id']):
                             auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} trigger count limit exceed, {event} will not trigger")
@@ -310,7 +311,7 @@ class AutomationsPipeline:
         auto_rule_logger.info("Start to stats thread")
         while True:
             result = self.results_queue.get()
-            if result.run_condition == 'per_update' and not result.is_exceed_system_limit:
+            if result.run_condition == 'per_update' and not result.is_exceed_system_resource_limit:
                 owner = result.owner
                 org_id = result.org_id
                 run_time = result.run_time
@@ -324,27 +325,27 @@ class AutomationsPipeline:
             finally:
                 db_session.close()
 
-    def send_exceed_system_limit_notifications(self):
+    def send_exceed_system_resource_limit_notifications(self):
         sched = BlockingScheduler()
 
         @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='*/10', misfire_grace_time=60)
         def timed_job():
-            orgs_map = self.exceed_system_limit_entities['orgs_map']
+            orgs_map = self.exceed_system_resource_limit_entities['orgs_map']
             db_session = self._db_session_class()
             dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
             try:
                 for org_id, missing_count in orgs_map.items():
                     admins = get_org_admins(db_session, org_id)
                     if admins:
-                        dtable_web_api.internal_add_notification(admins, 'automation_exceed_system_limit', {'missing_count': missing_count})
-                owners_map = self.exceed_system_limit_entities['owners_map']
+                        dtable_web_api.internal_add_notification(admins, 'auto_exceed_sys_res_limit', {'missing_count': missing_count})
+                owners_map = self.exceed_system_resource_limit_entities['owners_map']
                 for owner, missing_count in owners_map.items():
-                    dtable_web_api.internal_add_notification([owner], 'automation_exceed_system_limit', {'missing_count': missing_count})
+                    dtable_web_api.internal_add_notification([owner], 'auto_exceed_sys_res_limit', {'missing_count': missing_count})
             except Exception as e:
                 auto_rule_logger.exception(e)
             finally:
                 db_session.close()
-            self.reset_exceed_system_limit_entities()
+            self.reset_exceed_system_resource_limit_entities()
 
         sched.start()
 
@@ -355,4 +356,4 @@ class AutomationsPipeline:
         Thread(target=self.scheduled_scan, daemon=True).start()
         Thread(target=self.stats, daemon=True).start()
         Thread(target=self.publish_metrics, daemon=True).start()
-        Thread(target=self.send_exceed_system_limit_notifications, daemon=True).start()
+        Thread(target=self.send_exceed_system_resource_limit_notifications, daemon=True).start()
