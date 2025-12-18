@@ -38,7 +38,6 @@ class RateLimiter:
             return owner
 
     def is_allowed(self, owner, org_id):
-        return False
         limit_key = self.get_key(owner, org_id)
         if isinstance(limit_key, str) and '@seafile_group' in limit_key:
             return True
