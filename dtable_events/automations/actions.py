@@ -4329,8 +4329,13 @@ class ArchiveAction(BaseAction):
         super().__init__(auto_rule, action_type, data)
 
     def can_do_action(self):
+        dtable_settings = self.auto_rule.dtable_metadata.get('settings') or {}
+        if not dtable_settings.get('enable_archive'):
+            auto_rule_logger.info(f"dtable {self.auto_rule.dtable_uuid} not enable_archive in settings")
+            return False
         permissions = self.auto_rule.dtable_web_api.internal_dtable_permission(self.auto_rule.dtable_uuid, 'enable_big_data_feature')
         if not permissions.get('enable_big_data_feature'):
+            auto_rule_logger.info(f"dtable {self.auto_rule.dtable_uuid} no permission to arhive rows")
             return False
         return True
 
