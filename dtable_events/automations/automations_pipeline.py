@@ -235,7 +235,6 @@ class AutomationsPipeline:
         auto_rule_logger.info(f"Started {self.workers} automation workers")
 
     def scan_rules(self):
-        db_session = self._db_session_class()
         sql = '''
             SELECT `dar`.`id`, `run_condition`, `trigger`, `actions`, `dtable_uuid`, w.`owner`, w.`org_id` FROM dtable_automation_rules dar
             JOIN dtables d ON dar.dtable_uuid=d.uuid
@@ -350,9 +349,9 @@ class AutomationsPipeline:
 
     def start(self):
         auto_rule_logger.info("Start automations pipeline")
-        self.start_workers()
-        Thread(target=self.receive, daemon=True).start()
-        Thread(target=self.scheduled_scan, daemon=True).start()
-        Thread(target=self.stats, daemon=True).start()
-        Thread(target=self.publish_metrics, daemon=True).start()
-        Thread(target=self.send_exceed_system_resource_limit_notifications, daemon=True).start()
+        self.start_workers() # auto rules do action from automations_queue
+        Thread(target=self.receive, daemon=True).start() # add normal action to automations_queue
+        Thread(target=self.scheduled_scan, daemon=True).start() # add cron action to automations_queue
+        Thread(target=self.stats, daemon=True).start() # update status
+        Thread(target=self.publish_metrics, daemon=True).start() # update metrics
+        Thread(target=self.send_exceed_system_resource_limit_notifications, daemon=True).start() # send notifications
