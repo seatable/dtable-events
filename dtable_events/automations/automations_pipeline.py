@@ -5,17 +5,19 @@ from datetime import datetime, timedelta
 from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
 from threading import Thread, Lock
-from typing import Dict
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 from sqlalchemy import text
 
+from dtable_events.app.config import DTABLE_WEB_SERVICE_URL
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.app.log import auto_rule_logger
-from dtable_events.automations.actions import AutomationRule
-from dtable_events.automations.automations_stats_helper import AutomationsStatsHelper
+from dtable_events.automations.actions import AutomationRule, AutomationResult
+from dtable_events.automations.automations_stats_manager import AutomationsStatsManager
+from dtable_events.ccnet.organization import get_org_admins
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import get_dtable_owner_org_id
+from dtable_events.utils.dtable_web_api import DTableWebAPI
 from dtable_events.utils.utils_metric import AUTOMATION_RULES_QUEUE_METRIC_HELP, REALTIME_AUTOMATION_RULES_HEARTBEAT_HELP, \
     REALTIME_AUTOMATION_RULES_TRIGGERED_COUNT_HELP, SCHEDULED_AUTOMATION_RULES_TRIGGERED_COUNT_HELP, publish_metric
 
@@ -66,7 +68,7 @@ class AutomationsPipeline:
     def __init__(self, config):
         self.workers = 5
         self.automations_queue: Queue[AutomationRule] = Queue()
-        self.results_queue: Queue[Dict] = Queue()
+        self.results_queue: Queue[AutomationResult] = Queue()
 
         self._db_session_class = init_db_session_class(config)
 
@@ -75,7 +77,7 @@ class AutomationsPipeline:
 
         self.rate_limiter = RateLimiter()
 
-        self.automations_stats_helper = AutomationsStatsHelper()
+        self.automations_stats_manager = AutomationsStatsManager()
 
         self.log_none_message_timeout = 10 * 60
 
@@ -87,6 +89,24 @@ class AutomationsPipeline:
         self.metric_times = {}
 
         self.parse_config()
+
+        self.exceed_system_resource_limit_entities = None
+        self.reset_exceed_system_resource_limit_entities()
+
+    def reset_exceed_system_resource_limit_entities(self):
+        self.exceed_system_resource_limit_entities = {'orgs_map': {}, 'owners_map': {}}
+
+    def add_exceed_system_resource_limit_entity(self, owner, org_id):
+        if org_id != -1:
+            if org_id in self.exceed_system_resource_limit_entities['orgs_map']:
+                self.exceed_system_resource_limit_entities['orgs_map'][org_id] += 1
+            else:
+                self.exceed_system_resource_limit_entities['orgs_map'][org_id] = 0
+        else:
+            if owner in self.exceed_system_resource_limit_entities['owners_map']:
+                self.exceed_system_resource_limit_entities['owners_map'][owner] += 1
+            else:
+                self.exceed_system_resource_limit_entities['owners_map'][owner] = 0
 
     def parse_config(self):
         try:
@@ -146,14 +166,31 @@ class AutomationsPipeline:
                     try:
                         dtable_uuid = event.get('dtable_uuid')
                         owner_info = get_dtable_owner_org_id(dtable_uuid, db_session)
-                        if not self.rate_limiter.is_allowed(owner_info['owner'], owner_info['org_id']):
-                            auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} rate limit exceed, event {event} will not trigger")
-                            continue
-                        if self.automations_stats_helper.is_exceed(db_session, owner_info['owner'], owner_info['org_id']):
-                            auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} trigger count limit exceed, {event} will not trigger")
-                            continue
                         event.update(owner_info)
                         automation_rule = self.get_automation_rule(db_session, event)
+                        if not automation_rule:
+                            continue
+                        if not self.rate_limiter.is_allowed(owner_info['owner'], owner_info['org_id']):
+                            auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} rate limit exceed, event {event} will not trigger")
+                            automation_rule.append_warning({'type': 'exceed_system_resource_limit'})
+                            self.results_queue.put(AutomationResult(
+                                rule_id=automation_rule.rule_id,
+                                rule_name=automation_rule.rule_name,
+                                dtable_uuid=automation_rule.dtable_uuid,
+                                run_condition=automation_rule.run_condition,
+                                org_id=automation_rule.org_id,
+                                owner=automation_rule.owner,
+                                with_test=False,
+                                success=False,
+                                is_exceed_system_resource_limit=True,
+                                trigger_time=datetime.utcnow(),
+                                warnings=automation_rule.warnings
+                            ))
+                            self.add_exceed_system_resource_limit_entity(automation_rule.owner, automation_rule.org_id)
+                            continue
+                        if self.automations_stats_manager.is_exceed(db_session, owner_info['owner'], owner_info['org_id']):
+                            auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} trigger count limit exceed, {event} will not trigger")
+                            continue
                         if not automation_rule.can_do_actions():
                             auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} trigger run condition missed, {event} will not trigger")
                             continue
@@ -184,7 +221,7 @@ class AutomationsPipeline:
                 run_time = time.time() - start_time
                 auto_rule_logger.info(f"Automation {automation.rule_id} with data {automation.data} result is {result} run for {run_time}")
                 if result:
-                    result['run_time'] = run_time
+                    result.run_time = run_time
                     self.results_queue.put(result)
             except Exception as e:
                 auto_rule_logger.exception('Handle automation rule with data %s failed: %s', automation.data, e)
@@ -198,7 +235,6 @@ class AutomationsPipeline:
         auto_rule_logger.info(f"Started {self.workers} automation workers")
 
     def scan_rules(self):
-        db_session = self._db_session_class()
         sql = '''
             SELECT `dar`.`id`, `run_condition`, `trigger`, `actions`, `dtable_uuid`, w.`owner`, w.`org_id` FROM dtable_automation_rules dar
             JOIN dtables d ON dar.dtable_uuid=d.uuid
@@ -245,7 +281,7 @@ class AutomationsPipeline:
                     self.automations_queue.put(automation)
                     self.scheduled_trigger_count += 1
                     continue
-                if self.automations_stats_helper.is_exceed(db_session, rule.owner, rule.org_id):
+                if self.automations_stats_manager.is_exceed(db_session, rule.owner, rule.org_id):
                     cached_exceed_keys_set.add(exceed_key)
                     continue
                 self.automations_queue.put(automation)
@@ -273,24 +309,49 @@ class AutomationsPipeline:
         auto_rule_logger.info("Start to stats thread")
         while True:
             result = self.results_queue.get()
-            if result.get('run_condition') == 'per_update':
-                owner = result.get('owner')
-                org_id = result.get('org_id')
-                run_time = result.get('run_time')
+            if result.run_condition == 'per_update' and not result.is_exceed_system_resource_limit:
+                owner = result.owner
+                org_id = result.org_id
+                run_time = result.run_time
                 self.rate_limiter.record_time(owner, org_id, run_time)
                 auto_rule_logger.debug(f"owner {owner} org_id {org_id} usage percent {self.rate_limiter.get_percent(owner, org_id)}")
             db_session = self._db_session_class()
             try:
-                self.automations_stats_helper.update_stats(db_session, result)
+                self.automations_stats_manager.update_stats(db_session, result)
             except Exception as e:
                 auto_rule_logger.exception(e)
             finally:
                 db_session.close()
 
+    def send_exceed_system_resource_limit_notifications(self):
+        sched = BlockingScheduler()
+
+        @sched.scheduled_job('cron', day_of_week='*', hour='*', minute='*/10', misfire_grace_time=60)
+        def timed_job():
+            orgs_map = self.exceed_system_resource_limit_entities['orgs_map']
+            db_session = self._db_session_class()
+            dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+            try:
+                for org_id, missing_count in orgs_map.items():
+                    admins = get_org_admins(db_session, org_id)
+                    if admins:
+                        dtable_web_api.internal_add_notification(admins, 'auto_exceed_sys_res_limit', {'missing_count': missing_count})
+                owners_map = self.exceed_system_resource_limit_entities['owners_map']
+                for owner, missing_count in owners_map.items():
+                    dtable_web_api.internal_add_notification([owner], 'auto_exceed_sys_res_limit', {'missing_count': missing_count})
+            except Exception as e:
+                auto_rule_logger.exception(e)
+            finally:
+                db_session.close()
+            self.reset_exceed_system_resource_limit_entities()
+
+        sched.start()
+
     def start(self):
         auto_rule_logger.info("Start automations pipeline")
-        self.start_workers()
-        Thread(target=self.receive, daemon=True).start()
-        Thread(target=self.scheduled_scan, daemon=True).start()
-        Thread(target=self.stats, daemon=True).start()
-        Thread(target=self.publish_metrics, daemon=True).start()
+        self.start_workers() # auto rules do action from automations_queue
+        Thread(target=self.receive, daemon=True).start() # add normal action to automations_queue
+        Thread(target=self.scheduled_scan, daemon=True).start() # add cron action to automations_queue
+        Thread(target=self.stats, daemon=True).start() # update status
+        Thread(target=self.publish_metrics, daemon=True).start() # update metrics
+        Thread(target=self.send_exceed_system_resource_limit_notifications, daemon=True).start() # send notifications

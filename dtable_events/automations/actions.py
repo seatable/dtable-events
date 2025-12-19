@@ -5,6 +5,7 @@ import re
 import time
 import os
 from copy import deepcopy
+from dataclasses import dataclass, field
 from datetime import datetime, date, timedelta, timezone
 from queue import Full
 from urllib.parse import unquote, urlparse, parse_qs
@@ -4330,6 +4331,29 @@ class RuleInvalidException(Exception):
     pass
 
 
+@dataclass
+class AutomationResult:
+    rule_id: int
+    rule_name: str
+    dtable_uuid: str
+    run_condition: str
+    org_id: int
+    owner: str
+    with_test: bool
+
+    is_exceed_system_resource_limit: bool = False
+
+    run_time: float = 0.0
+    trigger_time: datetime = None
+    trigger_date: date = None
+
+    success: bool = True
+    warnings: list = field(default_factory=list)
+
+    is_valid: bool = True
+    invalid_type: str = None
+
+
 class AutomationRule:
 
     def __init__(self, data, raw_trigger, raw_actions, options):
@@ -4713,7 +4737,7 @@ class AutomationRule:
 
         self.db_session = db_session
 
-        auto_rule_result = {
+        auto_rule_result = AutomationResult(**{
             'rule_id': self.rule_id,
             'rule_name': self.rule_name,
             'dtable_uuid': self.dtable_uuid,
@@ -4723,7 +4747,7 @@ class AutomationRule:
             'trigger_time': datetime.utcnow(),
             'trigger_date': date.today().replace(day=1),
             'with_test': with_test,
-        }
+        })
 
         do_actions_start = datetime.now()
         for action_info in self.action_infos:
@@ -4962,7 +4986,8 @@ class AutomationRule:
                         'type': 'rule_invalid',
                         'invalid_type': invalid_type
                     })
-                    auto_rule_result.update({'invalid_type': invalid_type})
+                    auto_rule_result.invalid_type = invalid_type
+                    auto_rule_result.is_valid = False
                 break
             except Exception as e:
                 self.task_run_success = False
@@ -4974,12 +4999,7 @@ class AutomationRule:
         if duration.seconds >= 5:
             auto_rule_logger.warning('the running time of rule %s is too long, for %s. SQL queries are %s', self.rule_id, duration, f"\n{'\n'.join(self.query_stats)}")
 
-
-        if not with_test:
-            auto_rule_result.update({
-                'success': self.task_run_success,
-                'warnings': self.warnings,
-                'is_valid': self.current_valid
-            })
+        auto_rule_result.success = self.task_run_success
+        auto_rule_result.warnings = self.warnings
 
         return auto_rule_result
