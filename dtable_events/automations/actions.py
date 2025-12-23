@@ -4321,7 +4321,110 @@ class GoogleCalendar(BaseAction):
         else:
             auto_rule_logger.warning('google calendar action %s not supported', self.action_type)
             return
-        
+
+
+class ArchiveAction(BaseAction):
+
+    def __init__(self, auto_rule, action_type, data):
+        super().__init__(auto_rule, action_type, data)
+
+    def can_do_action(self):
+        dtable_settings = self.auto_rule.dtable_metadata.get('settings') or {}
+        if not dtable_settings.get('enable_archive'):
+            auto_rule_logger.info(f"dtable {self.auto_rule.dtable_uuid} not enable_archive in settings")
+            return False
+        permissions = self.auto_rule.dtable_web_api.internal_dtable_permission(self.auto_rule.dtable_uuid, 'enable_big_data_feature')
+        if not permissions.get('enable_big_data_feature'):
+            auto_rule_logger.info(f"dtable {self.auto_rule.dtable_uuid} no permission to arhive rows")
+            return False
+        return True
+
+    def cron_archive(self):
+        view_filters = self.auto_rule.view_info.get('filters', [])
+        if view_filters:
+            view_filter_conjunction = self.auto_rule.view_info.get('filter_conjunction', 'And')
+            view_filter_conditions = {
+                'filters': view_filters,
+                'filter_conjunction': view_filter_conjunction
+            }
+            where_clause = BaseSQLGenerator(self.auto_rule.table_info['name'], self.auto_rule.table_info['columns'], filter_conditions=view_filter_conditions)._filter2sql()
+            if where_clause:
+                where = where_clause[where_clause.find('WHERE')+len('WHERE'):]
+            else:
+                where = ''
+        else:
+            where = ''
+        auto_rule_logger.info(f"rule {self.auto_rule.rule_id} archive WHERE={where}")
+        try:
+            resp_json = self.auto_rule.dtable_db_api.import_archive(self.auto_rule.table_info['name'], where)
+            task_id = resp_json.get('task_id')
+            success = resp_json.get('success')
+            if not success:
+                self.auto_rule.append_warning({
+                    'type': 'archive_failed',
+                    'action_type': self.action_type
+                })
+                auto_rule_logger.error(f"rule {self.auto_rule.rule_id} archive where {where} error resp {resp_json}")
+            else:
+                auto_rule_logger.info(f"rule {self.auto_rule.rule_id} archive task_id {task_id}")
+        except Exception as e:
+            self.auto_rule.append_warning({
+                'type': 'archive_failed',
+                'action_type': self.action_type
+            })
+            auto_rule_logger.exception(f"rule {self.auto_rule.rule_id} archive where {where} error {e}")
+
+    def condition_cron_archive(self):
+        view_filters = self.auto_rule.view_info.get('filters', [])
+        view_filter_conjunction = self.auto_rule.view_info.get('filter_conjunction', 'And')
+        view_filter_conditions = {
+            'filters': view_filters,
+            'filter_conjunction': view_filter_conjunction
+        }
+        filters = self.auto_rule.trigger.get('filters', [])
+        filter_conjunction = self.auto_rule.trigger.get('filter_conjunction', 'And')
+        rule_filter_conditions = {
+            'filters': filters,
+            'filter_conjunction': filter_conjunction
+        }
+        filter_conditions = {
+            'filter_groups': [view_filter_conditions, rule_filter_conditions],
+            'group_conjunction': 'And',
+            'start': 0,
+            'limit': 500,
+        }
+        where_clause = BaseSQLGenerator(self.auto_rule.table_info['name'], self.auto_rule.table_info['columns'], filter_condition_groups=filter_conditions)._groupfilter2sql()
+        if where_clause:
+            where = where_clause[where_clause.find('WHERE')+len('WHERE'):]
+        else:
+            where = ''
+        auto_rule_logger.info(f"rule {self.auto_rule.rule_id} archive WHERE={where}")
+        try:
+            resp_json = self.auto_rule.dtable_db_api.import_archive(self.auto_rule.table_info['name'], where)
+            task_id = resp_json.get('task_id')
+            success = resp_json.get('success')
+            if not success:
+                self.auto_rule.append_warning({
+                    'type': 'archive_failed',
+                    'action_type': self.action_type
+                })
+                auto_rule_logger.error(f"rule {self.auto_rule.rule_id} archive where {where} error resp {resp_json}")
+            else:
+                auto_rule_logger.info(f"rule {self.auto_rule.rule_id} archive task_id {task_id}")
+        except Exception as e:
+            self.auto_rule.append_warning({
+                'type': 'archive_failed',
+                'action_type': self.action_type
+            })
+            auto_rule_logger.exception(f"rule {self.auto_rule.rule_id} archive where {where} error {e}")
+
+    def do_action(self):
+        if not self.can_do_action():
+            return
+        if self.auto_rule.trigger.get('condition') == CONDITION_PERIODICALLY_BY_CONDITION:
+            self.condition_cron_archive()
+        else:
+            self.cron_archive()
 
 
 class RuleInvalidException(Exception):
@@ -4724,6 +4827,9 @@ class AutomationRule:
             if self.run_condition == PER_UPDATE:
                 return True
             return False
+        elif action_type == 'archive':
+            if self.run_condition in CRON_CONDITIONS:
+                return True
         return False
 
     def do_actions(self, db_session, with_test=False):
@@ -4970,6 +5076,9 @@ class AutomationRule:
                         'event_id_key': action_info.get('event_id_key'),
                     }
                     GoogleCalendar(self, action_info.get('type'), self.data, config, function_type).do_action()
+
+                elif action_info.get('type') == 'archive':
+                    ArchiveAction(self, action_info.get('type'), self.data).do_action()
 
             except RuleInvalidException as e:
                 auto_rule_logger.warning('auto rule %s with data %s, invalid error: %s', self.rule_id, self.data, e)

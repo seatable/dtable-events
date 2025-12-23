@@ -251,3 +251,14 @@ class DTableWebAPI:
         headers = {'Authorization': 'Token ' + token}
         resp = requests.get(url, headers=headers)
         return parse_response(resp).get('roles', [])
+
+    def internal_dtable_permission(self, dtable_uuid, permission):
+        logger.debug(f"internal_dtable_permission: {dtable_uuid} permission: {permission}")
+        url = '%(server_url)s/api/v2.1/internal-dtable-permission/?from=dtable_events' % {
+            'server_url': self.dtable_web_service_url
+        }
+        token = jwt.encode({'is_internal': True}, DTABLE_PRIVATE_KEY, algorithm='HS256')
+        headers = {'Authorization': 'Token ' + token}
+        params = {'dtable_uuid': dtable_uuid, 'permission': permission}
+        resp = requests.get(url, headers=headers, params=params)
+        return parse_response(resp)
