@@ -210,6 +210,20 @@ def format_date(date, format):
     return value
 
 
+def format_date_in_query(date, format):
+    try:
+        timestamp = parser.parse(date.strip()).timestamp()
+    except:
+        return ''
+    timestamp = round(timestamp, 0)
+    datetime_obj = datetime.fromtimestamp(timestamp)
+    if 'HH:mm' in format:
+        value = datetime_obj.strftime('%Y-%m-%d %H:%M')
+    else:
+        value = datetime_obj.strftime('%Y-%m-%d')
+    return value
+
+
 def uuid_str_to_36_chars(dtable_uuid):
     if len(dtable_uuid) == 32:
         return str(uuid.UUID(dtable_uuid))

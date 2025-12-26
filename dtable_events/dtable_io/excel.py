@@ -10,7 +10,7 @@ from openpyxl import load_workbook
 from copy import deepcopy
 from datetime import datetime, time
 from dtable_events.app.config import EXPORT2EXCEL_DEFAULT_STRING, TIME_ZONE, INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
-from dtable_events.utils import utc_to_tz, gen_random_option, format_date
+from dtable_events.utils import utc_to_tz, gen_random_option, format_date_in_query
 from dtable_events.utils.constants import ColumnTypes, FormulaResultType
 from dtable_events.utils.geo_location_parser import parse_geolocation_from_tree
 from dtable_events.utils.dtable_db_api import DTableDBAPI
@@ -749,7 +749,7 @@ def get_dtable_row_data(dtable_rows, key_columns, excel_col_name_to_type, excel_
         key_cols_value = []
         for col in key_columns:
             if col in row and excel_col_name_to_type.get(col) and excel_col_name_to_type.get(col) == ColumnTypes.DATE:
-                row[col] = format_date(row[col], excel_col_name_to_data.get(col).get('format'))
+                row[col] = format_date_in_query(row[col], excel_col_name_to_data.get(col).get('format'))
             key_cols_value.append(str(get_cell_value(row, col, excel_col_name_to_type)))
         key = str(hash('-'.join(key_cols_value)))
         if dtable_row_data.get(key):
@@ -1117,7 +1117,7 @@ def parse_row(column_type, cell_value, name_to_email, location_tree=None, column
         return parse_duration(cell_value)
     elif column_type == 'date':
         if column_data:
-            return format_date(str(cell_value), column_data.get('format'))
+            return format_date_in_query(str(cell_value), column_data.get('format'))
         return str(cell_value)
     elif column_type == 'long-text':
         return parse_long_text(cell_value)

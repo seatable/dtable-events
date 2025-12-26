@@ -7,7 +7,7 @@ from copy import deepcopy
 from dtable_events.dtable_io.excel import parse_row, write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR
 from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, get_metadata_from_dtable_server, \
     escape_sheet_name
-from dtable_events.utils import get_location_tree_json, gen_random_option, format_date
+from dtable_events.utils import get_location_tree_json, gen_random_option, format_date_in_query
 from dtable_events.utils.constants import ColumnTypes
 from dtable_events.app.config import INNER_DTABLE_DB_URL, BIG_DATA_ROW_IMPORT_LIMIT, BIG_DATA_ROW_UPDATE_LIMIT, \
     ARCHIVE_VIEW_EXPORT_ROW_LIMIT, APP_TABLE_EXPORT_EXCEL_ROW_LIMIT, INNER_DTABLE_SERVER_URL
@@ -104,7 +104,7 @@ def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column
                     if column_name_type_map.get(col) and column_name_type_map.get(col) == ColumnTypes.DATE:
                         pre_format_date_str = base_row.get(col).replace('T', ' ')
                         pre_format_date_str = pre_format_date_str.split('+' if '+' in pre_format_date_str else '-')[0]
-                        base_ref_data[col] = format_date(pre_format_date_str, column_name_data_map.get(col).get('format'))
+                        base_ref_data[col] = format_date_in_query(pre_format_date_str, column_name_data_map.get(col).get('format'))
             if base_ref_data and excel_ref_data and base_ref_data == excel_ref_data:
                 rows_for_update.append({
                     "row_id": base_row.get('_id'),
@@ -374,7 +374,7 @@ def update_excel_to_db(
                         pop_col_lists.append(col_name)
                         continue
                     elif col_type == ColumnTypes.DATE and col_data:
-                        row_data[col_name] = format_date(str(value), col_data.get('format'))
+                        row_data[col_name] = format_date_in_query(str(value), col_data.get('format'))
 
                 row_data1 = deepcopy(row_data)
                 for col_name in pop_col_lists:
