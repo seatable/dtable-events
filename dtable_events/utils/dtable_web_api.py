@@ -180,7 +180,8 @@ class DTableWebAPI:
             'server_url': self.dtable_web_service_url
         }
         payload = {
-            'exp': int(time.time()) + 60
+            'exp': int(time.time()) + 60,
+            'is_internal': True
         }
         token = jwt.encode(payload, DTABLE_PRIVATE_KEY, algorithm='HS256')
         headers = {'Authorization': 'Token ' + token}
@@ -206,7 +207,8 @@ class DTableWebAPI:
             data['automation_rule_id'] = rule_id
         payload = {
             'exp': int(time.time()) + 60,
-            'token': workflow_token
+            'token': workflow_token,
+            'is_internal': True
         }
         header_token = 'Token ' + jwt.encode(payload, DTABLE_PRIVATE_KEY, 'HS256')
         resp = requests.post(url, data=data, headers={'Authorization': header_token}, timeout=30)

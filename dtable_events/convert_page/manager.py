@@ -471,11 +471,12 @@ class RobustPlaywrightManager:
                 fut.set_result(dest_path)
             except Exception as e:
                 # try to capture diagnostics (optional): write page screenshot
-                try:
-                    ss_path = dest_path + '.failed.png'
-                    await page.screenshot(path=ss_path, full_page=True)
-                except Exception:
-                    pass
+                if logger.root.level == logging.DEBUG:
+                    try:
+                        ss_path = dest_path + '.failed.png'
+                        await page.screenshot(path=ss_path, full_page=True)
+                    except Exception:
+                        pass
                 fut.set_exception(e)
             finally:
                 try:

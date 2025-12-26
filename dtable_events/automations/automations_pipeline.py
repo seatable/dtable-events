@@ -101,12 +101,12 @@ class AutomationsPipeline:
             if org_id in self.exceed_system_resource_limit_entities['orgs_map']:
                 self.exceed_system_resource_limit_entities['orgs_map'][org_id] += 1
             else:
-                self.exceed_system_resource_limit_entities['orgs_map'][org_id] = 0
+                self.exceed_system_resource_limit_entities['orgs_map'][org_id] = 1
         else:
             if owner in self.exceed_system_resource_limit_entities['owners_map']:
                 self.exceed_system_resource_limit_entities['owners_map'][owner] += 1
             else:
-                self.exceed_system_resource_limit_entities['owners_map'][owner] = 0
+                self.exceed_system_resource_limit_entities['owners_map'][owner] = 1
 
     def parse_config(self):
         try:
