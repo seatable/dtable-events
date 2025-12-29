@@ -4,6 +4,7 @@ import os
 import re
 import time
 from copy import deepcopy
+from email.utils import parseaddr
 from uuid import UUID
 from datetime import datetime, timedelta
 
@@ -467,6 +468,12 @@ class SendEmailAction(BaseAction):
     SEND_FROM_AUTOMATION_RULES = 'automation-rules'
     SEND_FROM_WORKFLOW = 'workflow'
 
+    def is_valid_email(self, email):
+        """A heavy email format validation.
+        """
+        parsed_email = parseaddr(email)[1]
+        return is_valid_email(parsed_email)
+
     def __init__(self, context: BaseContext, account_id, subject, msg, send_to, copy_to, send_from):
         super().__init__(context)
         self.account_id = account_id
@@ -477,12 +484,14 @@ class SendEmailAction(BaseAction):
         self.subject = subject
 
     def do_action_without_row(self):
-        return self.do_action_with_row(None)
+        return self.do_action_with_row({})
 
     def replace_username_with_contact_emails(self, emails):
         return_emails = []
         usernames = []
         for item in emails:
+            if not self.is_valid_email(item):
+                continue
             if '@auth.local' in item:
                 usernames.append(item)
                 continue
@@ -508,7 +517,7 @@ class SendEmailAction(BaseAction):
         if self.send_to_list:
             for send_to in self.send_to_list:
                 real_send_to = self.generate_real_msg(send_to, sql_row, convert_to_nickname=False)
-                if is_valid_email(real_send_to):
+                if self.is_valid_email(real_send_to):
                     valid_send_to_list.append(real_send_to)
             valid_send_to_list = self.replace_username_with_contact_emails(valid_send_to_list)
         if not valid_send_to_list:
@@ -516,7 +525,7 @@ class SendEmailAction(BaseAction):
         if self.copy_to_list:
             for copy_to in self.copy_to_list:
                 real_copy_to = self.generate_real_msg(copy_to, sql_row, convert_to_nickname=False)
-                if is_valid_email(real_copy_to):
+                if self.is_valid_email(real_copy_to):
                     valid_copy_to_list.append(real_copy_to)
             valid_copy_to_list = self.replace_username_with_contact_emails(valid_copy_to_list)
         send_info = {

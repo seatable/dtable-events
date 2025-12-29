@@ -7,6 +7,7 @@ import os
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime, date, timedelta, timezone
+from email.utils import parseaddr
 from queue import Full
 from urllib.parse import unquote, urlparse, parse_qs
 from uuid import UUID
@@ -1131,7 +1132,8 @@ class SendEmailAction(BaseAction):
     def is_valid_email(self, email):
         """A heavy email format validation.
         """
-        return is_valid_email(email)
+        parsed_email = parseaddr(email)[1]
+        return is_valid_email(parsed_email)
 
     def __init__(self, auto_rule, action_type, data, send_info, account_id, repo_id):
 
