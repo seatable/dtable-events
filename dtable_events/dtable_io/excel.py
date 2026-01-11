@@ -1265,7 +1265,6 @@ def parse_summary_value(cell_data, column_data):
         h_value = str(duration_value // 3600).split('.')[0]
         m_value = str((duration_value % 3600) // 60).split('.')[0]
         s_value = str(duration_value % 60).split('.')[0]
-        print(f"duration_value: {duration_value} h_value: {h_value} m_value: {m_value} s_value: {s_value}")
         if len(m_value) == 1:
             m_value = '0' + m_value
         if duration_format == 'h:mm':
@@ -1613,7 +1612,7 @@ def format_duration(cell_data, column_data):
     duration_value = float(value)
     sign_value = '' if duration_value >= 0 else '-'
     duration_value = duration_value if duration_value >= 0 else -duration_value
-    h_value = str((duration_value) // 3600).split('.')[0]
+    h_value = str(duration_value // 3600).split('.')[0]
     m_value = str((duration_value % 3600) // 60).split('.')[0]
     s_value = str(duration_value % 60).split('.')[0]
     if len(m_value) == 1:
