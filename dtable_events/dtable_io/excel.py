@@ -1260,18 +1260,21 @@ def parse_summary_value(cell_data, column_data):
     elif src_format == 'duration':
         duration_format = column_data.get('duration_format', 'h:mm')
         duration_value = float(value)
+        sign_value = '' if duration_value >= 0 else '-'
+        duration_value = duration_value if duration_value >= 0 else -duration_value
         h_value = str(duration_value // 3600).split('.')[0]
         m_value = str((duration_value % 3600) // 60).split('.')[0]
         s_value = str(duration_value % 60).split('.')[0]
+        print(f"duration_value: {duration_value} h_value: {h_value} m_value: {m_value} s_value: {s_value}")
         if len(m_value) == 1:
             m_value = '0' + m_value
         if duration_format == 'h:mm':
 
-            return h_value + ':' + m_value
+            return sign_value + h_value + ':' + m_value
         else:
             if len(s_value) == 1:
                 s_value = '0' + s_value
-            return h_value + ':' + m_value + ':' + s_value
+            return sign_value + h_value + ':' + m_value + ':' + s_value
 
     value_list = value.split('.')
     value_precision = len(value_list[1]) if (len(value_list) > 1) else 0
@@ -1608,17 +1611,19 @@ def format_duration(cell_data, column_data):
     value = str(cell_data)
     duration_format = column_data.get('duration_format', 'h:mm')
     duration_value = float(value)
-    h_value = str(duration_value // 3600).split('.')[0]
+    sign_value = '' if duration_value >= 0 else '-'
+    duration_value = duration_value if duration_value >= 0 else -duration_value
+    h_value = str((duration_value) // 3600).split('.')[0]
     m_value = str((duration_value % 3600) // 60).split('.')[0]
     s_value = str(duration_value % 60).split('.')[0]
     if len(m_value) == 1:
         m_value = '0' + m_value
     if duration_format == 'h:mm':
-        return h_value + ':' + m_value
+        return sign_value + h_value + ':' + m_value
     else:
         if len(s_value) == 1:
             s_value = '0' + s_value
-        return h_value + ':' + m_value + ':' + s_value
+        return sign_value + h_value + ':' + m_value + ':' + s_value
 
 
 def handle_grouped_row(row, ws, cols_without_hidden, column_name_to_column, sub_level, summary_col_info, summaries):
