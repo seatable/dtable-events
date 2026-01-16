@@ -28,7 +28,7 @@ class DTableIOServer(Thread):
         big_data_task_manager.run()
 
     def _parse_config(self, config):
-        self._host = '127.0.0.1'
+        self._host = '0.0.0.0'
         self._port = '6000'
         self._workers = 3
         self._io_task_timeout = 3600
