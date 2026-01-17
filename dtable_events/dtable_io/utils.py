@@ -290,7 +290,8 @@ def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id, path
     fake_obj_id = {
         'obj_id': asset_dir_id,
         'dir_name': 'asset',        # after download and zip, folder root name is asset
-        'is_windows': 0
+        'is_windows': 0,
+        'parent_dir': '/asset'
     }
     try:
         token = seafile_api.get_fileserver_access_token(
@@ -1927,7 +1928,8 @@ def export_page_design_dir_to_path(repo_id, dtable_uuid, page_id, tmp_file_path,
     fake_obj_id = {
         'obj_id': dir_id,
         'dir_name': page_id,
-        'is_window': 0
+        'is_window': 0,
+        'parent_dir': os.path.dirname(dir_path)
     }
     token = seafile_api.get_fileserver_access_token(
         repo_id, json.dumps(fake_obj_id), 'download-dir', username, use_onetime=False
@@ -2146,11 +2148,12 @@ def gen_seadoc_base_dir(dtable_uuid, file_uuid):
     return posixpath.join('/asset', dtable_uuid, DOCUMENT_PLUGIN_FILE_RELATIVE_PATH, str(file_uuid))
 
 
-def export_sdoc_prepare_images_folder(repo_id, images_dir_id, username, tmp_file_path):
+def export_sdoc_prepare_images_folder(repo_id, image_parent_path, images_dir_id, username, tmp_file_path):
     fake_obj_id = {
         'obj_id': images_dir_id,
         'dir_name': 'images',
-        'is_windows': 0
+        'is_windows': 0,
+        'parent_dir': os.path.dirname(image_parent_path)
     }
 
     token = seafile_api.get_fileserver_access_token(repo_id, json.dumps(fake_obj_id), 'download-dir', username, use_onetime=False)
