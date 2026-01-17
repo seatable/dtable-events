@@ -471,9 +471,6 @@ class RobustPlaywrightManager:
 
                 await wait_for_images(page)
 
-                ss_path = dest_path + '.test.png'
-                await page.screenshot(path=ss_path, full_page=True)
-
                 await page.pdf(
                     path=dest_path,
                     format='A4',
