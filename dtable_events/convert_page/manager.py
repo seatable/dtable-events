@@ -446,12 +446,24 @@ class RobustPlaywrightManager:
 
             # create only page — reuse batch context
             page = await context.new_page()
-            page.on("console", lambda msg: logger.debug("Console [%s]: %s", msg.type, msg.text))
+
+            page.on("pageerror", lambda e: logger.error("PageError: %s", e))
+
+            async def handle_console(msg):
+                args = [await arg.json_value() for arg in msg.args]
+                logger.debug("Console [%s]: %s %s", msg.type, msg.text, args)
+
+            page.on("console", lambda msg: asyncio.create_task(handle_console(msg)))
             page.on("request", lambda req: logger.debug("Request: %s %s", req.method, req.url))
             page.on("response", lambda res: logger.debug("Response: %d %s", res.status, res.url))
+            page.on("crash", lambda: logger.debug("PAGE CRASHED"))
+            page.on("pageerror", lambda e: logger.debug("PAGE ERROR: %s", e))
+            page.on("requestfailed", lambda req: logger.debug("REQUEST FAILED: %s", req.url))
+
             try:
                 page.set_default_timeout(timeout_ms)
                 await page.goto(url, wait_until='load', timeout=timeout_ms)
+                await page.wait_for_load_state('networkidle')
                 await page.wait_for_timeout(500)  # small wait for dynamic renders
 
                 if 'selector' in task:
