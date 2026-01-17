@@ -1391,7 +1391,7 @@ def export_document(repo_id, dtable_uuid, doc_uuid, parent_path, filename, usern
     if images_dir_id:
         dtable_io_logger.info('Create images folder.')
         try:
-            export_sdoc_prepare_images_folder(repo_id, images_dir_id, username, tmp_file_path)
+            export_sdoc_prepare_images_folder(repo_id, image_parent_path, images_dir_id, username, tmp_file_path)
         except Exception as e:
             dtable_io_logger.warning('create images folder failed. ERROR: %s', e)
 
