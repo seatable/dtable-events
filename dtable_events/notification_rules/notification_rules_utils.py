@@ -3,6 +3,7 @@ import json
 import logging
 import re
 import time
+from uuid import uuid4
 from datetime import datetime
 
 from sqlalchemy import text
@@ -187,13 +188,24 @@ def convert_zero_in_value(value):
 
 
 def escape_markdown_value(value):
-    """escapse markdown special chars"""
     if not value:
         return value
 
     value = str(value)
-
-    # first: escape all markdown special chars
+    
+    # 1. mentions in value
+    mentions = []
+    
+    def protect_mention(match):
+        mention = match.group(0)
+        placeholder = f'MENTION{uuid4().hex[:8]}'
+        mentions.append((placeholder, mention))
+        return placeholder
+    
+    # match and replace with placeholders
+    value = re.sub(r'<@[\w.-]+>', protect_mention, value)
+    
+    # 2. escape
     md_special_chars = [
         '\\', '`', '*', '_', '{', '}', '[', ']', 
         '(', ')', '#', '+', '-', '.', '!', '|', 
@@ -201,7 +213,7 @@ def escape_markdown_value(value):
     ]
     for char in md_special_chars:
         value = value.replace(char, '\\' + char)
-    
+
     # Special handling of sequences that may disrupt the context
     # Avoid accidentally creating tables, lists, etc
     value = re.sub(r'^\s*[-*+]\s+', r'\\- ', value)  # Initial list tag
@@ -209,6 +221,10 @@ def escape_markdown_value(value):
     value = re.sub(r'^\s*#+\s+', r'\\# ', value)  # Initial title
     value = re.sub(r'^\s*>\s+', r'\\> ', value)  # Initial citation
 
+    # 3. restore mentions
+    for placeholder, mention in mentions:
+        value = value.replace(placeholder, mention)
+    
     return value
 
 
