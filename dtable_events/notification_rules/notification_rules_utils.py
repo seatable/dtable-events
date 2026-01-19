@@ -3,6 +3,7 @@ import json
 import logging
 import re
 import time
+from uuid import uuid4
 from datetime import datetime
 
 from sqlalchemy import text
@@ -187,28 +188,36 @@ def convert_zero_in_value(value):
 
 
 def escape_markdown_value(value):
-    """escapse markdown special chars"""
     if not value:
         return value
 
     value = str(value)
-
-    # first: escape all markdown special chars
-    md_special_chars = [
+    
+    # 1. mentions in value
+    mentions = []
+    
+    def protect_mention(match):
+        mention = match.group(0)
+        placeholder = f'MENTION{uuid4().hex[:8]}'
+        mentions.append((placeholder, mention))
+        return placeholder
+    
+    # match and replace with placeholders
+    value = re.sub(r'<@[\w.-]+>', protect_mention, value)
+    
+    # 2. escapse
+    md_chars_wechat = [
         '\\', '`', '*', '_', '{', '}', '[', ']', 
-        '(', ')', '#', '+', '-', '.', '!', '|', 
-        '~', '>', '$', '%', '^', '&', '=', ':'
+        '(', ')', '#', '+', '-', '.', '!', '|', '~', '>'
     ]
-    for char in md_special_chars:
+    
+    for char in md_chars_wechat:
         value = value.replace(char, '\\' + char)
     
-    # Special handling of sequences that may disrupt the context
-    # Avoid accidentally creating tables, lists, etc
-    value = re.sub(r'^\s*[-*+]\s+', r'\\- ', value)  # Initial list tag
-    value = re.sub(r'^\s*\d+\.\s+', r'1\\. ', value)  # There is a sequence table at the beginning of the line
-    value = re.sub(r'^\s*#+\s+', r'\\# ', value)  # Initial title
-    value = re.sub(r'^\s*>\s+', r'\\> ', value)  # Initial citation
-
+    # 3. restore mentions
+    for placeholder, mention in mentions:
+        value = value.replace(placeholder, mention)
+    
     return value
 
 
