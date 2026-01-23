@@ -300,24 +300,25 @@ def prepare_asset_file_folder(username, repo_id, dtable_uuid, asset_dir_id, path
     except Exception as e:
         raise e
 
-    progress = {'zipped': 0, 'total': 1}
-    last_log_time = None
-    dtable_io_logger.info(add_task_id_to_log(f'export dtable: {dtable_uuid} username: {username} start to zip assets', task_id))
-    while progress['zipped'] != progress['total']:
-        time.sleep(0.5)   # sleep 0.5 second
-        try:
-            progress = json.loads(seafile_api.query_zip_progress(token))
-        except Exception as e:
-            raise e
-        else:
-            # per 10s or zip progress done, log progress
-            if not last_log_time or time.time() - last_log_time > 10 or progress['zipped'] == progress['total']:
-                dtable_io_logger.info(add_task_id_to_log(f'progress {progress}', task_id))
-                last_log_time = time.time()
-            failed_reason = progress.get('failed_reason')
-            if failed_reason:
-                raise Exception(failed_reason)
-    dtable_io_logger.info(add_task_id_to_log(f'export dtable: {dtable_uuid} username: {username} zip assets done', task_id))
+    if not USE_GO_FILESERVER:
+        progress = {'zipped': 0, 'total': 1}
+        last_log_time = None
+        dtable_io_logger.info(add_task_id_to_log(f'export dtable: {dtable_uuid} username: {username} start to zip assets', task_id))
+        while progress['zipped'] != progress['total']:
+            time.sleep(0.5)   # sleep 0.5 second
+            try:
+                progress = json.loads(seafile_api.query_zip_progress(token))
+            except Exception as e:
+                raise e
+            else:
+                # per 10s or zip progress done, log progress
+                if not last_log_time or time.time() - last_log_time > 10 or progress['zipped'] == progress['total']:
+                    dtable_io_logger.info(add_task_id_to_log(f'progress {progress}', task_id))
+                    last_log_time = time.time()
+                failed_reason = progress.get('failed_reason')
+                if failed_reason:
+                    raise Exception(failed_reason)
+        dtable_io_logger.info(add_task_id_to_log(f'export dtable: {dtable_uuid} username: {username} zip assets done', task_id))
 
     dtable_io_logger.info(add_task_id_to_log(f'export dtable: {dtable_uuid} username: {username} start to download asset zip', task_id))
 
@@ -1934,10 +1935,11 @@ def export_page_design_dir_to_path(repo_id, dtable_uuid, page_id, tmp_file_path,
     token = seafile_api.get_fileserver_access_token(
         repo_id, json.dumps(fake_obj_id), 'download-dir', username, use_onetime=False
     )
-    progress = {'zipped': 0, 'total': 1}
-    while progress['zipped'] != progress['total']:
-        time.sleep(0.5)   # sleep 0.5 second
-        progress = json.loads(seafile_api.query_zip_progress(token))
+    if not USE_GO_FILESERVER:
+        progress = {'zipped': 0, 'total': 1}
+        while progress['zipped'] != progress['total']:
+            time.sleep(0.5)   # sleep 0.5 second
+            progress = json.loads(seafile_api.query_zip_progress(token))
 
     asset_url = gen_dir_zip_download_url(token)
     resp = requests.get(asset_url)
