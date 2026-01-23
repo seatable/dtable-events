@@ -194,17 +194,24 @@ def escape_markdown_value(value):
     value = str(value)
     
     # 1. mentions in value
-    mentions = []
-    
+    protect_strs = []
+
     def protect_mention(match):
         mention = match.group(0)
         placeholder = f'MENTION{uuid4().hex[:8]}'
-        mentions.append((placeholder, mention))
+        protect_strs.append((placeholder, mention))
         return placeholder
-    
+
+    def protect_url(match):
+        url = match.group(0)
+        placeholder = f'URL{uuid4().hex[:8]}'
+        protect_strs.append((placeholder, url))
+        return placeholder
+
     # match and replace with placeholders
     value = re.sub(r'<@[\w.-]+>', protect_mention, value)
-    
+    value = re.sub(r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+(?::\d+)?(?:/[/\w .%&?=#-]*)?', protect_url, value)
+
     # 2. escape
     md_special_chars = [
         '\\', '`', '*', '_', '{', '}', '[', ']', 
@@ -222,9 +229,9 @@ def escape_markdown_value(value):
     value = re.sub(r'^\s*>\s+', r'\\> ', value)  # Initial citation
 
     # 3. restore mentions
-    for placeholder, mention in mentions:
-        value = value.replace(placeholder, mention)
-    
+    for placeholder, value in protect_strs:
+        value = value.replace(placeholder, value)
+
     return value
 
 
