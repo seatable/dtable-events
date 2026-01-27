@@ -314,7 +314,9 @@ class GeolocationMessageFormatter(BaseMessageFormatter):
             return self.format_empty_message()
         if not isinstance(value, dict):
             return self.format_empty_message()
+
         info_list = []
+
         province = value.get('province', '')
         city = value.get('city', '')
         district = value.get('district', '')
@@ -324,21 +326,32 @@ class GeolocationMessageFormatter(BaseMessageFormatter):
         lng = value.get('lng', '')
         lat = value.get('lat', '')
 
-        if country_region:
-            info_list.append(country_region)
-        if province:
-            info_list.append(province)
-        if city:
-            info_list.append(city)
-        if district:
-            info_list.append(district)
-        if detail:
-            info_list.append(detail)
+        address = value.get('address', '')
+        title = value.get('title', '')
 
-        if lng:
-            info_list.append("lng: %s" % lng)
-        if lat:
-            info_list.append("lat: %s" % lat)
+        if country_region or province or city or district or detail:
+            if country_region:
+                info_list.append(country_region)
+            if province:
+                info_list.append(province)
+            if city:
+                info_list.append(city)
+            if district:
+                info_list.append(district)
+            if detail:
+                info_list.append(detail)
+
+        if lng or lat:
+            if lng:
+                info_list.append("lng: %s" % lng)
+            if lat:
+                info_list.append("lat: %s" % lat)
+
+        if address or title:
+            if address:
+                info_list.append(address)
+            if title:
+                info_list.append(title)
 
         return info_list and " ".join(info_list) or ''
 
