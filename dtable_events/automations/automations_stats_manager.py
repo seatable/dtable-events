@@ -28,25 +28,25 @@ class AutomationsStatsManager:
         return self.roles
 
     def get_user_quota(self, db_session, username):
-        sql = "SELECT username, automation_limit_per_month FROM user_quota WHERE username=:username"
+        sql = "SELECT username, monthly_automation_limit_per_user FROM user_quota WHERE username=:username"
         row = db_session.execute(text(sql), {'username': username}).fetchone()
-        if row and row.automation_limit_per_month and row.automation_limit_per_month != 0:
-            return row.automation_limit_per_month
+        if row and row.monthly_automation_limit_per_user and row.monthly_automation_limit_per_user != 0:
+            return row.monthly_automation_limit_per_user
         user_role = get_user_role(db_session, username)
-        return self.get_roles().get(user_role, {}).get('automation_limit_per_month', -1)
+        return self.get_roles().get(user_role, {}).get('monthly_automation_limit_per_user', -1)
 
     def get_org_quota(self, db_session, org_id):
-        sql = "SELECT org_id, automation_limit_per_month FROM organizations_org_quota WHERE org_id=:org_id"
+        sql = "SELECT org_id, monthly_automation_limit_per_user FROM organizations_org_quota WHERE org_id=:org_id"
         row = db_session.execute(text(sql), {'org_id': org_id}).fetchone()
-        if row and row.automation_limit_per_month and row.automation_limit_per_month != 0:
-            return row.automation_limit_per_month
+        if row and row.monthly_automation_limit_per_user and row.monthly_automation_limit_per_user != 0:
+            return row.monthly_automation_limit_per_user
         sql = "SELECT role FROM organizations_orgsettings WHERE org_id=:org_id"
         row = db_session.execute(text(sql), {'org_id': org_id}).fetchone()
         if not row:
             org_role = 'org_default'
         else:
             org_role = row.role
-        return self.get_roles().get(org_role, {}).get('automation_limit_per_month', -1)
+        return self.get_roles().get(org_role, {}).get('monthly_automation_limit_per_user', -1)
 
     def get_user_usage(self, db_session, username):
         """
