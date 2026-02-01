@@ -55,6 +55,7 @@ try:
     SEATABLE_AI_SERVER_URL = getattr(seahub_settings, 'SEATABLE_AI_SERVER_URL', 'http://127.0.0.1:8888')
     ENABLE_SEATABLE_AI = getattr(seahub_settings, 'ENABLE_SEATABLE_AI', False)
     AUTO_RULES_AI_CONTENT_MAX_LENGTH = getattr(seahub_settings, 'AUTO_RULES_AI_CONTENT_MAX_LENGTH', 10000)
+    ORG_MEMBER_QUOTA_DEFAULT = getattr(seahub_settings, 'ORG_MEMBER_QUOTA_DEFAULT', 10)
 
     # env
     CCNET_DB_NAME = os.environ.get('SEATABLE_MYSQL_DB_CCNET_DB_NAME', 'ccnet_db')

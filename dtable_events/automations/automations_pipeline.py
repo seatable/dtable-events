@@ -37,7 +37,7 @@ class RateLimiter:
         else:
             return owner
 
-    def is_allowed(self, owner, org_id):
+    def is_allowed(self, owner, org_id, workers):
         limit_key = self.get_key(owner, org_id)
         if isinstance(limit_key, str) and '@seafile_group' in limit_key:
             return True
@@ -45,7 +45,7 @@ class RateLimiter:
             if time.time() - self.window_start > self.window_secs:
                 return True
             total_time = self.counters.get(limit_key, 0)
-            if total_time / self.window_secs > self.percent / 100:
+            if total_time / self.window_secs > self.percent / 100 * workers:
                 return False
             return True
 
@@ -170,7 +170,7 @@ class AutomationsPipeline:
                         automation_rule = self.get_automation_rule(db_session, event)
                         if not automation_rule:
                             continue
-                        if not self.rate_limiter.is_allowed(owner_info['owner'], owner_info['org_id']):
+                        if not self.rate_limiter.is_allowed(owner_info['owner'], owner_info['org_id'], self.workers):
                             auto_rule_logger.info(f"owner {owner_info['owner']} org {owner_info['org_id']} rate limit exceed, event {event} will not trigger")
                             automation_rule.append_warning({'type': 'exceed_system_resource_limit'})
                             self.results_queue.put(AutomationResult(
