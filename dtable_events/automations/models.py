@@ -28,16 +28,15 @@ def _encrypt_detail(detail):
 def _decrypt_detail(detail):
     detail_clone = deepcopy(detail)
     cryptor = AESPasswordHasher()
-    try:
-        decrypted_details = {
-            key: cryptor.decode(detail_clone[key])
-            for key in ENCRYPT_KEYS if key in detail_clone and detail_clone[key]
-        }
-        detail_clone.update(decrypted_details)
-        return detail_clone
-    except Exception as e:
-        logger.error(e)
-        return None
+    decrypted_details = {}
+    for key in ENCRYPT_KEYS:
+        if key in detail_clone and detail_clone[key]:
+            try:
+                decrypted_details[key] = cryptor.decode(detail_clone[key])
+            except:
+                logger.debug(f'Key {key} with value {detail_clone[key]} decodes failure')
+    detail_clone.update(decrypted_details)
+    return detail_clone
 
 class BoundThirdPartyAccounts(Base):
     __tablename__ = 'bound_third_party_accounts'
