@@ -24,7 +24,7 @@ from dtable_events.utils.utils_metric import AUTOMATION_RULES_QUEUE_METRIC_HELP,
 
 class RateLimiter:
 
-    def __init__(self, window_secs = 60 * 5, percent=25):
+    def __init__(self, window_secs = 60 * 5, percent=0.25):
         self.window_secs = window_secs
         self.percent = percent
         self.window_start = time.time()
@@ -45,7 +45,8 @@ class RateLimiter:
             if time.time() - self.window_start > self.window_secs:
                 return True
             total_time = self.counters.get(limit_key, 0)
-            if total_time / self.window_secs > self.percent / 100 * workers:
+            auto_rule_logger.debug(f"owner {owner} org_id {org_id} usage percent {self.get_percent(owner, org_id, workers)}")
+            if total_time / (self.window_secs * workers) > self.percent:
                 return False
             return True
 
@@ -58,9 +59,9 @@ class RateLimiter:
             limit_key = self.get_key(owner, org_id)
             self.counters[limit_key] = self.counters.get(limit_key, 0) + run_time
 
-    def get_percent(self, owner, org_id):
+    def get_percent(self, owner, org_id, workers):
         limit_key = self.get_key(owner, org_id)
-        return self.counters.get(limit_key, 0) / self.window_secs
+        return self.counters.get(limit_key, 0) / (self.window_secs * workers)
 
 
 class AutomationsPipeline:
@@ -121,7 +122,7 @@ class AutomationsPipeline:
             pass
 
         try:
-            rate_limit_percent = int(os.environ.get('AUTOMATION_RATE_LIMIT_PERCENT', '25'))
+            rate_limit_percent = float(os.environ.get('AUTOMATION_RATE_LIMIT_PERCENT', '0.25'))
             self.rate_limiter.percent = rate_limit_percent
         except:
             pass
@@ -150,7 +151,7 @@ class AutomationsPipeline:
         return AutomationRule(event_data, rule.trigger, rule.actions, options)
 
     def receive(self):
-        auto_rule_logger.info("Start to receive automation event from redis")
+        auto_rule_logger.info(f"Start to receive automation event from redis, window seconds {self.rate_limiter.window_secs} limit percent {self.rate_limiter.percent}")
         subscriber = self._redis_client.get_subscriber(self.per_update_channel)
         last_message_time = datetime.now()
         while True:
@@ -314,7 +315,7 @@ class AutomationsPipeline:
                 org_id = result.org_id
                 run_time = result.run_time
                 self.rate_limiter.record_time(owner, org_id, run_time)
-                auto_rule_logger.debug(f"owner {owner} org_id {org_id} usage percent {self.rate_limiter.get_percent(owner, org_id)}")
+                auto_rule_logger.debug(f"owner {owner} org_id {org_id} usage percent {self.rate_limiter.get_percent(owner, org_id, self.workers)}")
             db_session = self._db_session_class()
             try:
                 self.automations_stats_manager.update_stats(db_session, result)
