@@ -40,7 +40,7 @@ def _check_and_raise_error(response):
         raise ConnectionError(response.json())
 
 class _SendEmailBaseClass(ABC):
-    def _build_msg_obj(self, send_info, from_addr=None):
+    def _build_msg_obj(self, send_info):
         msg = send_info.get('message', '')
         html_msg = send_info.get('html_message', '')
         send_to = send_info.get('send_to', [])
