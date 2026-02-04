@@ -230,9 +230,6 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
         self.account_id = account_id
         self.detail = detail
         self.db_session = db_session
-        self.host_user = detail.get('host_user')
-        self.sender_name = detail.get('sender_name')
-        self.sender_email = detail.get('sender_email')
         self.client_id = detail.get('client_id')
         self.client_secret = detail.get('client_secret')
         self.refresh_token = detail.get('refresh_token')
@@ -310,9 +307,9 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
             success = True
         except Exception as e:
             dtable_message_logger.exception(
-                'Email sending failed. email: %s, error: %s' % (self.host_user, e))
+                f'Email sending failed, error: {e}')
         
-        self._save_send_email_record(self.host_user, success)
+        self._save_send_email_record('<OAuth authenticated account>', success)
         if not success:
             raise SendEmailFailure()
         
@@ -335,12 +332,12 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
                 _check_and_raise_error(response)
                 success = True
             except Exception as e:
-                dtable_message_logger.warning('Batch send emails: Email sending failed. email: %s, error: %s' % (self.host_user, e))
+                dtable_message_logger.warning(f'Batch send emails: Email sending failed, error: {e}')
 
             send_state_list.append(success)
             time.sleep(0.5)
 
-        self._save_batch_send_email_record(self.host_user, send_state_list)
+        self._save_batch_send_email_record('<OAuth authenticated account>', send_state_list)
     
 class GoogleAPISendEmail(_ThirdpartyAPISendEmail):
     def __init__(self, db_session, account_id, detail, operator):
