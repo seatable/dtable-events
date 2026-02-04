@@ -1402,17 +1402,20 @@ def query_plugin_email_send_status():
 
     task_id = request.args.get('task_id')
     if not plugin_email_task_manager.is_valid_task_id(task_id):
-        return make_response(('task_id invalid.', 400))
-
+        return make_response(('task_id not found.', 404))
+    
     try:
-        is_finished = plugin_email_task_manager.query_status(task_id)
+        is_finished, result = message_task_manager.query_status(task_id)
     except Exception as e:
-        dtable_io_logger.debug(e)
+        dtable_io_logger.debug(e)  # task_id not found
         return make_response((e, 500))
-
-    resp = dict(is_finished=is_finished)
-    return make_response((resp, 200))
-
+    
+    if is_finished and 'err_msg' in result:
+        return make_response((result['err_msg'], result['status_code']))
+    else:
+        resp = dict(is_finished=is_finished)
+        resp['result'] = result if result else {}
+        return make_response((resp, 200))
 
 @app.route('/add-convert-app-table-page-to-excel-task', methods=['POST'])
 def convert_app_table_page_to_excel():
