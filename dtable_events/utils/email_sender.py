@@ -230,9 +230,6 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
         self.account_id = account_id
         self.detail = detail
         self.db_session = db_session
-        self.host_user = detail.get('host_user')
-        self.sender_name = detail.get('sender_name')
-        self.sender_email = detail.get('sender_email')
         self.client_id = detail.get('client_id')
         self.client_secret = detail.get('client_secret')
         self.refresh_token = detail.get('refresh_token')
@@ -242,7 +239,7 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
         self.scopes = detail.get('scopes')
         self.operator = operator
 
-        if not all([self.client_id,  self.client_secret, self.refresh_token, self.host_user, self.token_url, self.scopes, self.operator]):
+        if not all([self.client_id,  self.client_secret, self.refresh_token, self.token_url, self.scopes, self.operator]):
             dtable_message_logger.exception('Third party account %s is invalid.' % self.account_id)
             raise ThirdPartyAccountInvalid()
         
@@ -310,9 +307,9 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
             success = True
         except Exception as e:
             dtable_message_logger.exception(
-                'Email sending failed. email: %s, error: %s' % (self.host_user, e))
+                f'Email sending failed, error: {e}')
         
-        self._save_send_email_record(self.host_user, success)
+        self._save_send_email_record('<OAuth authenticated account>', success)
         if not success:
             raise SendEmailFailure()
         
@@ -335,18 +332,18 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
                 _check_and_raise_error(response)
                 success = True
             except Exception as e:
-                dtable_message_logger.warning('Batch send emails: Email sending failed. email: %s, error: %s' % (self.host_user, e))
+                dtable_message_logger.warning(f'Batch send emails: Email sending failed, error: {e}')
 
             send_state_list.append(success)
             time.sleep(0.5)
 
-        self._save_batch_send_email_record(self.host_user, send_state_list)
+        self._save_batch_send_email_record('<OAuth authenticated account>', send_state_list)
     
 class GoogleAPISendEmail(_ThirdpartyAPISendEmail):
     def __init__(self, db_session, account_id, detail, operator):
         super().__init__(db_session, account_id, detail, operator)
 
-        self.gmail_api_send_emails_endpoint = f'https://gmail.googleapis.com/upload/gmail/v1/users/{parse.quote(self.host_user)}/messages/send?uploadType=multipart'
+        self.gmail_api_send_emails_endpoint = f'https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send?uploadType=multipart'
 
     def _on_sending_email(self, msg_obj):
         msg_string = msg_obj.as_string()
@@ -358,11 +355,11 @@ class GoogleAPISendEmail(_ThirdpartyAPISendEmail):
         
         return requests.post(self.gmail_api_send_emails_endpoint, data=msg_string, headers=headers)
 
-class MS365APISendEmail(_ThirdpartyAPISendEmail):
+class MicrosoftAPISendEmail(_ThirdpartyAPISendEmail):
     def __init__(self, db_session, account_id, detail, operator):
         super().__init__(db_session, account_id, detail, operator)
 
-        self.outlook_api_send_emails_endpoint = 'https://graph.microsoft.com/v1.0' + ('/me/sendMail' if self.host_user == 'me' else f'/users/{parse.quote(self.host_user)}/sendMail')
+        self.microsoft_api_send_emails_endpoint = 'https://graph.microsoft.com/v1.0/me/sendMail'
 
     def _build_msg_obj_ms_json(self, send_info):
         # send info
@@ -389,11 +386,6 @@ class MS365APISendEmail(_ThirdpartyAPISendEmail):
                 'contentType': 'html' if html_msg else 'text',
                 'content': html_msg if html_msg else msg
             },
-            'from':{
-                'emailAddress': {
-                    'address': self.sender_email if self.sender_name else self.host_user
-                }
-            },
             'toRecipients': [
                 {
                     'emailAddress':{
@@ -419,9 +411,6 @@ class MS365APISendEmail(_ThirdpartyAPISendEmail):
                 for to in reply_to
             ]
         }
-
-        if self.sender_name:
-            email_data['from']['emailAddress']['name'] = self.sender_name
 
         if message_id:
             email_data.update({'internetMessageId': message_id})
@@ -462,7 +451,7 @@ class MS365APISendEmail(_ThirdpartyAPISendEmail):
         }
 
         return requests.post(
-            self.outlook_api_send_emails_endpoint,
+            self.microsoft_api_send_emails_endpoint,
             data=json.dumps(email_data),
             headers=headers
         )
@@ -476,7 +465,7 @@ class MS365APISendEmail(_ThirdpartyAPISendEmail):
             'Content-Type': 'text/plain'
         }
         
-        return requests.post(self.outlook_api_send_emails_endpoint, data=msg_base64, headers=headers)
+        return requests.post(self.microsoft_api_send_emails_endpoint, data=msg_base64, headers=headers)
 
 class EmailSender:
     def __init__(self, account_id, operator, config=None, db_session=None):
@@ -506,8 +495,8 @@ class EmailSender:
             self.sender = SMTPSendEmail(self.db_session, self.account_id, detail, self.operator)
         elif self.email_provider == 'Gmail':
             self.sender = GoogleAPISendEmail(self.db_session, self.account_id, detail, self.operator)
-        elif self.email_provider == 'Outlook':
-            self.sender = MS365APISendEmail(self.db_session, self.account_id, detail, self.operator)
+        elif self.email_provider in ('Microsoft', 'Outlook'):
+            self.sender = MicrosoftAPISendEmail(self.db_session, self.account_id, detail, self.operator)
         else:
             dtable_message_logger.exception(f'Invalid third party account type: account_id: {self.account_id} account type: {self.email_provider}')
             raise ThirdPartyAccountInvalid()
