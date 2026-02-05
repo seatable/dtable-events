@@ -302,16 +302,18 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
         response = self._on_sending_email(msg_obj)
 
         success = False
+        exception = None
         try:
             _check_and_raise_error(response)
             success = True
         except Exception as e:
+            exception = e
             dtable_message_logger.exception(
                 f'Email sending failed, error: {e}')
         
         self._save_send_email_record('<OAuth authenticated account>', success)
         if not success:
-            raise SendEmailFailure()
+            raise SendEmailFailure(repr(exception))
         
         return {'success': True}
 
