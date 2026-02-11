@@ -3448,6 +3448,32 @@ class RunAI(BaseAction):
         # Build complete AI classification input content
         content = f'Available options: {target_content}\nOption type: {target_column.get("type")}\nContent to classify: {classify_content}\n'
         return content
+
+    def _get_image_ocr_text(self, image_list, repo_id):
+        if not image_list or not repo_id:
+            return ''
+
+        try:
+            file_name, download_token = self.get_file_download_info(image_list, repo_id)
+            if not file_name or not download_token:
+                return ''
+
+            file_content = self.get_file_binary_content(file_name, download_token)
+            if file_content is None:
+                return ''
+
+            seatable_ai_api = DTableAIAPI(
+                self.username,
+                self.auto_rule.org_id,
+                self.auto_rule.dtable_uuid,
+                SEATABLE_AI_SERVER_URL
+            )
+            ocr_text = seatable_ai_api.ocr(file_name, file_content)
+            return ocr_text.strip() if ocr_text else ''
+        except Exception as e:
+            auto_rule_logger.warning(f'rule {self.auto_rule.rule_id} ocr in custom prompt failed: {e}')
+            return ''
+
     def fill_custom_prompt(self, custom_prompt, row_data):
         """Fill custom_prompt with field values using the same pattern as notifications"""
         if not custom_prompt:
@@ -3459,6 +3485,7 @@ class RunAI(BaseAction):
         column_blanks = [blank for blank in blanks if blank in col_name_dict]
         
         filled_prompt = custom_prompt
+        repo_id = self.config.get('repo_id')
 
         for blank in column_blanks:
             column_value = row_data.get(blank, '')
@@ -3467,12 +3494,16 @@ class RunAI(BaseAction):
             column = col_name_dict.get(blank)
             if column:
                 column_type = column.get('type')
-                formatted_value = self._format_column_value_for_ai(column_value, column_type)
+                # For image columns, extract text using OCR
+                if column_type == ColumnTypes.IMAGE and column_value and repo_id:
+                    formatted_value = self._get_image_ocr_text(column_value, repo_id)
+                else:
+                    formatted_value = self._format_column_value_for_ai(column_value, column_type)
             else:
                 formatted_value = ''
             
             filled_prompt = filled_prompt.replace('{' + blank + '}', formatted_value)
-        
+
         return filled_prompt
             
     def summary(self):
@@ -5046,6 +5077,7 @@ class AutomationRule:
                             'config': {
                                 'custom_output_column_key': action_info.get('custom_output_column_key'),
                                 'custom_prompt': action_info.get('custom_prompt'),
+                                'repo_id': action_info.get('repo_id'),
                             }
                         },
                         'invoice_recognition': {
