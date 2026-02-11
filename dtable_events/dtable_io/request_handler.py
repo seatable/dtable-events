@@ -1561,6 +1561,7 @@ def add_import_airtable_task():
     airtable_base_id = request_data.get('airtable_base_id')
     workspace_id = request_data.get('workspace_id')
     repo_id = request_data.get('repo_id')
+    org_id = request_data.get('org_id')
 
     context = {
         'username': username,
@@ -1568,7 +1569,8 @@ def add_import_airtable_task():
         'airtable_access_token': airtable_access_token,
         'airtable_base_id': airtable_base_id,
         'workspace_id': workspace_id,
-        'repo_id': repo_id
+        'repo_id': repo_id,
+        'org_id': org_id
     }
     try:
         task_id = task_manager.add_import_airtable_task(context)

@@ -451,12 +451,16 @@ class AirtableConvertor(object):
         self.first_column_map = {}
         self.link_map = {}
 
-    def convert_airtable_to_seatable(self):        
+    def prepare_import(self):
         schema = self.airtable_api.get_schema()
         self.extract_schema_info(schema)
         self.parse_airtable_schema(schema)
         self.get_airtable_row_map()
-        
+
+    def get_total_asset_size(self):
+        return getattr(self, '_total_asset_size', 0)
+
+    def execute_import(self):
         # Create tables and columns
         self.convert_tables()
         self.add_helper_table()
@@ -768,15 +772,30 @@ class AirtableConvertor(object):
                         add_link_mapping(linked_table_name, linked_field, table_name, field['name'], table)
 
     def get_airtable_row_map(self):
-        """Get all data from Airtable"""
+        """Get all data from Airtable and calculate total asset size"""
         logger.info('Start retrieving data from Airtable')
 
         self.airtable_row_map = {}
+        self._total_asset_size = 0
+
         for table_name in self.table_names:
             rows = self.airtable_api.list_all_rows(table_name)
             self.airtable_row_map[table_name] = rows
 
-        logger.info('Data retrieved from Airtable')
+            # Calculate asset size for this table
+            columns = self.airtable_column_map.get(table_name, [])
+            file_columns = {col['name'] for col in columns if col.get('type') == ColumnTypes.FILE}
+            if not file_columns:
+                continue
+
+            for row in rows:
+                self._total_asset_size += sum(
+                    item.get('size', 0)
+                    for col_name in file_columns
+                    for item in (row.get(col_name) or [])
+                    if isinstance(item, dict)
+                )
+        logger.info('Data retrieved from Airtable, total asset size: %d bytes', self._total_asset_size)
         return self.airtable_row_map
 
     def get_table_map(self):
