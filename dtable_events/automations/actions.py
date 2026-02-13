@@ -3449,43 +3449,33 @@ class RunAI(BaseAction):
         content = f'Available options: {target_content}\nOption type: {target_column.get("type")}\nContent to classify: {classify_content}\n'
         return content
 
-    def _get_image_ocr_text(self, image_list, repo_id):
+    def _collect_image(self, image_list, repo_id):
+        """Collect binary content of the first image from image column"""
         if not image_list or not repo_id:
-            return ''
+            return None
 
         try:
             file_name, download_token = self.get_file_download_info(image_list, repo_id)
             if not file_name or not download_token:
-                return ''
-
-            file_content = self.get_file_binary_content(file_name, download_token)
-            if file_content is None:
-                return ''
-
-            seatable_ai_api = DTableAIAPI(
-                self.username,
-                self.auto_rule.org_id,
-                self.auto_rule.dtable_uuid,
-                SEATABLE_AI_SERVER_URL
-            )
-            ocr_text = seatable_ai_api.ocr(file_name, file_content)
-            return ocr_text.strip() if ocr_text else ''
+                return None
+            return self.get_file_binary_content(file_name, download_token)
         except Exception as e:
-            auto_rule_logger.warning(f'rule {self.auto_rule.rule_id} ocr in custom prompt failed: {e}')
-            return ''
+            auto_rule_logger.warning(f'rule {self.auto_rule.rule_id} collect image failed: {e}')
+            return None
 
     def fill_custom_prompt(self, custom_prompt, row_data):
         """Fill custom_prompt with field values using the same pattern as notifications"""
         if not custom_prompt:
-            return ''
-        
+            return '', []
+
         # Find all field placeholders like {field_name}
         blanks = set(re.findall(r'\{([^{]*?)\}', custom_prompt))
         col_name_dict = {col.get('name'): col for col in self.auto_rule.table_info['columns']}
         column_blanks = [blank for blank in blanks if blank in col_name_dict]
-        
+
         filled_prompt = custom_prompt
         repo_id = self.config.get('repo_id')
+        images = []
 
         for blank in column_blanks:
             column_value = row_data.get(blank, '')
@@ -3494,9 +3484,11 @@ class RunAI(BaseAction):
             column = col_name_dict.get(blank)
             if column:
                 column_type = column.get('type')
-                # For image columns, extract text using OCR
                 if column_type == ColumnTypes.IMAGE and column_value and repo_id:
-                    formatted_value = self._get_image_ocr_text(column_value, repo_id)
+                    image_content = self._collect_image(column_value, repo_id)
+                    if image_content:
+                        images.append(image_content)
+                    formatted_value = '[Image provided]'
                 else:
                     formatted_value = self._format_column_value_for_ai(column_value, column_type)
             else:
@@ -3504,7 +3496,7 @@ class RunAI(BaseAction):
             
             filled_prompt = filled_prompt.replace('{' + blank + '}', formatted_value)
 
-        return filled_prompt
+        return filled_prompt, images
             
     def summary(self):
         self.fill_summary_field()
@@ -3829,14 +3821,14 @@ class RunAI(BaseAction):
 
         # Process custom_prompt with field replacements
         custom_prompt = self.config.get('custom_prompt', '')
-        filled_prompt = self.fill_custom_prompt(custom_prompt, converted_row)
+        filled_prompt, images = self.fill_custom_prompt(custom_prompt, converted_row)
         filled_prompt = filled_prompt[:AUTO_RULES_AI_CONTENT_MAX_LENGTH]
         if not filled_prompt.strip():
             custom_result = ''
         else:
             try:
                 seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, SEATABLE_AI_SERVER_URL)
-                custom_result = seatable_ai_api.custom(filled_prompt)
+                custom_result = seatable_ai_api.custom(filled_prompt, images=images if images else None)
             except Exception as e:
                 auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai custom processing error: {e}')
                 self.auto_rule.append_warning({
