@@ -2088,6 +2088,12 @@ class LinkRecordsAction(BaseAction):
                 else:
                     row_id_list.append(row_id)
                     other_rows_ids_map[row_id] = [other_row['_id']]
+        # rows without any matches in other table, update links to empty
+        for row_ids in table_rows_dict.values():
+            for row_id in row_ids:
+                if row_id not in other_rows_ids_map:
+                    other_rows_ids_map[row_id] = []
+                    row_id_list.append(row_id)
         # update links
         step = 1000
         for i in range(0, len(row_id_list), step):
