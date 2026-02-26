@@ -1,9 +1,10 @@
-import json
 import time
 import base64
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
+from email.mime.application import MIMEApplication
 from email.utils import formataddr, parseaddr
 from urllib import parse
 
@@ -29,6 +30,9 @@ class ThirdPartyAccountAuthorizationFailure(Exception):
 class ThirdPartyAccountFetchTokenFailure(Exception):
     pass
 
+class ThirdPartyAccountFetchEmailBoxFailure(Exception):
+    pass
+
 class InvalidEmailMessage(ValueError):
     pass
 
@@ -40,12 +44,11 @@ def _check_and_raise_error(response):
         raise ConnectionError(response.json())
 
 class _SendEmailBaseClass(ABC):
-    def _build_msg_obj(self, send_info):
+    def _build_msg_obj(self, send_info, sender_name, sender_email):
         msg = send_info.get('message', '')
         html_msg = send_info.get('html_message', '')
         send_to = send_info.get('send_to', [])
         subject = send_info.get('subject', '')
-        source = send_info.get('source', '')
         copy_to = send_info.get('copy_to', [])
         reply_to = send_info.get('reply_to', '')
         file_download_urls = send_info.get('file_download_urls', None)
@@ -56,19 +59,22 @@ class _SendEmailBaseClass(ABC):
 
         msg = send_info.get('message', '')
         html_msg = send_info.get('html_message', '')
-        if not msg and not html_msg:
+        if not msg and not html_msg or not sender_name or not sender_email:
             dtable_message_logger.warning(
                 'Email message invalid. message: %s, html_message: %s' % (msg, html_msg))
             raise InvalidEmailMessage('Email message invalid')
 
         send_to = [formataddr(parseaddr(to)) for to in send_to]
         copy_to = [formataddr(parseaddr(to)) for to in copy_to]
-        if source:
-            source = formataddr(parseaddr(source))
+
+        # Old features compatible:
+        # source = send_info.get('source', '')
+        # if source:
+        #    source = formataddr(parseaddr(source))
 
         msg_obj = MIMEMultipart()
         msg_obj['Subject'] = subject
-        msg_obj['From'] = source or formataddr((self.sender_name, self.sender_email if self.sender_email else self.host_user))
+        msg_obj['From'] = formataddr((sender_name, sender_email))
         msg_obj['To'] = ",".join(send_to)
         msg_obj['Cc'] = ",".join(copy_to)
         msg_obj['Reply-to'] = reply_to
@@ -90,7 +96,6 @@ class _SendEmailBaseClass(ABC):
         if html_msg and image_cid_url_map:
             for cid, image_url in image_cid_url_map.items():
                 response = requests.get(image_url)
-                from email.mime.image import MIMEImage
                 msg_image = MIMEImage(response.content)
                 msg_image.add_header('Content-ID', '<%s>' % cid)
                 msg_obj.attach(msg_image)
@@ -98,16 +103,16 @@ class _SendEmailBaseClass(ABC):
         if file_download_urls:
             for file_name, file_url in file_download_urls.items():
                 response = requests.get(file_url)
-                attach_file = MIMEText(response.content, 'base64', 'utf-8')
-                attach_file["Content-Type"] = 'application/octet-stream'
-                attach_file["Content-Disposition"] = 'attachment;filename*=UTF-8\'\'' + parse.quote(file_name)
+                attach_file = MIMEApplication(response.content)
+                attach_file.add_header('Content-Disposition', 'attachment', filename=('utf-8', '', file_name))
                 msg_obj.attach(attach_file)
 
         if file_contents:
             for file_name, content in file_contents.items():
-                attach_file = MIMEText(content, 'base64', 'utf-8')
-                attach_file["Content-Type"] = 'application/octet-stream'
-                attach_file["Content-Disposition"] = 'attachment;filename*=UTF-8\'\'' + parse.quote(file_name)
+                if isinstance(content, str):
+                    content = content.encode('utf-8')
+                attach_file = MIMEApplication(content)
+                attach_file.add_header('Content-Disposition', 'attachment', filename=('utf-8', '', file_name))
                 msg_obj.attach(attach_file)
 
         return msg_obj
@@ -153,7 +158,7 @@ class SMTPSendEmail(_SendEmailBaseClass):
         send_to = send_info.get('send_to', [])
         
         try:
-            msg_obj = self._build_msg_obj(send_info)
+            msg_obj = self._build_msg_obj(send_info, self.sender_name, self.sender_email or self.host_user)
         except Exception as e:
             dtable_message_logger.exception(f'Build MIME object failure: {e}')
             raise InvalidEmailMessage()
@@ -204,7 +209,7 @@ class SMTPSendEmail(_SendEmailBaseClass):
             copy_to = send_info.get('copy_to', [])
 
             try:
-                msg_obj = self._build_msg_obj(send_info)
+                msg_obj = self._build_msg_obj(send_info, self.sender_name, self.sender_email or self.host_user)
             except Exception as e:
                 dtable_message_logger.warning(f'Batch send emails: Build MIME object failure: {e}')
                 continue
@@ -238,6 +243,10 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
         self.token_url = detail.get('token_url')
         self.scopes = detail.get('scopes')
         self.operator = operator
+
+        # compatible for the accounts in 6.0.x 
+        self.sender_name = detail.get('sender_name')
+        self.sender_email = detail.get('sender_email')
 
         if not all([self.client_id,  self.client_secret, self.refresh_token, self.token_url, self.scopes, self.operator]):
             dtable_message_logger.exception('Third party account %s is invalid.' % self.account_id)
@@ -292,9 +301,19 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
     @abstractmethod
     def _on_sending_email(self, /): ...
 
+    @abstractmethod
+    def _get_sender(self, /): ...
+
     def send(self, send_info):
+        if not self.sender_name and not self.sender_email:
+            sender_name, sender_email = self._get_sender()
+        else:
+            # compatible for 6.0.x
+            sender_name = self.sender_name
+            sender_email = self.sender_email
+
         try:
-            msg_obj = self._build_msg_obj(send_info)
+            msg_obj = self._build_msg_obj(send_info, sender_name, sender_email)
         except Exception as e:
             dtable_message_logger.exception(f'Build MIME object failure: {e}')
             raise InvalidEmailMessage()
@@ -318,12 +337,19 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
         return {'success': True}
 
     def batch_send(self, send_info_list):
+        if not self.sender_name and not self.sender_email:
+            sender_name, sender_email = self._get_sender()
+        else:
+            # compatible for 6.0.x
+            sender_name = self.sender_name
+            sender_email = self.sender_email
+
         send_state_list = []
         for send_info in send_info_list:
             success = False
 
             try:
-                msg_obj = self._build_msg_obj(send_info)
+                msg_obj = self._build_msg_obj(send_info, sender_name, sender_email)
             except Exception as e:
                 dtable_message_logger.warning(f'Batch send emails: Build MIME object failure: {e}')
                 continue
@@ -345,7 +371,23 @@ class GoogleAPISendEmail(_ThirdpartyAPISendEmail):
     def __init__(self, db_session, account_id, detail, operator):
         super().__init__(db_session, account_id, detail, operator)
 
+        self.gmail_api_get_sender_endpoint = f'https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs'
         self.gmail_api_send_emails_endpoint = f'https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send?uploadType=multipart'
+
+    def _get_sender(self):
+        headers = {
+            'Authorization': f'Bearer {self.access_token}'
+        }
+        response = requests.get(self.gmail_api_get_sender_endpoint, headers=headers)
+        try:
+            _check_and_raise_error(response)
+            sender_info = response.json()['sendAs'][0]
+            sender_name = sender_info['displayName']
+            sender_email = sender_info['sendAsEmail']
+        except Exception as e:
+            dtable_message_logger.exception(f'Failure to fetch sender info: {e}')
+            raise ThirdPartyAccountFetchEmailBoxFailure(repr(e))
+        return sender_name, sender_email
 
     def _on_sending_email(self, msg_obj):
         msg_string = msg_obj.as_string()
@@ -361,102 +403,23 @@ class MicrosoftAPISendEmail(_ThirdpartyAPISendEmail):
     def __init__(self, db_session, account_id, detail, operator):
         super().__init__(db_session, account_id, detail, operator)
 
+        self.microsoft_api_get_sender_endpoint = 'https://graph.microsoft.com/v1.0/me'
         self.microsoft_api_send_emails_endpoint = 'https://graph.microsoft.com/v1.0/me/sendMail'
 
-    def _build_msg_obj_ms_json(self, send_info):
-        # send info
-        msg = send_info.get('message', '')
-        html_msg = send_info.get('html_message', '')
-        send_to = send_info.get('send_to', [])
-        subject = send_info.get('subject', '')
-        copy_to = send_info.get('copy_to', [])
-        reply_to = send_info.get('reply_to') or []
-        file_download_urls = send_info.get('file_download_urls', None)
-        file_contents = send_info.get('file_contents', None)
-        message_id = send_info.get('message_id', '')
-
-        if not msg and not html_msg:
-            dtable_message_logger.warning(
-                'Email message invalid. message: %s, html_message: %s' % (msg, html_msg))
-            raise ValueError('Email message invalid')
-        
-        email_data = {
-            'message':{
-                'subject': subject,
-            },
-            'body': {
-                'contentType': 'html' if html_msg else 'text',
-                'content': html_msg if html_msg else msg
-            },
-            'toRecipients': [
-                {
-                    'emailAddress':{
-                        'address': to
-                    }
-                }
-                for to in send_to
-            ],
-            'ccRecipients': [
-                {
-                    'emailAddress':{
-                        'address': to
-                    }
-                }
-                for to in copy_to
-            ],
-            'replyTo':[
-                {
-                    'emailAddress':{
-                        'address': to
-                    }
-                }
-                for to in reply_to
-            ]
-        }
-
-        if message_id:
-            email_data.update({'internetMessageId': message_id})
-
-        attachments = []
-
-        if file_download_urls:
-            attachments.extend([
-                {
-                    '@odata.type': '#microsoft.graph.fileAttachment',
-                    'name': 'UTF-8\'\'' + parse.quote(file_name),
-                    'contentType': 'application/octet-stream',
-                    'contentBytes': requests.get(file_url).content
-                }
-                for file_name, file_url in file_download_urls.items()
-            ])
-
-        if file_contents:
-            attachments.extend([
-                {
-                    '@odata.type': '#microsoft.graph.fileAttachment',
-                    'name': 'UTF-8\'\'' + parse.quote(file_name),
-                    'contentType': 'application/octet-stream',
-                    'contentBytes': file_content
-                }
-                for file_name, file_content in file_contents.items()
-            ])
-
-        if attachments:
-            email_data.update({'attachments': attachments})
-
-        return email_data
-    
-    def _on_sending_email_by_ms_json(self, email_data):
+    def _get_sender(self):
         headers = {
-            'Authorization': f'Bearer {self.access_token}',
-            'Content-Type': 'application/json'
+            'Authorization': f'Bearer {self.access_token}'
         }
-
-        return requests.post(
-            self.microsoft_api_send_emails_endpoint,
-            data=json.dumps(email_data),
-            headers=headers
-        )
+        response = requests.get(self.microsoft_api_get_sender_endpoint, headers=headers)
+        try:
+            _check_and_raise_error(response)
+            response = response.json()
+            sender_name = response['displayName']
+            sender_email = response['mail']
+        except Exception as e:
+            dtable_message_logger.exception(f'Failure to fetch sender info: {e}')
+            raise ThirdPartyAccountFetchEmailBoxFailure(repr(e))
+        return sender_name, sender_email
 
     def _on_sending_email(self, msg_obj):
         msg_bytes = msg_obj.as_bytes()
