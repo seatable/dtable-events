@@ -3,7 +3,7 @@ import queue
 import threading
 import time
 from dtable_events.utils.email_sender import ThirdPartyAccountNotFound, ThirdPartyAccountInvalid, \
-    ThirdPartyAccountAuthorizationFailure, ThirdPartyAccountFetchTokenFailure, ThirdPartyAccountFetchEmailBoxFailure, \
+    ThirdPartyAccountAuthorizationFailure, ThirdPartyAccountFetchTokenFailure, \
     InvalidEmailMessage, SendEmailFailure
 
 class TaskPluginEmailManager(object):
@@ -83,9 +83,6 @@ class TaskPluginEmailManager(object):
                     elif isinstance(e, ThirdPartyAccountFetchTokenFailure):
                         result['status_code'] = 400
                         result['err_msg'] = 'Third-party account fetches token failure'
-                    elif isinstance(e, ThirdPartyAccountFetchEmailBoxFailure):
-                        result['status_code'] = 400
-                        result['err_msg'] = 'Third-party account fetches sender from mail box failure or the mail box is invalid'
                     elif isinstance(e, InvalidEmailMessage):
                         result['status_code'] = 400
                         result['err_msg'] = 'Invalid email message'

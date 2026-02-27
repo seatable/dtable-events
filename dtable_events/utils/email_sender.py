@@ -30,9 +30,6 @@ class ThirdPartyAccountAuthorizationFailure(Exception):
 class ThirdPartyAccountFetchTokenFailure(Exception):
     pass
 
-class ThirdPartyAccountFetchEmailBoxFailure(Exception):
-    pass
-
 class InvalidEmailMessage(ValueError):
     pass
 
@@ -252,11 +249,9 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
             dtable_message_logger.exception('Third party account %s is invalid.' % self.account_id)
             raise ThirdPartyAccountInvalid()
         
-        self._request_access_token()
-        
     # request access_token
     def _request_access_token(self):
-        if not self.access_token or not self.expires_at or self.expires_at - time.time() < 300:
+        if not self.access_token or self.expires_at is None  or self.expires_at - time.time() < 300:
             params = {
                 'grant_type': 'refresh_token',
                 'client_id': self.client_id,
@@ -301,23 +296,14 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
     @abstractmethod
     def _on_sending_email(self, /): ...
 
-    @abstractmethod
-    def _get_sender(self, /): ...
-
     def send(self, send_info):
-        if not self.sender_name and not self.sender_email:
-            sender_name, sender_email = self._get_sender()
-        else:
-            # compatible for 6.0.x
-            sender_name = self.sender_name
-            sender_email = self.sender_email
-
         try:
-            msg_obj = self._build_msg_obj(send_info, sender_name, sender_email)
+            msg_obj = self._build_msg_obj(send_info, self.sender_name, self.sender_email)
         except Exception as e:
             dtable_message_logger.exception(f'Build MIME object failure: {e}')
             raise InvalidEmailMessage()
         
+        self._request_access_token()
         response = self._on_sending_email(msg_obj)
 
         success = False
@@ -330,30 +316,24 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
             dtable_message_logger.exception(
                 f'Email sending failed, error: {e}')
         
-        self._save_send_email_record('<OAuth authenticated account>', success)
+        self._save_send_email_record(self.sender_email, success)
         if not success:
             raise SendEmailFailure(repr(exception))
         
         return {'success': True}
 
     def batch_send(self, send_info_list):
-        if not self.sender_name and not self.sender_email:
-            sender_name, sender_email = self._get_sender()
-        else:
-            # compatible for 6.0.x
-            sender_name = self.sender_name
-            sender_email = self.sender_email
-
         send_state_list = []
         for send_info in send_info_list:
             success = False
 
             try:
-                msg_obj = self._build_msg_obj(send_info, sender_name, sender_email)
+                msg_obj = self._build_msg_obj(send_info, self.sender_name, self.sender_email)
             except Exception as e:
                 dtable_message_logger.warning(f'Batch send emails: Build MIME object failure: {e}')
                 continue
 
+            self._request_access_token()
             response = self._on_sending_email(msg_obj)
 
             try:
@@ -365,29 +345,13 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
             send_state_list.append(success)
             time.sleep(0.5)
 
-        self._save_batch_send_email_record('<OAuth authenticated account>', send_state_list)
+        self._save_batch_send_email_record(self.sender_email, send_state_list)
     
 class GoogleAPISendEmail(_ThirdpartyAPISendEmail):
+    EMAIL_SENDING_ENDPOINT = 'https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send?uploadType=multipart'
+
     def __init__(self, db_session, account_id, detail, operator):
         super().__init__(db_session, account_id, detail, operator)
-
-        self.gmail_api_get_sender_endpoint = f'https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs'
-        self.gmail_api_send_emails_endpoint = f'https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send?uploadType=multipart'
-
-    def _get_sender(self):
-        headers = {
-            'Authorization': f'Bearer {self.access_token}'
-        }
-        response = requests.get(self.gmail_api_get_sender_endpoint, headers=headers)
-        try:
-            _check_and_raise_error(response)
-            sender_info = response.json()['sendAs'][0]
-            sender_name = sender_info['displayName']
-            sender_email = sender_info['sendAsEmail']
-        except Exception as e:
-            dtable_message_logger.exception(f'Failure to fetch sender info: {e}')
-            raise ThirdPartyAccountFetchEmailBoxFailure(repr(e))
-        return sender_name, sender_email
 
     def _on_sending_email(self, msg_obj):
         msg_string = msg_obj.as_string()
@@ -397,29 +361,13 @@ class GoogleAPISendEmail(_ThirdpartyAPISendEmail):
             'Content-Type': 'message/rfc822'
         }
         
-        return requests.post(self.gmail_api_send_emails_endpoint, data=msg_string, headers=headers)
+        return requests.post(self.EMAIL_SENDING_ENDPOINT, data=msg_string, headers=headers)
 
 class MicrosoftAPISendEmail(_ThirdpartyAPISendEmail):
+    EMAIL_SENDING_ENDPOINT = 'https://graph.microsoft.com/v1.0/me/sendMail'
+
     def __init__(self, db_session, account_id, detail, operator):
         super().__init__(db_session, account_id, detail, operator)
-
-        self.microsoft_api_get_sender_endpoint = 'https://graph.microsoft.com/v1.0/me'
-        self.microsoft_api_send_emails_endpoint = 'https://graph.microsoft.com/v1.0/me/sendMail'
-
-    def _get_sender(self):
-        headers = {
-            'Authorization': f'Bearer {self.access_token}'
-        }
-        response = requests.get(self.microsoft_api_get_sender_endpoint, headers=headers)
-        try:
-            _check_and_raise_error(response)
-            response = response.json()
-            sender_name = response['displayName']
-            sender_email = response['mail']
-        except Exception as e:
-            dtable_message_logger.exception(f'Failure to fetch sender info: {e}')
-            raise ThirdPartyAccountFetchEmailBoxFailure(repr(e))
-        return sender_name, sender_email
 
     def _on_sending_email(self, msg_obj):
         msg_bytes = msg_obj.as_bytes()
@@ -430,7 +378,7 @@ class MicrosoftAPISendEmail(_ThirdpartyAPISendEmail):
             'Content-Type': 'text/plain'
         }
         
-        return requests.post(self.microsoft_api_send_emails_endpoint, data=msg_base64, headers=headers)
+        return requests.post(self.EMAIL_SENDING_ENDPOINT, data=msg_base64, headers=headers)
 
 class EmailSender:
     def __init__(self, account_id, operator, config=None, db_session=None):

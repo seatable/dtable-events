@@ -5,7 +5,7 @@ import uuid
 
 from dtable_events.utils.utils_metric import publish_metric, MESSAGE_TASK_MANAGER_METRIC_HELP
 from dtable_events.utils.email_sender import ThirdPartyAccountNotFound, ThirdPartyAccountInvalid, \
-    ThirdPartyAccountAuthorizationFailure, ThirdPartyAccountFetchTokenFailure, ThirdPartyAccountFetchEmailBoxFailure, \
+    ThirdPartyAccountAuthorizationFailure, ThirdPartyAccountFetchTokenFailure, \
     InvalidEmailMessage, SendEmailFailure
 
 class TaskMessageManager(object):
@@ -112,9 +112,6 @@ class TaskMessageManager(object):
                     elif isinstance(e, ThirdPartyAccountFetchTokenFailure):
                         result['status_code'] = 400
                         result['err_msg'] = 'Third-party account fetches token failure'
-                    elif isinstance(e, ThirdPartyAccountFetchEmailBoxFailure):
-                        result['status_code'] = 400
-                        result['err_msg'] = 'Third-party account fetches sender failure'
                     elif isinstance(e, InvalidEmailMessage):
                         result['status_code'] = 400
                         result['err_msg'] = 'Invalid email message'
