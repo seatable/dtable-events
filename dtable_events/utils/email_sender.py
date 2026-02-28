@@ -56,7 +56,19 @@ class _SendEmailBaseClass(ABC):
 
         msg = send_info.get('message', '')
         html_msg = send_info.get('html_message', '')
-        if not msg and not html_msg or not self.sender_name or not self.sender_email:
+
+        sender_email = self.sender_email
+        if not sender_email:
+            try:
+                sender_email = self.host_user
+            except:
+                pass
+        if not sender_email:
+            error_msg = f'Sender info is incompleted: sender\'s email is not provided!'
+            dtable_message_logger.warning(error_msg)
+            raise InvalidEmailMessage(error_msg)
+
+        if not msg and not html_msg:
             dtable_message_logger.warning(
                 'Email message invalid. message: %s, html_message: %s' % (msg, html_msg))
             raise InvalidEmailMessage('Email message invalid')
@@ -71,10 +83,7 @@ class _SendEmailBaseClass(ABC):
 
         msg_obj = MIMEMultipart()
         msg_obj['Subject'] = subject
-        try:
-            msg_obj['From'] = formataddr((self.sender_name, self.sender_email or self.host_user))
-        except:
-            msg_obj['From'] = formataddr((self.sender_name, self.sender_email))
+        msg_obj['From'] = formataddr((self.sender_name, sender_email))
         msg_obj['To'] = ",".join(send_to)
         msg_obj['Cc'] = ",".join(copy_to)
         msg_obj['Reply-to'] = reply_to
@@ -145,7 +154,7 @@ class SMTPSendEmail(_SendEmailBaseClass):
         self.email_port = detail.get('email_port')
         self.host_user = detail.get('host_user')
         self.password = detail.get('password')
-        self.sender_name = detail.get('sender_name')
+        self.sender_name = detail.get('sender_name', '')
         self.sender_email = detail.get('sender_email')
         self.operator = operator
 
@@ -239,7 +248,7 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
         self.client_secret = detail.get('client_secret')
         self.refresh_token = detail.get('refresh_token')
         self.access_token = detail.get('access_token')
-        self.sender_name = detail.get('sender_name')
+        self.sender_name = detail.get('sender_name', '')
         self.sender_email = detail.get('sender_email')
         self.expires_at = detail.get('expires_at')
         self.token_url = detail.get('token_url')
