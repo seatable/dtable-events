@@ -2,8 +2,9 @@ import uuid
 import queue
 import threading
 import time
-from dtable_events.utils.email_sender import ThirdPartyAccountNotFound, ThirdPartyAccountInvalid, ThirdPartyAccountAuthorizationFailure, ThirdPartyAccountFetchTokenFailure, InvalidEmailMessage, SendEmailFailure
-
+from dtable_events.utils.email_sender import ThirdPartyAccountNotFound, ThirdPartyAccountInvalid, \
+    ThirdPartyAccountAuthorizationFailure, ThirdPartyAccountFetchTokenFailure, \
+    InvalidEmailMessage, SendEmailFailure
 
 class TaskPluginEmailManager(object):
 
