@@ -41,7 +41,7 @@ def _check_and_raise_error(response):
         raise ConnectionError(response.json())
 
 class _SendEmailBaseClass(ABC):
-    def _build_msg_obj(self, send_info, sender_name, sender_email):
+    def _build_msg_obj(self, send_info):
         msg = send_info.get('message', '')
         html_msg = send_info.get('html_message', '')
         send_to = send_info.get('send_to', [])
@@ -56,7 +56,7 @@ class _SendEmailBaseClass(ABC):
 
         msg = send_info.get('message', '')
         html_msg = send_info.get('html_message', '')
-        if not msg and not html_msg or not sender_name or not sender_email:
+        if not msg and not html_msg or not self.sender_name or not self.sender_email:
             dtable_message_logger.warning(
                 'Email message invalid. message: %s, html_message: %s' % (msg, html_msg))
             raise InvalidEmailMessage('Email message invalid')
@@ -71,7 +71,10 @@ class _SendEmailBaseClass(ABC):
 
         msg_obj = MIMEMultipart()
         msg_obj['Subject'] = subject
-        msg_obj['From'] = formataddr((sender_name, sender_email))
+        try:
+            msg_obj['From'] = formataddr((self.sender_name, self.sender_email or self.host_user))
+        except:
+            msg_obj['From'] = formataddr((self.sender_name, self.sender_email))
         msg_obj['To'] = ",".join(send_to)
         msg_obj['Cc'] = ",".join(copy_to)
         msg_obj['Reply-to'] = reply_to
@@ -155,7 +158,7 @@ class SMTPSendEmail(_SendEmailBaseClass):
         send_to = send_info.get('send_to', [])
         
         try:
-            msg_obj = self._build_msg_obj(send_info, self.sender_name, self.sender_email or self.host_user)
+            msg_obj = self._build_msg_obj(send_info)
         except Exception as e:
             dtable_message_logger.exception(f'Build MIME object failure: {e}')
             raise InvalidEmailMessage()
@@ -206,7 +209,7 @@ class SMTPSendEmail(_SendEmailBaseClass):
             copy_to = send_info.get('copy_to', [])
 
             try:
-                msg_obj = self._build_msg_obj(send_info, self.sender_name, self.sender_email or self.host_user)
+                msg_obj = self._build_msg_obj(send_info)
             except Exception as e:
                 dtable_message_logger.warning(f'Batch send emails: Build MIME object failure: {e}')
                 continue
@@ -236,14 +239,12 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
         self.client_secret = detail.get('client_secret')
         self.refresh_token = detail.get('refresh_token')
         self.access_token = detail.get('access_token')
+        self.sender_name = detail.get('sender_name')
+        self.sender_email = detail.get('sender_email')
         self.expires_at = detail.get('expires_at')
         self.token_url = detail.get('token_url')
         self.scopes = detail.get('scopes')
         self.operator = operator
-
-        # compatible for the accounts in 6.0.x 
-        self.sender_name = detail.get('sender_name')
-        self.sender_email = detail.get('sender_email')
 
         if not all([self.client_id,  self.client_secret, self.refresh_token, self.token_url, self.scopes, self.operator]):
             dtable_message_logger.exception('Third party account %s is invalid.' % self.account_id)
@@ -298,7 +299,7 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
 
     def send(self, send_info):
         try:
-            msg_obj = self._build_msg_obj(send_info, self.sender_name, self.sender_email)
+            msg_obj = self._build_msg_obj(send_info)
         except Exception as e:
             dtable_message_logger.exception(f'Build MIME object failure: {e}')
             raise InvalidEmailMessage()
@@ -328,7 +329,7 @@ class _ThirdpartyAPISendEmail(_SendEmailBaseClass):
             success = False
 
             try:
-                msg_obj = self._build_msg_obj(send_info, self.sender_name, self.sender_email)
+                msg_obj = self._build_msg_obj(send_info)
             except Exception as e:
                 dtable_message_logger.warning(f'Batch send emails: Build MIME object failure: {e}')
                 continue
