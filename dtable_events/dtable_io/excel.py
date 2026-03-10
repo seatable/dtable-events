@@ -1168,7 +1168,7 @@ def parse_geolocation(cell_data):
     if 'country_region' in cell_data:
         return cell_data['country_region']
     elif 'lng' in cell_data:
-        return str(cell_data['lng']) + ', ' + str(cell_data['lat'])
+        return str(cell_data['lat']) + ', ' + str(cell_data['lng'])
     elif 'province' in cell_data:
         value = str(cell_data['province'])
         if 'city' in cell_data:
