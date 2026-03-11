@@ -136,7 +136,7 @@ class AutomationsPipeline:
             time.sleep(10)
 
     def get_automation_rule(self, db_session, event_data):
-        sql = "SELECT `trigger`, `actions`, `run_condition`, `dtable_uuid` FROM dtable_automation_rules where id=:rule_id"
+        sql = "SELECT `trigger`, `actions`, `run_condition`, `dtable_uuid` FROM dtable_automation_rules WHERE id=:rule_id AND is_valid=1 AND is_pause=0"
         rule = db_session.execute(text(sql), {'rule_id': event_data['automation_rule_id']}).fetchone()
         if not rule:
             return None
