@@ -3410,7 +3410,7 @@ class RunAI(BaseAction):
                     'action_type': self.action_type,
                     'ai_function': 'summarize'
                 })
-                return
+                raise timeout_exc
             except Exception as e:
                 auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai summarize error: {e}')
                 self.auto_rule.append_warning({
@@ -3418,7 +3418,7 @@ class RunAI(BaseAction):
                     'action_type': self.action_type,
                     'ai_function': 'summarize'
                 })
-                return
+                raise e
 
         update_data = {target_column_name: summary_result}
 
@@ -3544,7 +3544,7 @@ class RunAI(BaseAction):
                     'action_type': self.action_type,
                     'ai_function': 'classify'
                 })
-                return
+                raise timeout_exc
             except Exception as e:
                 auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai classify error: {e}')
                 self.auto_rule.append_warning({
@@ -3552,7 +3552,7 @@ class RunAI(BaseAction):
                     'action_type': self.action_type,
                     'ai_function': 'classify'
                 })
-                return
+                raise e
         if not classification_result:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} no suitable options found')
             return
@@ -3632,7 +3632,7 @@ class RunAI(BaseAction):
                 'action_type': self.action_type,
                 'ai_function': 'OCR'
             })
-            return
+            raise timeout_exc
         except Exception as e:
             auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai ocr error: {e}')
             self.auto_rule.append_warning({
@@ -3640,7 +3640,7 @@ class RunAI(BaseAction):
                 'action_type': self.action_type,
                 'ai_function': 'OCR'
             })
-            return
+            raise e
 
         update_data = {target_column_name: ocr_result}
 
@@ -3791,7 +3791,7 @@ class RunAI(BaseAction):
                 'action_type': self.action_type,
                 'ai_function': 'extract'
             })
-            return
+            raise timeout_exc
         except Exception as e:
             auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai extract error: {e}')
             self.auto_rule.append_warning({
@@ -3799,7 +3799,7 @@ class RunAI(BaseAction):
                 'action_type': self.action_type,
                 'ai_function': 'extract'
             })
-            return
+            raise e
         
         # Build update data directly from target columns
         update_data = {name: value for name, value in extraction_result.items() if name in target_descriptions}
@@ -3858,7 +3858,7 @@ class RunAI(BaseAction):
                     'action_type': self.action_type,
                     'ai_function': 'custom'
                 })
-                return
+                raise timeout_exc
             except Exception as e:
                 auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai custom processing error: {e}')
                 self.auto_rule.append_warning({
@@ -3866,7 +3866,7 @@ class RunAI(BaseAction):
                     'action_type': self.action_type,
                     'ai_function': 'custom'
                 })
-                return
+                raise e
 
         update_data = {target_column_name: custom_result}
 
@@ -3916,7 +3916,7 @@ class RunAI(BaseAction):
                 'action_type': self.action_type,
                 'ai_function': 'invoice_recognition'
             })
-            return
+            raise timeout_exc
         except Exception as e:
             auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai invoice recognition error: {e}')
             self.auto_rule.append_warning({
@@ -3924,7 +3924,7 @@ class RunAI(BaseAction):
                 'action_type': self.action_type,
                 'ai_function': 'invoice_recognition'
             })
-            return
+            raise e
 
         # Build update data based on output_columns configuration
         update_data = {}
@@ -5166,6 +5166,12 @@ class AutomationRule:
             except Exception as e:
                 self.task_run_success = False
                 auto_rule_logger.exception('rule %s do action %s with data %s error: %s', self.rule_id, action_info, self.data, e)
+                self.append_warning({
+                    'type': 'error',
+                    'action_type': action_info.get('type'),
+                    'action_id': action_info.get('_id')
+                })
+                break
 
         auto_rule_logger.info('rule: %s all actions finished', self.rule_id)
 
