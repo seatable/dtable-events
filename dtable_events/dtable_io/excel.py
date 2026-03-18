@@ -194,7 +194,7 @@ def guess_column_type(value_list):
 
     try:
         type_list = []
-        for cell_value in value_list:
+        for cell_value in value_list[:200]:
             # cell_value may be zero
             if cell_value is None or cell_value == '':
                 continue
@@ -272,7 +272,7 @@ def parse_excel_columns(sheet_rows, head_index, max_column):
         column_name = get_non_duplicated_name(column_name, column_name_set)
         column_name_set.add(column_name)
 
-        value_list = [get_excel_cell_value(row, index) for row in value_rows[:200]]
+        value_list = [get_excel_cell_value(row, index) for row in value_rows]
         # Check the first 200 rows of data to determine column type
         column_type, column_data = guess_column_type(value_list)
 
