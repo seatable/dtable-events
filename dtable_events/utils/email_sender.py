@@ -47,6 +47,7 @@ class _SendEmailBaseClass(ABC):
         send_to = send_info.get('send_to', [])
         subject = send_info.get('subject', '')
         copy_to = send_info.get('copy_to', [])
+        bcc_to = send_info.get('bcc_to', [])
         reply_to = send_info.get('reply_to', '')
         file_download_urls = send_info.get('file_download_urls', None)
         file_contents = send_info.get('file_contents', None)
@@ -75,6 +76,7 @@ class _SendEmailBaseClass(ABC):
 
         send_to = [formataddr(parseaddr(to)) for to in send_to]
         copy_to = [formataddr(parseaddr(to)) for to in copy_to]
+        bcc_to = [formataddr(parseaddr(to)) for to in bcc_to]
 
         # Old features compatible:
         # source = send_info.get('source', '')
@@ -164,6 +166,7 @@ class SMTPSendEmail(_SendEmailBaseClass):
     
     def send(self, send_info):
         copy_to = send_info.get('copy_to', [])
+        bcc_to = send_info.get('bcc_to', [])
         send_to = send_info.get('send_to', [])
         
         try:
@@ -183,7 +186,7 @@ class SMTPSendEmail(_SendEmailBaseClass):
         
         success = False
         try:
-            recevers = copy_to and send_to + copy_to or send_to
+            recevers = send_to + copy_to + bcc_to
             smtp.sendmail(self.sender_email if self.sender_email else self.host_user, recevers, msg_obj.as_string())
             success = True
         except Exception as e:
@@ -216,6 +219,7 @@ class SMTPSendEmail(_SendEmailBaseClass):
             success = False
             send_to = send_info.get('send_to', [])
             copy_to = send_info.get('copy_to', [])
+            bcc_to = send_info.get('bcc_to', [])
 
             try:
                 msg_obj = self._build_msg_obj(send_info)
@@ -225,9 +229,10 @@ class SMTPSendEmail(_SendEmailBaseClass):
 
             send_to = [formataddr(parseaddr(to)) for to in send_to]
             copy_to = [formataddr(parseaddr(to)) for to in copy_to]
+            bcc_to = [formataddr(parseaddr(to)) for to in bcc_to]
 
             try:
-                recevers = copy_to and send_to + copy_to or send_to
+                recevers = send_to + copy_to + bcc_to
                 smtp.sendmail(self.sender_email if self.sender_email else self.host_user, recevers, msg_obj.as_string())
                 success = True
             except Exception as e:
