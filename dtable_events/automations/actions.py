@@ -998,7 +998,10 @@ class SendWechatAction(BaseAction):
         super().__init__(auto_rule, action_type, data)
         self.msg = msg or ''
         self.msg_type = msg_type or 'text'
-        self.account_id = account_id or ''
+        try:
+            self.account_id = int(account_id)
+        except:
+            raise RuleInvalidException('account_id invalid', 'account_id_invalid')
 
         self.webhook_url = ''
         self.column_blanks = []
@@ -1066,7 +1069,10 @@ class SendDingtalkAction(BaseAction):
         super().__init__(auto_rule, action_type, data)
         self.msg = msg or ''
         self.msg_type = msg_type or 'text'
-        self.account_id = account_id or ''
+        try:
+            self.account_id = int(account_id)
+        except:
+            raise RuleInvalidException('account_id invalid', 'account_id_invalid')
         self.msg_title = msg_title or ''
 
         self.webhook_url = ''
@@ -1138,7 +1144,10 @@ class SendEmailAction(BaseAction):
     def __init__(self, auto_rule, action_type, data, send_info, account_id, repo_id):
 
         super().__init__(auto_rule, action_type, data)
-        self.account_id = account_id
+        try:
+            self.account_id = int(account_id)
+        except:
+            raise RuleInvalidException('account_id invalid', 'account_id_invalid')
 
         # send info
         self.send_info = send_info
@@ -3209,7 +3218,13 @@ class ConvertDocumentToPDFAndSendAction(BaseAction):
         auto_rule_logger.debug('rule: %s convert-and-send start check send email can_do: %s', self.auto_rule.rule_id, self.send_email_config.get('can_do'))
         if not self.send_email_config.get('can_do'):
             return
-        account_id = self.send_email_config['account_info'].get('id')
+        try:
+            account_id = int(self.send_email_config['account_info'].get('id'))
+        except:
+            raise RuleInvalidException('account_id invalid', 'account_id_invalid')
+        account_dict = get_third_party_account(self.auto_rule.db_session, account_id)
+        if not account_dict or uuid_str_to_36_chars(account_dict.get('dtable_uuid')) != uuid_str_to_36_chars(self.auto_rule.dtable_uuid):
+            raise RuleInvalidException('Send email no account in convert document', 'account_not_found')
         file_name = self.file_name
         if not file_name.endswith('.pdf'):
             file_name += '.pdf'
@@ -4082,7 +4097,10 @@ class GoogleCalendar(BaseAction):
         super().__init__(auto_rule, action_type, data)
         self.config = config or {}
         self.function_type = function_type
-        self.account_id = self.config.get('account_id')
+        try:
+            self.account_id = int(self.config.get('account_id'))
+        except:
+            raise RuleInvalidException('account_id invalid', 'account_id_invalid')
         self.calendar_id = self.config.get('calendar_id')
         self.col_key_dict = {col.get('key'): col for col in self.auto_rule.table_info['columns']}
 
@@ -4884,20 +4902,20 @@ class AutomationRule:
                     LockRowAction(self, action_info.get('type'), self.data, self.trigger).do_action()
 
                 elif action_info.get('type') == 'send_wechat':
-                    account_id = int(action_info.get('account_id'))
+                    account_id = action_info.get('account_id')
                     default_msg = action_info.get('default_msg', '')
                     msg_type = action_info.get('msg_type', 'text')
                     SendWechatAction(self, action_info.get('type'), self.data, default_msg, account_id, msg_type).do_action()
 
                 elif action_info.get('type') == 'send_dingtalk':
-                    account_id = int(action_info.get('account_id'))
+                    account_id = action_info.get('account_id')
                     default_msg = action_info.get('default_msg', '')
                     default_title = action_info.get('default_title', '')
                     msg_type = action_info.get('msg_type', 'text')
                     SendDingtalkAction(self, action_info.get('type'), self.data, default_msg, account_id, msg_type, default_title).do_action()
 
                 elif action_info.get('type') == 'send_email':
-                    account_id = int(action_info.get('account_id'))
+                    account_id = action_info.get('account_id')
                     msg = action_info.get('default_msg', '')
                     is_plain_text = action_info.get('is_plain_text', True)
                     html_message = action_info.get('html_message', '')
