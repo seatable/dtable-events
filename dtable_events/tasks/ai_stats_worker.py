@@ -198,10 +198,10 @@ class AIStatsWorker:
                 input_tokens = usage.get('input_tokens') or 0
                 output_tokens = usage.get('output_tokens') or 0
 
-                input_tokens_price = AI_PRICES[model].get('input_tokens_1k') or 0
-                output_tokens_price = AI_PRICES[model].get('output_tokens_1k') or 0
-                input_cost = input_tokens_price * (input_tokens / 1000)
-                output_cost = output_tokens_price * (output_tokens / 1000)
+                input_tokens_price = AI_PRICES[model].get('input_tokens') or 0
+                output_tokens_price = AI_PRICES[model].get('output_tokens') or 0
+                input_cost = input_tokens_price * (input_tokens / 1000000)
+                output_cost = output_tokens_price * (output_tokens / 1000000)
                 logger.info('org %s model %s, input_tokens %s cost %s, output_tokens %s cost %s', org_id, model, input_tokens, input_cost, output_tokens, output_cost)
 
                 params = {
@@ -230,10 +230,10 @@ class AIStatsWorker:
                 input_tokens = usage.get('input_tokens') or 0
                 output_tokens = usage.get('output_tokens') or 0
 
-                input_tokens_price = AI_PRICES[model].get('input_tokens_1k') or 0
-                output_tokens_price = AI_PRICES[model].get('output_tokens_1k') or 0
-                input_cost = input_tokens_price * (input_tokens / 1000)
-                output_cost = output_tokens_price * (output_tokens / 1000)
+                input_tokens_price = AI_PRICES[model].get('input_tokens') or 0
+                output_tokens_price = AI_PRICES[model].get('output_tokens') or 0
+                input_cost = input_tokens_price * (input_tokens / 1000000)
+                output_cost = output_tokens_price * (output_tokens / 1000000)
                 logger.info('owner %s model %s, input_tokens %s cost %s, output_tokens %s cost %s', owner_id, model, input_tokens, input_cost, output_tokens, output_cost)
 
                 params = {
@@ -270,10 +270,10 @@ class AIStatsWorker:
                     owner = None
                     org_id = None
 
-                input_tokens_price = AI_PRICES[model].get('input_tokens_1k') or 0
-                output_tokens_price = AI_PRICES[model].get('output_tokens_1k') or 0
-                input_cost = input_tokens_price * (input_tokens / 1000)
-                output_cost = output_tokens_price * (output_tokens / 1000)
+                input_tokens_price = AI_PRICES[model].get('input_tokens') or 0
+                output_tokens_price = AI_PRICES[model].get('output_tokens') or 0
+                input_cost = input_tokens_price * (input_tokens / 1000000)
+                output_cost = output_tokens_price * (output_tokens / 1000000)
                 logger.info('dtable %s model %s, input_tokens %s cost %s, output_tokens %s cost %s', dtable_uuid, model, input_tokens, input_cost, output_tokens, output_cost)
 
                 params = {
