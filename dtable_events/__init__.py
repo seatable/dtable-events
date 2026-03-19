@@ -10,4 +10,3 @@ from dtable_events.utils.sql_generator import filter2sql, statistic2sql, linkRec
 from dtable_events.utils.dtable_db_api import convert_db_rows
 from dtable_events.utils.google_calendar_manager import get_google_calendar_list
 from dtable_events.virus_scanner import *
-
