@@ -47,5 +47,5 @@ jobs:
     - name: test sql
       run: |
         cd $GITHUB_WORKSPACE
-        export CCNET_CONF_DIR=/tmp/ccnet SEAFILE_CONF_DIR=/tmp/seafile-data IS_PRO_VERSION=True
+        export SEAFILE_CENTRAL_CONF_DIR=/tmp/conf CCNET_CONF_DIR=/tmp/ccnet SEAFILE_DATA_DIR=/tmp/seafile-data IS_PRO_VERSION=True
         ./dtable_events/tests/test.sh init && ./dtable_events/tests/test.sh test

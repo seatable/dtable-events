@@ -33,7 +33,7 @@ if __name__ == "__main__":
     seafile_conf_path = '/opt/seafile/conf/seafile.conf'
     for conf_dir in [
         os.environ.get('SEAFILE_CENTRAL_CONF_DIR'),
-        os.environ.get('SEAFILE_CONF_DIR')
+        os.environ.get('SEAFILE_DATA_DIR')
     ]:
         if os.path.isfile(os.path.join(conf_dir, 'seafile.conf')):
             seafile_conf_path = os.path.join(conf_dir, 'seafile.conf')
