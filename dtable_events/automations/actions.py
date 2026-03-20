@@ -3403,6 +3403,14 @@ class RunAI(BaseAction):
             try:
                 seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, SEATABLE_AI_SERVER_URL)
                 summary_result = seatable_ai_api.summarize(content, self.config.get('summary_prompt'))
+            except requests.Timeout as timeout_exc:
+                auto_rule_logger.error(f'rule {self.auto_rule.rule_id} ai summarize timeout {timeout_exc}')
+                self.auto_rule.append_warning({
+                    'type': 'run_ai_timeout',
+                    'action_type': self.action_type,
+                    'ai_function': 'summarize'
+                })
+                raise timeout_exc
             except Exception as e:
                 auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai summarize error: {e}')
                 self.auto_rule.append_warning({
@@ -3410,7 +3418,7 @@ class RunAI(BaseAction):
                     'action_type': self.action_type,
                     'ai_function': 'summarize'
                 })
-                return 
+                raise e
 
         update_data = {target_column_name: summary_result}
 
@@ -3529,6 +3537,14 @@ class RunAI(BaseAction):
             try:
                 seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, SEATABLE_AI_SERVER_URL)
                 classification_result = seatable_ai_api.classify(content, self.config.get('classify_prompt'))
+            except requests.Timeout as timeout_exc:
+                auto_rule_logger.error(f'rule {self.auto_rule.rule_id} ai classify timeout {timeout_exc}')
+                self.auto_rule.append_warning({
+                    'type': 'run_ai_timeout',
+                    'action_type': self.action_type,
+                    'ai_function': 'classify'
+                })
+                raise timeout_exc
             except Exception as e:
                 auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai classify error: {e}')
                 self.auto_rule.append_warning({
@@ -3536,7 +3552,7 @@ class RunAI(BaseAction):
                     'action_type': self.action_type,
                     'ai_function': 'classify'
                 })
-                return 
+                raise e
         if not classification_result:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} no suitable options found')
             return
@@ -3609,7 +3625,14 @@ class RunAI(BaseAction):
             ocr_text = seatable_ai_api.ocr(file_name, file_content)
             if ocr_text.strip():
                 ocr_result = ocr_text.strip()
-                            
+        except requests.Timeout as timeout_exc:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} ai ocr timeout {timeout_exc}')
+            self.auto_rule.append_warning({
+                'type': 'run_ai_timeout',
+                'action_type': self.action_type,
+                'ai_function': 'OCR'
+            })
+            raise timeout_exc
         except Exception as e:
             auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai ocr error: {e}')
             self.auto_rule.append_warning({
@@ -3617,7 +3640,7 @@ class RunAI(BaseAction):
                 'action_type': self.action_type,
                 'ai_function': 'OCR'
             })
-            return
+            raise e
 
         update_data = {target_column_name: ocr_result}
 
@@ -3761,7 +3784,14 @@ class RunAI(BaseAction):
             # Use dedicated extract method with optional prompt
             extract_prompt = self.config.get('extract_prompt')
             extraction_result = seatable_ai_api.extract(source_content, target_descriptions, extract_prompt)
-                    
+        except requests.Timeout as timeout_exc:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} ai extract timeout {timeout_exc}')
+            self.auto_rule.append_warning({
+                'type': 'run_ai_timeout',
+                'action_type': self.action_type,
+                'ai_function': 'extract'
+            })
+            raise timeout_exc
         except Exception as e:
             auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai extract error: {e}')
             self.auto_rule.append_warning({
@@ -3769,7 +3799,7 @@ class RunAI(BaseAction):
                 'action_type': self.action_type,
                 'ai_function': 'extract'
             })
-            return
+            raise e
         
         # Build update data directly from target columns
         update_data = {name: value for name, value in extraction_result.items() if name in target_descriptions}
@@ -3821,6 +3851,14 @@ class RunAI(BaseAction):
             try:
                 seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, SEATABLE_AI_SERVER_URL)
                 custom_result = seatable_ai_api.custom(filled_prompt)
+            except requests.Timeout as timeout_exc:
+                auto_rule_logger.error(f'rule {self.auto_rule.rule_id} ai custom processing timeout {timeout_exc}')
+                self.auto_rule.append_warning({
+                    'type': 'run_ai_timeout',
+                    'action_type': self.action_type,
+                    'ai_function': 'custom'
+                })
+                raise timeout_exc
             except Exception as e:
                 auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai custom processing error: {e}')
                 self.auto_rule.append_warning({
@@ -3828,7 +3866,7 @@ class RunAI(BaseAction):
                     'action_type': self.action_type,
                     'ai_function': 'custom'
                 })
-                return 
+                raise e
 
         update_data = {target_column_name: custom_result}
 
@@ -3871,7 +3909,14 @@ class RunAI(BaseAction):
         try:
             seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, SEATABLE_AI_SERVER_URL)
             invoice_result = seatable_ai_api.recognize_chinese_invoice(file_name, file_content)
-
+        except requests.Timeout as timeout_exc:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} ai invoice recognition timeout {timeout_exc}')
+            self.auto_rule.append_warning({
+                'type': 'run_ai_timeout',
+                'action_type': self.action_type,
+                'ai_function': 'invoice_recognition'
+            })
+            raise timeout_exc
         except Exception as e:
             auto_rule_logger.exception(f'rule {self.auto_rule.rule_id} ai invoice recognition error: {e}')
             self.auto_rule.append_warning({
@@ -3879,7 +3924,7 @@ class RunAI(BaseAction):
                 'action_type': self.action_type,
                 'ai_function': 'invoice_recognition'
             })
-            return
+            raise e
 
         # Build update data based on output_columns configuration
         update_data = {}
@@ -5121,6 +5166,12 @@ class AutomationRule:
             except Exception as e:
                 self.task_run_success = False
                 auto_rule_logger.exception('rule %s do action %s with data %s error: %s', self.rule_id, action_info, self.data, e)
+                self.append_warning({
+                    'type': 'error',
+                    'action_type': action_info.get('type'),
+                    'action_id': action_info.get('_id')
+                })
+                break
 
         auto_rule_logger.info('rule: %s all actions finished', self.rule_id)
 
