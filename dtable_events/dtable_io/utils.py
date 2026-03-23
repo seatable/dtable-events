@@ -777,35 +777,22 @@ def update_page_design_static_image(page_design_settings, repo_id, workspace_id,
         dtable_io_logger.warning('update page design static image failed. ERROR: {}'.format(e))
 
 
-def rename_universal_app_static_assets_dir(pages, app_id, repo_id, dtable_uuid, username):
-    if not isinstance(pages, list):
-            return
+def rename_universal_app_static_assets_dir(app_id, repo_id, dtable_uuid, username, old_app_id=None):
+    if not old_app_id or str(old_app_id) == str(app_id):
+        return
 
     from dtable_events.dtable_io import dtable_io_logger
 
-    app_parent_dir = '/asset/%s/external-apps'%(dtable_uuid)
-    for page in pages:
-        page_id = page['id']
-        content_url = page.get('content_url')
-        if not content_url:
-            continue
+    app_parent_dir = '/asset/%s/external-apps' % (dtable_uuid)
+    old_app_dir = '%s/%s' % (app_parent_dir, old_app_id)
+    old_app_dir_id = seafile_api.get_dir_id_by_path(repo_id, old_app_dir)
+    if not old_app_dir_id:
+        return
 
-        # support relative path: /app_id/page_id/
-        parent_dir_re = r'/\d+/%s/%s.json'%(page_id, page_id)
-        if re.search(parent_dir_re, content_url):
-            old_content_app_id = content_url.split('/')[1]
-            content_path = '%s/%s/%s/%s.json' % (app_parent_dir, old_content_app_id, page_id, page_id)
-            content_file_id = seafile_api.get_file_id_by_path(repo_id, content_path)
-
-            # just rename the dir which content file exist
-            if not content_file_id:
-                continue
-
-            try:
-                seafile_api.rename_file(repo_id, app_parent_dir, '%s'%old_content_app_id, '%s'%app_id, username)
-            except Exception as e:
-                dtable_io_logger.warning('rename custom page\'s content dir of external app failed. ERROR: {}'.format(e))
-            break
+    try:
+        seafile_api.rename_file(repo_id, app_parent_dir, '%s'%old_app_id, '%s'%app_id, username)
+    except Exception as e:
+        dtable_io_logger.warning('rename app assets dir %s to %s failed. ERROR: %s' % (old_app_id, app_id, e))
 
 def update_universal_app_custom_page_static_image(pages, app_id, repo_id, workspace_id, dtable_uuid, content_json_tmp_path, username):
     if not isinstance(pages, list):
@@ -1024,7 +1011,7 @@ def add_a_workflow_to_db(username, workflow, workspace_id, repo_id, dtable_uuid,
     db_session.commit()
     old_new_workflow_token_dict[old_token] = new_token
 
-def add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, org_id, workspace_id, repo_id):
+def add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, org_id, workspace_id, repo_id, old_app_id=None):
     sql = """INSERT INTO dtable_external_apps (`app_uuid`,`dtable_uuid`,`app_type`, `app_config`, `creator`, `created_at`, `org_id`)
                 VALUES (:app_uuid, :dtable_uuid, :app_type, :app_config, :creator, :created_at, :org_id)"""
     app_uuid = str(uuid.uuid4())
@@ -1055,7 +1042,7 @@ def add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, o
         db_session.commit()
         app_settings = external_app['app_config'].get('settings') or {}
         pages = app_settings.get('pages') or []
-        rename_universal_app_static_assets_dir(pages, app_id, repo_id, dtable_uuid, username)
+        rename_universal_app_static_assets_dir(app_id, repo_id, dtable_uuid, username, old_app_id=old_app_id)
         os.makedirs(DTABLE_IO_DIR, exist_ok=True)
         update_universal_app_custom_page_static_image(pages, app_id, repo_id, workspace_id,
                 dtable_uuid, DTABLE_IO_DIR, username)
@@ -1194,7 +1181,7 @@ def create_external_apps_from_src_dtable(username, dtable_uuid, db_session, org_
                 page_type = page.get('type', '')
                 if page_type == 'custom_page' or page_type == 'single_record_page':
                     page['content_url'] = '/%s/%s/%s.json' % (app_id, page_id, page_id)
-        add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, org_id, workspace_id, repo_id)
+        add_an_external_app_to_db(username, external_app, dtable_uuid, db_session, org_id, workspace_id, repo_id, old_app_id=app_id)
 
 
 def import_archive_from_src_dtable(username, dtable_uuid, path):
