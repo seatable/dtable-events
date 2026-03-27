@@ -2503,7 +2503,11 @@ class ModifyLinkedRecordInOtherAction(BaseAction):
                         elif set_type == 'column':
                             src_col_key = data_dict.get('value')
                             src_col = self.col_key_dict.get(src_col_key)
-                            if src_col and src_col.get('type') == ColumnTypes.COLLABORATOR:
+                            if src_col and src_col.get('type') in [
+                                ColumnTypes.COLLABORATOR,
+                                ColumnTypes.CREATOR,
+                                ColumnTypes.LAST_MODIFIER,
+                            ]:
                                 value = sql_row.get(src_col['key'])
                                 if not isinstance(value, list):
                                     value = [value]
