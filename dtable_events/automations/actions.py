@@ -2369,6 +2369,41 @@ class AddRecordToOtherTableAction(BaseAction):
             return
 
 
+class AddRecordToOtherTableAndLinkAction(AddRecordToOtherTableAction):
+
+    def __init__(self, auto_rule, action_type, data, row, dst_table_id, link_id):
+        super().__init__(auto_rule, action_type, data, row, dst_table_id)
+        self.link_id = link_id
+
+    def do_action(self):
+        table_name = self.get_table_name(self.dst_table_id)
+        if not table_name:
+            raise RuleInvalidException('add-record dst_table_id table not found', 'dst_table_not_found')
+
+        self.init_append_rows()
+        if not self.row_data.get('row'):
+            return
+
+        try:
+            result = self.auto_rule.dtable_server_api.append_row(table_name, self.row_data['row'], apply_default=True)
+            new_row_id = result.get('_id')
+        except Exception as e:
+            auto_rule_logger.error('append row error: %s', e)
+            return
+
+        if new_row_id and self.link_id:
+            try:
+                self.auto_rule.dtable_server_api.update_link(
+                    self.link_id,
+                    self.auto_rule.table_id,
+                    self.dst_table_id,
+                    self.data['row_id'],
+                    [new_row_id]
+                )
+            except Exception as e:
+                auto_rule_logger.error('create link error: %s', e)
+
+
 class TriggerWorkflowAction(BaseAction):
 
     VALID_COLUMN_TYPES = [
@@ -4887,6 +4922,10 @@ class AutomationRule:
             if run_condition == PER_UPDATE:
                 return True
             return False
+        elif action_type == 'add_record_to_other_table_and_link':
+            if run_condition == PER_UPDATE:
+                return True
+            return False
         elif action_type == 'trigger_workflow':
             if run_condition in CRON_CONDITIONS and trigger_condition == CONDITION_PERIODICALLY:
                 return True
@@ -5028,6 +5067,12 @@ class AutomationRule:
                     row = action_info.get('row')
                     dst_table_id = action_info.get('dst_table_id')
                     AddRecordToOtherTableAction(self, action_info.get('type'), self.data, row, dst_table_id).do_action()
+
+                elif action_info.get('type') == 'add_record_to_other_table_and_link':
+                    row = action_info.get('row')
+                    dst_table_id = action_info.get('dst_table_id')
+                    link_id = action_info.get('link_id')
+                    AddRecordToOtherTableAndLinkAction(self, action_info.get('type'), self.data, row, dst_table_id, link_id).do_action()
 
                 elif action_info.get('type') == 'trigger_workflow':
                     token = action_info.get('token')
