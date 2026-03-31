@@ -81,6 +81,15 @@ class RedisClient(object):
     def publish(self, channel_name, message):
         return self.connection.publish(channel_name, message)
 
+    def lpush(self, key, value):
+        return self.connection.lpush(key, value)
+
+    def rpop(self, key):
+        return self.connection.rpop(key)
+
+    def llen(self, key):
+        return self.connection.llen(key)
+
 
 class RedisCache(object):
     def __init__(self):

@@ -1,4 +1,5 @@
 import inspect
+import json
 import os
 import queue
 import threading
@@ -6,6 +7,7 @@ import time
 import uuid
 from threading import Lock
 
+from dtable_events.app.event_redis import redis_cache
 from dtable_events.utils.utils_metric import publish_metric, TASK_MANAGER_METRIC_HELP
 
 from seaserv import seafile_api
@@ -246,19 +248,16 @@ class TaskManager(object):
         return task_id
 
     @log_function_call
-    def add_run_auto_rule_task(self, automation_rule_id, creator, owner, org_id, dtable_uuid, run_condition, trigger, actions):
-        from dtable_events.automations.utils import run_auto_rule_task
-        task_id = str(uuid.uuid4())
-        options = {
-            'run_condition': run_condition,
-            'dtable_uuid': dtable_uuid,
-            'org_id': org_id,
-            'owner': owner,
-            'creator': creator,
-            'rule_id': automation_rule_id
-        }
+    def add_run_auto_rule_task(self, automation_rule_id):
+        # from dtable_events.automations.automations_pipeline import AutomationTask
 
-        task = (run_auto_rule_task, (trigger, actions, options, self.config))
+        # task_id = str(uuid.uuid4())
+        # automation_task = AutomationTask(automation_rule_id, run_condition, json.loads(trigger), json.loads(actions), dtable_uuid, org_id, owner, None, True, task_id)
+        # task = (
+        #     self.app._automations_pipeline.put_test_task, 
+        #     (automation_task,))
+        task_id = str(uuid.uuid4())
+        task = (self.app._automations_pipeline.put_test_task, (automation_rule_id, task_id))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
@@ -557,7 +556,7 @@ class TaskManager(object):
             task = self.tasks_map.get(task_id)
             if type(task) != tuple or len(task) < 1:
                 continue
-            if type(task[0]).__name__ != 'function':
+            if type(task[0]).__name__ not in ('function', 'method'):
                 continue
             task_info = task_id + ' ' + str(task[0])
             try:
