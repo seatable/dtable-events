@@ -1,9 +1,9 @@
 import json
 import os
 import time
-from datetime import datetime, timedelta
-from queue import Queue
-from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, date
 from threading import Thread, Lock
 
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -13,14 +13,15 @@ from dtable_events.app.config import INNER_DTABLE_WEB_SERVICE_URL, AUTOMATION_RA
     AUTOMATION_RATE_LIMIT_WINDOW_SECS, AUTOMATION_WORKERS
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.app.log import auto_rule_logger
-from dtable_events.automations.actions import AutomationRule, AutomationResult
 from dtable_events.automations.automations_stats_manager import AutomationsStatsManager
 from dtable_events.ccnet.organization import get_org_admins
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import get_dtable_owner_org_id
 from dtable_events.utils.dtable_web_api import DTableWebAPI
-from dtable_events.utils.utils_metric import AUTOMATION_RULES_QUEUE_METRIC_HELP, REALTIME_AUTOMATION_RULES_HEARTBEAT_HELP, \
+from dtable_events.utils.utils_metric import AUTOMATION_QUEUE_10_METRIC_HELP, AUTOMATION_QUEUE_20_METRIC_HELP, \
+    AUTOMATION_QUEUE_30_METRIC_HELP, REALTIME_AUTOMATION_RULES_HEARTBEAT_HELP, \
     REALTIME_AUTOMATION_RULES_TRIGGERED_COUNT_HELP, SCHEDULED_AUTOMATION_RULES_TRIGGERED_COUNT_HELP, publish_metric
+from dtable_events.automations.entities import AutomationResult, AutomationTask, QUEUE_AUTOMATION_TASKS_10, QUEUE_AUTOMATION_TASKS_20, QUEUE_AUTOMATION_TASKS_30
 
 
 class RateLimiter:
@@ -69,15 +70,14 @@ class AutomationsPipeline(object):
 
     def __init__(self):
         self.workers = 5
-        self.automations_queue: Queue[AutomationRule] = Queue()
-        self.results_queue: Queue[AutomationResult] = Queue()
-        self._pubsub_no_message_timeout = 5 * 60
-
         self._db_session_class = init_db_session_class()
 
         self._redis_client = RedisClient(socket_connect_timeout=5, socket_timeout=10,
                                          health_check_interval=30, retry_on_timeout=True)
         self.per_update_channel = 'automation-rule-triggered'
+        self._pubsub_no_message_timeout = 5 * 60
+
+        self.results_queue_key = 'automation_results'
 
         self.rate_limiter = RateLimiter()
 
@@ -121,24 +121,42 @@ class AutomationsPipeline(object):
         while True:
             publish_metric(self.realtime_trigger_count, 'realtime_automation_triggered_count', REALTIME_AUTOMATION_RULES_TRIGGERED_COUNT_HELP)
             publish_metric(self.scheduled_trigger_count, 'scheduled_automation_triggered_count', SCHEDULED_AUTOMATION_RULES_TRIGGERED_COUNT_HELP)
-            publish_metric(self.automations_queue.qsize(), 'automation_queue_size', AUTOMATION_RULES_QUEUE_METRIC_HELP)
+            publish_metric(self._redis_client.llen(QUEUE_AUTOMATION_TASKS_10), f'{QUEUE_AUTOMATION_TASKS_10}_size', AUTOMATION_QUEUE_10_METRIC_HELP)
+            publish_metric(self._redis_client.llen(QUEUE_AUTOMATION_TASKS_20), f'{QUEUE_AUTOMATION_TASKS_20}_size', AUTOMATION_QUEUE_20_METRIC_HELP)
+            publish_metric(self._redis_client.llen(QUEUE_AUTOMATION_TASKS_30), f'{QUEUE_AUTOMATION_TASKS_30}_size', AUTOMATION_QUEUE_30_METRIC_HELP)
             publish_metric(self.realtime_automation_heartbeat, 'realtime_automation_heartbeat', REALTIME_AUTOMATION_RULES_HEARTBEAT_HELP)
             time.sleep(10)
 
-    def get_automation_rule(self, db_session, event_data):
+    def get_automation_task(self, db_session, event_data):
         sql = "SELECT `trigger`, `actions`, `run_condition`, `dtable_uuid` FROM dtable_automation_rules WHERE id=:rule_id AND is_valid=1 AND is_pause=0"
         rule = db_session.execute(text(sql), {'rule_id': event_data['automation_rule_id']}).fetchone()
         if not rule:
             return None
         owner_info = get_dtable_owner_org_id(rule.dtable_uuid, db_session)
-        options = {
-            'rule_id': event_data['automation_rule_id'],
-            'run_condition': rule.run_condition,
-            'dtable_uuid': rule.dtable_uuid,
-            'org_id': owner_info['org_id'],
-            'owner': owner_info['owner']
-        }
-        return AutomationRule(event_data, rule.trigger, rule.actions, options)
+        return AutomationTask(
+            rule_id=event_data['automation_rule_id'],
+            run_condition=rule.run_condition,
+            trigger=json.loads(rule.trigger),
+            actions=json.loads(rule.actions),
+            dtable_uuid=rule.dtable_uuid,
+            org_id=owner_info['org_id'],
+            owner=owner_info['owner'],
+            data=event_data,
+            with_test=False
+        )
+
+    def put_task(self, automation_task: AutomationTask):
+        queue_key = automation_task.get_priority_queue()
+        auto_rule_logger.info(
+            "Put automation event rule_id=%s rule_name=%s run_condition=%s dtable_uuid=%s test=%s to task queue=%s",
+            automation_task.rule_id,
+            automation_task.rule_name,
+            automation_task.run_condition,
+            automation_task.dtable_uuid,
+            automation_task.with_test,
+            queue_key
+        )
+        self._redis_client.lpush(queue_key, json.dumps(automation_task.to_dict()))
 
     def receive(self):
         auto_rule_logger.info(
@@ -172,49 +190,51 @@ class AutomationsPipeline(object):
                         dtable_uuid = event.get('dtable_uuid')
                         owner_info = get_dtable_owner_org_id(dtable_uuid, db_session)
                         event.update(owner_info)
-                        automation_rule = self.get_automation_rule(db_session, event)
-                        if not automation_rule:
+                        automation_task = self.get_automation_task(db_session, event)
+                        if not automation_task:
+                            continue
+                        if not automation_task.can_do_actions():
+                            auto_rule_logger.info(
+                                "Skip automation event: trigger conditions not met rule_id=%s owner=%s org_id=%s",
+                                automation_task.rule_id,
+                                owner_info['owner'],
+                                owner_info['org_id'],
+                            )
                             continue
                         if not self.rate_limiter.is_allowed(owner_info['owner'], owner_info['org_id'], self.workers):
                             auto_rule_logger.info(
                                 "Skip automation event: rate limited owner=%s org_id=%s rule_id=%s",
                                 owner_info['owner'],
                                 owner_info['org_id'],
-                                automation_rule.rule_id,
+                                automation_task.rule_id,
                             )
-                            automation_rule.append_warning({'type': 'exceed_system_resource_limit'})
-                            self.results_queue.put(AutomationResult(
-                                rule_id=automation_rule.rule_id,
-                                rule_name=automation_rule.rule_name,
-                                dtable_uuid=automation_rule.dtable_uuid,
-                                run_condition=automation_rule.run_condition,
-                                org_id=automation_rule.org_id,
-                                owner=automation_rule.owner,
-                                with_test=False,
+                            automation_task.append_warning({'type': 'exceed_system_resource_limit'})
+                            automation_result = AutomationResult(
+                                rule_id=automation_task.rule_id,
+                                rule_name=automation_task.rule_name,
+                                dtable_uuid=automation_task.dtable_uuid,
+                                run_condition=automation_task.run_condition,
+                                org_id=automation_task.org_id,
+                                owner=automation_task.owner,
+                                with_test=automation_task.with_test,
                                 success=False,
                                 is_exceed_system_resource_limit=True,
                                 trigger_time=datetime.utcnow(),
-                                warnings=automation_rule.warnings
-                            ))
-                            self.add_exceed_system_resource_limit_entity(automation_rule.owner, automation_rule.org_id)
+                                trigger_date=date.today().replace(day=1),
+                                warnings=automation_task.warnings
+                            )
+                            self.add_exceed_system_resource_limit_entity(automation_task.owner, automation_task.org_id)
+                            self._redis_client.lpush(self.results_queue_key, json.dumps(automation_result.to_dict()))
                             continue
                         if self.automations_stats_manager.is_exceed(db_session, owner_info['owner'], owner_info['org_id']):
                             auto_rule_logger.info(
                                 "Skip automation event: trigger quota exceeded owner=%s org_id=%s rule_id=%s",
                                 owner_info['owner'],
                                 owner_info['org_id'],
-                                automation_rule.rule_id,
+                                automation_task.rule_id,
                             )
                             continue
-                        if not automation_rule.can_do_actions():
-                            auto_rule_logger.info(
-                                "Skip automation event: trigger conditions not met rule_id=%s owner=%s org_id=%s",
-                                automation_rule.rule_id,
-                                owner_info['owner'],
-                                owner_info['org_id'],
-                            )
-                            continue
-                        self.automations_queue.put(automation_rule)
+                        self.put_task(automation_task)
                         self.realtime_trigger_count += 1
                     except Exception as e:
                         auto_rule_logger.exception(e)
@@ -232,47 +252,6 @@ class AutomationsPipeline(object):
                 auto_rule_logger.error('Redis pubsub receive failed: %s', e)
                 subscriber = self._redis_client.refresh_subscriber(subscriber, self.per_update_channel, str(e))
                 last_pubsub_message_time = time.time()
-
-    def worker(self):
-        while True:
-            automation = self.automations_queue.get()
-            row_id = automation.data.get('row_id') if isinstance(automation.data, dict) else None
-            updated_column_keys = automation.data.get('updated_column_keys') if isinstance(automation.data, dict) else None
-            auto_rule_logger.info(
-                'Automation started: rule_id=%s rule_name=%s dtable_uuid=%s run_condition=%s row_id=%s updated_column_keys=%s',
-                automation.rule_id,
-                automation.rule_name,
-                automation.dtable_uuid,
-                automation.run_condition,
-                row_id,
-                updated_column_keys,
-            )
-            db_session = self._db_session_class()
-            try:
-                start_time = time.time()
-                result = automation.do_actions(db_session)
-                run_time = time.time() - start_time
-                auto_rule_logger.info(
-                    'Automation finished: rule_id=%s success=%s run_time=%.3fs exceed_limit=%s warnings=%s',
-                    automation.rule_id,
-                    result.success if result else None,
-                    run_time,
-                    result.is_exceed_system_resource_limit if result else None,
-                    len(result.warnings) if result else 0
-                )
-                if result:
-                    result.run_time = run_time
-                    self.results_queue.put(result)
-            except Exception as e:
-                auto_rule_logger.exception('Handle automation rule with data %s failed: %s', automation.data, e)
-            finally:
-                db_session.close()
-
-    def start_workers(self):
-        executor = ThreadPoolExecutor(max_workers=self.workers, thread_name_prefix='automations-pipeline-worker')
-        for _ in range(self.workers):
-            executor.submit(self.worker)
-        auto_rule_logger.info(f"Started {self.workers} automation workers")
 
     def scan_rules(self):
         sql = '''
@@ -305,27 +284,30 @@ class AutomationsPipeline(object):
 
         try:
             for rule in rules:
-                options = {
-                    'rule_id': rule.id,
-                    'run_condition': rule.run_condition,
-                    'dtable_uuid': rule.dtable_uuid,
-                    'org_id': rule.org_id,
-                    'owner': rule.owner
-                }
-                automation = AutomationRule(None, rule.trigger, rule.actions, options)
-                if not automation.can_do_actions():
+                automation_task = AutomationTask(
+                    rule_id=rule.id,
+                    run_condition=rule.run_condition,
+                    trigger=json.loads(rule.trigger),
+                    actions=json.loads(rule.actions),
+                    dtable_uuid=rule.dtable_uuid,
+                    org_id=rule.org_id,
+                    owner=rule.owner,
+                    data=None,
+                    with_test=False
+                )
+                if not automation_task.can_do_actions():
                     continue
                 exceed_key = gen_exceed_key(rule.owner, rule.org_id)
                 if exceed_key in cached_exceed_keys_set:
                     continue
                 if isinstance(exceed_key, str) and '@seafile_group' in exceed_key:
-                    self.automations_queue.put(automation)
+                    self.put_task(automation_task)
                     self.scheduled_trigger_count += 1
                     continue
                 if self.automations_stats_manager.is_exceed(db_session, rule.owner, rule.org_id):
                     cached_exceed_keys_set.add(exceed_key)
                     continue
-                self.automations_queue.put(automation)
+                self.put_task(automation_task)
                 self.scheduled_trigger_count += 1
         except Exception as e:
             auto_rule_logger.exception(e)
@@ -347,7 +329,35 @@ class AutomationsPipeline(object):
     def stats(self):
         auto_rule_logger.info("Start stats thread")
         while True:
-            result = self.results_queue.get()
+            result_info_str = self._redis_client.rpop(self.results_queue_key)
+            if not result_info_str:
+                time.sleep(0.2)
+                continue
+            result_info = json.loads(result_info_str)
+            try:
+                result_info['trigger_time'] = datetime.fromisoformat(result_info['trigger_time'])
+                result_info['trigger_date'] = datetime.fromisoformat(result_info['trigger_date'])
+                result = AutomationResult(**result_info)
+            except Exception as e:
+                auto_rule_logger.exception(f'failed to load result {result_info}')
+                continue
+            auto_rule_logger.info(
+                "Received automation event: rule_id=%s rule_name=%s run_condition=%s dtable_uuid=%s op_type=%s table_id=%s row_id=%s updated_column_keys=%s success=%s run_time=%s test=%s",
+                result.rule_id,
+                result.rule_name,
+                result.run_condition,
+                result.dtable_uuid,
+                result.data['op_type'] if result.data else None,
+                result.data['table_id'] if result.data else None,
+                result.data['row_id'] if result.data else None,
+                result.data['updated_column_keys'] if result.data else None,
+                result.success,
+                result.run_time,
+                result.with_test
+            )
+            if result.with_test:
+                self._redis_client.set(self.get_test_task_cache_key(result.task_id), 1, timeout=30)
+                continue
             if result.run_condition == 'per_update' and not result.is_exceed_system_resource_limit:
                 owner = result.owner
                 org_id = result.org_id
@@ -391,11 +401,48 @@ class AutomationsPipeline(object):
 
         sched.start()
 
+    def get_test_task_cache_key(self, task_id):
+        return f'TEST_AUTOMATION:{task_id}'
+
+    def put_test_task(self, automation_rule_id, task_id):
+        # self.put_task(automation_task)
+        db_session = self._db_session_class()
+        try:
+            sql = "SELECT `run_condition`, `trigger`, `actions`, `dtable_uuid` FROM dtable_automation_rules WHERE id=:automation_rule_id"
+            rule = db_session.execute(text(sql), {'automation_rule_id': automation_rule_id}).fetchone()
+            if not rule:
+                return
+            owner_info = get_dtable_owner_org_id(rule.dtable_uuid, db_session)
+            automation_task = AutomationTask(
+                rule_id=automation_rule_id,
+                run_condition=rule.run_condition,
+                trigger=json.loads(rule.trigger),
+                actions=json.loads(rule.actions),
+                dtable_uuid=rule.dtable_uuid,
+                org_id=owner_info['org_id'],
+                owner=owner_info['owner'],
+                data=None,
+                with_test=True,
+                task_id=task_id
+            )
+        except Exception as e:
+            raise Exception(f"Test run rule {automation_rule_id} error {e}")
+        finally:
+            db_session.close()
+        self.put_task(automation_task)
+        start_at = time.time()
+        while True:
+            done = self._redis_client.get(self.get_test_task_cache_key(automation_task.task_id))
+            if done:
+                break
+            if time.time() - start_at > 15 * 60:
+                raise Exception(f'Wait test automation {automation_task.rule_id} task id {automation_task.task_id} timeout')
+            time.sleep(1)
+
     def start(self):
         auto_rule_logger.info("Start automations pipeline")
-        self.start_workers() # auto rules do action from automations_queue
-        Thread(target=self.receive, daemon=True).start() # add normal action to automations_queue
-        Thread(target=self.scheduled_scan, daemon=True).start() # add cron action to automations_queue
+        Thread(target=self.receive, daemon=True).start() # add normal action to redis queue
+        Thread(target=self.scheduled_scan, daemon=True).start() # add cron action to redis queue
         Thread(target=self.stats, daemon=True).start() # update status
         Thread(target=self.publish_metrics, daemon=True).start() # update metrics
         Thread(target=self.send_exceed_system_resource_limit_notifications, daemon=True).start() # send notifications

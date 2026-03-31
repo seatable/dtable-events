@@ -43,10 +43,13 @@ class App(object):
 
         self._stats_sender = StatsSender()
 
-        self._playwright_manager = get_playwright_manager()
+        # automations pipeline, to put test tasks to redis for foreground mode and to put real tasks to redis for background mode
+        # but not necessary to start in foreground mode
+        self._automations_pipeline = AutomationsPipeline()
 
         if self._enable_foreground_tasks:
             self._dtable_io_server = DTableIOServer(self)
+            self._playwright_manager = get_playwright_manager()
 
         if self._enable_background_tasks:
             # redis client subscriber
@@ -79,14 +82,12 @@ class App(object):
             self._virus_scanner = VirusScanner()
             # ai stats, listen redis and cron
             self.ai_stats_worker = AIStatsWorker()
-            # automations pipeline
-            self._automations_pipeline = AutomationsPipeline()
 
     def serve_forever(self):
 
-        self._playwright_manager.start()
 
         if self._enable_foreground_tasks:
+            self._playwright_manager.start()                 # always True
             self._dtable_io_server.start()                   # always True
 
         if self._enable_background_tasks:
