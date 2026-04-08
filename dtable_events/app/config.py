@@ -52,7 +52,7 @@ try:
     UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_DAYS = getattr(seahub_settings, 'UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_DAYS', 7)
     UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_NOTES = getattr(seahub_settings, 'UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_NOTES', 'auto backup')
     DTABLE_STORAGE_SERVER_URL = getattr(seahub_settings, 'DTABLE_STORAGE_SERVER_URL', 'http://127.0.0.1:6666')
-    SEATABLE_AI_SERVER_URL = getattr(seahub_settings, 'SEATABLE_AI_SERVER_URL', 'http://127.0.0.1:8888')
+    INNER_SEATABLE_AI_SERVER_URL = getattr(seahub_settings, 'INNER_SEATABLE_AI_SERVER_URL', 'http://127.0.0.1:8888')
     ENABLE_SEATABLE_AI = getattr(seahub_settings, 'ENABLE_SEATABLE_AI', False)
     AUTO_RULES_AI_CONTENT_MAX_LENGTH = getattr(seahub_settings, 'AUTO_RULES_AI_CONTENT_MAX_LENGTH', 10000)
     ORG_MEMBER_QUOTA_DEFAULT = getattr(seahub_settings, 'ORG_MEMBER_QUOTA_DEFAULT', 10)
