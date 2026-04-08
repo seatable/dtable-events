@@ -23,7 +23,7 @@ from seaserv import seafile_api
 from dtable_events.automations.models import get_third_party_account
 from dtable_events.utils.utils_metadata_cache import clean_metadata, get_metadata
 from dtable_events.app.event_redis import redis_cache
-from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, ENABLE_PYTHON_SCRIPT, SEATABLE_AI_SERVER_URL, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, \
+from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, ENABLE_PYTHON_SCRIPT, INNER_SEATABLE_AI_SERVER_URL, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, \
 INNER_DTABLE_SERVER_URL, ENABLE_SEATABLE_AI, AUTO_RULES_AI_CONTENT_MAX_LENGTH
 from dtable_events.dtable_io import send_wechat_msg, send_dingtalk_msg
 from dtable_events.convert_page.manager import get_playwright_manager
@@ -3424,7 +3424,7 @@ class RunAI(BaseAction):
             summary_result = ''
         else:
             try:
-                seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, SEATABLE_AI_SERVER_URL)
+                seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, INNER_SEATABLE_AI_SERVER_URL)
                 summary_result = seatable_ai_api.summarize(content, self.config.get('summary_prompt'))
             except requests.Timeout as timeout_exc:
                 auto_rule_logger.error(f'rule {self.auto_rule.rule_id} ai summarize timeout {timeout_exc}')
@@ -3558,7 +3558,7 @@ class RunAI(BaseAction):
             classification_result = []
         else:
             try:
-                seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, SEATABLE_AI_SERVER_URL)
+                seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, INNER_SEATABLE_AI_SERVER_URL)
                 classification_result = seatable_ai_api.classify(content, self.config.get('classify_prompt'))
             except requests.Timeout as timeout_exc:
                 auto_rule_logger.error(f'rule {self.auto_rule.rule_id} ai classify timeout {timeout_exc}')
@@ -3643,7 +3643,7 @@ class RunAI(BaseAction):
         
         # Call AI service for OCR recognition
         try:
-            seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, SEATABLE_AI_SERVER_URL)
+            seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, INNER_SEATABLE_AI_SERVER_URL)
             
             ocr_text = seatable_ai_api.ocr(file_name, file_content)
             if ocr_text.strip():
@@ -3803,7 +3803,7 @@ class RunAI(BaseAction):
         # Call AI service for content extraction
         extraction_result = {}
         try:
-            seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, SEATABLE_AI_SERVER_URL)
+            seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, INNER_SEATABLE_AI_SERVER_URL)
             # Use dedicated extract method with optional prompt
             extract_prompt = self.config.get('extract_prompt')
             extraction_result = seatable_ai_api.extract(source_content, target_descriptions, extract_prompt)
@@ -3872,7 +3872,7 @@ class RunAI(BaseAction):
             custom_result = ''
         else:
             try:
-                seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, SEATABLE_AI_SERVER_URL)
+                seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, INNER_SEATABLE_AI_SERVER_URL)
                 custom_result = seatable_ai_api.custom(filled_prompt)
             except requests.Timeout as timeout_exc:
                 auto_rule_logger.error(f'rule {self.auto_rule.rule_id} ai custom processing timeout {timeout_exc}')
@@ -3930,7 +3930,7 @@ class RunAI(BaseAction):
 
         # Call AI service for Chinese invoice recognition
         try:
-            seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, SEATABLE_AI_SERVER_URL)
+            seatable_ai_api = DTableAIAPI(self.username, self.auto_rule.org_id, self.auto_rule.dtable_uuid, INNER_SEATABLE_AI_SERVER_URL)
             invoice_result = seatable_ai_api.recognize_chinese_invoice(file_name, file_content)
         except requests.Timeout as timeout_exc:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} ai invoice recognition timeout {timeout_exc}')
@@ -4564,7 +4564,7 @@ class AutomationRule:
         self.dtable_server_api = DTableServerAPI(self.username, str(UUID(self.dtable_uuid)), INNER_DTABLE_SERVER_URL)
         self.dtable_db_api = DTableDBAPI(self.username, str(UUID(self.dtable_uuid)), INNER_DTABLE_DB_URL)
         self.dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
-        self.seatable_ai_api = DTableAIAPI(self.username, self.org_id, self.dtable_uuid, SEATABLE_AI_SERVER_URL)
+        self.seatable_ai_api = DTableAIAPI(self.username, self.org_id, self.dtable_uuid, INNER_SEATABLE_AI_SERVER_URL)
 
         self.query_stats = []
 
