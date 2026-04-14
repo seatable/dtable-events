@@ -1,13 +1,10 @@
 import requests
-import logging
 import time
 from dtable_events.utils import get_file_ext, process_pdf_to_images
 from dtable_events.utils.constants import EXTRACT_TEXT_SUPPORTED_FILES
 import jwt
 
 from dtable_events.app.config import DTABLE_PRIVATE_KEY
-
-logger = logging.getLogger(__name__)
 
 class DTableAIAPIError(Exception):
     pass
@@ -46,8 +43,7 @@ class DTableAIAPI:
             result = response.json()
             return result.get('summary', '')
         else:
-            logger.error(f"Failed to summarize text: {response.text}")
-            raise DTableAIAPIError()
+            raise DTableAIAPIError(f"Failed to summarize text: {response.text}")
 
     def classify(self, content, classify_prompt=''):
         if not content or not content.strip():
@@ -70,8 +66,7 @@ class DTableAIAPI:
             classification = result.get('classification', [])
             return classification
         else:
-            logger.error(f"Failed to classify text: {response.text}")
-            raise DTableAIAPIError()
+            raise DTableAIAPIError(f"Failed to classify text: {response.text}")
 
     def ocr(self, file_name, file_content):
         file_ext = get_file_ext(file_name)
@@ -82,7 +77,6 @@ class DTableAIAPI:
             try:
                 image_pages = process_pdf_to_images(file_content, max_pages=5)
             except Exception as e:
-                logger.error(f"Failed to process PDF to images: {e}")
                 raise DTableAIAPIError(f"PDF processing failed: {e}")
         else:
             image_pages = [file_content]
@@ -106,8 +100,7 @@ class DTableAIAPI:
             result = response.json()
             return result.get('ocr_result', '')
         else:
-            logger.error(f"Failed to ocr file: {response.text}")
-            raise DTableAIAPIError()
+            raise DTableAIAPIError(f"Failed to ocr file: {response.text}")
 
     def extract(self, content, extract_fields, extract_prompt):
         """Extract specific information from content based on field descriptions"""
@@ -131,8 +124,7 @@ class DTableAIAPI:
             result = response.json()
             return result.get('extracted_data', {})
         else:
-            logger.error(f"Failed to extract information: {response.text}")
-            raise DTableAIAPIError()
+            raise DTableAIAPIError(f"Failed to extract information: {response.text}")
 
     def custom(self, content):
         """Execute custom AI processing with user-defined prompt"""
@@ -154,8 +146,7 @@ class DTableAIAPI:
             result = response.json()
             return result.get('result', '')
         else:
-            logger.error(f"Failed to process custom AI request: {response.text}")
-            raise DTableAIAPIError()
+            raise DTableAIAPIError(f"Failed to process custom AI request: {response.text}")
 
     def recognize_chinese_invoice(self, file_name, file_content):
         data = {
@@ -175,5 +166,4 @@ class DTableAIAPI:
             result = response.json()
             return result.get('result', {})
         else:
-            logger.error(f"Failed to recognize Chinese invoice: {response.text}")
-            raise DTableAIAPIError()
+            raise DTableAIAPIError(f"Failed to recognize Chinese invoice: {response.text}")
