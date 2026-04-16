@@ -22,7 +22,7 @@ __all__ = [
 def update_big_data_storage_stats(db_session, bases):
     uuid_org_id_map = dict()
     get_org_id_sql = """SELECT uuid, org_id FROM dtables d JOIN workspaces w ON d.workspace_id=w.id
-                        WHERE uuid IN :uuid_list AND d.deleted=0"""
+                        WHERE uuid IN :uuid_list"""
     results = db_session.execute(text(get_org_id_sql),
                                  {'uuid_list': [uuid.UUID(base.get('id')).hex for base in bases]}).fetchall()
     for result in results:
