@@ -9,7 +9,7 @@ from dtable_events.notification_rules.notification_rules_utils import send_notif
 from dtable_events.utils import get_dtable_admins
 
 from dtable_events.app.config import CCNET_DB_NAME, DTABLE_WEB_SERVICE_URL, ORG_MEMBER_QUOTA_DEFAULT
-from dtable_events.automations.actions import AutomationResult
+from dtable_events.automations.entities import AutomationResult
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 
 

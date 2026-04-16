@@ -14,7 +14,9 @@ COMMON_DATASET_ELAPSED_TIME_METRIC_HELP = "Time taken (in seconds) to complete c
 REALTIME_AUTOMATION_RULES_TRIGGERED_COUNT_HELP = "The number of triggered realtime automations since start up"
 REALTIME_AUTOMATION_RULES_HEARTBEAT_HELP = "Heartbeat timestamp of realtime automations"
 SCHEDULED_AUTOMATION_RULES_TRIGGERED_COUNT_HELP = "The number of triggered scheduled automations since start up"
-AUTOMATION_RULES_QUEUE_METRIC_HELP = "The number of automations in the queue"
+AUTOMATION_QUEUE_10_METRIC_HELP = "The number of automations in the queue 10"
+AUTOMATION_QUEUE_20_METRIC_HELP = "The number of automations in the queue 20"
+AUTOMATION_QUEUE_30_METRIC_HELP = "The number of automations in the queue 30"
 
 
 def publish_metric(value, metric_name, metric_help):
