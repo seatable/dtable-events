@@ -66,6 +66,9 @@ except Exception as e:
 
 def get_config(config_file):
     config = configparser.ConfigParser()
+    if not os.path.exists(config_file):
+        logger.debug("Config file %s not found" % config_file)
+        return config
     try:
         config.read(config_file)
     except Exception as e:

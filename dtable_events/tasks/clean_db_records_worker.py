@@ -30,7 +30,7 @@ class CleanDBRecordsWorker(object):
     def _parse_config(self, config):
         section_name = 'CLEAN DB'
 
-        self._enabled = config.getboolean(section_name, 'enabled', fallback=False)
+        self._enabled = config.getboolean(section_name, 'enabled', fallback=True)
 
         # Read retention times from config file
         dtable_snapshot = config.getint(section_name, 'keep_dtable_snapshot_days', fallback=365)
