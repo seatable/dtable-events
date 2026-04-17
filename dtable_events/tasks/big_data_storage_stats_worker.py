@@ -36,8 +36,10 @@ def update_big_data_storage_stats(db_session, bases):
 
 
 def update_org_big_data_storage_stats(db_session):
-    get_stats_sql = """SELECT org_id, SUM(total_rows) AS total_rows, SUM(total_storage) AS total_storage
-                       FROM big_data_storage_stats WHERE org_id != -1 GROUP BY org_id"""
+    get_stats_sql = """SELECT bdss.org_id, SUM(bdss.total_rows) AS total_rows, SUM(bdss.total_storage) AS total_storage
+                       FROM big_data_storage_stats bdss
+                       JOIN dtables d ON REPLACE(bdss.dtable_uuid, '-', '')=d.uuid
+                       WHERE bdss.org_id != -1 AND d.deleted=0 GROUP BY bdss.org_id"""
     results = db_session.execute(text(get_stats_sql)).fetchall()
 
     if results:
