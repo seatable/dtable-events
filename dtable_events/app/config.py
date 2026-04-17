@@ -2,60 +2,90 @@
 import configparser
 import logging
 import os
-import sys
+
+from dtable_events.app.config_parser import ConfigParser
 
 logger = logging.getLogger(__name__)
 
+central_conf_dir = os.environ.get('SEAFILE_CENTRAL_CONF_DIR', '')
+yaml_file_path = os.path.join(central_conf_dir, os.environ.get('SEATABLE_CONFIG_NAME', 'seatable_config.yaml'))
+configs = ConfigParser(yaml_file_path, 'dtable-events')
 
-# DTABLE_WEB_DIR
-dtable_web_dir = os.environ.get('DTABLE_WEB_DIR', '')
-if not dtable_web_dir:
-    logging.critical('dtable_web_dir is not set')
-    raise RuntimeError('dtable_web_dir is not set')
-if not os.path.exists(dtable_web_dir):
-    logging.critical('dtable_web_dir %s does not exist' % dtable_web_dir)
-    raise RuntimeError('dtable_web_dir does not exist.')
+def validate_llm_models(models):
+    if not models or not isinstance(models, list):
+        return []
+    validated_models = []
 
-sys.path.insert(0, dtable_web_dir)
+    for model in models:
+        if not isinstance(model, dict) or model.get('disable', False):
+            continue
+        if model.get('type') in ('proxy', 'other', 'hosted_vllm'):
+            required_fields = ('model', 'url')
+        else:
+            required_fields = ('model', 'key')
+        if not all(field in model for field in required_fields):
+            continue
+        model['label'] = model.get('label', model['model'])
+        validated_models.append(model)
+
+    return validated_models
+
+
+def get_llm_prices(models):
+    if not models or not isinstance(models, list):
+        return {}
+    prices = {}
+    for model in models:
+        if not isinstance(model, dict):
+            continue
+        model_name = model.get('model')
+        price = model.get('price')
+        if not model_name or not isinstance(price, dict):
+            continue
+        if 'input_tokens' not in price:
+            continue
+        prices[model_name] = {
+            'input_tokens': price.get('input_tokens', 0),
+            'output_tokens': price.get('output_tokens', 0),
+        }
+    return prices
 
 try:
-    # settings in dtable-web
-    import seahub.settings as seahub_settings
-    DTABLE_WEB_SERVICE_URL = getattr(seahub_settings, 'DTABLE_WEB_SERVICE_URL', 'http://127.0.0.1')
-    DTABLE_PRIVATE_KEY = getattr(seahub_settings, 'DTABLE_PRIVATE_KEY', '')
-    ENABLE_DTABLE_SERVER_CLUSTER = getattr(seahub_settings, 'ENABLE_DTABLE_SERVER_CLUSTER', False)
-    FILE_SERVER_ROOT = getattr(seahub_settings, 'FILE_SERVER_ROOT', 'http://127.0.0.1:8082')
-    INNER_FILE_SERVER_ROOT = getattr(seahub_settings, 'INNER_FILE_SERVER_ROOT', 'http://127.0.0.1:8082')
-    SEATABLE_FAAS_AUTH_TOKEN = getattr(seahub_settings, 'SEATABLE_FAAS_AUTH_TOKEN', '')
-    ENABLE_PYTHON_SCRIPT = getattr(seahub_settings, 'ENABLE_PYTHON_SCRIPT', '')
-    SEATABLE_FAAS_URL = getattr(seahub_settings, 'SEATABLE_FAAS_URL', '')
-    SECRET_KEY = getattr(seahub_settings, 'SECRET_KEY', '')
-    SESSION_COOKIE_NAME = getattr(seahub_settings, 'SESSION_COOKIE_NAME', 'sessionid')
-    EXPORT2EXCEL_DEFAULT_STRING = getattr(seahub_settings, 'EXPORT2EXCEL_DEFAULT_STRING', 'illegal character in excel')
-    TIME_ZONE = getattr(seahub_settings, 'TIME_ZONE', 'UTC')
-    INNER_DTABLE_DB_URL = getattr(seahub_settings, 'INNER_DTABLE_DB_URL', 'http://127.0.0.1:7777')
-    ENABLE_WEIXIN = getattr(seahub_settings, 'ENABLE_WEIXIN', False)
-    ENABLE_WORK_WEIXIN = getattr(seahub_settings, 'ENABLE_WORK_WEIXIN', False)
-    ENABLE_DINGTALK = getattr(seahub_settings, 'ENABLE_DINGTALK', False)
-    USE_INNER_DTABLE_SERVER = getattr(seahub_settings, 'USE_INNER_DTABLE_SERVER', True)
-    INNER_DTABLE_SERVER_URL = getattr(seahub_settings, 'INNER_DTABLE_SERVER_URL', 'http://127.0.0.1:5000/')
-    ARCHIVE_VIEW_EXPORT_ROW_LIMIT = getattr(seahub_settings, 'ARCHIVE_VIEW_EXPORT_ROW_LIMIT', 250000)
-    APP_TABLE_EXPORT_EXCEL_ROW_LIMIT = getattr(seahub_settings, 'APP_TABLE_EXPORT_EXCEL_ROW_LIMIT', 10000)
-    BIG_DATA_ROW_IMPORT_LIMIT = getattr(seahub_settings, 'BIG_DATA_ROW_IMPORT_LIMIT', 500000)
-    BIG_DATA_ROW_UPDATE_LIMIT = getattr(seahub_settings, 'BIG_DATA_ROW_UPDATE_LIMIT', 500000)
-    TRASH_CLEAN_AFTER_DAYS = getattr(seahub_settings, 'TRASH_CLEAN_AFTER_DAYS', 30)
-    LICENSE_PATH = getattr(seahub_settings, 'LICENSE_PATH', '/shared/seatable-license.txt')
-    IS_PRO_VERSION = getattr(seahub_settings, 'IS_PRO_VERSION', False)
-    ENABLE_OPERATION_LOG_DB = getattr(seahub_settings, 'ENABLE_OPERATION_LOG_DB', False)
-    AI_PRICES = getattr(seahub_settings, 'AI_PRICES', {})
-    BAIDU_OCR_TOKENS = getattr(seahub_settings, 'BAIDU_OCR_TOKENS', {})
-    UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_DAYS = getattr(seahub_settings, 'UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_DAYS', 7)
-    UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_NOTES = getattr(seahub_settings, 'UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_NOTES', 'auto backup')
-    DTABLE_STORAGE_SERVER_URL = getattr(seahub_settings, 'DTABLE_STORAGE_SERVER_URL', 'http://127.0.0.1:6666')
-    INNER_SEATABLE_AI_SERVER_URL = getattr(seahub_settings, 'INNER_SEATABLE_AI_SERVER_URL', 'http://127.0.0.1:8888')
-    ENABLE_SEATABLE_AI = getattr(seahub_settings, 'ENABLE_SEATABLE_AI', False)
-    AUTO_RULES_AI_CONTENT_MAX_LENGTH = getattr(seahub_settings, 'AUTO_RULES_AI_CONTENT_MAX_LENGTH', 10000)
-    ORG_MEMBER_QUOTA_DEFAULT = getattr(seahub_settings, 'ORG_MEMBER_QUOTA_DEFAULT', 10)
+    DTABLE_WEB_SERVICE_URL = configs.get('DTABLE_WEB_SERVICE_URL', default='http://127.0.0.1')
+    DTABLE_PRIVATE_KEY = configs.get('JWT_PRIVATE_KEY', default='')
+    ENABLE_DTABLE_SERVER_CLUSTER = configs.get('ENABLE_DTABLE_SERVER_CLUSTER', default=False)
+    FILE_SERVER_ROOT = configs.get('FILE_SERVER_ROOT', default='http://127.0.0.1:8082')
+    INNER_FILE_SERVER_ROOT = configs.get('INNER_FILE_SERVER_ROOT', default='http://127.0.0.1:8082')
+    SEATABLE_FAAS_AUTH_TOKEN = configs.get('SEATABLE_FAAS_AUTH_TOKEN', default='')
+    ENABLE_PYTHON_SCRIPT = configs.get('ENABLE_PYTHON_SCRIPT', default=False)
+    SEATABLE_FAAS_URL = configs.get('SEATABLE_FAAS_URL', default='')
+    SECRET_KEY = configs.get('SECRET_KEY', default='')
+    EXPORT2EXCEL_DEFAULT_STRING = configs.get('EXPORT2EXCEL_DEFAULT_STRING', default='illegal character in excel')
+    TIME_ZONE = configs.get('TIME_ZONE', default='UTC')
+    INNER_DTABLE_DB_URL = configs.get('INNER_DTABLE_DB_URL', default='http://127.0.0.1:7777')
+    ENABLE_WEIXIN = configs.get('ENABLE_WEIXIN', default=False)
+    ENABLE_WORK_WEIXIN = configs.get('ENABLE_WORK_WEIXIN', default=False)
+    ENABLE_DINGTALK = configs.get('ENABLE_DINGTALK', default=False)
+    INNER_DTABLE_SERVER_URL = configs.get('INNER_DTABLE_SERVER_URL', default=False)
+    ARCHIVE_VIEW_EXPORT_ROW_LIMIT = configs.get('ARCHIVE_VIEW_EXPORT_ROW_LIMIT', default=250000)
+    APP_TABLE_EXPORT_EXCEL_ROW_LIMIT = configs.get('APP_TABLE_EXPORT_EXCEL_ROW_LIMIT', default=10000)
+    BIG_DATA_ROW_IMPORT_LIMIT = configs.get('BIG_DATA_ROW_IMPORT_LIMIT', default=500000)
+    BIG_DATA_ROW_UPDATE_LIMIT = configs.get('BIG_DATA_ROW_UPDATE_LIMIT', default=500000)
+    TRASH_CLEAN_AFTER_DAYS = configs.get('TRASH_CLEAN_AFTER_DAYS', default=30)
+    LICENSE_PATH = configs.get('LICENSE_PATH', default='/shared/seatable-license.txt')
+    IS_PRO_VERSION = os.environ.get('IS_PRO_VERSION', default=True)
+    ENABLE_OPERATION_LOG_DB = configs.get('ENABLE_OPERATION_LOG_DB', default=False)
+    LLM_MODELS = []
+    LLM_MODELS = validate_llm_models(configs.get('LLM_MODELS', LLM_MODELS))
+    AI_PRICES = get_llm_prices(LLM_MODELS)
+    BAIDU_OCR_TOKENS = configs.get('BAIDU_OCR_TOKENS', default={})
+    UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_DAYS = configs.get('UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_DAYS', default=7)
+    UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_NOTES = configs.get('UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_NOTES', default='auto backup')
+    DTABLE_STORAGE_SERVER_URL = configs.get('DTABLE_STORAGE_SERVER_URL', default='http://127.0.0.1:6666')
+    INNER_SEATABLE_AI_SERVER_URL = configs.get('INNER_SEATABLE_AI_SERVER_URL', default='http://127.0.0.1:8888')
+    ENABLE_SEATABLE_AI = configs.get('ENABLE_SEATABLE_AI', default=False)
+    AUTO_RULES_AI_CONTENT_MAX_LENGTH = configs.get('AUTO_RULES_AI_CONTENT_MAX_LENGTH', default=10000)
+    ORG_MEMBER_QUOTA_DEFAULT = configs.get('ORG_MEMBER_QUOTA_DEFAULT', 10)
 
     # env
     CCNET_DB_NAME = os.environ.get('SEATABLE_MYSQL_DB_CCNET_DB_NAME', 'ccnet_db')
