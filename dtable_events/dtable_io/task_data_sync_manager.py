@@ -8,16 +8,12 @@ class TaskDataSyncManager(object):
     def __init__(self):
         self.tasks_map = {}
         self.tasks_queue = queue.Queue(10)
-        self.config = None
         self.current_task_info = {}
         self.conf = {}
 
-    def init(self, workers, file_server_port, io_task_timeout, config):
-        self.conf['file_server_port'] = file_server_port
+    def init(self, workers, io_task_timeout):
         self.conf['io_task_timeout'] = io_task_timeout
         self.conf['workers'] = workers
-
-        self.config = config
 
     def is_valid_task_id(self, task_id):
         return task_id in self.tasks_map.keys()
@@ -26,7 +22,7 @@ class TaskDataSyncManager(object):
         from dtable_events.dtable_io import email_sync
 
         task_id = str(uuid.uuid4())
-        task = (email_sync, (context, self.config))
+        task = (email_sync, (context,))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
 

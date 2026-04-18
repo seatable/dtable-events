@@ -4,6 +4,8 @@ import sys
 import logging
 from logging import handlers
 
+from dtable_events.app.config import LOG_LEVEL, LOG_DIR, SEATABLE_LOG_TO_STDOUT
+
 
 def _get_log_level(level):
     if level == 'debug':
@@ -28,19 +30,16 @@ def get_format(component=None, fmt=None):
 
 
 class LogConfigurator(object):
-    def __init__(self, level, logfile=None):
-        self._level = _get_log_level(level)
-        self._logfile = logfile
+    def __init__(self):
+        self._level = _get_log_level(LOG_LEVEL)
+        self._logfile = os.path.join(LOG_DIR, 'dtable-events.log')
 
-        if logfile is None:
-            self._basic_config()
-        else:
-            self._rotating_config()
+        self._rotating_config()
 
     def _rotating_config(self):
         logging.root.setLevel(self._level)
 
-        if os.environ.get('SEATABLE_LOG_TO_STDOUT', 'false') == 'true':
+        if SEATABLE_LOG_TO_STDOUT:
             # logs to stdout
             stdout_formatter = logging.Formatter(get_format(component='dtable-events'), datefmt="%Y-%m-%d %H:%M:%S")
             stdout_handler = logging.StreamHandler()
@@ -55,22 +54,6 @@ class LogConfigurator(object):
             logging.root.addHandler(file_handler)
 
 
-    def _basic_config(self):
-        # Log to stdout. Mainly for development.
-        if os.environ.get('SEATABLE_LOG_TO_STDOUT', 'false') == 'true':
-            component = 'dtable-events'
-        else:
-            component = None
-        kw = {
-            'format': get_format(component=component),
-            'datefmt': '%m/%d/%Y %H:%M:%S',
-            'level': self._level,
-            'stream': sys.stdout
-        }
-
-        logging.basicConfig(**kw)
-
-
 def setup_logger(logname, fmt=None, level=None, propagate=None):
     """
     setup logger for dtable io
@@ -79,7 +62,7 @@ def setup_logger(logname, fmt=None, level=None, propagate=None):
     if propagate is not None:
         logger.propagate = propagate
 
-    if os.environ.get('SEATABLE_LOG_TO_STDOUT', 'false') == 'true':
+    if SEATABLE_LOG_TO_STDOUT:
         # logs to stdout
         logger_component_name = logname
         stdout_handler = logging.StreamHandler()

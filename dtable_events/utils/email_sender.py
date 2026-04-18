@@ -396,15 +396,14 @@ class MicrosoftAPISendEmail(_ThirdpartyAPISendEmail):
         return requests.post(self.EMAIL_SENDING_ENDPOINT, data=msg_base64, headers=headers)
 
 class EmailSender:
-    def __init__(self, account_id, operator, config=None, db_session=None):
+    def __init__(self, account_id, operator, db_session=None):
         """
         one of config or db_session is required
         """
         self.account_id = account_id
         self.operator = operator
-        self.config = config
         self.is_config_session = False if db_session else True
-        self.db_session = db_session or init_db_session_class(self.config)()
+        self.db_session = db_session or init_db_session_class()()
         self._sender_init()
 
     def _sender_init(self):
@@ -458,5 +457,5 @@ class EmailSender:
         if self.is_config_session:
             self.db_session.close()
 
-def toggle_send_email(account_id, send_info, username, config):
-    return EmailSender(account_id, username, config).send(send_info)
+def toggle_send_email(account_id, send_info, username):
+    return EmailSender(account_id, username).send(send_info)

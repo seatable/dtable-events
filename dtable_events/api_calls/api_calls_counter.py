@@ -20,10 +20,10 @@ logger = logging.getLogger(__name__)
 
 
 class APICallsCounter:
-    def __init__(self, config):
+    def __init__(self):
         self._finished = Event()
-        self._db_session_class = init_db_session_class(config)
-        self._redis_client = RedisClient(config)
+        self._db_session_class = init_db_session_class()
+        self._redis_client = RedisClient()
         self.keep_months = 3  # including this month
 
     def count_api_gateway(self, info, db_session):

@@ -10,30 +10,19 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from sqlalchemy import text
 
 from dtable_events import init_db_session_class
-from dtable_events.app.config import DTABLE_PRIVATE_KEY
+from dtable_events.app.config import COMMON_DATASET_SYNCER_ENABLED
 from dtable_events.common_dataset.common_dataset_sync_utils import batch_sync_common_dataset, cds_logger
-from dtable_events.utils import get_opt_from_conf_or_env, parse_bool
 
 class CommonDatasetSyncer(object):
 
-    def __init__(self, app, config):
+    def __init__(self, app):
         self.app = app
         self._enabled = True
-        self._prepara_config(config)
-        self._db_session_class = init_db_session_class(config)
+        self._prepara_config()
+        self._db_session_class = init_db_session_class()
 
-    def _prepara_config(self, config):
-        section_name = 'COMMON DATASET SYNCER'
-        key_enabled = 'enabled'
-
-        if not config.has_section(section_name):
-            section_name = 'COMMON-DATASET-SYNCER'
-            if not config.has_section(section_name):
-                return
-
-        # enabled
-        enabled = get_opt_from_conf_or_env(config, section_name, key_enabled, default=True)
-        self._enabled = parse_bool(enabled)
+    def _prepara_config(self):
+        self._enabled = COMMON_DATASET_SYNCER_ENABLED
 
     def start(self):
         if not self.is_enabled():

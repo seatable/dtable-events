@@ -11,42 +11,26 @@ from dtable_events.db import create_db_tables, prepare_seafile_tables
 
 
 def main():
-    args = parser.parse_args()
-    app_logger = LogConfigurator(args.loglevel, args.logfile)
+    args, _ = parser.parse_known_args()
+    LogConfigurator()
 
-    config = get_config(args.config_file)
-
-    redis_cache.init_redis(config)  # init redis instance for redis_cache
-
-    seafile_conf_path = '/opt/seatable/conf/seafile.conf'
-    for conf_dir in [
-        os.environ.get('SEAFILE_CENTRAL_CONF_DIR'),
-        os.environ.get('SEAFILE_DATA_DIR')
-    ]:
-        if os.path.isfile(os.path.join(conf_dir, 'seafile.conf')):
-            seafile_conf_path = os.path.join(conf_dir, 'seafile.conf')
-            break
-
-    seafile_config = get_config(seafile_conf_path)
+    redis_cache.init_redis()  # init redis instance for redis_cache
 
     try:
-        create_db_tables(config)
-        prepare_seafile_tables(seafile_config)
+        create_db_tables()
+        prepare_seafile_tables()
     except Exception as e:
         logging.error('Failed create or prepare tables, error: %s' % e)
         raise RuntimeError('Failed create or prepare tables, error: %s' % e)
 
     task_mode = get_task_mode(args.taskmode)
 
-    app = App(config, seafile_config, task_mode)
+    app = App(task_mode)
     app.serve_forever()
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config-file', help='config file')
-    parser.add_argument('--logfile', help='log file')
-    parser.add_argument('--loglevel', default='info', help='log level')
     parser.add_argument('--taskmode', default='all', help='task mode')
 
     main()

@@ -7,7 +7,11 @@ from threading import Thread
 from apscheduler.schedulers.blocking import BlockingScheduler
 from sqlalchemy import text
 
-from dtable_events.app.config import ENABLE_OPERATION_LOG_DB
+from dtable_events.app.config import ENABLE_OPERATION_LOG_DB, CLEAN_DB_ENABLED, CLEAN_DB_KEEP_DTABLE_SNAPSHOT_DAYS, \
+    CLEAN_DB_KEEP_ACTIVITIES_DAYS, CLEAN_DB_KEEP_OPERATION_LOG_DAYS, CLEAN_DB_KEEP_DELETE_OPERATION_LOG_DAYS, \
+    CLEAN_DB_KEEP_DTABLE_DB_OP_LOG_DAYS, CLEAN_DB_KEEP_NOTIFICATIONS_USERNOTIFICATION_DAYS, \
+    CLEAN_DB_KEEP_DTABLE_NOTIFICATIONS_DAYS, CLEAN_DB_KEEP_SESSION_LOG_DAYS, CLEAN_DB_KEEP_AUTO_RULES_TASK_LOG_DAYS, \
+    CLEAN_DB_KEEP_USER_ACTIVITY_STATISTICS_DAYS, CLEAN_DB_KEEP_DTABLE_APP_PAGES_OPERATION_LOG_DAYS
 from dtable_events.db import init_db_session_class
 
 __all__ = [
@@ -16,48 +20,28 @@ __all__ = [
 
 
 class CleanDBRecordsWorker(object):
-    def __init__(self, config):
+    def __init__(self):
         self._enabled = False
-        self._db_session_class = init_db_session_class(config)
+        self._db_session_class = init_db_session_class()
 
-        try:
-            self._parse_config(config)
-        except:
-            logging.exception('Could not parse config, using default retention config instead')
-            # Use default configuration
-            self._retention_config = RetentionConfig()
+        self._parse_config()
 
-    def _parse_config(self, config):
-        section_name = 'CLEAN DB'
+    def _parse_config(self):
 
-        self._enabled = config.getboolean(section_name, 'enabled', fallback=True)
-
-        # Read retention times from config file
-        dtable_snapshot = config.getint(section_name, 'keep_dtable_snapshot_days', fallback=365)
-        activities = config.getint(section_name, 'keep_activities_days', fallback=30)
-        operation_log = config.getint(section_name, 'keep_operation_log_days', fallback=14)
-        delete_operation_log = config.getint(section_name, 'keep_delete_operation_log_days', fallback=30)
-        dtable_db_op_log = config.getint(section_name, 'keep_dtable_db_op_log_days', fallback=30)
-        notifications_usernotification = config.getint(section_name, 'keep_notifications_usernotification_days', fallback=30)
-        dtable_notifications = config.getint(section_name, 'keep_dtable_notifications_days', fallback=30)
-        session_log = config.getint(section_name, 'keep_session_log_days', fallback=30)
-        auto_rules_task_log = config.getint(section_name, 'keep_auto_rules_task_log_days', fallback=30)
-        # Disabled by default
-        user_activity_statistics = config.getint(section_name, 'keep_user_activity_statistics_days', fallback=0)
-        dtable_app_pages_operation_log = config.getint(section_name, 'keep_dtable_app_pages_operation_log_days', fallback=14)
+        self._enabled = CLEAN_DB_ENABLED
 
         self._retention_config = RetentionConfig(
-            dtable_snapshot=dtable_snapshot,
-            activities=activities,
-            operation_log=operation_log,
-            delete_operation_log=delete_operation_log,
-            dtable_db_op_log=dtable_db_op_log,
-            notifications_usernotification=notifications_usernotification,
-            dtable_notifications=dtable_notifications,
-            session_log=session_log,
-            auto_rules_task_log=auto_rules_task_log,
-            user_activity_statistics=user_activity_statistics,
-            dtable_app_pages_operation_log=dtable_app_pages_operation_log,
+            dtable_snapshot=CLEAN_DB_KEEP_DTABLE_SNAPSHOT_DAYS,
+            activities=CLEAN_DB_KEEP_ACTIVITIES_DAYS,
+            operation_log=CLEAN_DB_KEEP_OPERATION_LOG_DAYS,
+            delete_operation_log=CLEAN_DB_KEEP_DELETE_OPERATION_LOG_DAYS,
+            dtable_db_op_log=CLEAN_DB_KEEP_DTABLE_DB_OP_LOG_DAYS,
+            notifications_usernotification=CLEAN_DB_KEEP_NOTIFICATIONS_USERNOTIFICATION_DAYS,
+            dtable_notifications=CLEAN_DB_KEEP_DTABLE_NOTIFICATIONS_DAYS,
+            session_log=CLEAN_DB_KEEP_SESSION_LOG_DAYS,
+            auto_rules_task_log=CLEAN_DB_KEEP_AUTO_RULES_TASK_LOG_DAYS,
+            user_activity_statistics=CLEAN_DB_KEEP_USER_ACTIVITY_STATISTICS_DAYS,
+            dtable_app_pages_operation_log=CLEAN_DB_KEEP_DTABLE_APP_PAGES_OPERATION_LOG_DAYS,
         )
 
     def start(self):

@@ -4,7 +4,7 @@ import logging
 from threading import Thread, Event
 
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, get_python_executable, run, parse_interval
-from dtable_events.app.config import dtable_web_dir
+from dtable_events.app.config import dtable_web_dir, EMAIL_SENDER_ENABLED, EMAIL_SENDER_INTERVAL
 
 __all__ = [
     'EmailNoticesSender',
@@ -12,35 +12,22 @@ __all__ = [
 
 
 class EmailNoticesSender(object):
-    def __init__(self, config):
+    def __init__(self):
         self._enabled = True
         self._logfile = None
         self._interval = 60 * 60  # 60min
         self._prepare_logfile()
-        self._parse_config(config)
+        self._parse_config()
 
     def _prepare_logfile(self):
         logdir = os.path.join(os.environ.get('LOG_DIR', ''))
         self._logfile = os.path.join(logdir, 'email_notices_sender.log')
 
-    def _parse_config(self, config):
+    def _parse_config(self):
         """parse send email related options from config file
         """
-        section_name = 'EMAIL SENDER'
-        key_enabled = 'enabled'
-        key_interval = 'interval'
-
-        if not config.has_section(section_name):
-            return
-
-        # enabled
-        enabled = get_opt_from_conf_or_env(config, section_name, key_enabled, default=True)
-        enabled = parse_bool(enabled)
-        self._enabled = enabled
-        # interval
-        interval = get_opt_from_conf_or_env(config, section_name, key_interval, default=60 * 60)
-        interval = parse_interval(interval, 60 * 60)
-        self._interval = interval
+        self._enabled = EMAIL_SENDER_ENABLED
+        self._interval = EMAIL_SENDER_INTERVAL
 
     def start(self):
         if not self.is_enabled():

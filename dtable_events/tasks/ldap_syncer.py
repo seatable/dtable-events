@@ -2,39 +2,26 @@ import os
 import logging
 from threading import Thread, Event
 
-from dtable_events.utils import get_opt_from_conf_or_env, \
-     get_python_executable, run_and_wait, parse_bool, parse_interval
-from dtable_events.app.config import dtable_web_dir
+from dtable_events.utils import get_python_executable, run_and_wait
+from dtable_events.app.config import dtable_web_dir, LDAP_SYNC_ENABLED, LDAP_SYNC_INTERVAL
 
 
 class LDAPSyncer(object):
 
-    def __init__(self, config):
+    def __init__(self):
         self._enabled = False
         self._logfile = None
         self._interval = 60 * 60
         self._prepare_logfile()
-        self._prepara_config(config)
+        self._prepara_config()
 
     def _prepare_logfile(self):
         logdir = os.path.join(os.environ.get('LOG_DIR', ''))
         self._logfile = os.path.join(logdir, 'ldap_syncer.log')
 
-    def _prepara_config(self, config):
-        section_name = 'LDAP SYNC'
-        key_enabled = 'enabled'
-        key_sync_interval = 'sync_interval'
-
-        if not config.has_section(section_name):
-            section_name = 'LDAP_SYNC'
-            if not config.has_section(section_name):
-                return
-
-        # enabled
-        enabled = get_opt_from_conf_or_env(config, section_name, key_enabled, default=False)
-        self._enabled = parse_bool(enabled)
-        interval = get_opt_from_conf_or_env(config, section_name, key_sync_interval, default=60*60)
-        self._interval = parse_interval(interval, 60*60)
+    def _prepara_config(self):
+        self._enabled = LDAP_SYNC_ENABLED
+        self._interval = LDAP_SYNC_INTERVAL
 
     def start(self):
         if not self.is_enabled():

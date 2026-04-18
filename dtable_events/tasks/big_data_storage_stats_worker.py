@@ -1,16 +1,13 @@
 # -*- coding: utf-8 -*-
 import os
-import time
 import uuid
 import logging
 from threading import Thread
 
-import jwt
-import requests
 from apscheduler.schedulers.blocking import BlockingScheduler
 from sqlalchemy import text
 
-from dtable_events.app.config import INNER_DTABLE_DB_URL, DTABLE_PRIVATE_KEY
+from dtable_events.app.config import INNER_DTABLE_DB_URL
 from dtable_events.db import init_db_session_class
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 
@@ -51,9 +48,9 @@ def update_org_big_data_storage_stats(db_session):
 
 class BigDataStorageStatsWorker(object):
 
-    def __init__(self, config):
+    def __init__(self):
         self._logfile = None
-        self._db_session_class = init_db_session_class(config)
+        self._db_session_class = init_db_session_class()
         self._prepare_logfile()
 
     def _prepare_logfile(self):

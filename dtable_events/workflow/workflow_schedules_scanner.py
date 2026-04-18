@@ -6,7 +6,7 @@ from threading import Thread
 from sqlalchemy import text
 from apscheduler.schedulers.blocking import BlockingScheduler
 
-from dtable_events.app.config import DTABLE_WEB_SERVICE_URL
+from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, WORKFLOW_SCANNER_ENABLED
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool
 from dtable_events.utils.dtable_web_api import DTableWebAPI
@@ -14,24 +14,13 @@ from dtable_events.utils.dtable_web_api import DTableWebAPI
 
 class WorkflowSchedulesScanner:
 
-    def __init__(self, config):
+    def __init__(self):
         self._enabled = True
-        self._parse_config(config)
-        self._db_session_class = init_db_session_class(config)
+        self._parse_config()
+        self._db_session_class = init_db_session_class()
 
-    def _parse_config(self, config):
-        section_name = 'WORKFLOW SCANNER'
-        key_enabled = 'enabled'
-
-        if not config.has_section(section_name):
-            section_name = 'WORKFLOW-SCANNER'
-            if not config.has_section(section_name):
-                return
-
-        # enabled
-        enabled = get_opt_from_conf_or_env(config, section_name, key_enabled, default=True)
-        enabled = parse_bool(enabled)
-        self._enabled = enabled
+    def _parse_config(self):
+        self._enabled = WORKFLOW_SCANNER_ENABLED
 
     def start(self):
         if not self._enabled:

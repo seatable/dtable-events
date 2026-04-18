@@ -6,10 +6,9 @@ from threading import Thread
 from sqlalchemy import text
 from apscheduler.schedulers.blocking import BlockingScheduler
 
-from dtable_events.app.config import TIME_ZONE
+from dtable_events.app.config import TIME_ZONE, NOTIFICATION_RULES_SCAN_ENABLED
 from dtable_events.db import init_db_session_class
 from dtable_events.notification_rules.notification_rules_utils import trigger_near_deadline_notification_rule
-from dtable_events.utils import get_opt_from_conf_or_env, parse_bool
 
 
 timezone = TIME_ZONE
@@ -22,32 +21,19 @@ __all__ = [
 
 class DTableNofiticationRulesScanner(object):
 
-    def __init__(self, config):
+    def __init__(self):
         self._enabled = True
         self._logfile = None
-        self._parse_config(config)
+        self._parse_config()
         self._prepare_logfile()
-        self._db_session_class = init_db_session_class(config)
+        self._db_session_class = init_db_session_class()
 
     def _prepare_logfile(self):
         logdir = os.path.join(os.environ.get('LOG_DIR', ''))
         self._logfile = os.path.join(logdir, 'dtables_notification_rule_scanner.log')
 
-    def _parse_config(self, config):
-        """parse send email related options from config file
-        """
-        section_name = 'NOTIFY SCANNER'
-        key_enabled = 'enabled'
-
-        if not config.has_section(section_name):
-            section_name = 'NOTIFY-SCANNER'
-            if not config.has_section(section_name):
-                return
-
-        # enabled
-        enabled = get_opt_from_conf_or_env(config, section_name, key_enabled, default=True)
-        enabled = parse_bool(enabled)
-        self._enabled = enabled
+    def _parse_config(self):
+        self._enabled = NOTIFICATION_RULES_SCAN_ENABLED
 
     def start(self):
         if not self.is_enabled():

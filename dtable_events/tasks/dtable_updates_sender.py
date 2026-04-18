@@ -4,7 +4,7 @@ import logging
 from threading import Thread, Event
 
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, get_python_executable, run_and_wait
-from dtable_events.app.config import dtable_web_dir
+from dtable_events.app.config import dtable_web_dir, UPDATES_SENDER_ENABLED
 
 
 __all__ = [
@@ -14,30 +14,19 @@ __all__ = [
 
 class DTableUpdatesSender(object):
 
-    def __init__(self, config):
+    def __init__(self):
         self._enabled = True
         self._logfile = None
         self._interval = 60 * 60
         self._prepare_logfile()
-        self._parse_config(config)
+        self._parse_config()
 
     def _prepare_logfile(self):
         log_dir = os.environ.get('LOG_DIR', '')
         self._logfile = os.path.join(log_dir, 'dtable_updates_sender.log')
 
-    def _parse_config(self, config):
-        """parse send email related options from config file
-        """
-        section_name = 'EMAIL SENDER'
-        key_enabled = 'enabled'
-
-        if not config.has_section(section_name):
-            return
-
-        # enabled
-        enabled = get_opt_from_conf_or_env(config, section_name, key_enabled, default=True)
-        enabled = parse_bool(enabled)
-        self._enabled = enabled
+    def _parse_config(self):
+        self._enabled = UPDATES_SENDER_ENABLED
 
     def start(self):
         if not self.is_enabled():

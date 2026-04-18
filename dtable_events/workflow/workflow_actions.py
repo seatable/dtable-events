@@ -163,11 +163,11 @@ def do_workflow_actions(task_id, node_id, db_session):
 
 
 class WorkflowActionsHandler(Thread):
-    def __init__(self, config):
+    def __init__(self):
         Thread.__init__(self)
         self._finished = Event()
-        self._db_session_class = init_db_session_class(config)
-        self._redis_client = RedisClient(config)
+        self._db_session_class = init_db_session_class()
+        self._redis_client = RedisClient()
     
     def run(self):
         logger.info('Starting handle workflow actions...')

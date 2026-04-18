@@ -8,10 +8,10 @@ from dtable_events.db import init_db_session_class
 
 class DTableUpdateHander(object):
 
-    def __init__(self, app, config):
+    def __init__(self, app):
         self.app = app
         self._enabled = True
-        self._db_session_class = init_db_session_class(config)
+        self._db_session_class = init_db_session_class()
 
     def start(self):
         logging.info('Start dtable update scanner')

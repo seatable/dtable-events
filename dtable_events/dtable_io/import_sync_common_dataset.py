@@ -10,14 +10,14 @@ from dtable_events.utils.dtable_server_api import DTableServerAPI
 from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.app.config import INNER_DTABLE_SERVER_URL
 
-def force_sync_common_dataset(context: dict, config):
+def force_sync_common_dataset(context: dict):
     """
     force apply common dataset to all syncs
     """
     dataset_id = context.get('dataset_id')
     dst_dtable_uuids = context.get('dst_dtable_uuids')
     # select valid syncs
-    session_class = init_db_session_class(config)
+    session_class = init_db_session_class()
     sql = '''
         SELECT dcds.dst_dtable_uuid, dcds.dst_table_id, dcd.table_id AS src_table_id, dcd.view_id AS src_view_id,
                 dcd.dtable_uuid AS src_dtable_uuid, dcds.id AS sync_id, dcds.src_version, dcd.id AS dataset_id
@@ -45,7 +45,7 @@ def force_sync_common_dataset(context: dict, config):
                 task_manager.finish_dataset_sync(sync_item.sync_id)
 
 
-def sync_common_dataset(context, config):
+def sync_common_dataset(context):
     """
     sync common dataset to destination table
 
@@ -78,7 +78,7 @@ def sync_common_dataset(context, config):
 
     # get database version
     try:
-        db_session = init_db_session_class(config)()
+        db_session = init_db_session_class()()
     except Exception as e:
         cds_logger.error('create db session failed. ERROR: {}'.format(e))
         return
@@ -182,7 +182,7 @@ def sync_common_dataset(context, config):
         db_session.close()
 
 
-def import_common_dataset(context, config):
+def import_common_dataset(context):
     """
     import common dataset to destination table
     """
@@ -202,7 +202,7 @@ def import_common_dataset(context, config):
     org_id = context.get('org_id')
 
     try:
-        db_session = init_db_session_class(config)()
+        db_session = init_db_session_class()()
     except Exception as e:
         db_session = None
         cds_logger.error('create db session failed. ERROR: {}'.format(e))

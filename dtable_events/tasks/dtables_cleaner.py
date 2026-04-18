@@ -2,7 +2,7 @@ import os
 import logging
 from threading import Thread, Event
 
-from dtable_events.utils import get_opt_from_conf_or_env, get_python_executable, run
+from dtable_events.utils import get_python_executable, run
 from dtable_events.app.config import dtable_web_dir, TRASH_CLEAN_AFTER_DAYS
 
 __all__ = [
@@ -12,18 +12,18 @@ __all__ = [
 
 class DTablesCleaner(object):
 
-    def __init__(self, config):
+    def __init__(self):
         self._enabled = True
         self._logfile = None
         self._interval = 60 * 60 * 24
         self._prepare_logfile()
-        self._parse_config(config)
+        self._parse_config()
 
     def _prepare_logfile(self):
         logdir = os.path.join(os.environ.get('LOG_DIR', ''))
         self._logfile = os.path.join(logdir, 'dtables_cleaner.log')
 
-    def _parse_config(self, config):
+    def _parse_config(self):
         self._expire_seconds = 60 * 60 * 24 * TRASH_CLEAN_AFTER_DAYS
 
     def start(self):

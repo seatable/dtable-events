@@ -9,6 +9,10 @@ from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import sessionmaker
 
+from dtable_events.app.config import SEATABLE_MYSQL_DB_HOST, SEATABLE_MYSQL_DB_PORT, SEATABLE_MYSQL_DB_USER, \
+    SEATABLE_MYSQL_DB_PASSWORD, SEATABLE_MYSQL_DB_DTABLE_DB_NAME, SEATABLE_MYSQL_DB_CCNET_DB_NAME, \
+    SEATABLE_MYSQL_DB_SEAFILE_DB_NAME
+
 logger = logging.getLogger(__name__)
 
 
@@ -19,42 +23,26 @@ class Base(DeclarativeBase):
 SeafBase = automap_base()
 
 
-def create_engine_from_conf(config):
-    backend = config.get('DATABASE', 'type') if config.has_section('DATABASE') and config.has_option('DATABASE', 'type') else 'mysql'
+def create_engine_from_conf(db):
+    db_name = ''
+    if db == 'dtable':
+        db_name = SEATABLE_MYSQL_DB_DTABLE_DB_NAME
+    elif db == 'seafile':
+        db_name = SEATABLE_MYSQL_DB_SEAFILE_DB_NAME
+    elif db == 'ccnet':
+        db_name = SEATABLE_MYSQL_DB_CCNET_DB_NAME
 
-    if backend == 'mysql':
-        if not (host := os.getenv('SEATABLE_MYSQL_DB_HOST')):
-            if config.has_option('DATABASE', 'host'):
-                host = config.get('DATABASE', 'host').lower()
-            else:
-                host = 'localhost'
+    db_host = SEATABLE_MYSQL_DB_HOST
+    db_port = SEATABLE_MYSQL_DB_PORT
+    db_user = SEATABLE_MYSQL_DB_USER
+    db_pwd = SEATABLE_MYSQL_DB_PASSWORD
 
-        if not (port := os.getenv('SEATABLE_MYSQL_DB_PORT')):
-            if config.has_option('DATABASE', 'port'):
-                port = config.getint('DATABASE', 'port')
-            else:
-                port = 3306
+    if not (db_name and db_host and db_port and db_user):
+        raise RuntimeError('Database configured error')
 
-        try:
-            port = int(port)
-        except:
-            raise ValueError(f'Invalid database port: {port}')
-
-        if not (username := os.getenv('SEATABLE_MYSQL_DB_USER')):
-            username = config.get('DATABASE', 'username')
-
-        if not (password := os.getenv('SEATABLE_MYSQL_DB_PASSWORD')):
-            password = config.get('DATABASE', 'password')
-
-        if not (db_name := os.getenv('SEATABLE_MYSQL_DB_DTABLE_DB_NAME')):
-            db_name = config.get('DATABASE', 'db_name')
-
-        db_url = "mysql+mysqldb://%s:%s@%s:%s/%s?charset=utf8" % \
-                 (username, quote_plus(password), host, port, db_name)
-        logger.debug('[dtable_events] database: mysql, name: %s', db_name)
-    else:
-        logger.error("Unknown database backend: %s" % backend)
-        raise RuntimeError("Unknown database backend: %s" % backend)
+    db_url = "mysql+mysqldb://%s:%s@%s:%s/%s?charset=utf8" % \
+                 (db_user, quote_plus(db_pwd), db_host, db_port, db_name)
+    logger.debug('[dtable_events] database: mysql, name: %s', db_name)
 
     # Add pool recycle, or mysql connection will be closed
     # by mysql daemon if idle for too long.
@@ -69,98 +57,10 @@ def create_engine_from_conf(config):
     return engine
 
 
-def create_seafile_engine_from_conf(config):
-    backend = config.get('DATABASE', 'type') if config.has_section('DATABASE') and config.has_option('DATABASE', 'type') else 'mysql'
-
-    if backend == 'mysql':
-        if not (host := os.getenv('SEATABLE_MYSQL_DB_HOST')):
-            if config.has_option('database', 'host'):
-                host = config.get('database', 'host').lower()
-            else:
-                host = 'localhost'
-
-        if not (port := os.getenv('SEATABLE_MYSQL_DB_PORT')):
-            if config.has_option('database', 'port'):
-                port = config.getint('database', 'port')
-            else:
-                port = 3306
-
-        try:
-            port = int(port)
-        except:
-            raise ValueError(f'Invalid database port: {port}')
-
-        if not (username := os.getenv('SEATABLE_MYSQL_DB_USER')):
-            username = config.get('database', 'user')
-
-        if not (password := os.getenv('SEATABLE_MYSQL_DB_PASSWORD')):
-            password = config.get('database', 'password')
-
-        if not (db_name := os.getenv('SEATABLE_MYSQL_DB_SEAFILE_DB_NAME')):
-            db_name = config.get('database', 'db_name')
-
-        db_url = "mysql+mysqldb://%s:%s@%s:%s/%s?charset=utf8" % \
-                 (username, quote_plus(password), host, port, db_name)
-        logger.debug('[dtable_events] seafile database: mysql, name: %s', db_name)
-    else:
-        logger.error("Unknown seafile database backend: %s" % backend)
-        raise RuntimeError("Unknown seafile database backend: %s" % backend)
-
-    # Add pool recycle, or mysql connection will be closed
-    # by mysql daemon if idle for too long.
-    """MySQL has gone away
-    https://docs.sqlalchemy.org/en/20/faq/connections.html#mysql-server-has-gone-away
-    https://docs.sqlalchemy.org/en/20/core/pooling.html#pool-disconnects
-    """
-    kwargs = dict(pool_recycle=300, pool_pre_ping=True, echo=False, echo_pool=False)
-
-    engine = create_engine(db_url, **kwargs)
-
-    return engine
-
-
-def create_operation_log_db_engine_from_conf(config):
-    backend = config.get('DATABASE', 'type')
-
-    if backend == 'mysql':
-        if config.has_option('DATABASE', 'operation_log_db_host'):
-            host = config.get('DATABASE', 'operation_log_db_host').lower()
-        else:
-            host = 'localhost'
-
-        if config.has_option('DATABASE', 'operation_log_db_port'):
-            port = config.getint('DATABASE', 'operation_log_db_port')
-        else:
-            port = 3306
-
-        username = config.get('DATABASE', 'operation_log_db_username')
-        password = config.get('DATABASE', 'operation_log_db_password')
-        db_name = config.get('DATABASE', 'operation_log_db_name')
-
-        db_url = "mysql+mysqldb://%s:%s@%s:%s/%s?charset=utf8" % \
-                 (username, quote_plus(password), host, port, db_name)
-        logger.debug('[dtable_events] database: mysql, name: %s', db_name)
-    else:
-        logger.error("Unknown database backend: %s" % backend)
-        raise RuntimeError("Unknown database backend: %s" % backend)
-
-    # Add pool recycle, or mysql connection will be closed
-    # by mysql daemon if idle for too long.
-    """MySQL has gone away
-    https://docs.sqlalchemy.org/en/20/faq/connections.html#mysql-server-has-gone-away
-    https://docs.sqlalchemy.org/en/20/core/pooling.html#pool-disconnects
-    """
-    kwargs = dict(pool_recycle=300, pool_pre_ping=True, echo=False, echo_pool=False)
-
-    engine = create_engine(db_url, **kwargs)
-
-    return engine
-
-
-def init_db_session_class(config):
+def init_db_session_class():
     """Configure session class for mysql according to the config file."""
     try:
-        engine = create_engine_from_conf(config)
+        engine = create_engine_from_conf('dtable')
     except (configparser.NoOptionError, configparser.NoSectionError) as e:
         logger.error("Init db session class error: %s" % e)
         raise RuntimeError("Init db session class error: %s" % e)
@@ -169,10 +69,10 @@ def init_db_session_class(config):
     return session
 
 
-def init_seafile_db_session_class(config):
+def init_seafile_db_session_class():
     """Configure session class for mysql according to the config file."""
     try:
-        engine = create_seafile_engine_from_conf(config)
+        engine = create_engine_from_conf('seafile')
     except (configparser.NoOptionError, configparser.NoSectionError) as e:
         logger.error("Init operation-log db session class error: %s" % e)
         raise RuntimeError("Init operation-log db session class error: %s" % e)
@@ -181,10 +81,10 @@ def init_seafile_db_session_class(config):
     return session
 
 
-def create_db_tables(config):
+def create_db_tables():
     # create events tables if not exists.
     try:
-        engine = create_engine_from_conf(config)
+        engine = create_engine_from_conf('dtable')
     except (configparser.NoOptionError, configparser.NoSectionError) as e:
         logger.error("Create tables error: %s" % e)
         raise RuntimeError("Create tables error: %s" % e)
@@ -193,10 +93,10 @@ def create_db_tables(config):
     engine.dispose()
 
 
-def prepare_seafile_tables(seafile_config):
+def prepare_seafile_tables():
     # reflect the seafile_db tables
     try:
-        engine = create_seafile_engine_from_conf(seafile_config)
+        engine = create_engine_from_conf('seafile')
     except Exception as e:
         logger.error(e)
         raise RuntimeError("create db engine error: %s" % e)

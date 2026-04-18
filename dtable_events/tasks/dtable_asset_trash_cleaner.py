@@ -18,9 +18,9 @@ __all__ = [
 
 class DTableAssetTrashCleaner(object):
 
-    def __init__(self, config):
+    def __init__(self):
         self._enabled = True
-        self._db_session_class = init_db_session_class(config)
+        self._db_session_class = init_db_session_class()
         self._expire_days = 60
 
     def start(self):
