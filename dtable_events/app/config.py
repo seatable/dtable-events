@@ -75,8 +75,7 @@ try:
     REDIS_PASSWORD = configs.get('REDIS_PASSWORD', default='')
 
     # inner server url
-    ENABLE_DTABLE_SERVER_CLUSTER = configs.get('ENABLE_DTABLE_SERVER_CLUSTER', default=False)
-    INNER_DTABLE_SERVER_URL = configs.get('INNER_DTABLE_SERVER_URL', default='http://127.0.0.1:5100')
+    INNER_DTABLE_SERVER_URL = configs.get('INNER_DTABLE_SERVER_URL', default='http://127.0.0.1:5000')
     INNER_DTABLE_DB_URL = configs.get('INNER_DTABLE_DB_URL', default='http://127.0.0.1:7777')
 
     # file server
