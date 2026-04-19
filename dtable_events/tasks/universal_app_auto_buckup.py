@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from dtable_events.db import init_db_session_class
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.utils import uuid_str_to_36_chars
-from dtable_events.app.config import UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_DAYS, UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_NOTES
+from dtable_events.app.config import UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_DAYS
 
 from sqlalchemy import text
 from seaserv import seafile_api
@@ -36,7 +36,7 @@ class UniversalAppAutoBackup(Thread):
         """
         result = session.execute(text(cmd), {
             'app_id':       app_id,
-            'notes':        UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_NOTES,
+            'notes':        'auto backup',
             'app_version':  app_version,
             'app_config':   app_config,
             'created_at':   int(time.time()),

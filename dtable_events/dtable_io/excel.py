@@ -9,7 +9,7 @@ from openpyxl.styles import PatternFill
 from openpyxl import load_workbook
 from copy import deepcopy
 from datetime import datetime, time
-from dtable_events.app.config import EXPORT2EXCEL_DEFAULT_STRING, TIME_ZONE, INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
+from dtable_events.app.config import TIME_ZONE, INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL
 from dtable_events.utils import utc_to_tz, gen_random_option, format_date_in_query
 from dtable_events.utils.constants import ColumnTypes, FormulaResultType
 from dtable_events.utils.geo_location_parser import parse_geolocation_from_tree
@@ -1810,7 +1810,7 @@ def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, rep
                 if not column_error_log_exists:
                     dtable_io_logger.error('Error column in exporting excel: {}'.format(e))
                     column_error_log_exists = True
-                c = WriteOnlyCell(ws, value=EXPORT2EXCEL_DEFAULT_STRING)
+                c = WriteOnlyCell(ws, value='illegal character in excel')
             head_cell_list.append(c)
             col_num += 1
         ws.append(head_cell_list)
