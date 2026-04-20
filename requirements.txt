@@ -13,3 +13,4 @@ pdfminer.six==20221105
 pdf2image~=1.17.0
 playwright==1.48.0
 psutil==6.1.0
+pyyaml==6.0.*

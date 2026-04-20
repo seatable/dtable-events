@@ -6,17 +6,19 @@ import os
 import time
 import redis
 
+from dtable_events.app.config import REDIS_HOST, REDIS_PORT, REDIS_PASSWORD
+
 logger = logging.getLogger(__name__)
 
 REDIS_METRIC_KEY = 'metric'
 
 class RedisClient(object):
 
-    def __init__(self, config, socket_connect_timeout=30, socket_timeout=None):
+    def __init__(self, socket_connect_timeout=30, socket_timeout=None):
         self._host = '127.0.0.1'
         self._port = 6379
         self._password = None
-        self._parse_config(config)
+        self._parse_config()
 
         """
         By default, each Redis instance created will in turn create its own connection pool.
@@ -28,29 +30,11 @@ class RedisClient(object):
             decode_responses=True
             )
 
-    def _parse_config(self, config):
+    def _parse_config(self):
 
-        if not (redis_host := os.getenv('REDIS_HOST')):
-            if config.has_option('REDIS', 'host'):
-                self._host = config.get('REDIS', 'host')
-        else:
-            self._host = redis_host
-
-        if not (redis_port := os.getenv('REDIS_PORT')):
-            if config.has_option('REDIS', 'port'):
-                self._port = config.getint('REDIS', 'port')
-        else:
-            self._port = redis_port
-        try:
-            self._port = int(self._port)
-        except:
-            raise ValueError(f'Invalid redis port: {self._port}')
-        
-        if not (redis_password := os.getenv('REDIS_PASSWORD')):
-            if config.has_option('REDIS', 'password'):
-                self._password = config.get('REDIS', 'password')
-        else:
-            self._password = redis_password
+        self._host = REDIS_HOST
+        self._port = REDIS_PORT
+        self._password = REDIS_PASSWORD
 
     def get_subscriber(self, channel_name):
         while True:
@@ -86,8 +70,8 @@ class RedisCache(object):
     def __init__(self):
         self._redis_client = None
 
-    def init_redis(self, config):
-        self._redis_client = RedisClient(config)
+    def init_redis(self):
+        self._redis_client = RedisClient()
 
     def get(self, key):
         return self._redis_client.get(key)

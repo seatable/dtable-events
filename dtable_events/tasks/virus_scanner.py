@@ -7,8 +7,8 @@ from dtable_events.virus_scanner import VirusScan
 
 
 class VirusScanner(object):
-    def __init__(self, config, seafile_config):
-        self.settings = Settings(config, seafile_config)
+    def __init__(self):
+        self.settings = Settings()
 
     def is_enabled(self):
         return self.settings.is_enabled()

@@ -8,39 +8,22 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from sqlalchemy import text
 
 from dtable_events import init_db_session_class
+from dtable_events.app.config import EMAIL_SYNCER_ENABLED, EMAIL_SYNCER_MAX_WORKERS
 from dtable_events.data_sync.data_sync_utils import run_sync_emails
-from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars
+from dtable_events.utils import uuid_str_to_36_chars
 
 
 class DataSyncer(object):
 
-    def __init__(self, config):
+    def __init__(self):
         self._enabled = True
         self._max_workers = 5
-        self._prepara_config(config)
-        self._db_session_class = init_db_session_class(config)
+        self._prepara_config()
+        self._db_session_class = init_db_session_class()
 
-    def _prepara_config(self, config):
-        section_name = 'EMAIL SYNCER'
-        key_enabled = 'enabled'
-        key_max_workers = 'max_workers'
-
-        if not config.has_section(section_name):
-            section_name = 'EMAIL-SYNCER'
-            if not config.has_section(section_name):
-                return
-
-        # enabled
-        enabled = get_opt_from_conf_or_env(config, section_name, key_enabled, default=True)
-        self._enabled = parse_bool(enabled)
-        # max workers
-        max_workers = get_opt_from_conf_or_env(config, section_name, key_max_workers, default=5)
-        try:
-            self._max_workers = int(max_workers)
-        except:
-            pass
-        finally:
-            self._max_workers = min(32, self._max_workers)
+    def _prepara_config(self):
+        self._enabled = EMAIL_SYNCER_ENABLED
+        self._max_workers = EMAIL_SYNCER_MAX_WORKERS
 
     def start(self):
         if not self.is_enabled():

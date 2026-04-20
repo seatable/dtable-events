@@ -10,7 +10,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from dateutil import relativedelta
 from sqlalchemy import text
 
-from dtable_events.app.config import AI_PRICES, BAIDU_OCR_TOKENS
+from dtable_events.app.config import AI_PRICES, BAIDU_OCR_TOKENS, AI_STATS_ENABLED
 from dtable_events.app.event_redis import RedisClient, redis_cache
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars, uuid_str_to_32_chars
@@ -20,26 +20,18 @@ logger = logging.getLogger(__name__)
 
 class AIStatsWorker:
 
-    def __init__(self, config):
-        self._db_session_class = init_db_session_class(config)
-        self._redis_client = RedisClient(config)
+    def __init__(self):
+        self._db_session_class = init_db_session_class()
+        self._redis_client = RedisClient()
         self.stats_lock = Lock()
         self.channel = 'log_ai_model_usage'
         self.keep_months = 3
         self.owner_info_cache_timeout = 24 * 60 * 60
-        self._parse_config(config)
+        self._parse_config()
         self.reset_stats()
 
-    def _parse_config(self, config):
-        """parse send email related options from config file
-        """
-        section_name = 'AI STATS'
-        key_enabled = 'enabled'
-
-        # enabled
-        enabled = get_opt_from_conf_or_env(config, section_name, key_enabled, default=True)
-        enabled = parse_bool(enabled)
-        self._enabled = enabled
+    def _parse_config(self):
+        self._enabled = AI_STATS_ENABLED
 
     def reset_stats(self):
         self.org_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))

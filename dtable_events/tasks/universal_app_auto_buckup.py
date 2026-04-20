@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from dtable_events.db import init_db_session_class
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.utils import uuid_str_to_36_chars
-from dtable_events.app.config import UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_DAYS, UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_NOTES
+from dtable_events.app.config import UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_DAYS
 
 from sqlalchemy import text
 from seaserv import seafile_api
@@ -17,11 +17,11 @@ from seaserv import seafile_api
 logger = logging.getLogger(__name__)
 
 class UniversalAppAutoBackup(Thread):
-    def __init__(self, config):
+    def __init__(self):
         Thread.__init__(self)
         self._finished = Event()
-        self._db_session_class = init_db_session_class(config)
-        self._redis_client = RedisClient(config)
+        self._db_session_class = init_db_session_class()
+        self._redis_client = RedisClient()
         self._lock = Lock()
 
     def create_snapshot(self, session, app_id, app_version, app_config):
@@ -36,7 +36,7 @@ class UniversalAppAutoBackup(Thread):
         """
         result = session.execute(text(cmd), {
             'app_id':       app_id,
-            'notes':        UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_NOTES,
+            'notes':        'auto backup',
             'app_version':  app_version,
             'app_config':   app_config,
             'created_at':   int(time.time()),

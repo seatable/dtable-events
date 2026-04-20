@@ -9,7 +9,8 @@ from threading import Thread, Lock
 from apscheduler.schedulers.blocking import BlockingScheduler
 from sqlalchemy import text
 
-from dtable_events.app.config import DTABLE_WEB_SERVICE_URL
+from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, AUTOMATION_RATE_LIMIT_PERCENT, \
+    AUTOMATION_RATE_LIMIT_WINDOW_SECS, AUTOMATION_WORKERS
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.app.log import auto_rule_logger
 from dtable_events.automations.actions import AutomationRule, AutomationResult
@@ -66,14 +67,14 @@ class RateLimiter:
 
 class AutomationsPipeline:
 
-    def __init__(self, config):
+    def __init__(self):
         self.workers = 5
         self.automations_queue: Queue[AutomationRule] = Queue()
         self.results_queue: Queue[AutomationResult] = Queue()
 
-        self._db_session_class = init_db_session_class(config)
+        self._db_session_class = init_db_session_class()
 
-        self._redis_client = RedisClient(config, socket_timeout=10)
+        self._redis_client = RedisClient(socket_timeout=10)
         self.per_update_channel = 'automation-rule-triggered'
 
         self.rate_limiter = RateLimiter()
@@ -110,22 +111,11 @@ class AutomationsPipeline:
                 self.exceed_system_resource_limit_entities['owners_map'][owner] = 1
 
     def parse_config(self):
-        try:
-            self.workers = int(os.environ.get('AUTOMATION_WORKERS', self.workers))
-        except:
-            pass
+        self.workers = AUTOMATION_WORKERS
 
-        try:
-            rate_limit_window_secs = int(os.environ.get('AUTOMATION_RATE_LIMIT_WINDOW_SECS', '300'))
-            self.rate_limiter.window_secs = rate_limit_window_secs
-        except:
-            pass
+        self.rate_limiter.window_secs = AUTOMATION_RATE_LIMIT_WINDOW_SECS
 
-        try:
-            rate_limit_percent = float(os.environ.get('AUTOMATION_RATE_LIMIT_PERCENT', '0.25'))
-            self.rate_limiter.percent = rate_limit_percent
-        except:
-            pass
+        self.rate_limiter.percent = AUTOMATION_RATE_LIMIT_PERCENT
 
     def publish_metrics(self):
         while True:

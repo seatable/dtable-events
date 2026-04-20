@@ -20,6 +20,7 @@ import uuid
 import psutil
 from playwright.async_api import async_playwright, Playwright, Browser, BrowserContext
 
+from dtable_events.app.config import CONVERT_PDF_BROWSERS, CONVERT_PDF_SESSIONS_PER_BROWSER
 from dtable_events.convert_page.utils import wait_for_images
 
 logger = logging.getLogger(__name__)
@@ -541,16 +542,8 @@ playwright_manager = None
 def get_playwright_manager():
     global playwright_manager
     if not playwright_manager:
-        try:
-            num_browsers = int(os.environ.get('CONVERT_PDF_BROWSERS', '2'))
-        except:
-            num_browsers = 2
-        try:
-            contexts_per_browser = int(os.environ.get('CONVERT_PDF_SESSIONS_PER_BROWSER', '3'))
-        except:
-            contexts_per_browser = 3
         playwright_manager = RobustPlaywrightManager(
-            num_browsers=num_browsers,
-            contexts_per_browser=contexts_per_browser
+            num_browsers=CONVERT_PDF_BROWSERS,
+            contexts_per_browser=CONVERT_PDF_SESSIONS_PER_BROWSER
         )
     return playwright_manager

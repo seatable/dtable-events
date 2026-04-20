@@ -26,11 +26,11 @@ class MessageHandler(Thread):
         'update_rows_links'
     ]
 
-    def __init__(self, app, config):
+    def __init__(self, app):
         Thread.__init__(self)
         self._finished = Event()
-        self._db_session_class = init_db_session_class(config)
-        self._redis_client = RedisClient(config)
+        self._db_session_class = init_db_session_class()
+        self._redis_client = RedisClient()
         self.app = app
 
     def run(self):

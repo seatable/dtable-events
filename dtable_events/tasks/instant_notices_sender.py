@@ -4,9 +4,9 @@ import sys
 import logging
 from threading import Thread, Event
 
-from dtable_events.app.config import ENABLE_WEIXIN, ENABLE_WORK_WEIXIN, ENABLE_DINGTALK, dtable_web_dir
-from dtable_events.utils import get_python_executable, parse_bool, \
-     parse_interval, get_opt_from_conf_or_env, run
+from dtable_events.app.config import ENABLE_WEIXIN, ENABLE_WORK_WEIXIN, ENABLE_DINGTALK, dtable_web_dir, \
+    INSTANT_SENDER_INTERVAL
+from dtable_events.utils import get_python_executable, parse_bool, run
 
 __all__ = [
     'InstantNoticeSender',
@@ -15,24 +15,20 @@ __all__ = [
 
 class InstantNoticeSender(object):
 
-    def __init__(self, config):
+    def __init__(self):
         self._enabled = False
         self._interval = None
         self._logfile = None
-        self._parse_config(config)
+        self._parse_config()
         self._prepare_logfile()
 
     def _prepare_logfile(self):
         log_dir = os.path.join(os.environ.get('LOG_DIR', ''))
         self._logfile = os.path.join(log_dir, 'instant_notice_sender.log')
 
-    def _parse_config(self, config):
+    def _parse_config(self):
         """parse instant related options from config file
         """
-        section_name = 'INSTANT SENDER'
-        key_interval = 'interval'
-        default_interval = 60  # 1min
-
         # enabled
         enabled = ENABLE_WEIXIN or ENABLE_WORK_WEIXIN or ENABLE_DINGTALK
         enabled = parse_bool(enabled)
@@ -40,15 +36,7 @@ class InstantNoticeSender(object):
             return
         self._enabled = True
 
-        # notice send interval
-        if config.has_section(section_name):
-            interval = get_opt_from_conf_or_env(config, section_name, key_interval,
-                                                default=default_interval).lower()
-            interval = parse_interval(interval, default_interval)
-        else:
-            interval = default_interval
-
-        self._interval = interval
+        self._interval = INSTANT_SENDER_INTERVAL
 
     def start(self):
         if not self.is_enabled():

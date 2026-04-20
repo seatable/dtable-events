@@ -26,9 +26,9 @@ class Webhooker(object):
     2. query webhooks and generate jobs, then put them to queue.
     3. trigger jobs one by one.
     """
-    def __init__(self, config):
-        self._db_session_class = init_db_session_class(config)
-        self._redis_client = RedisClient(config)
+    def __init__(self):
+        self._db_session_class = init_db_session_class()
+        self._redis_client = RedisClient()
         self._subscriber = self._redis_client.get_subscriber('table-events')
         self.job_queue = Queue()
 

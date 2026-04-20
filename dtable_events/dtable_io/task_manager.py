@@ -42,7 +42,6 @@ class TaskManager(object):
         self.tasks_map = {}
         self.task_results_map = {}
         self.tasks_queue = queue.Queue(10)
-        self.config = None
         self.current_task_info = {}
         self.threads = []
 
@@ -54,13 +53,10 @@ class TaskManager(object):
 
         self.conf = {}
 
-    def init(self, app, workers, file_server_port, io_task_timeout, config):
+    def init(self, app, workers, io_task_timeout):
         self.app = app
-        self.conf['file_server_port'] = file_server_port
         self.conf['io_task_timeout'] = io_task_timeout
         self.conf['workers'] = workers
-
-        self.config = config
 
     def is_valid_task_id(self, task_id):
         return task_id in (self.tasks_map.keys() | self.task_results_map.keys())
@@ -77,10 +73,10 @@ class TaskManager(object):
         task_id = str(uuid.uuid4())
         if not is_export_folder:
             task = (get_dtable_export_content,
-                    (username, repo_id, workspace_id, dtable_uuid, asset_dir_id, ignore_archive_backup, self.config, task_id))
+                    (username, repo_id, workspace_id, dtable_uuid, asset_dir_id, ignore_archive_backup, task_id))
         else:
             task = (get_dtable_export_content_folder,
-                    (username, repo_id, workspace_id, dtable_uuid, asset_dir_id, ignore_archive_backup, self.config, folder_path, task_id))
+                    (username, repo_id, workspace_id, dtable_uuid, asset_dir_id, ignore_archive_backup, folder_path, task_id))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_metric(self.tasks_queue.qsize(), metric_name='io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
@@ -97,11 +93,11 @@ class TaskManager(object):
         if not is_import_folder:
             task = (post_dtable_import_files,
                     (username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage,
-                    can_use_automation_rules, can_use_workflows, can_use_external_apps, can_import_archive, owner, org_id, self.config, task_id))
+                    can_use_automation_rules, can_use_workflows, can_use_external_apps, can_import_archive, owner, org_id, task_id))
         else:
             task = (post_dtable_import_files_folder,
                     (username, repo_id, workspace_id, dtable_uuid, folder_path, in_storage,
-                    can_use_automation_rules, can_use_workflows, can_use_external_apps, can_import_archive, owner, org_id, self.config, task_id))
+                    can_use_automation_rules, can_use_workflows, can_use_external_apps, can_import_archive, owner, org_id, task_id))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', TASK_MANAGER_METRIC_HELP)
@@ -113,7 +109,7 @@ class TaskManager(object):
 
         task_id = str(uuid.uuid4())
         task = (get_dtable_export_asset_files,
-                (username, repo_id, dtable_uuid, files, task_id, self.config, files_map))
+                (username, repo_id, dtable_uuid, files, task_id, files_map))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
@@ -146,7 +142,7 @@ class TaskManager(object):
         from  dtable_events.dtable_io import get_dtable_export_big_data_screen_app
         task_id = str(uuid.uuid4())
         task = (get_dtable_export_big_data_screen_app,
-                (username, repo_id, dtable_uuid, app_uuid, app_id, task_id, self.config))
+                (username, repo_id, dtable_uuid, app_uuid, app_id, task_id))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
@@ -157,7 +153,7 @@ class TaskManager(object):
         from  dtable_events.dtable_io import import_big_data_screen_app
         task_id = str(uuid.uuid4())
         task = (import_big_data_screen_app,
-                (username, repo_id, dtable_uuid, app_uuid, app_id, self.config))
+                (username, repo_id, dtable_uuid, app_uuid, app_id))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
@@ -178,8 +174,7 @@ class TaskManager(object):
                  relative_path,
                  replace,
                  repo_api_token,
-                 seafile_server_url,
-                 self.config))
+                 seafile_server_url))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
@@ -191,7 +186,7 @@ class TaskManager(object):
 
         task_id = str(uuid.uuid4())
         task = (parse_excel_csv,
-                (username, repo_id, file_name, file_type, parse_type, dtable_uuid, self.config))
+                (username, repo_id, file_name, file_type, parse_type, dtable_uuid))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
@@ -203,7 +198,7 @@ class TaskManager(object):
 
         task_id = str(uuid.uuid4())
         task = (import_excel_csv,
-                (username, repo_id, dtable_uuid, dtable_name, included_tables, lang, self.config))
+                (username, repo_id, dtable_uuid, dtable_name, included_tables, lang))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
@@ -215,7 +210,7 @@ class TaskManager(object):
 
         task_id = str(uuid.uuid4())
         task = (import_excel_csv_add_table,
-                (username, dtable_uuid, dtable_name, included_tables, lang, self.config))
+                (username, dtable_uuid, dtable_name, included_tables, lang))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
@@ -258,7 +253,7 @@ class TaskManager(object):
             'rule_id': automation_rule_id
         }
 
-        task = (run_auto_rule_task, (trigger, actions, options, self.config))
+        task = (run_auto_rule_task, (trigger, actions, options))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
@@ -356,7 +351,7 @@ class TaskManager(object):
 
         task_id = str(uuid.uuid4())
         task = (convert_page_design_to_pdf,
-                (dtable_uuid, page_id, row_id, username, self.config))
+                (dtable_uuid, page_id, row_id, username))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
@@ -368,7 +363,7 @@ class TaskManager(object):
 
         task_id = str(uuid.uuid4())
         task = (convert_document_to_pdf,
-                (dtable_uuid, doc_uuid, row_id, username, self.config))
+                (dtable_uuid, doc_uuid, row_id, username))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
@@ -393,7 +388,7 @@ class TaskManager(object):
 
         task_id = str(uuid.uuid4())
         context['app'] = self.app
-        task = (import_common_dataset, (context, self.config))
+        task = (import_common_dataset, (context,))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
@@ -415,7 +410,7 @@ class TaskManager(object):
 
         task_id = str(uuid.uuid4())
         context['app'] = self.app
-        task = (sync_common_dataset, (context, self.config))
+        task = (sync_common_dataset, (context,))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
@@ -437,7 +432,7 @@ class TaskManager(object):
 
         task_id = str(uuid.uuid4())
         context['app'] = self.app
-        task = (force_sync_common_dataset, (context, self.config))
+        task = (force_sync_common_dataset, (context,))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
@@ -472,7 +467,7 @@ class TaskManager(object):
     def add_app_users_sync_task(self, dtable_uuid, app_name, app_id, table_name, table_id, username):
         from dtable_events.dtable_io import app_user_sync
         task_id = str(uuid.uuid4())
-        task = (app_user_sync, (dtable_uuid, app_name, app_id, table_name, table_id, username, self.config))
+        task = (app_user_sync, (dtable_uuid, app_name, app_id, table_name, table_id, username))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)

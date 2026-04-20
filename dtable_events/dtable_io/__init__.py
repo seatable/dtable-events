@@ -57,7 +57,7 @@ def add_task_id_to_log(log_msg, task_id=None):
     return f'task [{task_id}] - {log_msg}' if task_id else log_msg
 
 
-def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asset_dir_id, ignore_archive_backup, config, task_id):
+def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asset_dir_id, ignore_archive_backup, task_id):
     """
     1. prepare file content at /tmp/dtable-io/<dtable_id>/dtable_asset/...
     2. make zip file
@@ -73,7 +73,7 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
                                  'dtable_asset/')  # used to store asset files and json from file_server
     tmp_zip_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'zip_file') + '.zip'  # zip path of zipped xxx.dtable
 
-    db_session = init_db_session_class(config)()
+    db_session = init_db_session_class()()
 
     dtable_io_logger.info(add_task_id_to_log('Clear tmp dirs and files before prepare.', task_id))
     clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path)
@@ -206,7 +206,7 @@ def get_dtable_export_content(username, repo_id, workspace_id, dtable_uuid, asse
     return task_result
 
 
-def get_dtable_export_content_folder(username, repo_id, workspace_id, dtable_uuid, asset_dir_id, ignore_archive_backup, config, folder_path, task_id):
+def get_dtable_export_content_folder(username, repo_id, workspace_id, dtable_uuid, asset_dir_id, ignore_archive_backup, folder_path, task_id):
     """
     like `get_dtable_export_content` but to export to `folder_path` and not to archive
     """
@@ -214,7 +214,7 @@ def get_dtable_export_content_folder(username, repo_id, workspace_id, dtable_uui
         'warnings': []
     }
 
-    db_session = init_db_session_class(config)()
+    db_session = init_db_session_class()()
 
     # if not os.path.isdir(folder_path):
     if not os.path.exists(folder_path):
@@ -295,7 +295,7 @@ def get_dtable_export_content_folder(username, repo_id, workspace_id, dtable_uui
 
 
 def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtable_file_name, in_storage,
-                             can_use_automation_rules, can_use_workflows, can_use_external_apps, can_import_archive, owner, org_id, config, task_id):
+                             can_use_automation_rules, can_use_workflows, can_use_external_apps, can_import_archive, owner, org_id, task_id):
     """
     post files at /tmp/<dtable_uuid>/dtable_zip_extracted/ to file server
     unzip django uploaded tmp file is suppose to be done in dtable-web api.
@@ -304,7 +304,7 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
 
     extracted_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'dtable_zip_extracted')
 
-    db_session = init_db_session_class(config)()
+    db_session = init_db_session_class()()
 
     dtable_io_logger.info(add_task_id_to_log('Prepare dtable json file and post it at file server.', task_id))
     try:
@@ -397,14 +397,14 @@ def post_dtable_import_files(username, repo_id, workspace_id, dtable_uuid, dtabl
 
 
 def post_dtable_import_files_folder(username, repo_id, workspace_id, dtable_uuid, folder_path, in_storage,
-                             can_use_automation_rules, can_use_workflows, can_use_external_apps, can_import_archive, owner, org_id, config, task_id):
+                             can_use_automation_rules, can_use_workflows, can_use_external_apps, can_import_archive, owner, org_id, task_id):
     """
     like `post_dtable_import_files` but import from `folder_path` and not to remove folder_path
     """
     dtable_io_logger.info(add_task_id_to_log(f'Start import DTable: {dtable_uuid}.', task_id))
 
     dtable_file_name = os.path.basename(folder_path)
-    db_session = init_db_session_class(config)()
+    db_session = init_db_session_class()()
 
     dtable_io_logger.info(add_task_id_to_log('Prepare dtable json file and post it at file server.', task_id))
     try:
@@ -477,7 +477,7 @@ def post_dtable_import_files_folder(username, repo_id, workspace_id, dtable_uuid
     dtable_io_logger.info(add_task_id_to_log(f'Import DTable: {dtable_uuid} success!', task_id))
 
 
-def get_dtable_export_asset_files(username, repo_id, dtable_uuid, files, task_id, config, files_map=None):
+def get_dtable_export_asset_files(username, repo_id, dtable_uuid, files, task_id, files_map=None):
     """
     export asset files from dtable
     """
@@ -500,7 +500,7 @@ def get_dtable_export_asset_files(username, repo_id, dtable_uuid, files, task_id
     clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path)
     os.makedirs(tmp_file_path, exist_ok=True)
 
-    db_session = init_db_session_class(config)()
+    db_session = init_db_session_class()()
     try:
         # 1. download files to tmp_file_path
         download_files_to_path(username, repo_id, dtable_uuid, files, tmp_file_path, db_session, files_map)
@@ -547,7 +547,7 @@ def import_big_data_screen(username, repo_id, dtable_uuid, page_id):
         dtable_io_logger.error('rm extracted tmp file failed. ERROR: {}'.format(e))
 
 
-def get_dtable_export_big_data_screen_app(username, repo_id, dtable_uuid, app_uuid, app_id, task_id, config):
+def get_dtable_export_big_data_screen_app(username, repo_id, dtable_uuid, app_uuid, app_id, task_id):
     """
     parse json file in big data screen, and zip it for download
     """
@@ -556,7 +556,7 @@ def get_dtable_export_big_data_screen_app(username, repo_id, dtable_uuid, app_uu
     clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path)
     os.makedirs(tmp_file_path.rstrip('/') + '/images', exist_ok=True)
 
-    db_session = init_db_session_class(config)()
+    db_session = init_db_session_class()()
 
     try:
         zip_big_data_screen_app(username, repo_id, dtable_uuid, app_uuid, app_id, tmp_file_path, db_session)
@@ -569,12 +569,12 @@ def get_dtable_export_big_data_screen_app(username, repo_id, dtable_uuid, app_uu
         db_session.close()
 
 
-def import_big_data_screen_app(username, repo_id, dtable_uuid, app_uuid, app_id, config):
+def import_big_data_screen_app(username, repo_id, dtable_uuid, app_uuid, app_id):
     """
     parse the zip in tmp folders and upload it
     """
     tmp_extracted_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'big_data_screen_zip_extracted', app_uuid)
-    db_session = init_db_session_class(config)()
+    db_session = init_db_session_class()()
     try:
         post_big_data_screen_app_zip_file(username, repo_id, dtable_uuid, app_uuid, app_id, tmp_extracted_path, db_session)
     except Exception as e:
@@ -588,7 +588,7 @@ def import_big_data_screen_app(username, repo_id, dtable_uuid, app_uuid, app_id,
     except Exception as e:
         dtable_io_logger.error('rm extracted tmp file failed. ERROR: {}'.format(e))
 
-def parse_excel_csv(username, repo_id, file_name, file_type, parse_type, dtable_uuid, config):
+def parse_excel_csv(username, repo_id, file_name, file_type, parse_type, dtable_uuid):
     """
     parse excel or csv to json file, then upload json file to file server
     """
@@ -602,7 +602,7 @@ def parse_excel_csv(username, repo_id, file_name, file_type, parse_type, dtable_
     else:
         dtable_io_logger.info('parse excel %s.xlsx success!' % file_name)
 
-def import_excel_csv(username, repo_id, dtable_uuid, dtable_name, included_tables, lang, config):
+def import_excel_csv(username, repo_id, dtable_uuid, dtable_name, included_tables, lang):
     """
     upload excel or csv json file to dtable-server
     """
@@ -616,7 +616,7 @@ def import_excel_csv(username, repo_id, dtable_uuid, dtable_name, included_table
     else:
         dtable_io_logger.info('import excel or csv %s success!' % dtable_name)
 
-def import_excel_csv_add_table(username, dtable_uuid, dtable_name, included_tables, lang, config):
+def import_excel_csv_add_table(username, dtable_uuid, dtable_name, included_tables, lang):
     """
     add table, upload excel or csv json file to dtable-server
     """
@@ -787,11 +787,11 @@ def _upload_to_seafile(seafile_server_url, access_token, files, parent_dir="/", 
     response = requests.post(upload_url, files=files)
     return response
 
-def get_dtable_transfer_asset_files(username, repo_id, dtable_uuid, files, task_id, files_map, parent_dir, relative_path, replace, repo_api_token, seafile_server_url, config):
+def get_dtable_transfer_asset_files(username, repo_id, dtable_uuid, files, task_id, files_map, parent_dir, relative_path, replace, repo_api_token, seafile_server_url):
     tmp_file_path = os.path.join('/tmp/dtable-io/', dtable_uuid, 'transfer-files', str(task_id))
     os.makedirs(tmp_file_path, exist_ok=True)
 
-    db_session = init_db_session_class(config)()
+    db_session = init_db_session_class()()
     try:
         # download files to local
         local_file_list = download_files_to_path(username, repo_id, dtable_uuid, files, tmp_file_path, db_session, files_map)
@@ -905,10 +905,10 @@ def send_notification_msg(emails, user_col_key, msg, dtable_uuid, username, tabl
         dtable_message_logger.info('Notification sending success!')
     return result
 
-def convert_page_design_to_pdf(dtable_uuid, page_id, row_id, username, config):
+def convert_page_design_to_pdf(dtable_uuid, page_id, row_id, username):
     if not username:
         username = 'dtable-events'
-    db_session = init_db_session_class(config)()
+    db_session = init_db_session_class()()
     sql = "SELECT `owner`, `org_id` FROM dtables d JOIN workspaces w ON d.workspace_id=w.id WHERE d.uuid=:dtable_uuid"
     try:
         result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
@@ -932,10 +932,10 @@ def convert_page_design_to_pdf(dtable_uuid, page_id, row_id, username, config):
         dtable_io_logger.exception('dtable: %s plugin: page-design page: %s row: %s error: %s', dtable_uuid, page_id, row_id, e)
 
 
-def convert_document_to_pdf(dtable_uuid, doc_uuid, row_id, username, config):
+def convert_document_to_pdf(dtable_uuid, doc_uuid, row_id, username):
     if not username:
         username = 'dtable-events'
-    db_session = init_db_session_class(config)()
+    db_session = init_db_session_class()()
     sql = "SELECT `owner`, `org_id` FROM dtables d JOIN workspaces w ON d.workspace_id=w.id WHERE d.uuid=:dtable_uuid"
     try:
         result = db_session.execute(text(sql), {'dtable_uuid': uuid_str_to_32_chars(dtable_uuid)}).fetchone()
@@ -1121,9 +1121,9 @@ def convert_table_to_excel(dtable_uuid, table_id, username, name, repo_id, is_su
     except:
         pass
 
-def app_user_sync(dtable_uuid, app_name, app_id, table_name, table_id, username, config):
+def app_user_sync(dtable_uuid, app_name, app_id, table_name, table_id, username):
     dtable_io_logger.info('Start sync app %s users: to table %s.' % (app_name, table_name))
-    db_session = init_db_session_class(config)()
+    db_session = init_db_session_class()()
     try:
         sync_app_users_to_table(dtable_uuid, app_id, table_name, table_id, username, db_session)
     except Exception as e:
@@ -1136,9 +1136,9 @@ def app_user_sync(dtable_uuid, app_name, app_id, table_name, table_id, username,
             db_session.close()
 
 
-def email_sync(context, config):
+def email_sync(context):
     dtable_data_sync_logger.info('Start sync email to dtable %s, email table %s.' % (context.get('dtable_uuid'), context.get('detail',{}).get('email_table_id')))
-    context['db_session_class'] = init_db_session_class(config)
+    context['db_session_class'] = init_db_session_class()
 
     try:
         run_sync_emails(context)
@@ -1148,7 +1148,7 @@ def email_sync(context, config):
         dtable_data_sync_logger.info('sync email success, sync_id: %s' % context.get('data_sync_id'))
 
 
-def plugin_email_send_email(context, config=None):
+def plugin_email_send_email(context):
     dtable_plugin_email_logger.info('Start send email by plugin %s, email table %s.' % (context.get('dtable_uuid'), context.get('table_info', {}).get('email_table_name')))
 
     dtable_uuid = context.get('dtable_uuid')
@@ -1166,7 +1166,7 @@ def plugin_email_send_email(context, config=None):
     thread_table_name = table_info.get('thread_table_name')
 
     # send email
-    toggle_send_email(account_id, email_info, username, config)
+    toggle_send_email(account_id, email_info, username)
 
     send_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 

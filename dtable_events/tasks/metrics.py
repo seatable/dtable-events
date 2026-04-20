@@ -19,10 +19,10 @@ class MetricReceiver(Thread):
     """
     collect metrics from redis channel and save to local
     """
-    def __init__(self, config):
+    def __init__(self):
         Thread.__init__(self)
         self._finished = Event()
-        self._redis_client = RedisClient(config=config)
+        self._redis_client = RedisClient()
     def run(self):
         if not self._redis_client.connection:
             logging.warning('Redis connection is not established.')
@@ -76,9 +76,6 @@ class MetricSaver(Thread):
 
 
 class MetricManager(object):
-    def __init__(self, config):
-        self.config = config
-    
     def start(self):
         logging.info('Start metric manager...')
         try:
@@ -87,7 +84,7 @@ class MetricManager(object):
         except Exception as e:  
             logging.error('Failed to start metric collect thread: %s' % e)
         try:
-            self._metric_task = MetricReceiver(self.config)
+            self._metric_task = MetricReceiver()
             self._metric_task.start()
         except Exception as e:  
             logging.error('Failed to start metric handle thread: %s' % e)
