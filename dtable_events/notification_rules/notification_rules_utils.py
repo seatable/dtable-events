@@ -229,8 +229,8 @@ def escape_markdown_value(value):
     value = re.sub(r'^\s*>\s+', r'\\> ', value)  # Initial citation
 
     # 3. restore mentions
-    for placeholder, value in protect_strs:
-        value = value.replace(placeholder, value)
+    for placeholder, place_value in protect_strs:
+        value = value.replace(placeholder, place_value)
 
     return value
 
