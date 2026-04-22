@@ -14,21 +14,41 @@ REDIS_METRIC_KEY = 'metric'
 
 class RedisClient(object):
 
-    def __init__(self, socket_connect_timeout=30, socket_timeout=None):
+    def __init__(self, socket_connect_timeout=30, socket_timeout=None,
+                 health_check_interval=None, retry_on_timeout=None):
         self._host = '127.0.0.1'
         self._port = 6379
         self._password = None
         self._parse_config()
+        self._connection_kwargs = {
+            'host': self._host,
+            'port': self._port,
+            'password': self._password,
+            'socket_timeout': socket_timeout,
+            'socket_connect_timeout': socket_connect_timeout,
+            'decode_responses': True,
+        }
+        if health_check_interval is not None:
+            self._connection_kwargs['health_check_interval'] = health_check_interval
+        if retry_on_timeout is not None:
+            self._connection_kwargs['retry_on_timeout'] = retry_on_timeout
 
         """
         By default, each Redis instance created will in turn create its own connection pool.
         Every caller using redis client will has it's own pool with config caller passed.
         """
-        self.connection = redis.Redis(
-            host=self._host, port=self._port, password=self._password,
-            socket_timeout=socket_timeout, socket_connect_timeout=socket_connect_timeout,
-            decode_responses=True
-            )
+        self.connection = self._build_connection()
+
+    def _build_connection(self):
+        return redis.Redis(**self._connection_kwargs)
+
+    def reconnect(self):
+        try:
+            self.connection.connection_pool.disconnect()
+        except Exception:
+            pass
+        self.connection = self._build_connection()
+        return self.connection
 
     def _parse_config(self):
 
@@ -50,6 +70,23 @@ class RedisClient(object):
             else:
                 return subscriber
 
+    def close_subscriber(self, subscriber):
+        if not subscriber:
+            return
+        try:
+            subscriber.close()
+        except Exception as e:
+            logger.debug('close redis subscriber failed: %s', e)
+
+    def refresh_subscriber(self, subscriber, pubsub_channel_name, reason='unknown'):
+        logger.warning('reconnect redis pubsub channel=%s reason=%s', pubsub_channel_name, reason)
+        self.close_subscriber(subscriber)
+        try:
+            self.reconnect()
+        except Exception as e:
+            logger.warning('redis reconnect failed channel=%s error=%s', pubsub_channel_name, e)
+        return self.get_subscriber(pubsub_channel_name)
+
     def get(self, key):
         return self.connection.get(key)
 
@@ -63,7 +100,12 @@ class RedisClient(object):
         return self.connection.delete(key)
     
     def publish(self, channel_name, message):
-        return self.connection.publish(channel_name, message)
+        try:
+            return self.connection.publish(channel_name, message)
+        except Exception as e:
+            logger.warning('redis publish failed on %s: %s', channel_name, e)
+            self.reconnect()
+            return self.connection.publish(channel_name, message)
 
 
 class RedisCache(object):

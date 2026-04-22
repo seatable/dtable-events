@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from datetime import datetime
 from threading import Thread
 from queue import Queue
@@ -28,9 +29,12 @@ class Webhooker(object):
     """
     def __init__(self):
         self._db_session_class = init_db_session_class()
-        self._redis_client = RedisClient()
-        self._subscriber = self._redis_client.get_subscriber('table-events')
+        self._redis_client = RedisClient(socket_connect_timeout=5, socket_timeout=5,
+                                         health_check_interval=30, retry_on_timeout=True)
         self.job_queue = Queue()
+        self._pubsub_channel_name = 'table-events'
+        self._pubsub_health_check_interval = 30
+        self._pubsub_no_message_timeout = 5 * 60
 
     def start(self):
         logger.info('Starting handle webhook jobs...')
@@ -40,9 +44,13 @@ class Webhooker(object):
 
     def add_jobs(self):
         """all events from redis are kind of update so far"""
+        subscriber = self._redis_client.get_subscriber(self._pubsub_channel_name)
+        last_pubsub_message_time = time.time()
+        last_pubsub_health_check_time = last_pubsub_message_time
         while True:
             try:
-                for message in self._subscriber.listen():
+                message = subscriber.get_message()
+                if message is not None:
                     if message['type'] != 'message':
                         continue
                     try:
@@ -66,9 +74,32 @@ class Webhooker(object):
                         logger.error('add jobs error: %s' % e)
                     finally:
                         session.close()
+                    last_pubsub_message_time = time.time()
+                    last_pubsub_health_check_time = last_pubsub_message_time
+                else:
+                    now = time.time()
+                    if now - last_pubsub_health_check_time >= self._pubsub_health_check_interval:
+                        last_pubsub_health_check_time = now
+                        try:
+                            subscriber.ping()
+                        except Exception as e:
+                            subscriber = self._redis_client.refresh_subscriber(
+                                subscriber, self._pubsub_channel_name, 'health check failed: %s' % e)
+                            last_pubsub_message_time = time.time()
+                            last_pubsub_health_check_time = last_pubsub_message_time
+                            continue
+                    if (time.time() - last_pubsub_message_time) >= self._pubsub_no_message_timeout:
+                        subscriber = self._redis_client.refresh_subscriber(
+                            subscriber, self._pubsub_channel_name, 'no message timeout')
+                        last_pubsub_message_time = time.time()
+                        last_pubsub_health_check_time = last_pubsub_message_time
+                        continue
+                    time.sleep(0.5)
             except Exception as e:
-                logger.error('webhook sub from redis error: %s', e)
-                self._subscriber = self._redis_client.get_subscriber('table-events')
+                logger.error('redis pubsub receive error: %s', e)
+                subscriber = self._redis_client.refresh_subscriber(subscriber, self._pubsub_channel_name, str(e))
+                last_pubsub_message_time = time.time()
+                last_pubsub_health_check_time = last_pubsub_message_time
 
     def invalidate_webhook(self, webhook_id, db_session):
         sql = "UPDATE webhooks SET is_valid=0 WHERE id=:webhook_id"

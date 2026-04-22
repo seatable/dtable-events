@@ -22,16 +22,25 @@ class MetricReceiver(Thread):
     def __init__(self):
         Thread.__init__(self)
         self._finished = Event()
-        self._redis_client = RedisClient()
+        self._redis_client = RedisClient(socket_connect_timeout=5, socket_timeout=5,
+                                         health_check_interval=30, retry_on_timeout=True)
+        self._pubsub_channel_name = METRIC_CHANNEL_NAME
+        self._pubsub_health_check_interval = 30
+        self._pubsub_no_message_timeout = 5 * 60
+
     def run(self):
         if not self._redis_client.connection:
             logging.warning('Redis connection is not established.')
             return
-        subscriber = self._redis_client.get_subscriber(METRIC_CHANNEL_NAME)
+        subscriber = self._redis_client.get_subscriber(self._pubsub_channel_name)
+        last_pubsub_message_time = time.time()
+        last_pubsub_health_check_time = last_pubsub_message_time
         while not self._finished.is_set():
             try:
                 message = subscriber.get_message()
                 if message:
+                    if message.get('type') != 'message':
+                        continue
                     metric_data = json.loads(message['data'])
                     try:
                         component_name = metric_data.get('component_name')
@@ -46,10 +55,29 @@ class MetricReceiver(Thread):
                     except Exception as e:
                         logging.error('Error when handling metric data: %s' % e)
                 else:
+                    now = time.time()
+                    if now - last_pubsub_health_check_time >= self._pubsub_health_check_interval:
+                        last_pubsub_health_check_time = now
+                        try:
+                            subscriber.ping()
+                        except Exception as e:
+                            subscriber = self._redis_client.refresh_subscriber(
+                                subscriber, self._pubsub_channel_name, 'health check failed: %s' % e)
+                            last_pubsub_message_time = time.time()
+                            last_pubsub_health_check_time = last_pubsub_message_time
+                            continue
+                    if (time.time() - last_pubsub_message_time) >= self._pubsub_no_message_timeout:
+                        subscriber = self._redis_client.refresh_subscriber(
+                            subscriber, self._pubsub_channel_name, 'no message timeout')
+                        last_pubsub_message_time = time.time()
+                        last_pubsub_health_check_time = last_pubsub_message_time
+                        continue
                     time.sleep(0.5)
             except Exception as e:
-                logging.error('Failed handle metric %s' % e)
-                subscriber = self._redis_client.get_subscriber(METRIC_CHANNEL_NAME)
+                logging.error('redis pubsub receive error: %s', e)
+                subscriber = self._redis_client.refresh_subscriber(subscriber, self._pubsub_channel_name, str(e))
+                last_pubsub_message_time = time.time()
+                last_pubsub_health_check_time = last_pubsub_message_time
 
 
 class MetricSaver(Thread):
