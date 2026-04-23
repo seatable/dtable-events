@@ -198,7 +198,7 @@ class APICallsCounter(object):
                 session.close()
 
             try:
-                self._redis_client.connection.publish('exceed_api_quota', json.dumps({'changed': True}))
+                self._redis_client.publish('exceed_api_quota', json.dumps({'changed': True}))
             except Exception as e:
                 logger.exception('publish exceed_api_quota error: %s', e)
 

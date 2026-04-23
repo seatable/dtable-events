@@ -28,9 +28,6 @@ class MetricReceiver(Thread):
         self._pubsub_no_message_timeout = 5 * 60
 
     def run(self):
-        if not self._redis_client.connection:
-            logging.warning('Redis connection is not established.')
-            return
         subscriber = self._redis_client.get_subscriber(self._pubsub_channel_name)
         last_pubsub_message_time = time.time()
         while not self._finished.is_set():

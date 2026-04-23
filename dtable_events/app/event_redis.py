@@ -16,10 +16,10 @@ class RedisClient(object):
 
     def __init__(self, socket_connect_timeout=30, socket_timeout=None,
                  health_check_interval=None, retry_on_timeout=None):
-        self._host = '127.0.0.1'
-        self._port = 6379
-        self._password = None
-        self._parse_config()
+        self._host = REDIS_HOST
+        self._port = REDIS_PORT
+        self._password = REDIS_PASSWORD
+
         self._connection_kwargs = {
             'host': self._host,
             'port': self._port,
@@ -37,29 +37,20 @@ class RedisClient(object):
         By default, each Redis instance created will in turn create its own connection pool.
         Every caller using redis client will has it's own pool with config caller passed.
         """
-        self.connection = self._build_connection()
-
-    def _build_connection(self):
-        return redis.Redis(**self._connection_kwargs)
+        self._redis = redis.Redis(**self._connection_kwargs)
 
     def reconnect(self):
         try:
-            self.connection.connection_pool.disconnect()
+            self._redis.connection_pool.disconnect()
         except Exception:
             pass
-        self.connection = self._build_connection()
-        return self.connection
-
-    def _parse_config(self):
-
-        self._host = REDIS_HOST
-        self._port = REDIS_PORT
-        self._password = REDIS_PASSWORD
+        self._redis = redis.Redis(**self._connection_kwargs)
+        return self._redis
 
     def get_subscriber(self, channel_name):
         while True:
             try:
-                subscriber = self.connection.pubsub(ignore_subscribe_messages=True)
+                subscriber = self._redis.pubsub(ignore_subscribe_messages=True)
                 subscriber.subscribe(channel_name)
                 logger.info('redis pubsub success, success subscribe %s', channel_name)
             except redis.AuthenticationError as e:
@@ -89,24 +80,24 @@ class RedisClient(object):
         return self.get_subscriber(pubsub_channel_name)
 
     def get(self, key):
-        return self.connection.get(key)
+        return self._redis.get(key)
 
     def set(self, key, value, timeout=None):
         if not timeout:
-            return self.connection.set(key, value)
+            return self._redis.set(key, value)
         else:
-            return self.connection.setex(key, timeout, value)
+            return self._redis.setex(key, timeout, value)
 
     def delete(self, key):
-        return self.connection.delete(key)
+        return self._redis.delete(key)
     
     def publish(self, channel_name, message):
         try:
-            return self.connection.publish(channel_name, message)
+            return self._redis.publish(channel_name, message)
         except Exception as e:
             logger.warning('redis publish failed on %s: %s', channel_name, e)
             self.reconnect()
-            return self.connection.publish(channel_name, message)
+            return self._redis.publish(channel_name, message)
 
 
 class RedisCache(object):
