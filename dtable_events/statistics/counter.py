@@ -32,7 +32,7 @@ class UserActivityCounter(Thread):
                 if message is not None:
                     if message.get('type') != 'message':
                         continue
-                    last_pubsub_message_time = last_pubsub_message_time()
+                    last_pubsub_message_time = time.time()
                     msg = json.loads(message['data'])
                     session = self._db_session_class()
                     try:
