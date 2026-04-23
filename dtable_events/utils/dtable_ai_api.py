@@ -126,7 +126,7 @@ class DTableAIAPI:
         else:
             raise DTableAIAPIError(f"Failed to extract information: {response.text}")
 
-    def custom(self, content):
+    def custom(self, content, images=None):
         """Execute custom AI processing with user-defined prompt"""
         if not content or not content.strip():
             return ''
@@ -140,8 +140,13 @@ class DTableAIAPI:
         
         url = f'{self.seatable_ai_server_url}/api/v1/ai/custom/'
         headers = gen_headers()
-        response = requests.post(url, json=data, headers=headers, timeout=180)
-        
+
+        if images:
+            files = [('file', (f'image_{i}.jpg', img, 'image/jpeg')) for i, img in enumerate(images)]
+            response = requests.post(url, data=data, files=files, headers=headers, timeout=180)
+        else:
+            response = requests.post(url, json=data, headers=headers, timeout=180)
+
         if response.status_code == 200:
             result = response.json()
             return result.get('result', '')
