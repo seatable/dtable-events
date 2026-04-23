@@ -170,14 +170,12 @@ class WorkflowActionsHandler(Thread):
         self._redis_client = RedisClient(socket_connect_timeout=5, socket_timeout=5,
                                          health_check_interval=30, retry_on_timeout=True)
         self._pubsub_channel_name = 'workflow-actions'
-        self._pubsub_health_check_interval = 30
         self._pubsub_no_message_timeout = 5 * 60
     
     def run(self):
         logger.info('Starting handle workflow actions...')
         subscriber = self._redis_client.get_subscriber(self._pubsub_channel_name)
         last_pubsub_message_time = time.time()
-        last_pubsub_health_check_time = last_pubsub_message_time
 
         while not self._finished.is_set():
             try:
@@ -185,6 +183,7 @@ class WorkflowActionsHandler(Thread):
                 if message is not None:
                     if message.get('type') != 'message':
                         continue
+                    last_pubsub_message_time = time.time()
                     sub_data = json.loads(message['data'])
                     session = self._db_session_class()
                     task_id = sub_data['task_id']
@@ -197,26 +196,13 @@ class WorkflowActionsHandler(Thread):
                     finally:
                         session.close()
                 else:
-                    now = time.time()
-                    if now - last_pubsub_health_check_time >= self._pubsub_health_check_interval:
-                        last_pubsub_health_check_time = now
-                        try:
-                            subscriber.ping()
-                        except Exception as e:
-                            subscriber = self._redis_client.refresh_subscriber(
-                                subscriber, self._pubsub_channel_name, 'health check failed: %s' % e)
-                            last_pubsub_message_time = time.time()
-                            last_pubsub_health_check_time = last_pubsub_message_time
-                            continue
                     if (time.time() - last_pubsub_message_time) >= self._pubsub_no_message_timeout:
                         subscriber = self._redis_client.refresh_subscriber(
                             subscriber, self._pubsub_channel_name, 'no message timeout')
                         last_pubsub_message_time = time.time()
-                        last_pubsub_health_check_time = last_pubsub_message_time
                         continue
                     time.sleep(0.5)
             except Exception as e:
                 logger.error('redis pubsub receive error: %s', e)
                 subscriber = self._redis_client.refresh_subscriber(subscriber, self._pubsub_channel_name, str(e))
                 last_pubsub_message_time = time.time()
-                last_pubsub_health_check_time = last_pubsub_message_time

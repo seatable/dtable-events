@@ -71,7 +71,6 @@ class AutomationsPipeline(object):
         self.workers = 5
         self.automations_queue: Queue[AutomationRule] = Queue()
         self.results_queue: Queue[AutomationResult] = Queue()
-        self._pubsub_health_check_interval = 30
         self._pubsub_no_message_timeout = 5 * 60
 
         self._db_session_class = init_db_session_class()
@@ -145,7 +144,6 @@ class AutomationsPipeline(object):
         auto_rule_logger.info(f"Start to receive automation event from redis, window seconds {self.rate_limiter.window_secs} limit percent {self.rate_limiter.percent}")
         subscriber = self._redis_client.get_subscriber(self.per_update_channel)
         last_pubsub_message_time = time.time()
-        last_pubsub_health_check_time = last_pubsub_message_time
         while True:
             try:
                 message = subscriber.get_message()
@@ -153,10 +151,9 @@ class AutomationsPipeline(object):
                 if message is not None:
                     if message.get('type') != 'message':
                         continue
+                    last_pubsub_message_time = time.time()
                     event = json.loads(message['data'])
                     auto_rule_logger.info(f"subscribe event {event}")
-                    last_pubsub_message_time = time.time()
-                    last_pubsub_health_check_time = last_pubsub_message_time
 
                     db_session = self._db_session_class()
                     try:
@@ -197,30 +194,17 @@ class AutomationsPipeline(object):
                     finally:
                         db_session.close()
                 else:
-                    now = time.time()
-                    if now - last_pubsub_health_check_time >= self._pubsub_health_check_interval:
-                        last_pubsub_health_check_time = now
-                        try:
-                            subscriber.ping()
-                        except Exception as e:
-                            subscriber = self._redis_client.refresh_subscriber(
-                                subscriber, self.per_update_channel, 'health check failed: %s' % e)
-                            last_pubsub_message_time = time.time()
-                            last_pubsub_health_check_time = last_pubsub_message_time
-                            continue
-                    if now - last_pubsub_message_time >= self._pubsub_no_message_timeout:
+                    if time.time() - last_pubsub_message_time >= self._pubsub_no_message_timeout:
                         auto_rule_logger.info('no automation message for %ss', self._pubsub_no_message_timeout)
                         subscriber = self._redis_client.refresh_subscriber(
                             subscriber, self.per_update_channel, 'no message timeout')
                         last_pubsub_message_time = time.time()
-                        last_pubsub_health_check_time = last_pubsub_message_time
                         continue
                     time.sleep(0.5)
             except Exception as e:
                 auto_rule_logger.error('redis pubsub receive error: %s', e)
                 subscriber = self._redis_client.refresh_subscriber(subscriber, self.per_update_channel, str(e))
                 last_pubsub_message_time = time.time()
-                last_pubsub_health_check_time = last_pubsub_message_time
 
     def worker(self):
         while True:

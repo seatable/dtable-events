@@ -28,7 +28,6 @@ class AIStatsWorker(object):
         self._pubsub_channel_name = 'log_ai_model_usage'
         self.keep_months = 3
         self.owner_info_cache_timeout = 24 * 60 * 60
-        self._pubsub_health_check_interval = 30
         self._pubsub_no_message_timeout = 5 * 60
         self._parse_config()
         self.reset_stats()
@@ -99,7 +98,6 @@ class AIStatsWorker(object):
         logger.info('Starts to receive ai calls...')
         subscriber = self._redis_client.get_subscriber(self._pubsub_channel_name)
         last_pubsub_message_time = time.time()
-        last_pubsub_health_check_time = last_pubsub_message_time
 
         while True:
             try:
@@ -107,13 +105,12 @@ class AIStatsWorker(object):
                 if message is not None:
                     if message.get('type') != 'message':
                         continue
+                    last_pubsub_message_time = time.time()
                     try:
                         usage_info = json.loads(message['data'])
                     except:
                         logger.warning('log_ai_model_usage message invalid')
                         continue
-                    last_pubsub_message_time = time.time()
-                    last_pubsub_health_check_time = last_pubsub_message_time
                     session = self._db_session_class()
                     logger.debug('usage_info %s', usage_info)
                     try:
@@ -124,29 +121,16 @@ class AIStatsWorker(object):
                     finally:
                         session.close()
                 else:
-                    now = time.time()
-                    if now - last_pubsub_health_check_time >= self._pubsub_health_check_interval:
-                        last_pubsub_health_check_time = now
-                        try:
-                            subscriber.ping()
-                        except Exception as e:
-                            subscriber = self._redis_client.refresh_subscriber(
-                                subscriber, self._pubsub_channel_name, 'health check failed: %s' % e)
-                            last_pubsub_message_time = time.time()
-                            last_pubsub_health_check_time = last_pubsub_message_time
-                            continue
                     if (time.time() - last_pubsub_message_time) >= self._pubsub_no_message_timeout:
                         subscriber = self._redis_client.refresh_subscriber(
                             subscriber, self._pubsub_channel_name, 'no message timeout')
                         last_pubsub_message_time = time.time()
-                        last_pubsub_health_check_time = last_pubsub_message_time
                         continue
                     time.sleep(0.5)
             except Exception as e:
                 logger.error('redis pubsub receive error: %s', e)
                 subscriber = self._redis_client.refresh_subscriber(subscriber, self._pubsub_channel_name, str(e))
                 last_pubsub_message_time = time.time()
-                last_pubsub_health_check_time = last_pubsub_message_time
 
     def get_assistant_cache_key(self, assistant_uuid):
         return f'assistant:{assistant_uuid}:owner'
