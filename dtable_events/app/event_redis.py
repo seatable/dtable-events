@@ -61,6 +61,7 @@ class RedisClient(object):
             try:
                 subscriber = self.connection.pubsub(ignore_subscribe_messages=True)
                 subscriber.subscribe(channel_name)
+                logger.info('redis pubsub success, success subscribe %s', channel_name)
             except redis.AuthenticationError as e:
                 logger.critical('connect to redis auth error: %s', e)
                 raise e
