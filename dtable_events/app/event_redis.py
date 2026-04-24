@@ -71,12 +71,12 @@ class RedisClient(object):
             logger.debug('close redis subscriber failed: %s', e)
 
     def refresh_subscriber(self, subscriber, pubsub_channel_name, reason='unknown'):
-        logger.warning('reconnect redis pubsub channel=%s reason=%s', pubsub_channel_name, reason)
+        logger.info('reconnect redis pubsub channel=%s reason=%s', pubsub_channel_name, reason)
         self.close_subscriber(subscriber)
         try:
             self.reconnect()
         except Exception as e:
-            logger.warning('redis reconnect failed channel=%s error=%s', pubsub_channel_name, e)
+            logger.error('redis reconnect failed channel=%s error=%s', pubsub_channel_name, e)
         return self.get_subscriber(pubsub_channel_name)
 
     def get(self, key):
