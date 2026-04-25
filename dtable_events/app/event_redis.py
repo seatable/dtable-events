@@ -14,33 +14,45 @@ REDIS_METRIC_KEY = 'metric'
 
 class RedisClient(object):
 
-    def __init__(self, socket_connect_timeout=30, socket_timeout=None):
-        self._host = '127.0.0.1'
-        self._port = 6379
-        self._password = None
-        self._parse_config()
+    def __init__(self, socket_connect_timeout=30, socket_timeout=None,
+                 health_check_interval=None, retry_on_timeout=None):
+        self._host = REDIS_HOST
+        self._port = REDIS_PORT
+        self._password = REDIS_PASSWORD
+
+        self._connection_kwargs = {
+            'host': self._host,
+            'port': self._port,
+            'password': self._password,
+            'socket_timeout': socket_timeout,
+            'socket_connect_timeout': socket_connect_timeout,
+            'decode_responses': True,
+        }
+        if health_check_interval is not None:
+            self._connection_kwargs['health_check_interval'] = health_check_interval
+        if retry_on_timeout is not None:
+            self._connection_kwargs['retry_on_timeout'] = retry_on_timeout
 
         """
         By default, each Redis instance created will in turn create its own connection pool.
         Every caller using redis client will has it's own pool with config caller passed.
         """
-        self.connection = redis.Redis(
-            host=self._host, port=self._port, password=self._password,
-            socket_timeout=socket_timeout, socket_connect_timeout=socket_connect_timeout,
-            decode_responses=True
-            )
+        self._redis = redis.Redis(**self._connection_kwargs)
 
-    def _parse_config(self):
-
-        self._host = REDIS_HOST
-        self._port = REDIS_PORT
-        self._password = REDIS_PASSWORD
+    def reconnect(self):
+        try:
+            self._redis.connection_pool.disconnect()
+        except Exception:
+            pass
+        self._redis = redis.Redis(**self._connection_kwargs)
+        return self._redis
 
     def get_subscriber(self, channel_name):
         while True:
             try:
-                subscriber = self.connection.pubsub(ignore_subscribe_messages=True)
+                subscriber = self._redis.pubsub(ignore_subscribe_messages=True)
                 subscriber.subscribe(channel_name)
+                logger.info('redis pubsub success, success subscribe %s', channel_name)
             except redis.AuthenticationError as e:
                 logger.critical('connect to redis auth error: %s', e)
                 raise e
@@ -50,20 +62,42 @@ class RedisClient(object):
             else:
                 return subscriber
 
+    def close_subscriber(self, subscriber):
+        if not subscriber:
+            return
+        try:
+            subscriber.close()
+        except Exception as e:
+            logger.debug('close redis subscriber failed: %s', e)
+
+    def refresh_subscriber(self, subscriber, pubsub_channel_name, reason='unknown'):
+        logger.info('reconnect redis pubsub channel=%s reason=%s', pubsub_channel_name, reason)
+        self.close_subscriber(subscriber)
+        try:
+            self.reconnect()
+        except Exception as e:
+            logger.error('redis reconnect failed channel=%s error=%s', pubsub_channel_name, e)
+        return self.get_subscriber(pubsub_channel_name)
+
     def get(self, key):
-        return self.connection.get(key)
+        return self._redis.get(key)
 
     def set(self, key, value, timeout=None):
         if not timeout:
-            return self.connection.set(key, value)
+            return self._redis.set(key, value)
         else:
-            return self.connection.setex(key, timeout, value)
+            return self._redis.setex(key, timeout, value)
 
     def delete(self, key):
-        return self.connection.delete(key)
+        return self._redis.delete(key)
     
     def publish(self, channel_name, message):
-        return self.connection.publish(channel_name, message)
+        try:
+            return self._redis.publish(channel_name, message)
+        except Exception as e:
+            logger.warning('redis publish failed on %s: %s', channel_name, e)
+            self.reconnect()
+            return self._redis.publish(channel_name, message)
 
 
 class RedisCache(object):

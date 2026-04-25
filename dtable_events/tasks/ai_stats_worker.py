@@ -18,15 +18,17 @@ from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_t
 logger = logging.getLogger(__name__)
 
 
-class AIStatsWorker:
+class AIStatsWorker(object):
 
     def __init__(self):
         self._db_session_class = init_db_session_class()
-        self._redis_client = RedisClient()
+        self._redis_client = RedisClient(socket_connect_timeout=5, socket_timeout=5,
+                                         health_check_interval=30, retry_on_timeout=True)
         self.stats_lock = Lock()
-        self.channel = 'log_ai_model_usage'
+        self._pubsub_channel_name = 'log_ai_model_usage'
         self.keep_months = 3
         self.owner_info_cache_timeout = 24 * 60 * 60
+        self._pubsub_no_message_timeout = 5 * 60
         self._parse_config()
         self.reset_stats()
 
@@ -94,12 +96,16 @@ class AIStatsWorker:
 
     def receive(self):
         logger.info('Starts to receive ai calls...')
-        subscriber = self._redis_client.get_subscriber(self.channel)
+        subscriber = self._redis_client.get_subscriber(self._pubsub_channel_name)
+        last_pubsub_message_time = time.time()
 
         while True:
             try:
                 message = subscriber.get_message()
                 if message is not None:
+                    if message.get('type') != 'message':
+                        continue
+                    last_pubsub_message_time = time.time()
                     try:
                         usage_info = json.loads(message['data'])
                     except:
@@ -115,10 +121,16 @@ class AIStatsWorker:
                     finally:
                         session.close()
                 else:
+                    if (time.time() - last_pubsub_message_time) >= self._pubsub_no_message_timeout:
+                        subscriber = self._redis_client.refresh_subscriber(
+                            subscriber, self._pubsub_channel_name, 'no message timeout')
+                        last_pubsub_message_time = time.time()
+                        continue
                     time.sleep(0.5)
             except Exception as e:
-                logger.error('Failed get message from redis: %s' % e)
-                subscriber = self._redis_client.get_subscriber(self.channel)
+                logger.error('redis pubsub receive error: %s', e)
+                subscriber = self._redis_client.refresh_subscriber(subscriber, self._pubsub_channel_name, str(e))
+                last_pubsub_message_time = time.time()
 
     def get_assistant_cache_key(self, assistant_uuid):
         return f'assistant:{assistant_uuid}:owner'

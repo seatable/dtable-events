@@ -9,6 +9,7 @@ from dtable_events.notification_rules.notification_rules_utils import send_notif
 from dtable_events.utils import get_dtable_admins
 
 from dtable_events.app.config import SEATABLE_MYSQL_DB_CCNET_DB_NAME, DTABLE_WEB_SERVICE_URL, ORG_MEMBER_QUOTA_DEFAULT
+from dtable_events.app.event_redis import redis_cache
 from dtable_events.automations.actions import AutomationResult
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 
@@ -17,15 +18,19 @@ class AutomationsStatsManager:
 
     def __init__(self):
         self.dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
-        self.roles = None
+        self.roles_cache_key = 'DTABLE_WEB_ROLES'
+        self.roles_cache_timeout = 600
 
         self.ccnet_db_name = SEATABLE_MYSQL_DB_CCNET_DB_NAME
 
     def get_roles(self):
-        if self.roles:
-            return self.roles
-        self.roles = self.dtable_web_api.internal_roles()
-        return self.roles
+        roles_json = redis_cache.get(self.roles_cache_key)
+        if not roles_json:
+            roles = self.dtable_web_api.internal_roles()
+            roles_json = json.dumps(roles)
+            redis_cache.set(self.roles_cache_key, roles_json, timeout=self.roles_cache_timeout)
+            return roles
+        return json.loads(roles_json)
 
     def get_user_quota(self, db_session, username):
         sql = "SELECT username, monthly_automation_limit_per_user FROM user_quota WHERE username=:username"

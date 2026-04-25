@@ -16,7 +16,7 @@ class StatsSender:
 
     def send(self, channel: str, info: dict):
         try:
-            self._redis_client.connection.publish(channel, json.dumps(info))
+            self._redis_client.publish(channel, json.dumps(info))
         except Exception as e:
             logger.warning('send info to channel: %s error: %s', channel, e)
 
