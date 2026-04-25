@@ -82,9 +82,9 @@ FILE_SERVER_ROOT = DTABLE_WEB_SERVICE_URL.strip('/') + '/seafhttp'
 INNER_FILE_SERVER_ROOT = 'http://127.0.0.1:8082'
 
 # python runner
-SEATABLE_FAAS_URL = configs.get('SEATABLE_FAAS_URL', default='')
 ENABLE_PYTHON_SCRIPT = configs.get('ENABLE_PYTHON_SCRIPT', default=False)
-SEATABLE_FAAS_AUTH_TOKEN = configs.get('SEATABLE_FAAS_AUTH_TOKEN', default='')
+SEATABLE_FAAS_URL = configs.get('PYTHON_SCHEDULER_URL', default='http://python-scheduler')
+SEATABLE_FAAS_AUTH_TOKEN = configs.get('PYTHON_SCHEDULER_AUTH_TOKEN', default='')
 
 # AI
 ENABLE_SEATABLE_AI = configs.get('ENABLE_SEATABLE_AI', default=False)
