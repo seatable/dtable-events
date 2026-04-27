@@ -11,7 +11,8 @@ from dtable_events.app.config import ENABLE_OPERATION_LOG_DB, CLEAN_DB_ENABLED, 
     CLEAN_DB_KEEP_ACTIVITIES_DAYS, CLEAN_DB_KEEP_OPERATION_LOG_DAYS, CLEAN_DB_KEEP_DELETE_OPERATION_LOG_DAYS, \
     CLEAN_DB_KEEP_DTABLE_DB_OP_LOG_DAYS, CLEAN_DB_KEEP_NOTIFICATIONS_USERNOTIFICATION_DAYS, \
     CLEAN_DB_KEEP_DTABLE_NOTIFICATIONS_DAYS, CLEAN_DB_KEEP_SESSION_LOG_DAYS, CLEAN_DB_KEEP_AUTO_RULES_TASK_LOG_DAYS, \
-    CLEAN_DB_KEEP_USER_ACTIVITY_STATISTICS_DAYS, CLEAN_DB_KEEP_DTABLE_APP_PAGES_OPERATION_LOG_DAYS
+    CLEAN_DB_KEEP_USER_ACTIVITY_STATISTICS_DAYS, CLEAN_DB_KEEP_DTABLE_APP_PAGES_OPERATION_LOG_DAYS, \
+    CLEAN_DB_KEEP_EMAIL_SENDING_LOG_DAYS, CLEAN_DB_KEEP_SYSADMIN_EXTRA_USERLOGINLOG_DAYS
 from dtable_events.db import init_db_session_class
 
 __all__ = [
@@ -42,6 +43,8 @@ class CleanDBRecordsWorker(object):
             auto_rules_task_log=CLEAN_DB_KEEP_AUTO_RULES_TASK_LOG_DAYS,
             user_activity_statistics=CLEAN_DB_KEEP_USER_ACTIVITY_STATISTICS_DAYS,
             dtable_app_pages_operation_log=CLEAN_DB_KEEP_DTABLE_APP_PAGES_OPERATION_LOG_DAYS,
+            email_sending_log=CLEAN_DB_KEEP_EMAIL_SENDING_LOG_DAYS,
+            sysadmin_extra_userloginlog=CLEAN_DB_KEEP_SYSADMIN_EXTRA_USERLOGINLOG_DAYS
         )
 
     def start(self):
@@ -70,9 +73,11 @@ class RetentionConfig:
     dtable_notifications: int = 30
     session_log: int = 30
     auto_rules_task_log: int = 30
+    dtable_app_pages_operation_log: int = 14
+    email_sending_log: int = 60
+    sysadmin_extra_userloginlog: int = 60
     # Disabled by default
     user_activity_statistics: int = 0
-    dtable_app_pages_operation_log: int = 14
 
 
 class CleanDBRecordsTask(Thread):
@@ -104,6 +109,9 @@ class CleanDBRecordsTask(Thread):
                 clean_auto_rules_task_log(session, self.retention_config.auto_rules_task_log)
                 clean_user_activity_statistics(session, self.retention_config.user_activity_statistics)
                 clean_dtable_app_pages_operation_log(session, self.retention_config.dtable_app_pages_operation_log)
+                clean_email_sending_log(session, self.retention_config.email_sending_log)
+                clean_operation_checkpoint(session)
+                clean_sysadmin_extra_userloginlog(session, self.retention_config.sysadmin_extra_userloginlog)
             except:
                 logging.exception('Could not clean database')
             finally:
@@ -270,3 +278,41 @@ def clean_dtable_app_pages_operation_log(session, keep_days: int):
     session.commit()
 
     logging.info('Removed %d entries from "dtable_app_pages_operation_log"', result.rowcount)
+
+
+def clean_email_sending_log(session, keep_days: int):
+    if keep_days <= 0:
+        logging.info('Skipping "email_sending_log" since retention time is set to %d', keep_days)
+        return
+
+    logging.info('Cleaning "email_sending_log" table (older than %d days)', keep_days)
+
+    sql = 'DELETE FROM `email_sending_log` WHERE `timestamp` < DATE_SUB(NOW(), INTERVAL :days DAY)'
+    result = session.execute(text(sql), {'days': keep_days})
+    session.commit()
+
+    logging.info('Removed %d entries from "email_sending_log"', result.rowcount)
+
+
+def clean_operation_checkpoint(session):
+    logging.info('Cleaning "operation_checkpoint" whose dtables not existing')
+
+    sql = 'DELETE oc FROM `operation_checkpoint` oc LEFT JOIN `dtables` d ON oc.dtable_uuid=d.uuid WHERE d.uuid IS NULL'
+    result = session.execute(text(sql))
+    session.commit()
+
+    logging.info('Removed %d entries from "operation_checkpoint"', result.rowcount)
+
+
+def clean_sysadmin_extra_userloginlog(session, keep_days: int):
+    if keep_days <= 0:
+        logging.info('Skipping "sysadmin_extra_userloginlog" since retention time is set to %d', keep_days)
+        return
+
+    logging.info('Cleaning "sysadmin_extra_userloginlog" table (older than %d days)', keep_days)
+
+    sql = 'DELETE FROM `sysadmin_extra_userloginlog` WHERE `login_date` < DATE_SUB(NOW(), INTERVAL :days DAY)'
+    result = session.execute(text(sql), {'days': keep_days})
+    session.commit()
+
+    logging.info('Removed %d entries from "sysadmin_extra_userloginlog"', result.rowcount)
