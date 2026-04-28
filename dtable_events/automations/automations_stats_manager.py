@@ -8,7 +8,7 @@ from dtable_events.ccnet.user import get_user_role
 from dtable_events.notification_rules.notification_rules_utils import send_notification
 from dtable_events.utils import get_dtable_admins
 
-from dtable_events.app.config import SEATABLE_MYSQL_DB_CCNET_DB_NAME, DTABLE_WEB_SERVICE_URL, ORG_MEMBER_QUOTA_DEFAULT
+from dtable_events.app.config import SEATABLE_MYSQL_DB_CCNET_DB_NAME, INNER_DTABLE_WEB_SERVICE_URL, ORG_MEMBER_QUOTA_DEFAULT
 from dtable_events.app.event_redis import redis_cache
 from dtable_events.automations.actions import AutomationResult
 from dtable_events.utils.dtable_web_api import DTableWebAPI
@@ -17,7 +17,7 @@ from dtable_events.utils.dtable_web_api import DTableWebAPI
 class AutomationsStatsManager:
 
     def __init__(self):
-        self.dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+        self.dtable_web_api = DTableWebAPI(INNER_DTABLE_WEB_SERVICE_URL)
         self.roles_cache_key = 'DTABLE_WEB_ROLES'
         self.roles_cache_timeout = 600
 

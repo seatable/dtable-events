@@ -10,7 +10,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from dateutil import parser, relativedelta
 from sqlalchemy import text
 
-from dtable_events.app.config import DTABLE_WEB_SERVICE_URL
+from dtable_events.app.config import INNER_DTABLE_WEB_SERVICE_URL
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import uuid_str_to_32_chars
@@ -113,7 +113,7 @@ class APICallsCounter(object):
         org_ids = list(org_counts_dict.keys())
         owner_ids = list(owner_ids_dict.keys())
         if org_ids or owner_ids_dict:
-            dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+            dtable_web_api = DTableWebAPI(INNER_DTABLE_WEB_SERVICE_URL)
             try:
                 dtable_web_api.internal_update_exceed_api_quota(month, org_ids, owner_ids)
             except Exception as e:

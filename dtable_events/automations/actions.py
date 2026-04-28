@@ -1,6 +1,5 @@
 import io
 import json
-import logging
 import re
 import time
 import os
@@ -8,13 +7,11 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime, date, timedelta, timezone
 from email.utils import parseaddr
-from queue import Full
 from urllib.parse import unquote, urlparse, parse_qs
 from uuid import UUID
 from pathlib import Path
 
 from dtable_events.utils.dtable_ai_api import DTableAIAPI
-import jwt
 import requests
 from dateutil import parser
 from sqlalchemy import text
@@ -22,15 +19,14 @@ from sqlalchemy import text
 from seaserv import seafile_api
 from dtable_events.automations.models import get_third_party_account
 from dtable_events.utils.utils_metadata_cache import clean_metadata, get_metadata
-from dtable_events.app.event_redis import redis_cache
-from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, ENABLE_PYTHON_SCRIPT, INNER_SEATABLE_AI_SERVER_URL, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, \
+from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, INNER_DTABLE_WEB_SERVICE_URL, ENABLE_PYTHON_SCRIPT, INNER_SEATABLE_AI_SERVER_URL, SEATABLE_FAAS_URL, INNER_DTABLE_DB_URL, \
 INNER_DTABLE_SERVER_URL, ENABLE_SEATABLE_AI, AUTO_RULES_AI_CONTENT_MAX_LENGTH
 from dtable_events.dtable_io import send_wechat_msg, send_dingtalk_msg
 from dtable_events.convert_page.manager import get_playwright_manager
 from dtable_events.app.log import auto_rule_logger
 from dtable_events.notification_rules.notification_rules_utils import send_notification, fill_msg_blanks_with_sql_row
 from dtable_events.utils import uuid_str_to_36_chars, is_valid_email, \
-    normalize_file_path, gen_file_get_url, gen_random_option, get_dtable_admins, \
+    normalize_file_path, gen_file_get_url, gen_random_option, \
     parse_docx, parse_pdf
 from dtable_events.dtable_io.utils import gen_inner_file_get_url
 from dtable_events.utils.constants import ColumnTypes, INVOICE_TYPES
@@ -830,7 +826,7 @@ class AppNotifyAction(BaseAction):
 
         self.column_blanks = []
         self.col_name_dict = {}
-        self.notice_api = UniversalAppAPI('notification-rule', app_uuid, DTABLE_WEB_SERVICE_URL)
+        self.notice_api = UniversalAppAPI('notification-rule', app_uuid, INNER_DTABLE_WEB_SERVICE_URL)
 
         self.init_notify(msg)
 
@@ -1488,7 +1484,7 @@ class RunPythonScriptAction(BaseAction):
         if self.auto_rule.can_run_python is not None:
             return self.auto_rule.can_run_python
 
-        dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+        dtable_web_api = DTableWebAPI(INNER_DTABLE_WEB_SERVICE_URL)
         try:
             if self.org_id != -1:
                 can_run_python = dtable_web_api.can_org_run_python(self.org_id)
@@ -1506,7 +1502,7 @@ class RunPythonScriptAction(BaseAction):
     def get_scripts_running_limit(self):
         if self.auto_rule.scripts_running_limit is not None:
             return self.auto_rule.scripts_running_limit
-        dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+        dtable_web_api = DTableWebAPI(INNER_DTABLE_WEB_SERVICE_URL)
         try:
             if self.org_id != -1:
                 scripts_running_limit = dtable_web_api.get_org_scripts_running_limit(self.org_id)
@@ -1529,7 +1525,7 @@ class RunPythonScriptAction(BaseAction):
         scripts_running_limit = self.get_scripts_running_limit()
 
         # request faas url
-        dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+        dtable_web_api = DTableWebAPI(INNER_DTABLE_WEB_SERVICE_URL)
         try:
             dtable_web_api.run_script(
                 uuid_str_to_36_chars(self.auto_rule.dtable_uuid),
@@ -2463,7 +2459,7 @@ class TriggerWorkflowAction(BaseAction):
             auto_rule_logger.error('rule: %s submit workflow: %s append row dtable: %s, error: %s', self.auto_rule.rule_id, self.token, self.auto_rule.dtable_uuid, e)
             return
 
-        dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+        dtable_web_api = DTableWebAPI(INNER_DTABLE_WEB_SERVICE_URL)
         try:
             dtable_web_api.internal_submit_row_workflow(self.token, row_id, self.auto_rule.rule_id)
         except Exception as e:
@@ -4563,7 +4559,7 @@ class AutomationRule:
 
         self.dtable_server_api = DTableServerAPI(self.username, str(UUID(self.dtable_uuid)), INNER_DTABLE_SERVER_URL)
         self.dtable_db_api = DTableDBAPI(self.username, str(UUID(self.dtable_uuid)), INNER_DTABLE_DB_URL)
-        self.dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+        self.dtable_web_api = DTableWebAPI(INNER_DTABLE_WEB_SERVICE_URL)
         self.seatable_ai_api = DTableAIAPI(self.username, self.org_id, self.dtable_uuid, INNER_SEATABLE_AI_SERVER_URL)
 
         self.query_stats = []

@@ -1170,7 +1170,7 @@ def plugin_email_send_email(context):
 
     send_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL, server_url=DTABLE_WEB_SERVICE_URL,
+    dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL, dtable_web_service_url=DTABLE_WEB_SERVICE_URL,
                                         repo_id=repo_id, workspace_id=workspace_id)
 
     replied_email_row = dtable_server_api.get_row(email_table_name, email_row_id)

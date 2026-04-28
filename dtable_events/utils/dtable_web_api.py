@@ -41,14 +41,14 @@ def parse_response(response):
 
 class DTableWebAPI:
 
-    def __init__(self, dtable_web_service_url):
-        self.dtable_web_service_url = dtable_web_service_url.strip('/')
+    def __init__(self, inner_dtable_web_service_url):
+        self.inner_dtable_web_service_url = inner_dtable_web_service_url.strip('/')
 
     def get_related_users(self, dtable_uuid, username='dtable-events'):
         logger.debug('get related users dtable_uuid: %s, username: %s', dtable_uuid, username)
         dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
         url = '%(server_url)s/api/v2.1/dtables/%(dtable_uuid)s/related-users/?from=dtable_events' % {
-            'server_url': self.dtable_web_service_url,
+            'server_url': self.inner_dtable_web_service_url,
             'dtable_uuid': dtable_uuid
         }
         access_token = get_access_token(username, dtable_uuid)
@@ -59,7 +59,7 @@ class DTableWebAPI:
     def can_user_run_python(self, user):
         logger.debug('can user run python user: %s', user)
         url = '%(server_url)s/api/v2.1/script-permissions/?from=dtable_events' % {
-            'server_url': self.dtable_web_service_url
+            'server_url': self.inner_dtable_web_service_url
         }
         headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
         json_data = {'users': [user]}
@@ -82,7 +82,7 @@ class DTableWebAPI:
     def can_org_run_python(self, org_id):
         logger.debug('can org run python org_id: %s', org_id)
         url = '%(server_url)s/api/v2.1/script-permissions/?from=dtable_events' % {
-            'server_url': self.dtable_web_service_url
+            'server_url': self.inner_dtable_web_service_url
         }
         headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
         json_data = {'org_ids': [org_id]}
@@ -100,7 +100,7 @@ class DTableWebAPI:
     def get_user_scripts_running_limit(self, user):
         logger.debug('get user scripts running limit user: %s', user)
         url = '%(server_url)s/api/v2.1/scripts-running-limit/?from=dtable_events' % {
-            'server_url': self.dtable_web_service_url
+            'server_url': self.inner_dtable_web_service_url
         }
         headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
         params = {'username': user}
@@ -118,7 +118,7 @@ class DTableWebAPI:
     def get_org_scripts_running_limit(self, org_id):
         logger.debug('get org scripts running limit user: %s', org_id)
         url = '%(server_url)s/api/v2.1/scripts-running-limit/?from=dtable_events' % {
-            'server_url': self.dtable_web_service_url
+            'server_url': self.inner_dtable_web_service_url
         }
         headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
         params = {'org_id': org_id}
@@ -162,7 +162,7 @@ class DTableWebAPI:
         return parse_response(response)
 
     def get_users_common_info(self, user_id_list):
-        url = self.dtable_web_service_url + '/api/v2.1/users-common-info/'
+        url = self.inner_dtable_web_service_url + '/api/v2.1/users-common-info/'
         json_data = {
                 'user_id_list': user_id_list,
             }
@@ -177,7 +177,7 @@ class DTableWebAPI:
     def internal_add_notification(self, to_users, msg_type, detail):
         logger.debug('internal add notification to users: %s detail: %s', to_users, detail)
         url = '%(server_url)s/api/v2.1/internal-notifications/?from=dtable_events' % {
-            'server_url': self.dtable_web_service_url
+            'server_url': self.inner_dtable_web_service_url
         }
         payload = {
             'exp': int(time.time()) + 60,
@@ -195,7 +195,7 @@ class DTableWebAPI:
     def internal_submit_row_workflow(self, workflow_token, row_id, rule_id=None):
         logger.debug('internal submit row workflow token: %s row_id: %s rule_id: %s', workflow_token, row_id, rule_id)
         url = '%(server_url)s/api/v2.1/workflows/%(workflow_token)s/internal-task-submit/' % {
-            'server_url': self.dtable_web_service_url,
+            'server_url': self.inner_dtable_web_service_url,
             'workflow_token': workflow_token
         }
         data = {
@@ -217,7 +217,7 @@ class DTableWebAPI:
     def internal_update_exceed_api_quota(self, month, org_ids, owner_ids):
         logger.debug('internal update exeed api quota for month %s, org_ids are %s', month, org_ids)
         url = '%(server_url)s/api/v2.1/internal/update-exceed-api-quota/' % {
-            'server_url': self.dtable_web_service_url
+            'server_url': self.inner_dtable_web_service_url
         }
         data = {
             'org_ids': org_ids,
@@ -234,7 +234,7 @@ class DTableWebAPI:
     def ai_permission_check(self, dtable_uuid):
         logger.debug('ai permission check for dtable_uuid: %s', dtable_uuid)
         url = '%(server_url)s/api/v2.1/ai/internal-ai-permission/' % {
-            'server_url': self.dtable_web_service_url
+            'server_url': self.inner_dtable_web_service_url
         }
         params = {'dtable_uuid': dtable_uuid}
         payload = {
@@ -247,7 +247,7 @@ class DTableWebAPI:
     def internal_roles(self):
         logger.debug('internal roles')
         url = '%(server_url)s/api/v2.1/internal-roles/?from=dtable_events' % {
-            'server_url': self.dtable_web_service_url
+            'server_url': self.inner_dtable_web_service_url
         }
         token = jwt.encode({'is_internal': True}, DTABLE_PRIVATE_KEY, algorithm='HS256')
         headers = {'Authorization': 'Token ' + token}
@@ -258,7 +258,7 @@ class DTableWebAPI:
         """Get storage usage and quota for org or user."""
         logger.debug('internal storage quota org_id: %s username: %s', org_id, username)
         url = '%(server_url)s/api/v2.1/internal-storage-quota/?from=dtable_events' % {
-            'server_url': self.dtable_web_service_url
+            'server_url': self.inner_dtable_web_service_url
         }
         token = jwt.encode({'is_internal': True}, DTABLE_PRIVATE_KEY, algorithm='HS256')
         headers = {'Authorization': 'Token ' + token}
@@ -273,7 +273,7 @@ class DTableWebAPI:
     def internal_dtable_permission(self, dtable_uuid, permission):
         logger.debug(f"internal_dtable_permission: {dtable_uuid} permission: {permission}")
         url = '%(server_url)s/api/v2.1/internal-dtable-permission/?from=dtable_events' % {
-            'server_url': self.dtable_web_service_url
+            'server_url': self.inner_dtable_web_service_url
         }
         token = jwt.encode({'is_internal': True}, DTABLE_PRIVATE_KEY, algorithm='HS256')
         headers = {'Authorization': 'Token ' + token}

@@ -53,7 +53,14 @@ def get_llm_prices(models):
     return prices
 
 TIME_ZONE = configs.get('TIME_ZONE', default='UTC')
-DTABLE_WEB_SERVICE_URL = configs.get('DTABLE_WEB_SERVICE_URL', default='http://127.0.0.1')
+
+INNER_DTABLE_WEB_SERVICE_URL = configs.get('INNER_DTABLE_WEB_SERVICE_URL', default='http://127.0.0.1')
+
+DTABLE_WEB_SERVICE_URL = ''
+seatable_server_protocol = configs.get('SEATABLE_SERVER_PROTOCOL', 'http')
+seatable_server_hostname = configs.get('SEATABLE_SERVER_HOSTNAME', '')
+if seatable_server_protocol and seatable_server_hostname:
+    DTABLE_WEB_SERVICE_URL = seatable_server_protocol + '://' + seatable_server_hostname.rstrip('/')
 
 DTABLE_PRIVATE_KEY = configs.get('JWT_PRIVATE_KEY', default='')
 SECRET_KEY = configs.get('SECRET_KEY', default='')

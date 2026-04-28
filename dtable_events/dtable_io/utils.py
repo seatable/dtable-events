@@ -22,7 +22,7 @@ import posixpath
 from sqlalchemy import text
 from seaserv import seafile_api, USE_GO_FILESERVER
 
-from dtable_events.app.config import INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL, DTABLE_WEB_SERVICE_URL, INNER_FILE_SERVER_ROOT
+from dtable_events.app.config import INNER_DTABLE_DB_URL, INNER_DTABLE_SERVER_URL, DTABLE_WEB_SERVICE_URL, INNER_DTABLE_WEB_SERVICE_URL, INNER_FILE_SERVER_ROOT
 from dtable_events.dtable_io.external_app import APP_USERS_COUMNS_TYPE_MAP, match_user_info, update_app_sync, \
     get_row_ids_for_delete, get_app_users
 from dtable_events.dtable_io.task_manager import task_manager
@@ -1379,7 +1379,7 @@ def get_view_rows_from_dtable_server(dtable_uuid, table_name, view_name, usernam
 def get_related_nicknames_from_dtable(dtable_uuid):
     from dtable_events.utils.dtable_web_api import DTableWebAPI
 
-    dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+    dtable_web_api = DTableWebAPI(INNER_DTABLE_WEB_SERVICE_URL)
     related_users = dtable_web_api.get_related_users(dtable_uuid)
     user_list = related_users['user_list']
     app_user_list = related_users['app_user_list']
@@ -1396,7 +1396,7 @@ def get_related_nicknames_from_dtable(dtable_uuid):
 def get_nicknames_from_dtable(user_id_list):
     from dtable_events.utils.dtable_web_api import DTableWebAPI
 
-    dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+    dtable_web_api = DTableWebAPI(INNER_DTABLE_WEB_SERVICE_URL)
     user_list = dtable_web_api.get_users_common_info(user_id_list)['user_list']
     return user_list
 

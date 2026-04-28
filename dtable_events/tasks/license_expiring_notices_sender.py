@@ -9,7 +9,7 @@ from dateutil import parser
 
 from seaserv import ccnet_api
 
-from dtable_events.app.config import LICENSE_PATH, DTABLE_WEB_SERVICE_URL, IS_PRO_VERSION
+from dtable_events.app.config import LICENSE_PATH, INNER_DTABLE_WEB_SERVICE_URL, IS_PRO_VERSION
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 
 
@@ -74,7 +74,7 @@ class LicenseExpiringNoticesSenderTimer(Thread):
                 return
             try:
                 admin_users = ccnet_api.get_superusers()
-                dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+                dtable_web_api = DTableWebAPI(INNER_DTABLE_WEB_SERVICE_URL)
                 to_users = [user.email for user in admin_users]
                 dtable_web_api.internal_add_notification(to_users, 'license_expiring', {'days': days, 'mode': mode})
             except Exception as e:

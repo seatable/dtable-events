@@ -6,9 +6,8 @@ from threading import Thread
 from sqlalchemy import text
 from apscheduler.schedulers.blocking import BlockingScheduler
 
-from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, WORKFLOW_SCANNER_ENABLED
+from dtable_events.app.config import INNER_DTABLE_WEB_SERVICE_URL, WORKFLOW_SCANNER_ENABLED
 from dtable_events.db import init_db_session_class
-from dtable_events.utils import get_opt_from_conf_or_env, parse_bool
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 
 
@@ -43,7 +42,7 @@ def do_notify_schedule(schedule_id, task_id, action):
             'token': token,
             'offset': offset
         }
-        dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+        dtable_web_api = DTableWebAPI(INNER_DTABLE_WEB_SERVICE_URL)
         dtable_web_api.internal_add_notification(to_users, 'workflow_processing_expired', detail)
     except Exception as e:
         logging.exception(e)
