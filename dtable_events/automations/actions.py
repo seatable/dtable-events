@@ -1519,7 +1519,10 @@ class RunPythonScriptAction(BaseAction):
         if not self.can_do_action():
             return
 
-        context_data = {'table': self.auto_rule.table_info['name']}
+        context_data = {
+            'table': self.auto_rule.table_info['name'],
+            'view': self.auto_rule.view_info['name']
+        }
         if self.auto_rule.run_condition == PER_UPDATE:
             context_data['row'] = self.auto_rule.get_convert_sql_row()
         scripts_running_limit = self.get_scripts_running_limit()
