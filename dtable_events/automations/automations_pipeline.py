@@ -9,7 +9,7 @@ from threading import Thread, Lock
 from apscheduler.schedulers.blocking import BlockingScheduler
 from sqlalchemy import text
 
-from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, AUTOMATION_RATE_LIMIT_PERCENT, \
+from dtable_events.app.config import INNER_DTABLE_WEB_SERVICE_URL, AUTOMATION_RATE_LIMIT_PERCENT, \
     AUTOMATION_RATE_LIMIT_WINDOW_SECS, AUTOMATION_WORKERS
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.app.log import auto_rule_logger
@@ -326,7 +326,7 @@ class AutomationsPipeline(object):
         def timed_job():
             orgs_map = self.exceed_system_resource_limit_entities['orgs_map']
             db_session = self._db_session_class()
-            dtable_web_api = DTableWebAPI(DTABLE_WEB_SERVICE_URL)
+            dtable_web_api = DTableWebAPI(INNER_DTABLE_WEB_SERVICE_URL)
             try:
                 for org_id, missing_count in orgs_map.items():
                     admins = get_org_admins(db_session, org_id)

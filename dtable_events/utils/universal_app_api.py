@@ -55,11 +55,11 @@ def parse_response(response):
 class UniversalAppAPI(object):
 
 
-    def __init__(self, username, app_uuid, dtable_web_service_url):
+    def __init__(self, username, app_uuid, inner_dtable_web_service_url):
         self.username = username
         self.app_uuid = app_uuid
         self.headers = None
-        self.server_url = dtable_web_service_url.rstrip('/')
+        self.server_url = inner_dtable_web_service_url.rstrip('/')
         self._init()
 
     def _init(self):

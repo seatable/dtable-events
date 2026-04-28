@@ -1,7 +1,6 @@
 import time
 import re
 import ssl
-import socket
 import logging
 from datetime import timedelta
 from datetime import datetime
@@ -479,7 +478,7 @@ def sync_emails(context, db_session):
         return 'third_party_account_invalid'
 
     dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL,
-                                        server_url=DTABLE_WEB_SERVICE_URL,
+                                        dtable_web_service_url=DTABLE_WEB_SERVICE_URL,
                                         repo_id=repo_id,
                                         workspace_id=workspace_id
                                         )

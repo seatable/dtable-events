@@ -133,13 +133,13 @@ def gen_inner_file_upload_url(token, op, replace=False):
 class DTableServerAPI(object):
     # simple version of python sdk without authorization for base or table manipulation
 
-    def __init__(self, username, dtable_uuid, dtable_server_url, server_url=None, repo_id=None, workspace_id=None, timeout=180, access_token_timeout=3600, permission='rw', kwargs=None):
+    def __init__(self, username, dtable_uuid, dtable_server_url, dtable_web_service_url=None, repo_id=None, workspace_id=None, timeout=180, access_token_timeout=3600, permission='rw', kwargs=None):
         self.username = username
         self.dtable_uuid = uuid_str_to_36_chars(dtable_uuid)
         self.headers = None
         self.internal_headers = None
         self.dtable_server_url = dtable_server_url.rstrip('/')
-        self.server_url = server_url.rstrip('/') if server_url else None
+        self.dtable_web_service_url = dtable_web_service_url.rstrip('/') if dtable_web_service_url else None
         self.repo_id = repo_id
         self.workspace_id = workspace_id
         self.timeout = timeout
@@ -505,7 +505,7 @@ class DTableServerAPI(object):
 
         d = response.json()[0]
         url = '%(server)s/workspace/%(workspace_id)s/asset/%(dtable_uuid)s/%(relative_path)s/%(filename)s' % {
-            'server': self.server_url.strip('/'),
+            'server': self.dtable_web_service_url.strip('/'),
             'workspace_id': self.workspace_id,
             'dtable_uuid': str(UUID(self.dtable_uuid)),
             'relative_path': parse.quote(relative_path.strip('/')),
@@ -545,7 +545,7 @@ class DTableServerAPI(object):
 
         d = response.json()[0]
         url = '%(server)s/workspace/%(workspace_id)s/asset/%(dtable_uuid)s/%(relative_path)s/%(filename)s' % {
-            'server': self.server_url.strip('/'),
+            'server': self.dtable_web_service_url.strip('/'),
             'workspace_id': self.workspace_id,
             'dtable_uuid': str(UUID(self.dtable_uuid)),
             'relative_path': parse.quote(relative_path.strip('/')),
@@ -574,7 +574,7 @@ class DTableServerAPI(object):
 
         d = response.json()[0]
         url = '%(server)s/workspace/%(workspace_id)s/%(parent_dir)s/%(filename)s' % {
-            'server': self.server_url.strip('/'),
+            'server': self.dtable_web_service_url.strip('/'),
             'workspace_id': self.workspace_id,
             'parent_dir': parent_dir.strip('/'),
             'file_type': file_type,

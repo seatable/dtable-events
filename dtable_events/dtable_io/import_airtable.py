@@ -60,7 +60,7 @@ def import_airtable(context):
             username,
             dtable_uuid,
             INNER_DTABLE_SERVER_URL,
-            server_url=DTABLE_WEB_SERVICE_URL,
+            dtable_web_service_url=DTABLE_WEB_SERVICE_URL,
             workspace_id=workspace_id,
             repo_id=repo_id
         )
