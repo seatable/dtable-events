@@ -13,26 +13,6 @@ central_conf_dir = os.environ.get('SEAFILE_CENTRAL_CONF_DIR', '')
 yaml_file_path = os.path.join(central_conf_dir, os.environ.get('SEATABLE_CONFIG_NAME', 'seatable_config.yaml'))
 configs = ConfigParser(yaml_file_path, 'dtable-events')
 
-def validate_llm_models(models):
-    if not models or not isinstance(models, list):
-        return []
-    validated_models = []
-
-    for model in models:
-        if not isinstance(model, dict) or model.get('disable', False):
-            continue
-        if model.get('type') in ('proxy', 'other', 'hosted_vllm'):
-            required_fields = ('model', 'url')
-        else:
-            required_fields = ('model', 'key')
-        if not all(field in model for field in required_fields):
-            continue
-        model['label'] = model.get('label', model['model'])
-        validated_models.append(model)
-
-    return validated_models
-
-
 def get_llm_prices(models):
     if not models or not isinstance(models, list):
         return {}
@@ -99,8 +79,7 @@ INNER_SEATABLE_AI_SERVER_URL = configs.get('INNER_SEATABLE_AI_SERVER_URL', defau
 AUTO_RULES_AI_CONTENT_MAX_LENGTH = configs.get('AUTO_RULES_AI_CONTENT_MAX_LENGTH', default=10000)
 
 # AI models and prices
-LLM_MODELS = []
-LLM_MODELS = validate_llm_models(configs.get('LLM_MODELS', LLM_MODELS))
+LLM_MODELS = configs.get('LLM_MODELS', [])
 AI_PRICES = get_llm_prices(LLM_MODELS)
 BAIDU_OCR_TOKENS = configs.get('BAIDU_OCR_TOKENS', default={})
 
