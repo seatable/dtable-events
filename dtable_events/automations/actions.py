@@ -2368,6 +2368,65 @@ class AddRecordToOtherTableAction(BaseAction):
             return
 
 
+class AddRecordToOtherTableAndLinkAction(AddRecordToOtherTableAction):
+
+    def __init__(self, auto_rule, action_type, data, row, dst_table_id, link_id):
+        super().__init__(auto_rule, action_type, data, row, dst_table_id)
+        self.link_id = link_id
+
+    def _get_link_column(self):
+        for col in self.auto_rule.table_info['columns']:
+            if col.get('type') == 'link' and col.get('data', {}).get('link_id') == self.link_id:
+                return col
+        return None
+
+    def do_action(self):
+        table_name = self.get_table_name(self.dst_table_id)
+        if not table_name:
+            raise RuleInvalidException('add-record dst_table_id table not found', 'dst_table_not_found')
+        if not self.link_id:
+            raise RuleInvalidException('add-record-to-other-and-link link_id not found', 'link_id_not_found')
+
+        link_column = self._get_link_column()
+        if not link_column:
+            raise RuleInvalidException('add-record-to-other-and-link link column not found', 'link_column_not_found')
+
+        link_column_data = link_column.get('data') or {}
+        table_id = link_column_data.get('table_id')
+        other_table_id = link_column_data.get('other_table_id')
+        linked_table_id = other_table_id if self.auto_rule.table_id == table_id else table_id
+        if linked_table_id != self.dst_table_id:
+            raise RuleInvalidException('add-record-to-other-and-link linked table not match dst table', 'linked_table_not_match')
+
+        self.init_append_rows()
+        if not self.row_data.get('row'):
+            return
+
+        try:
+            result = self.auto_rule.dtable_server_api.append_row(table_name, self.row_data['row'], apply_default=True)
+            new_row_id = result.get('_id')
+        except Exception as e:
+            auto_rule_logger.error('append row error: %s', e)
+            return
+
+        sql_row = self.auto_rule.get_sql_row()
+        if new_row_id and sql_row:
+            linked_rows = sql_row.get(link_column.get('key'), [])
+            other_rows_ids = [row.get('row_id') for row in linked_rows if row.get('row_id')]
+            if new_row_id not in other_rows_ids:
+                other_rows_ids.append(new_row_id)
+            try:
+                self.auto_rule.dtable_server_api.update_link(
+                    self.link_id,
+                    self.auto_rule.table_id,
+                    self.dst_table_id,
+                    self.data['row_id'],
+                    other_rows_ids
+                )
+            except Exception as e:
+                auto_rule_logger.error('create link error: %s', e)
+
+
 class TriggerWorkflowAction(BaseAction):
 
     VALID_COLUMN_TYPES = [
@@ -4886,6 +4945,10 @@ class AutomationRule:
             if run_condition == PER_UPDATE:
                 return True
             return False
+        elif action_type == 'add_record_to_other_table_and_link':
+            if run_condition == PER_UPDATE:
+                return True
+            return False
         elif action_type == 'trigger_workflow':
             if run_condition in CRON_CONDITIONS and trigger_condition == CONDITION_PERIODICALLY:
                 return True
@@ -5027,6 +5090,12 @@ class AutomationRule:
                     row = action_info.get('row')
                     dst_table_id = action_info.get('dst_table_id')
                     AddRecordToOtherTableAction(self, action_info.get('type'), self.data, row, dst_table_id).do_action()
+
+                elif action_info.get('type') == 'add_record_to_other_table_and_link':
+                    row = action_info.get('row')
+                    dst_table_id = action_info.get('dst_table_id')
+                    link_id = action_info.get('link_id')
+                    AddRecordToOtherTableAndLinkAction(self, action_info.get('type'), self.data, row, dst_table_id, link_id).do_action()
 
                 elif action_info.get('type') == 'trigger_workflow':
                     token = action_info.get('token')
