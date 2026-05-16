@@ -21,15 +21,21 @@ def get_llm_prices(models):
         if not isinstance(model, dict):
             continue
         model_name = model.get('model')
+        if not model_name:
+            continue
+
         price = model.get('price')
-        if not model_name or not isinstance(price, dict):
+        if isinstance(price, (float, int)):
+            prices[model_name] = {
+                'input_tokens': price,
+                'output_tokens': 0
+            }
             continue
-        if 'input_tokens' not in price:
-            continue
-        prices[model_name] = {
-            'input_tokens': price.get('input_tokens', 0),
-            'output_tokens': price.get('output_tokens', 0),
-        }
+        if isinstance(price, dict) and 'input_tokens' in price:
+            prices[model_name] = {
+                'input_tokens': price.get('input_tokens', 0),
+                'output_tokens': price.get('output_tokens', 0),
+            }
     return prices
 
 TIME_ZONE = configs.get('TIME_ZONE', default='UTC')
