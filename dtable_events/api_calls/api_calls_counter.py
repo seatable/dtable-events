@@ -184,10 +184,11 @@ class APICallsCounter(object):
         logger.info('Starting schedule reset api calls exceed status...')
         sched = BlockingScheduler()
         # fire at 0 o'clock in every day of week
-        @sched.scheduled_job('cron', month='*', day='1', day_of_week='*', hour='0', misfire_grace_time=600)
+        @sched.scheduled_job('cron', day_of_week='*', hour='0', misfire_grace_time=600)
         def timed_job():
             session = self._db_session_class()
-            sql = "DELETE FROM `exceed_api_quota_teams`"
+            current_month = datetime.now().strftime('%Y-%m-01')
+            sql = f"DELETE FROM `exceed_api_quota_teams` WHERE `created_at` < '{current_month}'"
             logger.info('Start to reset exceed_api_quota_teams')
             try:
                 session.execute(text(sql))
