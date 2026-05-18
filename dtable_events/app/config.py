@@ -14,6 +14,19 @@ yaml_file_path = os.path.join(central_conf_dir, os.environ.get('SEATABLE_CONFIG_
 configs = ConfigParser(yaml_file_path, 'dtable-events')
 
 def get_llm_prices(models):
+    """
+    Configs support:
+    Type A: for common LLMs
+    - ...
+      price:
+        input_tokens: float # / (M Tokens)
+        output_tokens: float # / (M Tokens)
+
+    Type B: for embeddings or other models
+    EMBEDDING_MODEL:
+      ...
+      price: float # / (M Tokens)
+    """
     if not models or not isinstance(models, list):
         return {}
     prices = {}
