@@ -8,9 +8,9 @@ from dtable_events.app.config import LOG_LEVEL, LOG_DIR, SEATABLE_LOG_TO_STDOUT
 
 
 def _get_log_level(level):
-    if level == 'debug':
+    if level.lower() == 'debug':
         return logging.DEBUG
-    elif level == 'info':
+    elif level.lower() == 'info':
         return logging.INFO
     else:
         return logging.WARNING
