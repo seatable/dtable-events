@@ -13,7 +13,7 @@ from playwright._impl._errors import TimeoutError
 
 from seaserv import seafile_api
 
-from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, INNER_DTABLE_SERVER_URL
+from dtable_events.app.config import DTABLE_WEB_SERVICE_URL, INNER_DTABLE_SERVER_URL, INNER_DTABLE_DB_URL
 from dtable_events.dtable_io.big_data import import_excel_to_db, update_excel_to_db, export_big_data_to_excel, \
     export_app_table_page_to_excel
 from dtable_events.dtable_io.utils import import_archive_from_src_dtable, post_big_data_screen_app_zip_file, \
@@ -36,6 +36,7 @@ from dtable_events.convert_page.utils import get_chrome_data_dir, get_driver, op
 from dtable_events.statistics.db import save_email_sending_records, batch_save_email_sending_records
 from dtable_events.data_sync.data_sync_utils import run_sync_emails
 from dtable_events.utils import is_valid_email, uuid_str_to_36_chars, gen_file_upload_url, uuid_str_to_32_chars
+from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.utils.dtable_server_api import DTableServerAPI, BaseExceedsException
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 from dtable_events.utils.exception import ExcelFormatError
@@ -861,7 +862,12 @@ def send_notification_msg(emails, user_col_key, msg, dtable_uuid, username, tabl
         if not table:
             return
 
-        target_row = dtable_server_api.get_row(table['name'], row_id)
+        sql = f"SELECT * FROM `{table['name']}` WHERE _id='{row_id}'"
+        dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
+        rows = dtable_db_api.query(sql, convert=True, server_only=True)[0]
+        if not rows:
+            return
+        target_row = rows[0]
 
         sending_list = emails
         if user_col_key:
@@ -1173,7 +1179,12 @@ def plugin_email_send_email(context):
     dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL, dtable_web_service_url=DTABLE_WEB_SERVICE_URL,
                                         repo_id=repo_id, workspace_id=workspace_id)
 
-    replied_email_row = dtable_server_api.get_row(email_table_name, email_row_id)
+    sql = f"SELECT * FROM `{email_table_name}` WHERE _id='{email_row_id}'"
+    dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
+    rows = dtable_db_api.query(sql, convert=True, server_only=True)[0]
+    if not rows:
+        return
+    replied_email_row = rows[0]
 
     thread_id = replied_email_row.get('Thread ID')
 

@@ -244,14 +244,15 @@ class BaseContext:
         if not table:
             logger.error('dtable: %s table: %s not found', self.dtable_uuid, table_id)
             return None
+        sql = f"SELECT * FROM `{table['name']}` WHERE _id='{row_id}'"
         try:
-            converted_row = self.dtable_server_api.get_row(table['name'], row_id, convert_link_id=True)
-            if not converted_row:
-                logger.error('dtable: %s table: %s row: %s not found or parse error', self.dtable_uuid, table_id, row_id)
-                return None
+            rows = self.dtable_db_api.query(sql, convert=True, server_only=True)[0]
         except Exception as e:
             logger.error('dtable: %s table: %s row: %s error: %s', self.dtable_uuid, table_id, row_id, e)
             return None
+        if not rows:
+            return None
+        converted_row = rows[0]
         return converted_row
 
     def get_sql_row(self, table_id, row_id):
