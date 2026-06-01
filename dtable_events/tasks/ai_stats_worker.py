@@ -10,7 +10,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from dateutil import relativedelta
 from sqlalchemy import text
 
-from dtable_events.app.config import AI_PRICES, OCR_SERVICE_MODEL_NAME, OCR_SERVICE_PRICE, AI_STATS_ENABLED
+from dtable_events.app.config import AI_PRICES, AI_STATS_ENABLED
 from dtable_events.app.event_redis import RedisClient, redis_cache
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import uuid_str_to_36_chars, uuid_str_to_32_chars
