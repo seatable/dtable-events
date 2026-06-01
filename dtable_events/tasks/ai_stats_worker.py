@@ -36,9 +36,9 @@ class AIStatsWorker(object):
         self._enabled = AI_STATS_ENABLED
 
     def reset_stats(self):
-        self.org_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
-        self.owner_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
-        self.dtable_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
+        self.org_stats = defaultdict(lambda: defaultdict(lambda: {'times': 0, 'input_tokens': 0, 'output_tokens': 0}))
+        self.owner_stats = defaultdict(lambda: defaultdict(lambda: {'times': 0, 'input_tokens': 0, 'output_tokens': 0}))
+        self.dtable_stats = defaultdict(lambda: defaultdict(lambda: {'times': 0, 'input_tokens': 0, 'output_tokens': 0}))
 
     def save_to_memory(self, usage_info, session):
         if not usage_info.get('model'):
