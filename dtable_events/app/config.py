@@ -104,10 +104,16 @@ AI_PRICES = get_llm_prices(LLM_MODELS)
 ## OCR
 OCR_SERVICE_CONFIG = configs.get('OCR', {})
 OCR_SERVICE_MODEL = OCR_SERVICE_CONFIG.get('model', 'baidu-ocr')
-OCR_SERVICE_PRICE = OCR_SERVICE_CONFIG.get('price', 0)
+_ocr_service_price = OCR_SERVICE_CONFIG.get('price')
+if isinstance(_ocr_service_price, dict):
+    _ocr_service_price = _ocr_service_price.get('times', 0)
+elif _ocr_service_price is None:
+    _ocr_service_price = 0
+elif not isinstance(_ocr_service_price, (int, float)):
+    raise ValueError('Invalid ocr service price')
 AI_PRICES.update({
     OCR_SERVICE_MODEL: {
-        'times': OCR_SERVICE_PRICE
+        'times': _ocr_service_price
     }
 })
 
