@@ -56,6 +56,8 @@ class AIStatsWorker(object):
         if 'completion_tokens' in usage:
             usage['output_tokens'] = usage['completion_tokens']
 
+        if not isinstance(usage.get('times'), int):
+            usage['times'] = 0
         if not isinstance(usage.get('input_tokens'), int):
             usage['input_tokens'] = 0
         if not isinstance(usage.get('output_tokens'), int):
