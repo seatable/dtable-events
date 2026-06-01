@@ -99,23 +99,12 @@ AUTO_RULES_AI_CONTENT_MAX_LENGTH = configs.get('AUTO_RULES_AI_CONTENT_MAX_LENGTH
 
 # AI models and prices
 LLM_MODELS = configs.get('LLM_MODELS', [])
-AI_PRICES = get_llm_prices(LLM_MODELS)
 
 ## OCR
 OCR_SERVICE_CONFIG = configs.get('OCR', {})
-OCR_SERVICE_MODEL = OCR_SERVICE_CONFIG.get('model', 'baidu-ocr')
-_ocr_service_price = OCR_SERVICE_CONFIG.get('price')
-if isinstance(_ocr_service_price, dict):
-    _ocr_service_price = _ocr_service_price.get('times', 0)
-elif _ocr_service_price is None:
-    _ocr_service_price = 0
-elif not isinstance(_ocr_service_price, (int, float)):
-    raise ValueError('Invalid ocr service price')
-AI_PRICES.update({
-    OCR_SERVICE_MODEL: {
-        'times': _ocr_service_price
-    }
-})
+
+## AI price
+AI_PRICES = get_llm_prices(LLM_MODELS + [OCR_SERVICE_CONFIG])
 
 # IO server
 ARCHIVE_VIEW_EXPORT_ROW_LIMIT = configs.get('ARCHIVE_VIEW_EXPORT_ROW_LIMIT', default=250000)
