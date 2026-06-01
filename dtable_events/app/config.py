@@ -99,8 +99,12 @@ AUTO_RULES_AI_CONTENT_MAX_LENGTH = configs.get('AUTO_RULES_AI_CONTENT_MAX_LENGTH
 
 # AI models and prices
 LLM_MODELS = configs.get('LLM_MODELS', [])
-AI_PRICES = get_llm_prices(LLM_MODELS)
-BAIDU_OCR_TOKENS = configs.get('BAIDU_OCR_TOKENS', default={})
+
+## OCR
+OCR_SERVICE_CONFIG = configs.get('OCR', {})
+
+## AI price
+AI_PRICES = get_llm_prices(LLM_MODELS + [OCR_SERVICE_CONFIG])
 
 # IO server
 ARCHIVE_VIEW_EXPORT_ROW_LIMIT = configs.get('ARCHIVE_VIEW_EXPORT_ROW_LIMIT', default=250000)

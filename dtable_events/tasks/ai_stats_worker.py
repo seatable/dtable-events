@@ -10,10 +10,10 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from dateutil import relativedelta
 from sqlalchemy import text
 
-from dtable_events.app.config import AI_PRICES, BAIDU_OCR_TOKENS, AI_STATS_ENABLED
+from dtable_events.app.config import AI_PRICES, AI_STATS_ENABLED
 from dtable_events.app.event_redis import RedisClient, redis_cache
 from dtable_events.db import init_db_session_class
-from dtable_events.utils import get_opt_from_conf_or_env, parse_bool, uuid_str_to_36_chars, uuid_str_to_32_chars
+from dtable_events.utils import uuid_str_to_36_chars, uuid_str_to_32_chars
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +46,17 @@ class AIStatsWorker(object):
 
         model = usage_info['model']
         usage = usage_info.get('usage') or {}
+        org_id = usage_info.get('org_id')
 
         if model not in AI_PRICES:
             logger.warning('model %s price not defined', model)
             return
+        
+        try:
+            org_id = int(org_id)
+        except (TypeError, ValueError):
+            org_id = -1
+
 
         if 'prompt_tokens' in usage:
             usage['input_tokens'] = usage['prompt_tokens']
@@ -61,9 +68,6 @@ class AIStatsWorker(object):
         if not isinstance(usage.get('output_tokens'), int):
             usage['output_tokens'] = 0
 
-        if model in BAIDU_OCR_TOKENS:
-            usage['output_tokens'] = BAIDU_OCR_TOKENS[model]
-
         if usage_info.get('assistant_uuid'):
             # for assistant call, set stat object to the assistant owner, i.e., table admin, group admin ...
 
@@ -73,9 +77,9 @@ class AIStatsWorker(object):
             if not owner_info:
                 logger.warning('assistant %s has no owner', assistant_uuid)
                 return
-            if owner_info['org_id'] != -1:
-                self.org_stats[owner_info['org_id']][model]['input_tokens'] += usage.get('input_tokens') or 0
-                self.org_stats[owner_info['org_id']][model]['output_tokens'] += usage.get('output_tokens') or 0
+            if org_id != -1:
+                self.org_stats[org_id][model]['input_tokens'] += usage.get('input_tokens') or 0
+                self.org_stats[org_id][model]['output_tokens'] += usage.get('output_tokens') or 0
             else:
                 self.owner_stats[owner_info['owner_id']][model]['input_tokens'] += usage.get('input_tokens') or 0
                 self.owner_stats[owner_info['owner_id']][model]['output_tokens'] += usage.get('output_tokens') or 0
