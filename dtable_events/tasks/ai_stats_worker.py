@@ -85,9 +85,9 @@ class AIStatsWorker(object):
                 self.owner_stats[owner_info['owner_id']][model]['output_tokens'] += usage.get('output_tokens') or 0
         else:
             # for non-assistant call, set stat obj to common user
-            if usage_info['org_id'] != -1:
-                self.org_stats[usage_info['org_id']][model]['input_tokens'] += usage.get('input_tokens') or 0
-                self.org_stats[usage_info['org_id']][model]['output_tokens'] += usage.get('output_tokens') or 0
+            if org_id != -1:
+                self.org_stats[org_id][model]['input_tokens'] += usage.get('input_tokens') or 0
+                self.org_stats[org_id][model]['output_tokens'] += usage.get('output_tokens') or 0
             else:
                 self.owner_stats[usage_info['username']][model]['input_tokens'] += usage.get('input_tokens') or 0
                 self.owner_stats[usage_info['username']][model]['output_tokens'] += usage.get('output_tokens') or 0
