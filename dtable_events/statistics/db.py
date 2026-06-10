@@ -6,6 +6,7 @@ from datetime import datetime
 from sqlalchemy import func, desc, text, select, insert
 
 from dtable_events.statistics.models import UserActivityStatistics, EmailSendingLog
+from dtable_events.utils import get_user_org_id
 
 logger = logging.getLogger(__name__)
 
@@ -13,9 +14,11 @@ logger = logging.getLogger(__name__)
 def save_user_activity_stat(session, msg):
     username = msg['username']
     timestamp = msg['timestamp']
+    org_id = get_user_org_id(username)
 
     user_time_md5 = md5((username + timestamp).encode('utf-8')).hexdigest()
     msg['user_time_md5'] = user_time_md5
+    msg['org_id'] = org_id
 
     cmd = "REPLACE INTO user_activity_statistics (user_time_md5, username, timestamp, org_id)" \
           "values(:user_time_md5, :username, :timestamp, :org_id)"
