@@ -399,3 +399,15 @@ def get_dtable_owner_org_id(dtable_uuid, db_session):
     value = {'owner': result.owner, 'org_id': result.org_id}
     redis_cache.set(key, json.dumps(value), timeout=6 * 60 * 60)
     return value
+
+def get_user_org_id(username):
+    key = f'user:{username}:org_id'
+    org_id = redis_cache.get(key)
+    if org_id:
+        return org_id
+    orgs = ccnet_api.get_orgs_by_user(username)
+    org_id = -1
+    if orgs:
+        org_id = orgs[0].org_id
+    redis_cache.set(key, org_id, timeout=6 * 60 * 60)
+    return org_id
