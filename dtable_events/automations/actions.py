@@ -4922,8 +4922,6 @@ class AutomationRule:
     def do_actions(self, db_session, with_test=False):
         if with_test:
             auto_rule_logger.info('rule: %s run_condition: %s trigger_condition: %s start, a test run', self.rule_id, self.run_condition, self.trigger.get('condition'))
-        else:
-            auto_rule_logger.info('rule: %s run_condition: %s trigger_condition: %s start', self.rule_id, self.run_condition, self.trigger.get('condition'))
         if (not self.can_do_actions()) and (not with_test):
             auto_rule_logger.info('rule: %s can not do actions', self.rule_id)
             return

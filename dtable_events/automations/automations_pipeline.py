@@ -239,8 +239,9 @@ class AutomationsPipeline(object):
             row_id = automation.data.get('row_id') if isinstance(automation.data, dict) else None
             updated_column_keys = automation.data.get('updated_column_keys') if isinstance(automation.data, dict) else None
             auto_rule_logger.info(
-                'Automation started: rule_id=%s dtable_uuid=%s run_condition=%s row_id=%s updated_column_keys=%s',
+                'Automation started: rule_id=%s rule_name=%s dtable_uuid=%s run_condition=%s row_id=%s updated_column_keys=%s',
                 automation.rule_id,
+                automation.rule_name,
                 automation.dtable_uuid,
                 automation.run_condition,
                 row_id,
@@ -252,17 +253,12 @@ class AutomationsPipeline(object):
                 result = automation.do_actions(db_session)
                 run_time = time.time() - start_time
                 auto_rule_logger.info(
-                    'Automation finished: rule_id=%s rule_name=%s success=%s run_time=%.3fs exceed_limit=%s warnings=%s row_id=%s updated_column_keys=%s is_valid=%s valid_type=%s',
+                    'Automation finished: rule_id=%s success=%s run_time=%.3fs exceed_limit=%s warnings=%s',
                     automation.rule_id,
-                    automation.rule_name,
                     result.success if result else None,
                     run_time,
                     result.is_exceed_system_resource_limit if result else None,
-                    len(result.warnings) if result else 0,
-                    row_id,
-                    updated_column_keys,
-                    result.is_valid if result else None,
-                    result.invalid_type if result else None
+                    len(result.warnings) if result else 0
                 )
                 if result:
                     result.run_time = run_time
