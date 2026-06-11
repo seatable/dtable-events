@@ -252,7 +252,7 @@ class AutomationsPipeline(object):
                 result = automation.do_actions(db_session)
                 run_time = time.time() - start_time
                 auto_rule_logger.info(
-                    'Automation finished: rule_id=%s rule_name=%s success=%s run_time=%.3fs exceed_limit=%s warnings=%s row_id=%s updated_column_keys=%s',
+                    'Automation finished: rule_id=%s rule_name=%s success=%s run_time=%.3fs exceed_limit=%s warnings=%s row_id=%s updated_column_keys=%s is_valid=%s valid_type=%s',
                     automation.rule_id,
                     automation.rule_name,
                     result.success if result else None,
@@ -261,6 +261,8 @@ class AutomationsPipeline(object):
                     len(result.warnings) if result else 0,
                     row_id,
                     updated_column_keys,
+                    result.is_valid if result else None,
+                    result.invalid_type if result else None
                 )
                 if result:
                     result.run_time = run_time
