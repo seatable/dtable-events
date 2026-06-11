@@ -222,10 +222,7 @@ class AutomationsPipeline(object):
                         db_session.close()
                 else:
                     if time.time() - last_pubsub_message_time >= self._pubsub_no_message_timeout:
-                        auto_rule_logger.info(
-                            'No automation events received for %ss, refreshing subscriber',
-                            self._pubsub_no_message_timeout,
-                        )
+                        auto_rule_logger.info('no automation message for %ss', self._pubsub_no_message_timeout)
                         subscriber = self._redis_client.refresh_subscriber(
                             subscriber, self.per_update_channel, 'no message timeout')
                         last_pubsub_message_time = time.time()
