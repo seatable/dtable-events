@@ -66,6 +66,7 @@ class FilterTermModifier(object):
     NUMBER_OF_DAYS_AGO = 'number_of_days_ago'
     NUMBER_OF_DAYS_FROM_NOW = 'number_of_days_from_now'
     EXACT_DATE = 'exact_date'
+    EXACT_DATE_TIME = 'exact_date_time'
     THE_PAST_WEEK = 'the_past_week'
     THE_PAST_MONTH = 'the_past_month'
     THE_PAST_YEAR = 'the_past_year'
