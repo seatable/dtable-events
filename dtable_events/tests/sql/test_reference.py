@@ -268,6 +268,28 @@ TEST_CONDITIONS = [
     {
         "filter_conditions": {
             "filters": [
+                {'column_name': 'Time2d', 'filter_predicate': 'is_on_or_before', 'filter_term': '2021-12-20 14:30', 'filter_term_modifier':'exact_date_time'}
+            ],
+            "filter_predicate": 'And',
+            "sorts":[],
+        },
+        "expected_sql": "SELECT * FROM `Table1` WHERE ((`Time2d` < '2021-12-20 14:31' and `Time2d` is not null)) LIMIT 0, 100",
+        "by_group": False,
+    },
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'Time2d', 'filter_predicate': 'is_on_or_after', 'filter_term': '2021-12-20 14:30', 'filter_term_modifier':'exact_date_time'}
+            ],
+            "filter_predicate": 'And',
+            "sorts":[],
+        },
+        "expected_sql": "SELECT * FROM `Table1` WHERE ((`Time2d` >= '2021-12-20 14:30' and `Time2d` is not null)) LIMIT 0, 100",
+        "by_group": False,
+    },
+    {
+        "filter_conditions": {
+            "filters": [
                 {'column_name': 'Time2d', 'filter_predicate': 'is_within', 'filter_term': '', 'filter_term_modifier':'this_week'}
             ],
             "filter_predicate": 'And',
