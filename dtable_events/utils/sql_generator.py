@@ -885,15 +885,6 @@ class DateOperator(Operator):
     def op_is_before(self):
         if self.is_need_filter_term() and not self.filter_term and self.filter_term != 0:
             return ''
-        if self.filter_term_modifier == FilterTermModifier.EXACT_DATE_TIME:
-            start_date, _ = self._get_exact_date_time_range()
-            if not start_date:
-                return ""
-            formatted_start_date = self._format_filter_date_time(start_date)
-            return "(`%(column_name)s` < '%(start_date)s' and `%(column_name)s` is not null)" % ({
-                "column_name": self.column_name,
-                "start_date": formatted_start_date
-            })
         target_date, _ = self._other_date()
         if not target_date:
             return ""
@@ -911,15 +902,6 @@ class DateOperator(Operator):
     def op_is_after(self):
         if self.is_need_filter_term() and not self.filter_term and self.filter_term != 0:
             return ''
-        if self.filter_term_modifier == FilterTermModifier.EXACT_DATE_TIME:
-            _, end_date = self._get_exact_date_time_range()
-            if not end_date:
-                return ""
-            formatted_end_date = self._format_filter_date_time(end_date)
-            return "(`%(column_name)s` >= '%(end_date)s' and `%(column_name)s` is not null)" % ({
-                "column_name": self.column_name,
-                "end_date": formatted_end_date
-            })
         target_date, _ = self._other_date()
         if not target_date:
             return ""
@@ -935,15 +917,6 @@ class DateOperator(Operator):
     def op_is_on_or_before(self):
         if self.is_need_filter_term() and not self.filter_term and self.filter_term != 0:
             return ''
-        if self.filter_term_modifier == FilterTermModifier.EXACT_DATE_TIME:
-            _, end_date = self._get_exact_date_time_range()
-            if not end_date:
-                return ""
-            formatted_end_date = self._format_filter_date_time(end_date)
-            return "(`%(column_name)s` < '%(end_date)s' and `%(column_name)s` is not null)" % ({
-                "column_name": self.column_name,
-                "end_date": formatted_end_date
-            })
         target_date, _ = self._other_date()
         if not target_date:
             return ""
@@ -960,15 +933,6 @@ class DateOperator(Operator):
     def op_is_on_or_after(self):
         if self.is_need_filter_term() and not self.filter_term and self.filter_term != 0:
             return ''
-        if self.filter_term_modifier == FilterTermModifier.EXACT_DATE_TIME:
-            start_date, _ = self._get_exact_date_time_range()
-            if not start_date:
-                return ""
-            formatted_start_date = self._format_filter_date_time(start_date)
-            return "(`%(column_name)s` >= '%(start_date)s' and `%(column_name)s` is not null)" % ({
-                "column_name": self.column_name,
-                "start_date": formatted_start_date
-            })
         target_date, _ = self._other_date()
         if not target_date:
             return ""
@@ -985,17 +949,6 @@ class DateOperator(Operator):
     def op_is_not(self):
         if self.is_need_filter_term() and not self.filter_term and self.filter_term != 0:
             return ''
-        if self.filter_term_modifier == FilterTermModifier.EXACT_DATE_TIME:
-            start_date, end_date = self._get_exact_date_time_range()
-            if not start_date:
-                return ""
-            formatted_start_date = self._format_filter_date_time(start_date)
-            formatted_end_date = self._format_filter_date_time(end_date)
-            return "(`%(column_name)s` >= '%(end_date)s' or `%(column_name)s` < '%(start_date)s' or `%(column_name)s` is null)" % ({
-                "column_name": self.column_name,
-                "start_date": formatted_start_date,
-                "end_date": formatted_end_date
-            })
         target_date, _ = self._other_date()
         if not target_date:
             return ""
