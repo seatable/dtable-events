@@ -642,13 +642,9 @@ class DateOperator(Operator):
 
     def _parse_exact_date_time(self, filter_term):
         try:
-            date_time = datetime.strptime(filter_term[:16], "%Y-%m-%d %H:%M")
-        except:
-            try:
-                date_time = datetime.strptime(filter_term[:16], "%Y-%m-%dT%H:%M")
-            except:
-                raise DateTimeQueryInvalidError(self.column_name)
-        return date_time.replace(second=0, microsecond=0)
+            return datetime.strptime(filter_term, "%Y-%m-%d %H:%M")
+        except ValueError:
+            raise DateTimeQueryInvalidError(self.column_name)
 
     def _get_exact_date_time_range(self):
         start_date, _ = self._other_date()
@@ -656,11 +652,6 @@ class DateOperator(Operator):
             return None, None
         end_date = start_date + timedelta(minutes=1)
         return start_date, end_date
-
-    def _format_filter_date_time(self, dt):
-        if self.column.get('type') in [ColumnTypes.CTIME, ColumnTypes.MTIME]:
-            return self._format_to_utc_date(dt)
-        return self._format_date_time(dt)
 
     def _other_date(self):
         filter_term_modifier = self.filter_term_modifier
@@ -826,8 +817,7 @@ class DateOperator(Operator):
             FilterTermModifier.NUMBER_OF_DAYS_FROM_NOW,
             FilterTermModifier.THE_NEXT_NUMBERS_OF_DAYS,
             FilterTermModifier.THE_PAST_NUMBERS_OF_DAYS,
-            FilterTermModifier.EXACT_DATE,
-            FilterTermModifier.EXACT_DATE_TIME
+            FilterTermModifier.EXACT_DATE
         ]:
             return True
         return False
@@ -835,12 +825,30 @@ class DateOperator(Operator):
     def op_is(self):
         if self.is_need_filter_term() and not self.filter_term and self.filter_term != 0:
             return ''
+        if self.filter_term_modifier == FilterTermModifier.EXACT_DATE:
+            date, _ = self._other_date()
+            if not date:
+                return ""
+            end_date = date + timedelta(days=1)
+            if self.column.get('type') in [ColumnTypes.CTIME, ColumnTypes.MTIME]:
+                formatted_start_date = self._format_to_utc_date(date)
+                formatted_end_date = self._format_to_utc_date(end_date)
+            else:
+                formatted_start_date = self._format_date(date)
+                formatted_end_date = self._format_date(end_date)
+            return "(`%(column_name)s` >= '%(start_date)s' and `%(column_name)s` < '%(end_date)s')" % ({
+                "column_name": self.column_name,
+                "start_date": formatted_start_date,
+                "end_date": formatted_end_date
+            })
         if self.filter_term_modifier == FilterTermModifier.EXACT_DATE_TIME:
+            if not self.filter_term:
+                return ''
             start_date, end_date = self._get_exact_date_time_range()
             if not start_date:
                 return ""
-            formatted_start_date = self._format_filter_date_time(start_date)
-            formatted_end_date = self._format_filter_date_time(end_date)
+            formatted_start_date = self._format_date_time(start_date)
+            formatted_end_date = self._format_date_time(end_date)
             return "(`%(column_name)s` >= '%(start_date)s' and `%(column_name)s` < '%(end_date)s')" % ({
                 "column_name": self.column_name,
                 "start_date": formatted_start_date,
