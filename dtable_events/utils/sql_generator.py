@@ -630,11 +630,28 @@ class DateOperator(Operator):
         if dt:
             return dt.strftime("%Y-%m-%d")
 
+    def _format_date_time(self, dt):
+        if dt:
+            return dt.strftime("%Y-%m-%d %H:%M")
+
     def _format_to_utc_date(self, dt):
         if dt:
             end_date = dt.astimezone(pytz.UTC)
 
             return end_date.strftime("%Y-%m-%dT%H:%M:%S.%f+00:00")
+
+    def _parse_exact_date_time(self, filter_term):
+        try:
+            return datetime.strptime(filter_term, "%Y-%m-%d %H:%M")
+        except ValueError:
+            raise DateTimeQueryInvalidError(self.column_name)
+
+    def _get_exact_date_time_range(self):
+        start_date, _ = self._other_date()
+        if not start_date:
+            return None, None
+        end_date = start_date + timedelta(minutes=1)
+        return start_date, end_date
 
     def _other_date(self):
         filter_term_modifier = self.filter_term_modifier
@@ -702,6 +719,9 @@ class DateOperator(Operator):
             except:
                 logger.debug("filter_term is invalid, please assign an date value to filter_term, such as YYYY-MM-DD")
                 return None, None
+
+        if filter_term_modifier == FilterTermModifier.EXACT_DATE_TIME:
+            return self._parse_exact_date_time(filter_term), None
 
         if filter_term_modifier == FilterTermModifier.THE_PAST_WEEK:
             week_day = today.isoweekday()  # 1-7
@@ -805,6 +825,17 @@ class DateOperator(Operator):
     def op_is(self):
         if self.is_need_filter_term() and not self.filter_term and self.filter_term != 0:
             return ''
+        if self.filter_term_modifier == FilterTermModifier.EXACT_DATE_TIME and self.column.get('type') not in [ColumnTypes.CTIME, ColumnTypes.MTIME]:
+            start_date, end_date = self._get_exact_date_time_range()
+            if not start_date:
+                return ""
+            formatted_start_date = self._format_date_time(start_date)
+            formatted_end_date = self._format_date_time(end_date)
+            return "(`%(column_name)s` >= '%(start_date)s' and `%(column_name)s` < '%(end_date)s')" % ({
+                "column_name": self.column_name,
+                "start_date": formatted_start_date,
+                "end_date": formatted_end_date
+            })
         date, _ = self._other_date()
         if not date:
             return ""
