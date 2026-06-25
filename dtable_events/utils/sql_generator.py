@@ -825,21 +825,7 @@ class DateOperator(Operator):
     def op_is(self):
         if self.is_need_filter_term() and not self.filter_term and self.filter_term != 0:
             return ''
-        if self.filter_term_modifier == FilterTermModifier.EXACT_DATE and self.column.get('type') not in [ColumnTypes.CTIME, ColumnTypes.MTIME]:
-            date, _ = self._other_date()
-            if not date:
-                return ""
-            end_date = date + timedelta(days=1)
-            formatted_start_date = self._format_date(date)
-            formatted_end_date = self._format_date(end_date)
-            return "(`%(column_name)s` >= '%(start_date)s' and `%(column_name)s` < '%(end_date)s')" % ({
-                "column_name": self.column_name,
-                "start_date": formatted_start_date,
-                "end_date": formatted_end_date
-            })
-        if self.filter_term_modifier == FilterTermModifier.EXACT_DATE_TIME:
-            if not self.filter_term:
-                return ''
+        if self.filter_term_modifier == FilterTermModifier.EXACT_DATE_TIME and self.column.get('type') not in [ColumnTypes.CTIME, ColumnTypes.MTIME]:
             start_date, end_date = self._get_exact_date_time_range()
             if not start_date:
                 return ""
