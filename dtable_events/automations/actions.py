@@ -4178,7 +4178,7 @@ class GoogleCalendar(BaseAction):
         event_id = self._get_field_value_by_column_key(event_id_key)
         if not event_id:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar update event failed: event ID not found.')
-            return
+            raise ValueError('GoogleCalendar update event failed: event ID not found')
         
         try:
             event_data = self._prepare_event_data()
@@ -4194,11 +4194,13 @@ class GoogleCalendar(BaseAction):
             
             if result.get('error_msg'):
                 auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar update event failed: {result["error_msg"]}')
+                raise RuntimeError(result['error_msg'])
             else:
                 auto_rule_logger.info(f'rule {self.auto_rule.rule_id} GoogleCalendar update event success')
                 
         except Exception as e:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar update event failed with error: {e}')
+            raise
 
     def create_event(self):
         try:
@@ -4212,12 +4214,43 @@ class GoogleCalendar(BaseAction):
             
             if result.get('error_msg'):
                 auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar create event failed: {result["error_msg"]}')
+                raise RuntimeError(result['error_msg'])
             elif result.get('id'):
                 event_id = result.get('id')
                 self._save_event_id_to_column(event_id)
+                auto_rule_logger.info(f'rule {self.auto_rule.rule_id} GoogleCalendar create event success')
                 
         except Exception as e:
             auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar create event failed with error: {e}')
+            raise
+
+    def delete_event(self):
+        event_id_key = self.config.get('event_id_key')
+        event_id = self._get_field_value_by_column_key(event_id_key)
+        if not event_id:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar delete event failed: event ID not found.')
+            raise ValueError('GoogleCalendar delete event failed: event ID not found')
+
+        try:
+            event_data = {
+                'calendar_id': self.calendar_id,
+                'event_id': event_id,
+                'sendUpdates': self.config.get('sendUpdates') or 'all',
+            }
+
+            manager = CalendarManager(self.account_id, db_session=self.auto_rule.db_session)
+            result = manager.delete_event(event_data)
+
+            if result.get('error_msg'):
+                auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar delete event failed: {result["error_msg"]}')
+                raise RuntimeError(result['error_msg'])
+            else:
+                self._save_event_id_to_column('')
+                auto_rule_logger.info(f'rule {self.auto_rule.rule_id} GoogleCalendar delete event success')
+
+        except Exception as e:
+            auto_rule_logger.error(f'rule {self.auto_rule.rule_id} GoogleCalendar delete event failed with error: {e}')
+            raise
     
     def _prepare_event_data(self):
         try:
@@ -4235,17 +4268,12 @@ class GoogleCalendar(BaseAction):
                 'description': self._get_field_value('event_description'),
                 'location': self._get_field_value('location'),
                 'attendees': self._format_attendees(self.config.get('attendees', [])),
+                'sendUpdates':self.config.get('sendUpdates') or 'all',
+                'guestsCanInviteOthers': self.config.get('guests_can_invite'),
+                'guestsCanModify': self.config.get('guests_can_modify'),
+                'guestsCanSeeOtherGuests': self.config.get('guests_can_see_list'),
             }
 
-            if not self.config.get('dont_send_notifications'):
-                event_data['sendUpdates'] = 'all'
-            if self.config.get('guests_can_invite') is not None:
-                event_data['guestsCanInviteOthers'] = self.config.get('guests_can_invite')
-            if self.config.get('guests_can_modify') is not None:
-                event_data['guestsCanModify'] = self.config.get('guests_can_modify')
-            if self.config.get('guests_can_see_list') is not None:
-                event_data['guestsCanSeeOtherGuests'] = self.config.get('guests_can_see_list')
-            
             if self.config.get('video_conferencing'):
                 event_data['conferenceDataVersion'] = 1
                 event_data['conferenceData'] = {
@@ -4375,18 +4403,25 @@ class GoogleCalendar(BaseAction):
             return False
 
         event_id_key = self.config.get('event_id_key')
+        if not event_id_key:
+            return False
+
+        event_id_column = self.col_key_dict.get(event_id_key)
+        if not event_id_column or event_id_column.get('type') != ColumnTypes.TEXT:
+            return False
+
+        if self.function_type == 'delete_event':
+            return True
+
         start_date_column_key = self.config.get('start_date_column_key')
         end_date_column_key = self.config.get('end_date_column_key')
         
-        if not event_id_key or not start_date_column_key or not end_date_column_key:
+        if not start_date_column_key or not end_date_column_key:
             return False
         
-        event_id_column = self.col_key_dict.get(event_id_key)
         start_date_column = self.col_key_dict.get(start_date_column_key)
         end_date_column = self.col_key_dict.get(end_date_column_key)
         
-        if not event_id_column or event_id_column.get('type') != ColumnTypes.TEXT:
-            return False
         if not start_date_column or start_date_column.get('type') != ColumnTypes.DATE:
             return False
         if not end_date_column or end_date_column.get('type') != ColumnTypes.DATE:
@@ -4405,8 +4440,10 @@ class GoogleCalendar(BaseAction):
             self.create_event()
         elif self.function_type == 'update_event':
             self.update_event()
+        elif self.function_type == 'delete_event':
+            self.delete_event()
         else:
-            auto_rule_logger.warning('google calendar action %s not supported', self.action_type)
+            auto_rule_logger.warning('google calendar function %s not supported', self.function_type)
             return
 
 
@@ -5149,7 +5186,7 @@ class AutomationRule:
                     config =  {
                         'account_id': action_info.get('account_id'),
                         'calendar_id': action_info.get('calendar_id'),
-                        'dont_send_notifications': action_info.get('dont_send_notifications', False),
+                        'sendUpdates': action_info.get('sendUpdates') or 'all',
                         'start_date_column_key': action_info.get('start_date_column_key'),
                         'end_date_column_key': action_info.get('end_date_column_key'),
                         'event_description': action_info.get('event_description', ''),

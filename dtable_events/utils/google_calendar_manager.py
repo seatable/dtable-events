@@ -97,7 +97,7 @@ class _ThirdpartyAPICalendarBase(ABC):
             elif method == 'PUT':
                 response = requests.put(url, headers=headers, json=data, timeout=30)
             elif method == 'DELETE':
-                response = requests.delete(url, headers=headers, timeout=30)
+                response = requests.delete(url, headers=headers, params=params, timeout=30)
             else:
                 raise ValueError(f"Unsupported HTTP method: {method}")
             
@@ -114,7 +114,7 @@ class _ThirdpartyAPICalendarBase(ABC):
                 elif method == 'PUT':
                     response = requests.put(url, headers=headers, json=data, timeout=30)
                 elif method == 'DELETE':
-                    response = requests.delete(url, headers=headers, timeout=30)
+                    response = requests.delete(url, headers=headers, params=params, timeout=30)
             
             return response
             
@@ -188,13 +188,17 @@ class GoogleCalendarAPI(_ThirdpartyAPICalendarBase):
     def delete_event(self, event_data):
         calendar_id = event_data.get('calendar_id', 'primary')
         event_id = event_data.get('event_id')
+        params = {}
+        sendUpdates = event_data.get('sendUpdates')
+        if sendUpdates:
+            params['sendUpdates'] = sendUpdates
         
         if not event_id:
             raise ValueError("Event ID is required for deleting")
         
         url = f"{self.base_url}/calendars/{parse.quote(calendar_id)}/events/{event_id}"
         
-        response = self._make_api_request('DELETE', url)
+        response = self._make_api_request('DELETE', url, params=params)
         
         try:
             _check_and_raise_error(response)
