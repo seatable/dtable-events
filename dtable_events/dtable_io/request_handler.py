@@ -737,25 +737,17 @@ def add_run_auto_rule_task():
     if not is_valid:
         return make_response((error, 403))
 
-    if message_task_manager.tasks_queue.full():
+    if task_manager.tasks_queue.full():
         return make_response(('dtable io server busy.', 400))
 
     data = request.form
     if not isinstance(data, dict):
         return make_response(('Bad request', 400))
 
-    creator = data.get('creator')
-    owner = data.get('owner')
-    org_id = data.get('org_id')
-    run_condition = data.get('run_condition')
-    trigger = data.get('trigger')
-    dtable_uuid = data.get('dtable_uuid')
-    actions = data.get('actions')
     automation_rule_id = data.get('automation_rule_id')
 
     try:
-        task_id = task_manager.add_run_auto_rule_task(
-            automation_rule_id, creator, owner, org_id, dtable_uuid, run_condition, trigger, actions)
+        task_id = task_manager.add_run_auto_rule_task(automation_rule_id)
     except Exception as e:
         dtable_io_logger.error(e)
         return make_response((e, 500))

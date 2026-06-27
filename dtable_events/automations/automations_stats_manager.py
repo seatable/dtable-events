@@ -10,7 +10,7 @@ from dtable_events.utils import get_dtable_admins
 
 from dtable_events.app.config import SEATABLE_MYSQL_DB_CCNET_DB_NAME, INNER_DTABLE_WEB_SERVICE_URL, ORG_MEMBER_QUOTA_DEFAULT
 from dtable_events.app.event_redis import redis_cache
-from dtable_events.automations.actions import AutomationResult
+from dtable_events.automations.entities import AutomationResult
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 
 

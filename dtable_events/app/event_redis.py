@@ -99,6 +99,15 @@ class RedisClient(object):
             self.reconnect()
             return self._redis.publish(channel_name, message)
 
+    def lpush(self, key, value):
+        return self._redis.lpush(key, value)
+
+    def rpop(self, key):
+        return self._redis.rpop(key)
+
+    def llen(self, key):
+        return self._redis.llen(key)
+
 
 class RedisCache(object):
     def __init__(self):
