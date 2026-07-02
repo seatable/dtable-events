@@ -7,6 +7,7 @@ import json
 
 import requests
 from datetime import datetime
+from copy import deepcopy
 from sqlalchemy import text
 from playwright.async_api import async_playwright
 from playwright._impl._errors import TimeoutError
@@ -965,10 +966,35 @@ def convert_document_to_pdf(dtable_uuid, doc_uuid, row_id, username):
         dtable_io_logger.exception('dtable: %s plugin: document doc_uuid: %s row: %s error: %s', dtable_uuid, doc_uuid, row_id, e)
 
 
+def _merge_view_rows_with_db_rows(view_rows, db_row_map):
+    def merge_node(node):
+        if not isinstance(node, dict):
+            return node
+
+        row_id = node.get('_id')
+        db_row = db_row_map.get(row_id)
+        # Keep the view structure from dtable-server, but always prefer the
+        # actual row values returned by dtable-db for leaf rows.
+        merged_row = deepcopy(db_row if db_row else node)
+
+        if isinstance(merged_row.get('rows'), list):
+            merged_row['rows'] = [merge_node(row) for row in merged_row['rows']]
+        if isinstance(merged_row.get('subgroups'), list):
+            merged_row['subgroups'] = [merge_node(group) for group in merged_row['subgroups']]
+        return merged_row
+
+    merged_rows = []
+    for row in view_rows or []:
+        merged_rows.append(merge_node(row))
+    return merged_rows
+
+
 def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image=False):
-    from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_view_rows_from_dtable_server
+    from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_view_rows_from_dtable_server, \
+        get_export_view_rows_from_dtable_db
     from dtable_events.dtable_io.excel import write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR
     from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, escape_sheet_name
+    from dtable_events.utils.dtable_db_api import DTableDBAPI
     import openpyxl
 
     target_dir = TEMP_EXPORT_VIEW_DIR + dtable_uuid
@@ -1037,9 +1063,19 @@ def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, u
     ws = wb.create_sheet(sheet_name)
 
     try:
-        dtable_rows = get_view_rows_from_dtable_server(dtable_uuid, table_name, view_name, username, id_in_org, user_department_ids_map, permission)
+        view_rows = get_view_rows_from_dtable_server(dtable_uuid, table_name, view_name, username, id_in_org, user_department_ids_map, permission)
     except BaseExceedsException as e:
         raise Exception(e.error_msg)
+
+    dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
+    try:
+        db_rows = get_export_view_rows_from_dtable_db(dtable_db_api, table_id=table_id, view_id=view_id)
+    except Exception as e:
+        dtable_io_logger.error('get db rows. ERROR: {}'.format(e))
+        return
+
+    db_row_map = {row.get('_id'): row for row in db_rows if row.get('_id')}
+    dtable_rows = _merge_view_rows_with_db_rows(view_rows, db_row_map)
 
     column_name_to_column = {col.get('name'): col for col in cols}
     is_group_view = bool(target_view.get('groupbys'))
@@ -1062,9 +1098,10 @@ def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, u
 
 
 def convert_table_to_excel(dtable_uuid, table_id, username, name, repo_id, is_support_image=False):
-    from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_rows_from_dtable_server
+    from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_export_table_rows_from_dtable_db
     from dtable_events.dtable_io.excel import write_xls_with_type, IMAGE_TMP_DIR
     from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, escape_sheet_name
+    from dtable_events.utils.dtable_db_api import DTableDBAPI
     import openpyxl
 
     target_dir = '/tmp/dtable-io/export-table-to-excel/' + dtable_uuid
@@ -1101,10 +1138,12 @@ def convert_table_to_excel(dtable_uuid, table_id, username, name, repo_id, is_su
     if header_settings:
         header_height = header_settings.get('header_height', 'default')
 
+    dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
     try:
-        result_rows = get_rows_from_dtable_server(username, dtable_uuid, table_name)
-    except BaseExceedsException as e:
-        raise Exception(e.error_msg)
+        result_rows = get_export_table_rows_from_dtable_db(dtable_db_api, table_name)
+    except Exception as e:
+        dtable_io_logger.error('get db rows. ERROR: {}'.format(e))
+        return
     column_name_to_column = {col.get('name'): col for col in cols}
 
     images_target_dir = os.path.join(IMAGE_TMP_DIR, dtable_uuid, str(uuid.uuid4()))

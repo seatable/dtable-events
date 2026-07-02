@@ -1187,6 +1187,7 @@ def parse_link_formula(cell_data, email2nickname):
     try:
         # collaborator
         if isinstance(cell_data, list) \
+                and cell_data \
                 and isinstance(cell_data[0], str) \
                 and VIRTUAL_ID_EMAIL_DOMAIN in cell_data[0]:
             nickname_list = []
@@ -1206,6 +1207,126 @@ def parse_link_formula(cell_data, email2nickname):
     except Exception as e:
         dtable_io_logger.warning(e)
         return cell_data2str(cell_data)
+
+
+def _extract_display_value(item):
+    if isinstance(item, dict):
+        if 'display_value' in item:
+            return item.get('display_value')
+        if 'name' in item:
+            return item.get('name')
+    return item
+
+
+def _format_datetime_with_pattern(dt, date_format):
+    year = dt.year
+    month = dt.month
+    day = dt.day
+    hour = dt.hour
+    minute = dt.minute
+    second = dt.second
+
+    if date_format == 'DD/MM/YYYY':
+        return f'{day:02d}/{month:02d}/{year:04d}'
+    if date_format == 'D/M/YYYY':
+        return f'{day}/{month}/{year:04d}'
+    if date_format == 'DD/MM/YYYY HH:mm':
+        return f'{day:02d}/{month:02d}/{year:04d} {hour:02d}:{minute:02d}'
+    if date_format == 'D/M/YYYY HH:mm':
+        return f'{day}/{month}/{year:04d} {hour:02d}:{minute:02d}'
+    if date_format == 'M/D/YYYY':
+        return f'{month}/{day}/{year:04d}'
+    if date_format == 'M/D/YYYY HH:mm':
+        return f'{month}/{day}/{year:04d} {hour:02d}:{minute:02d}'
+    if date_format == 'YYYY-MM-DD HH:mm':
+        return f'{year:04d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}'
+    if date_format == 'YYYY-MM-DD HH:mm:ss':
+        return f'{year:04d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d}'
+    if date_format == 'DD.MM.YYYY':
+        return f'{day:02d}.{month:02d}.{year:04d}'
+    if date_format == 'DD.MM.YYYY HH:mm':
+        return f'{day:02d}.{month:02d}.{year:04d} {hour:02d}:{minute:02d}'
+    return f'{year:04d}-{month:02d}-{day:02d}'
+
+
+def _format_date_string(cell_value, date_format='YYYY-MM-DD'):
+    if not cell_value:
+        return ''
+    try:
+        dt = parser.isoparse(cell_value) if isinstance(cell_value, str) else cell_value
+    except Exception:
+        try:
+            dt = parser.parse(cell_data2str(cell_value))
+        except Exception:
+            return cell_data2str(cell_value)
+    return _format_datetime_with_pattern(dt, date_format)
+
+
+def _format_formula_array_date_value(cell_value, date_format):
+    if not cell_value:
+        return ''
+    normalized_format = date_format or ''
+    if 'HH:mm' in normalized_format:
+        return _format_date_string(cell_value, 'YYYY-MM-DD HH:mm')
+    return _format_date_string(cell_value, 'DD/MM/YYYY')
+
+
+def _get_column_data(column):
+    return column.get('data') if isinstance(column, dict) else {}
+
+
+def _get_column_result_type(column):
+    return _get_column_data(column).get('result_type')
+
+
+def _get_column_array_type(column):
+    return _get_column_data(column).get('array_type')
+
+
+def _get_column_array_data(column):
+    return _get_column_data(column).get('array_data') or {}
+
+
+def _normalize_export_item_value(item):
+    return _extract_display_value(item)
+
+
+def _format_array_item_value(item, email2nickname, array_type, array_data):
+    item_value = _normalize_export_item_value(item)
+    if item_value is None or item_value == '':
+        return ''
+
+    if array_type == ColumnTypes.SINGLE_SELECT:
+        options = array_data.get('options') or []
+        id2name = {op.get('id'): op.get('name') for op in options}
+        return id2name.get(item_value, item_value)
+    if array_type in (ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER):
+        return email2nickname.get(cell_data2str(item_value), '')
+    if array_type in (ColumnTypes.CTIME, ColumnTypes.MTIME):
+        return convert_time_to_utc_str(cell_data2str(item_value))
+    if array_type == ColumnTypes.DATE:
+        return _format_formula_array_date_value(cell_data2str(item_value), array_data.get('format', 'YYYY-MM-DD'))
+    if array_type == ColumnTypes.GEOLOCATION:
+        return parse_geolocation(item_value)
+    if array_type == ColumnTypes.LINK_FORMULA:
+        return parse_link_formula(item_value, email2nickname)
+    return cell_data2str(item_value)
+
+
+def _get_formula_linked_array_display_value(column, cell_value, email2nickname):
+    data = _get_column_data(column)
+    array_type = data.get('array_type')
+    array_data = data.get('array_data') or {}
+
+    if not isinstance(cell_value, list):
+        return parse_link_formula(cell_value, email2nickname)
+
+    values = []
+    for item in cell_value:
+        formatted = _format_array_item_value(item, email2nickname, array_type, array_data)
+        if formatted != '':
+            values.append(formatted)
+    return ', '.join(values)
 
 
 def cell_data2str(cell_data):
@@ -1420,7 +1541,7 @@ def parse_link(column, cell_data, email2nickname, is_big_data_view):
     if isinstance(cell_data, list):
         if column.get('data').get('array_type') == ColumnTypes.SINGLE_SELECT:
             if is_big_data_view:
-                return ', '.join(cell_data)
+                return ', '.join([cell_data2str(cell) for cell in cell_data])
             else:
                 if not column.get('data'):
                     options = []
@@ -1431,11 +1552,27 @@ def parse_link(column, cell_data, email2nickname, is_big_data_view):
                 id2name = {op.get('id'): op.get('name') for op in options}
                 return ', '.join([select_option_to_name(id2name, cell) for cell in cell_data])
         elif column.get('data').get('array_type') in (ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER):
-            return ', '.join([email_to_nickname(email2nickname, cell) for cell in cell_data])
+            return ', '.join([
+                email_to_nickname(email2nickname, cell) if isinstance(cell, dict)
+                else email2nickname.get(cell_data2str(cell), '')
+                for cell in cell_data
+            ])
         elif column.get('data').get('array_type') in (ColumnTypes.CTIME, ColumnTypes.MTIME):
-            return ', '.join([convert_time_to_utc_str(cell.get('display_value')) if cell.get('display_value') else '' for cell in cell_data])
+            return ', '.join([
+                convert_time_to_utc_str(cell.get('display_value')) if isinstance(cell, dict) and cell.get('display_value') else convert_time_to_utc_str(cell_data2str(cell))
+                for cell in cell_data
+            ])
+        elif column.get('data').get('array_type') == ColumnTypes.DATE:
+            date_format = column.get('data').get('array_data', {}).get('format', 'YYYY-MM-DD')
+            return ', '.join([
+                _format_formula_array_date_value(_extract_display_value(cell), date_format)
+                for cell in cell_data
+            ])
         # display_value may be array
-        return ', '.join([cell_data2str(cell.get('display_value')) if cell.get('display_value') else '' for cell in cell_data])
+        return ', '.join([
+            cell_data2str(cell.get('display_value')) if isinstance(cell, dict) and cell.get('display_value') else cell_data2str(cell)
+            for cell in cell_data
+        ])
     else:
         return str(cell_data)
 
@@ -1496,6 +1633,40 @@ def parse_dtable_long_text(cell_value):
     if cell_value.find('\n\n') == -1:
         return cell_value
     return parse_dtable_long_text(cell_value.replace('\n\n', '\n'))
+
+
+def convert_export_cell_value(column, cell_value, email2nickname, is_big_data_view=False):
+    col_type = column.get('type')
+    if col_type == ColumnTypes.GEOLOCATION:
+        return parse_geolocation(cell_value)
+    if col_type in (ColumnTypes.FORMULA, ColumnTypes.LINK_FORMULA) and _get_column_result_type(column) == FormulaResultType.ARRAY:
+        return _get_formula_linked_array_display_value(column, cell_value, email2nickname)
+    if col_type == ColumnTypes.LINK_FORMULA:
+        return parse_link_formula(cell_value, email2nickname)
+    if col_type == ColumnTypes.MULTIPLE_SELECT:
+        return parse_multiple_select_formula(cell_value)
+    if col_type == ColumnTypes.LINK:
+        return parse_link(column, cell_value, email2nickname, is_big_data_view)
+    if col_type == ColumnTypes.FORMULA:
+        result_type = _get_column_result_type(column)
+        if result_type == FormulaResultType.DATE:
+            return _format_date_string(cell_data2str(cell_value), column.get('data', {}).get('format', 'YYYY-MM-DD'))
+        if result_type == FormulaResultType.STRING:
+            return cell_data2str(cell_value)
+    if col_type == ColumnTypes.LONG_TEXT:
+        cell_value = parse_dtable_long_text(cell_value)
+        return cell_value.strip()
+    if col_type == ColumnTypes.DURATION:
+        return format_duration(cell_value, _get_column_data(column))
+    if col_type == ColumnTypes.DATE:
+        return _format_date_string(cell_data2str(cell_value), _get_column_data(column).get('format', 'YYYY-MM-DD'))
+    if col_type in (ColumnTypes.CTIME, ColumnTypes.MTIME):
+        return convert_time_to_utc_str(cell_data2str(cell_value))
+    if col_type == ColumnTypes.CREATOR or col_type == ColumnTypes.LAST_MODIFIER:
+        return email2nickname.get(cell_data2str(cell_value), '')
+    if col_type == ColumnTypes.COLLABORATOR and isinstance(cell_value, list):
+        return ', '.join([email2nickname.get(cell_data2str(user), '') for user in cell_value if email2nickname.get(cell_data2str(user), '')])
+    return cell_data2str(cell_value)
 
 
 def get_file_download_url(file_url, dtable_uuid, repo_id):
@@ -1684,8 +1855,105 @@ def handle_grouped_row(row, ws, cols_without_hidden, column_name_to_column, sub_
     return cell_list
 
 
-def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id, image_param, cols_without_hidden, row_height, is_big_data_view=False):
+def _build_empty_excel_cell(ws):
     from openpyxl.cell import WriteOnlyCell
+    return WriteOnlyCell(ws, value=None)
+
+
+def _build_number_excel_cell(ws, cell_value, column):
+    from openpyxl.cell import WriteOnlyCell
+    try:
+        if is_int_str(cell_value):
+            c = WriteOnlyCell(ws, value=int(cell_value))
+        else:
+            c = WriteOnlyCell(ws, value=float(cell_value))
+    except Exception:
+        return WriteOnlyCell(ws, value=None)
+
+    c.number_format = parse_number_format(column.get('data'), cell_value)
+    return c
+
+
+def _build_date_excel_cell(ws, cell_value, column):
+    from openpyxl.cell import WriteOnlyCell
+
+    c = WriteOnlyCell(ws, value=format_time(cell_value))
+    if column.get('data'):
+        c.number_format = column.get('data').get('format', '')
+    else:
+        c.number_format = 'YYYY-MM-DD'
+    return c
+
+
+def _build_formula_excel_cell(ws, cell_value, column, email2nickname, is_big_data_view):
+    from openpyxl.cell import WriteOnlyCell
+
+    result_type = column.get('data', {}).get('result_type')
+    if result_type == FormulaResultType.NUMBER:
+        formula_value, number_format = parse_formula_number(cell_value, column.get('data'), is_big_data_view)
+        c = WriteOnlyCell(ws, value=formula_value)
+        c.number_format = number_format
+        return c
+
+    if result_type == FormulaResultType.DATE:
+        c = WriteOnlyCell(ws, value=convert_export_cell_value(column, cell_value, email2nickname, is_big_data_view))
+        c.number_format = column.get('data').get('format', 'YYYY-MM-DD')
+        return c
+
+    if result_type == FormulaResultType.ARRAY:
+        return WriteOnlyCell(ws, value=convert_export_cell_value(column, cell_value, email2nickname, is_big_data_view))
+
+    return WriteOnlyCell(ws, value=convert_export_cell_value(column, cell_value, email2nickname, is_big_data_view))
+
+
+def _build_person_excel_cell(ws, cell_value, email2nickname, column, unknown_user_set, unknown_cell_list, col_type):
+    from openpyxl.cell import WriteOnlyCell
+
+    if col_type == ColumnTypes.COLLABORATOR:
+        nickname_list = []
+        collaborator_email_list = []
+        for user in cell_value:
+            nickname = email2nickname.get(user, '')
+            if not nickname:
+                unknown_user_set.add(user)
+                collaborator_email_list.append(user)
+            else:
+                nickname_list.append(nickname)
+        c = WriteOnlyCell(ws, value=', '.join(nickname_list))
+        if collaborator_email_list:
+            unknown_cell_list.append((c, (nickname_list, collaborator_email_list), col_type))
+        return c
+
+    user_value = cell_data2str(cell_value)
+    nickname = email2nickname.get(user_value, '')
+    c = WriteOnlyCell(ws, value=nickname)
+    if not nickname:
+        unknown_user_set.add(user_value)
+        unknown_cell_list.append((c, user_value, col_type))
+    return c
+
+
+def _build_image_excel_cell(ws, cell_value, row_num, dtable_uuid, repo_id, image_param, column, col_num, row_height):
+    from openpyxl.cell import WriteOnlyCell
+
+    c = WriteOnlyCell(ws)
+    image_num = image_param.get('num')
+    images_target_dir = image_param.get('images_target_dir')
+    if image_num < EXPORT_IMAGE_LIMIT:
+        num = add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, image_num,
+                                 images_target_dir, column, row_height)
+        image_param['num'] = num
+    return c
+
+
+def _build_default_excel_cell(ws, column, cell_value, email2nickname, is_big_data_view):
+    from openpyxl.cell import WriteOnlyCell
+
+    converted_value = convert_export_cell_value(column, cell_value, email2nickname, is_big_data_view)
+    return WriteOnlyCell(ws, value=ILLEGAL_CHARACTERS_RE.sub('', converted_value))
+
+
+def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id, image_param, cols_without_hidden, row_height, is_big_data_view=False):
     cell_list = []
     col_num = 0
     for column in cols_without_hidden:
@@ -1694,90 +1962,30 @@ def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_
         cell_value = row.get(col_name)
 
         if not cell_value and not isinstance(cell_value, int) and not isinstance(cell_value, float):
-            c = WriteOnlyCell(ws, value=None)
-
-        # excel format see
-        # https://support.office.com/en-us/article/Number-format-codes-5026bbd6-04bc-48cd-bf33-80f18b4eae68
+            c = _build_empty_excel_cell(ws)
         elif col_type == ColumnTypes.NUMBER:
-            # if value cannot convert to float or int, just pass, e.g. empty srt ''
-            try:
-                if is_int_str(cell_value):
-                    c = WriteOnlyCell(ws, value=int(cell_value))
-                else:
-                    c = WriteOnlyCell(ws, value=float(cell_value))
-            except Exception as e:
-                c = WriteOnlyCell(ws, value=None)
-            else:
-                c.number_format = parse_number_format(column.get('data'), cell_value)
+            c = _build_number_excel_cell(ws, cell_value, column)
         elif col_type == ColumnTypes.DATE:
-            c = WriteOnlyCell(ws, value=format_time(cell_value))
-            if column.get('data'):
-                c.number_format = column.get('data').get('format', '')
-            else:
-                c.number_format = 'YYYY-MM-DD'
+            c = _build_date_excel_cell(ws, cell_value, column)
         elif col_type in (ColumnTypes.CTIME, ColumnTypes.MTIME):
-            c = WriteOnlyCell(ws, value=format_time(cell_value))
+            c = _build_date_excel_cell(ws, cell_value, {'data': {'format': 'YYYY-MM-DD HH:mm:ss'}})
         elif col_type == ColumnTypes.DURATION:
+            from openpyxl.cell import WriteOnlyCell
             c = WriteOnlyCell(ws, value=format_duration(cell_value, column.get('data')))
         elif col_type == ColumnTypes.COLLABORATOR:
-            nickname_list = []
-            collaborator_email_list = []
-            for user in cell_value:
-                if not email2nickname.get(user, ''):
-                    unknown_user_set.add(user)
-                    collaborator_email_list.append(user)
-                else:
-                    nickname_list.append(email2nickname.get(user, ''))
-            nicknames = ', '.join(nickname_list)
-            c = WriteOnlyCell(ws, value=nicknames)
-            if collaborator_email_list:
-                unknown_cell_list.append((c, (nickname_list, collaborator_email_list), col_type))
-            c.value = ', '.join(nickname_list)
+            c = _build_person_excel_cell(ws, cell_value, email2nickname, column, unknown_user_set, unknown_cell_list, col_type)
         elif col_type == ColumnTypes.CREATOR:
-            c = WriteOnlyCell(ws, value=email2nickname.get(cell_data2str(cell_value), ''))
-            if not email2nickname.get(cell_data2str(cell_value), ''):
-                unknown_user_set.add(cell_data2str(cell_value))
-                unknown_cell_list.append((c, cell_data2str(cell_value), col_type))
+            c = _build_person_excel_cell(ws, cell_value, email2nickname, column, unknown_user_set, unknown_cell_list, col_type)
         elif col_type == ColumnTypes.LAST_MODIFIER:
-            c = WriteOnlyCell(ws, value=email2nickname.get(cell_data2str(cell_value), ''))
-            if not email2nickname.get(cell_data2str(cell_value), ''):
-                unknown_user_set.add(cell_data2str(cell_value))
-                unknown_cell_list.append((c, cell_data2str(cell_value), col_type))
+            c = _build_person_excel_cell(ws, cell_value, email2nickname, column, unknown_user_set, unknown_cell_list, col_type)
         elif col_type == ColumnTypes.FORMULA \
             and isinstance(column.get('data'), dict) \
             and column.get('data').get('result_type') in [FormulaResultType.NUMBER, FormulaResultType.DATE]:
-            if column.get('data').get('result_type') == FormulaResultType.NUMBER:
-                formula_value, number_format = parse_formula_number(cell_value, column.get('data'), is_big_data_view)
-                c = WriteOnlyCell(ws, value=formula_value)
-                c.number_format = number_format
-            elif column.get('data').get('result_type') == FormulaResultType.DATE:
-                c = WriteOnlyCell(ws, value=format_time(cell_value))
-                if column.get('data').get('format'):
-                    c.number_format = column.get('data').get('format')
-                else:
-                    c.number_format = 'YYYY-MM-DD'
+            c = _build_formula_excel_cell(ws, cell_value, column, email2nickname, is_big_data_view)
         elif col_type == ColumnTypes.IMAGE and cell_value and image_param['is_support']:
-            c = WriteOnlyCell(ws)
-            image_num = image_param.get('num')
-            images_target_dir = image_param.get('images_target_dir')
-            if image_num < EXPORT_IMAGE_LIMIT:
-                num = add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, image_num, images_target_dir, column, row_height)
-                image_param['num'] = num
+            c = _build_image_excel_cell(ws, cell_value, row_num, dtable_uuid, repo_id, image_param, column, col_num, row_height)
         else:
-            if col_type == ColumnTypes.GEOLOCATION:
-                cell_value = parse_geolocation(cell_value)
-            elif col_type == ColumnTypes.LINK_FORMULA:
-                cell_value = parse_link_formula(cell_value, email2nickname)
-            elif col_type == ColumnTypes.MULTIPLE_SELECT:
-                cell_value = parse_multiple_select_formula(cell_value)
-            elif col_type == ColumnTypes.LINK:
-                cell_value = parse_link(column, cell_value, email2nickname, is_big_data_view)
-            elif col_type == ColumnTypes.LONG_TEXT:
-                cell_value = parse_dtable_long_text(cell_value)
-                cell_value = cell_value.strip()
-            else:
-                cell_value = cell_data2str(cell_value)
-            c = WriteOnlyCell(ws, value=ILLEGAL_CHARACTERS_RE.sub('', cell_value))
+            c = _build_default_excel_cell(ws, column, cell_value, email2nickname, is_big_data_view)
 
         cell_list.append(c)
         col_num += 1
@@ -1791,6 +1999,20 @@ def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, rep
     from openpyxl.cell import WriteOnlyCell
     from openpyxl.utils import get_column_letter
     from dtable_events.dtable_io.utils import width_transfer, height_transfer
+
+    export_ctx = {
+        'email2nickname': email2nickname,
+        'dtable_uuid': dtable_uuid,
+        'repo_id': repo_id,
+        'image_param': image_param,
+        'cols_without_hidden': cols_without_hidden,
+        'column_name_to_column': column_name_to_column,
+        'is_group_view': is_group_view,
+        'summary_col_info': summary_col_info,
+        'row_height': row_height,
+        'header_height': header_height,
+        'is_big_data_view': is_big_data_view,
+    }
 
     ws.row_dimensions[1].height = height_transfer(header_height) # set header height
     if row_num == 0:
@@ -1832,8 +2054,9 @@ def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, rep
         for row in data_list:
             row_num += 1  # for big data view
             try:
-                params = (row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id,
-                          image_param, cols_without_hidden, row_height, is_big_data_view)
+                params = (row, row_num, ws, export_ctx['email2nickname'], unknown_user_set, unknown_cell_list,
+                          export_ctx['dtable_uuid'], export_ctx['repo_id'], export_ctx['image_param'],
+                          export_ctx['cols_without_hidden'], export_ctx['row_height'], export_ctx['is_big_data_view'])
                 row_cells = handle_row(*params)
                 ws.row_dimensions[row_num + 1].height = height_transfer(row_height)
             except Exception as e:
