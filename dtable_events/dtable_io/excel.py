@@ -1265,10 +1265,7 @@ def _format_date_string(cell_value, date_format='YYYY-MM-DD'):
 def _format_formula_array_date_value(cell_value, date_format):
     if not cell_value:
         return ''
-    normalized_format = date_format or ''
-    if 'HH:mm' in normalized_format:
-        return _format_date_string(cell_value, 'YYYY-MM-DD HH:mm')
-    return _format_date_string(cell_value, 'DD/MM/YYYY')
+    return _format_date_string(cell_value, date_format or 'YYYY-MM-DD')
 
 
 def _get_column_data(column):
