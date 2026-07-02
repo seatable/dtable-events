@@ -1268,6 +1268,104 @@ def _format_formula_array_date_value(cell_value, date_format):
     return _format_date_string(cell_value, date_format or 'YYYY-MM-DD')
 
 
+def _format_number_display_string(value, column_data):
+    if value is None or value == '':
+        return ''
+
+    try:
+        numeric_value = float(value)
+    except Exception:
+        return ''
+
+    decimal = column_data.get('decimal', 'dot')
+    thousands = column_data.get('thousands', 'no')
+    precision = column_data.get('precision')
+    if precision is None:
+        precision = 2
+    enable_precision = column_data.get('enable_precision', False)
+    currency_symbol = column_data.get('currency_symbol', '$')
+    currency_symbol_position = column_data.get('currency_symbol_position', 'before')
+    number_format = column_data.get('format')
+
+    def trim_trailing_zero(number_text):
+        if '.' not in number_text:
+            return number_text
+        return number_text.rstrip('0').rstrip('.')
+
+    def format_with_separators(number_text):
+        if number_text in ('', None):
+            return ''
+        if number_text[0] == '-':
+            sign = '-'
+            number_text = number_text[1:]
+        else:
+            sign = ''
+
+        if '.' in number_text:
+            int_part, frac_part = number_text.split('.', 1)
+        else:
+            int_part, frac_part = number_text, ''
+
+        if thousands != 'no' and int_part:
+            group_map = {
+                'comma': ',',
+                'dot': '.',
+                'space': ' ',
+            }
+            group_sep = group_map.get(thousands, '')
+            if group_sep:
+                int_part = f'{int(int_part):,}'
+                if group_sep != ',':
+                    int_part = int_part.replace(',', group_sep)
+
+        if decimal == 'comma' and frac_part:
+            decimal_sep = ','
+        else:
+            decimal_sep = '.'
+
+        if frac_part:
+            return f'{sign}{int_part}{decimal_sep}{frac_part}'
+        return f'{sign}{int_part}'
+
+    def format_number_fixed(number_value, fixed_precision):
+        return format_with_separators(f'{number_value:.{fixed_precision}f}')
+
+    def format_number_trimmed(number_value):
+        return format_with_separators(trim_trailing_zero(str(number_value)))
+
+    if number_format == 'percent':
+        numeric_value *= 100
+        if enable_precision:
+            value_text = format_number_fixed(numeric_value, precision)
+        else:
+            value_text = format_number_trimmed(numeric_value)
+        return value_text + '%'
+
+    if number_format in ['dollar', 'euro', 'yuan', 'custom_currency']:
+        if enable_precision:
+            value_text = format_number_fixed(numeric_value, precision)
+        else:
+            value_text = format_number_fixed(numeric_value, 2)
+
+        if number_format == 'dollar':
+            return '$' + value_text
+        if number_format == 'euro':
+            return '€' + value_text
+        if number_format == 'yuan':
+            return '￥' + value_text
+        if currency_symbol_position == 'before':
+            return (currency_symbol or '') + value_text
+        return value_text + (currency_symbol or '')
+
+    if enable_precision:
+        return format_number_fixed(numeric_value, precision)
+
+    if thousands == 'no' and decimal == 'dot':
+        return trim_trailing_zero(str(value))
+
+    return format_number_trimmed(numeric_value)
+
+
 def _get_column_data(column):
     return column.get('data') if isinstance(column, dict) else {}
 
@@ -1297,6 +1395,8 @@ def _format_array_item_value(item, email2nickname, array_type, array_data):
         options = array_data.get('options') or []
         id2name = {op.get('id'): op.get('name') for op in options}
         return id2name.get(item_value, item_value)
+    if array_type == ColumnTypes.NUMBER:
+        return _format_number_display_string(item_value, array_data)
     if array_type in (ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER):
         return email2nickname.get(cell_data2str(item_value), '')
     if array_type in (ColumnTypes.CTIME, ColumnTypes.MTIME):
