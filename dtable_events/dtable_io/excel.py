@@ -1424,7 +1424,7 @@ def parse_summary_value(cell_data, column_data):
     return value
 
 
-def parse_formula_number(cell_data, column_data, is_big_data_view=False):
+def parse_formula_number(cell_data, column_data):
     """
     parse formula number to regular format
     :param cell_data: value of cell (e.g. 1.25, ￥12.0, $10.20, €10.2, 0:02 or 10%, etc)
@@ -1432,25 +1432,6 @@ def parse_formula_number(cell_data, column_data, is_big_data_view=False):
     """
     src_format = column_data.get('format')
     value = cell_data
-    if not is_big_data_view:
-        value = str(cell_data)
-        if src_format in ['euro', 'dollar', 'yuan']:
-            value = value[1:]
-        elif src_format == 'percent':
-            value = value[:-1]
-        elif src_format == 'custom_currency':
-            currency_symbol = column_data.get('currency_symbol')
-            currency_symbol_position = column_data.get('currency_symbol_position', 'before')
-            if currency_symbol_position == 'before':
-                value = value[len(currency_symbol):]
-            else:
-                value = value[:-len(currency_symbol)]
-        value = convert_formula_number(value, column_data)
-        if src_format == 'percent' and isinstance(value, str):
-            try:
-                value = float(value) / 100
-            except Exception as e:
-                pass
     try:
         if is_int_str(value):
             value = int(value)
@@ -1537,20 +1518,17 @@ def email_to_nickname(email2nickname, cell):
         return ''
     return email2nickname.get(cell.get('display_value'), '')
 
-def parse_link(column, cell_data, email2nickname, is_big_data_view):
+def parse_link(column, cell_data, email2nickname):
     if isinstance(cell_data, list):
         if column.get('data').get('array_type') == ColumnTypes.SINGLE_SELECT:
-            if is_big_data_view:
-                return ', '.join([cell_data2str(cell) for cell in cell_data])
+            if not column.get('data'):
+                options = []
+            elif not column.get('data').get('array_data', {}):
+                options = []
             else:
-                if not column.get('data'):
-                    options = []
-                elif not column.get('data').get('array_data', {}):
-                    options = []
-                else:
-                    options = column.get('data').get('array_data', {}).get('options')
-                id2name = {op.get('id'): op.get('name') for op in options}
-                return ', '.join([select_option_to_name(id2name, cell) for cell in cell_data])
+                options = column.get('data').get('array_data', {}).get('options')
+            id2name = {op.get('id'): op.get('name') for op in options}
+            return ', '.join([select_option_to_name(id2name, cell) for cell in cell_data])
         elif column.get('data').get('array_type') in (ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER):
             return ', '.join([
                 email_to_nickname(email2nickname, cell) if isinstance(cell, dict)
@@ -1635,7 +1613,7 @@ def parse_dtable_long_text(cell_value):
     return parse_dtable_long_text(cell_value.replace('\n\n', '\n'))
 
 
-def convert_export_cell_value(column, cell_value, email2nickname, is_big_data_view=False):
+def convert_export_cell_value(column, cell_value, email2nickname):
     col_type = column.get('type')
     if col_type == ColumnTypes.GEOLOCATION:
         return parse_geolocation(cell_value)
@@ -1646,7 +1624,7 @@ def convert_export_cell_value(column, cell_value, email2nickname, is_big_data_vi
     if col_type == ColumnTypes.MULTIPLE_SELECT:
         return parse_multiple_select_formula(cell_value)
     if col_type == ColumnTypes.LINK:
-        return parse_link(column, cell_value, email2nickname, is_big_data_view)
+        return parse_link(column, cell_value, email2nickname)
     if col_type == ColumnTypes.FORMULA:
         result_type = _get_column_result_type(column)
         if result_type == FormulaResultType.DATE:
@@ -1885,25 +1863,25 @@ def _build_date_excel_cell(ws, cell_value, column):
     return c
 
 
-def _build_formula_excel_cell(ws, cell_value, column, email2nickname, is_big_data_view):
+def _build_formula_excel_cell(ws, cell_value, column, email2nickname):
     from openpyxl.cell import WriteOnlyCell
 
     result_type = column.get('data', {}).get('result_type')
     if result_type == FormulaResultType.NUMBER:
-        formula_value, number_format = parse_formula_number(cell_value, column.get('data'), is_big_data_view)
+        formula_value, number_format = parse_formula_number(cell_value, column.get('data'))
         c = WriteOnlyCell(ws, value=formula_value)
         c.number_format = number_format
         return c
 
     if result_type == FormulaResultType.DATE:
-        c = WriteOnlyCell(ws, value=convert_export_cell_value(column, cell_value, email2nickname, is_big_data_view))
+        c = WriteOnlyCell(ws, value=convert_export_cell_value(column, cell_value, email2nickname))
         c.number_format = column.get('data').get('format', 'YYYY-MM-DD')
         return c
 
     if result_type == FormulaResultType.ARRAY:
-        return WriteOnlyCell(ws, value=convert_export_cell_value(column, cell_value, email2nickname, is_big_data_view))
+        return WriteOnlyCell(ws, value=convert_export_cell_value(column, cell_value, email2nickname))
 
-    return WriteOnlyCell(ws, value=convert_export_cell_value(column, cell_value, email2nickname, is_big_data_view))
+    return WriteOnlyCell(ws, value=convert_export_cell_value(column, cell_value, email2nickname))
 
 
 def _build_person_excel_cell(ws, cell_value, email2nickname, column, unknown_user_set, unknown_cell_list, col_type):
@@ -1946,14 +1924,14 @@ def _build_image_excel_cell(ws, cell_value, row_num, dtable_uuid, repo_id, image
     return c
 
 
-def _build_default_excel_cell(ws, column, cell_value, email2nickname, is_big_data_view):
+def _build_default_excel_cell(ws, column, cell_value, email2nickname):
     from openpyxl.cell import WriteOnlyCell
 
-    converted_value = convert_export_cell_value(column, cell_value, email2nickname, is_big_data_view)
+    converted_value = convert_export_cell_value(column, cell_value, email2nickname)
     return WriteOnlyCell(ws, value=ILLEGAL_CHARACTERS_RE.sub('', converted_value))
 
 
-def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id, image_param, cols_without_hidden, row_height, is_big_data_view=False):
+def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid, repo_id, image_param, cols_without_hidden, row_height):
     cell_list = []
     col_num = 0
     for column in cols_without_hidden:
@@ -1981,18 +1959,18 @@ def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_
         elif col_type == ColumnTypes.FORMULA \
             and isinstance(column.get('data'), dict) \
             and column.get('data').get('result_type') in [FormulaResultType.NUMBER, FormulaResultType.DATE]:
-            c = _build_formula_excel_cell(ws, cell_value, column, email2nickname, is_big_data_view)
+            c = _build_formula_excel_cell(ws, cell_value, column, email2nickname)
         elif col_type == ColumnTypes.IMAGE and cell_value and image_param['is_support']:
             c = _build_image_excel_cell(ws, cell_value, row_num, dtable_uuid, repo_id, image_param, column, col_num, row_height)
         else:
-            c = _build_default_excel_cell(ws, column, cell_value, email2nickname, is_big_data_view)
+            c = _build_default_excel_cell(ws, column, cell_value, email2nickname)
 
         cell_list.append(c)
         col_num += 1
     return cell_list
 
 
-def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, is_group_view=False, summary_col_info=None, row_height='default', header_height='default', is_big_data_view=False):
+def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, is_group_view=False, summary_col_info=None, row_height='default', header_height='default'):
     """ write listed data into excel
     """
     from dtable_events.dtable_io import dtable_io_logger
@@ -2011,7 +1989,6 @@ def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, rep
         'summary_col_info': summary_col_info,
         'row_height': row_height,
         'header_height': header_height,
-        'is_big_data_view': is_big_data_view,
     }
 
     ws.row_dimensions[1].height = height_transfer(header_height) # set header height
@@ -2056,7 +2033,7 @@ def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, rep
             try:
                 params = (row, row_num, ws, export_ctx['email2nickname'], unknown_user_set, unknown_cell_list,
                           export_ctx['dtable_uuid'], export_ctx['repo_id'], export_ctx['image_param'],
-                          export_ctx['cols_without_hidden'], export_ctx['row_height'], export_ctx['is_big_data_view'])
+                          export_ctx['cols_without_hidden'], export_ctx['row_height'])
                 row_cells = handle_row(*params)
                 ws.row_dimensions[row_num + 1].height = height_transfer(row_height)
             except Exception as e:
