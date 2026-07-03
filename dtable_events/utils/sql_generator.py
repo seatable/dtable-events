@@ -1469,10 +1469,8 @@ class StatisticSQLGenerator(object):
         return f"{order_header} {', '.join(sort_sql)}"
 
     def _update_filter_sql(self, x_axis_include_empty, x_axis_column):
-        # avoid adding the WHERE clause repeatedly when this method is called
-        # more than once
         if self.filter_sql and self.filter_sql.startswith('WHERE'):
-            return
+            self.filter_sql = self.filter_sql[len('WHERE'):].strip()
 
         if x_axis_include_empty:
             if self.filter_sql:
