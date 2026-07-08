@@ -16,8 +16,7 @@ def gen_headers():
 
 
 class DTableAIAPI:
-    def __init__(self, username, org_id, dtable_uuid, seatable_ai_server_url):
-        self.username = username
+    def __init__(self, org_id, dtable_uuid, seatable_ai_server_url):
         self.org_id = org_id
         self.dtable_uuid = dtable_uuid
         self.seatable_ai_server_url = seatable_ai_server_url
@@ -29,7 +28,6 @@ class DTableAIAPI:
         
         data = {
             'content': f'content:{content}',
-            'username': self.username,
             'org_id': self.org_id,
             'dtable_uuid': self.dtable_uuid,
             'summary_prompt': summary_prompt,
@@ -51,7 +49,6 @@ class DTableAIAPI:
         
         data = {
             'content': content,
-            'username': self.username,
             'org_id': self.org_id,
             'dtable_uuid': self.dtable_uuid,
             'classify_prompt': classify_prompt,
@@ -82,7 +79,6 @@ class DTableAIAPI:
             image_pages = [file_content]
 
         data = {
-            'username': self.username,
             'org_id': self.org_id,
             'dtable_uuid': self.dtable_uuid,
         }
@@ -109,7 +105,6 @@ class DTableAIAPI:
         
         data = {
             'content': content,
-            'username': self.username,
             'org_id': self.org_id,
             'dtable_uuid': self.dtable_uuid,
             'extract_fields': extract_fields,
@@ -133,7 +128,6 @@ class DTableAIAPI:
         
         data = {
             'content': content,
-            'username': self.username,
             'org_id': self.org_id,
             'dtable_uuid': self.dtable_uuid,
         }
@@ -150,7 +144,6 @@ class DTableAIAPI:
 
     def recognize_chinese_invoice(self, file_name, file_content):
         data = {
-            'username': self.username,
             'org_id': self.org_id,
             'dtable_uuid': self.dtable_uuid,
         }

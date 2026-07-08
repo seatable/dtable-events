@@ -11,9 +11,9 @@ from dateutil import relativedelta
 from sqlalchemy import text
 
 from dtable_events.app.config import AI_PRICES, AI_STATS_ENABLED
-from dtable_events.app.event_redis import RedisClient, redis_cache
+from dtable_events.app.event_redis import RedisClient
 from dtable_events.db import init_db_session_class
-from dtable_events.utils import uuid_str_to_36_chars, uuid_str_to_32_chars
+from dtable_events.utils import uuid_str_to_32_chars
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,28 @@ class AIStatsWorker(object):
         self.org_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
         self.owner_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
         self.dtable_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
+        self.dtable_org_cache = {}
+        self.dtable_workspace_owner_cache = {}
+
+    def _get_dtable_owner_info(self, dtable_uuid, session, org_id=None):
+        cached_owner = self.dtable_workspace_owner_cache.get(dtable_uuid)
+        cached_org_id = self.dtable_org_cache.get(dtable_uuid)
+        if cached_owner is not None and cached_org_id is not None:
+            return {'owner': cached_owner, 'org_id': cached_org_id}
+
+        sql = "SELECT w.owner, w.org_id FROM dtables d JOIN workspaces w ON d.workspace_id=w.id WHERE d.uuid=:dtable_uuid"
+        result = session.execute(text(sql), {'dtable_uuid': dtable_uuid}).fetchone()
+        if not result:
+            return None
+
+        owner = result.owner
+        owner_org_id = result.org_id
+        if org_id is not None:
+            owner_org_id = org_id
+
+        self.dtable_workspace_owner_cache[dtable_uuid] = owner
+        self.dtable_org_cache[dtable_uuid] = owner_org_id
+        return {'owner': owner, 'org_id': owner_org_id}
 
     def save_to_memory(self, usage_info, session):
         if not usage_info.get('model'):
@@ -46,17 +68,30 @@ class AIStatsWorker(object):
 
         model = usage_info['model']
         usage = usage_info.get('usage') or {}
-        org_id = usage_info.get('org_id')
+        scenario = usage_info.get('scenario')
+        dtable_uuid = usage_info.get('dtable_uuid')
 
         if model not in AI_PRICES:
             logger.warning('model %s price not defined', model)
             return
-        
-        try:
-            org_id = int(org_id)
-        except (TypeError, ValueError):
-            org_id = -1
 
+        if not dtable_uuid:
+            logger.warning('dtable_uuid missing in usage_info %s', usage_info)
+            return
+
+        dtable_uuid = uuid_str_to_32_chars(dtable_uuid)
+
+        org_id = usage_info.get('org_id')
+        if org_id is not None:
+            try:
+                org_id = int(org_id)
+            except (TypeError, ValueError):
+                org_id = None
+
+        if not isinstance(scenario, str):
+            scenario = 'unknown'
+        else:
+            scenario = scenario.strip().lower() or 'unknown'
 
         if 'prompt_tokens' in usage:
             usage['input_tokens'] = usage['prompt_tokens']
@@ -68,35 +103,24 @@ class AIStatsWorker(object):
         if not isinstance(usage.get('output_tokens'), int):
             usage['output_tokens'] = 0
 
-        if usage_info.get('assistant_uuid'):
-            # for assistant call, set stat object to the assistant owner, i.e., table admin, group admin ...
+        owner_info = self._get_dtable_owner_info(dtable_uuid, session, org_id=org_id)
+        if not owner_info:
+            logger.warning('dtable %s owner info not found', dtable_uuid)
+            return
 
-            assistant_uuid = uuid_str_to_36_chars(usage_info.get('assistant_uuid'))
-            
-            owner_info = self.query_assistant_owner(assistant_uuid, session)
-            if not owner_info:
-                logger.warning('assistant %s has no owner', assistant_uuid)
-                return
-            if org_id != -1:
-                self.org_stats[org_id][model]['input_tokens'] += usage.get('input_tokens') or 0
-                self.org_stats[org_id][model]['output_tokens'] += usage.get('output_tokens') or 0
-            else:
-                self.owner_stats[owner_info['owner_id']][model]['input_tokens'] += usage.get('input_tokens') or 0
-                self.owner_stats[owner_info['owner_id']][model]['output_tokens'] += usage.get('output_tokens') or 0
-        else:
-            # for non-assistant call, set stat obj to common user
-            if org_id != -1:
-                self.org_stats[org_id][model]['input_tokens'] += usage.get('input_tokens') or 0
-                self.org_stats[org_id][model]['output_tokens'] += usage.get('output_tokens') or 0
-            else:
-                self.owner_stats[usage_info['username']][model]['input_tokens'] += usage.get('input_tokens') or 0
-                self.owner_stats[usage_info['username']][model]['output_tokens'] += usage.get('output_tokens') or 0
+        owner = owner_info.get('owner')
+        org_id = owner_info.get('org_id')
+        if owner is None or org_id is None:
+            logger.warning('dtable %s owner/org_id not found: %s', dtable_uuid, owner_info)
+            return
 
-        dtable_uuid = usage_info.get('dtable_uuid')
-        if dtable_uuid:
-            dtable_uuid = uuid_str_to_32_chars(usage_info['dtable_uuid'])
-            self.dtable_stats[dtable_uuid][model]['input_tokens'] += usage.get('input_tokens') or 0
-            self.dtable_stats[dtable_uuid][model]['output_tokens'] += usage.get('output_tokens') or 0
+        self.org_stats[org_id][model]['input_tokens'] += usage.get('input_tokens') or 0
+        self.org_stats[org_id][model]['output_tokens'] += usage.get('output_tokens') or 0
+        self.owner_stats[owner][model]['input_tokens'] += usage.get('input_tokens') or 0
+        self.owner_stats[owner][model]['output_tokens'] += usage.get('output_tokens') or 0
+        key = (model, scenario)
+        self.dtable_stats[dtable_uuid][key]['input_tokens'] += usage.get('input_tokens') or 0
+        self.dtable_stats[dtable_uuid][key]['output_tokens'] += usage.get('output_tokens') or 0
 
     def receive(self):
         logger.info('Starts to receive ai calls...')
@@ -135,27 +159,6 @@ class AIStatsWorker(object):
                 logger.error('redis pubsub receive error: %s', e)
                 subscriber = self._redis_client.refresh_subscriber(subscriber, self._pubsub_channel_name, str(e))
                 last_pubsub_message_time = time.time()
-
-    def get_assistant_cache_key(self, assistant_uuid):
-        return f'assistant:{assistant_uuid}:owner'
-
-    def query_assistant_owner(self, assistant_uuid, session):
-        cache_key = self.get_assistant_cache_key(assistant_uuid)
-        owner_info = redis_cache.get(cache_key)
-        if owner_info:
-            return json.loads(owner_info)
-        sql = '''
-            SELECT aao.assistant_uuid, aao.owner, w.org_id FROM ai_assistant_owner aao
-            JOIN workspaces w ON aao.owner=w.owner
-            WHERE aao.assistant_uuid=:assistant_uuid
-        '''
-        results = session.execute(text(sql), {'assistant_uuid': assistant_uuid})
-        row = results.fetchone()
-        if not row:
-            return None
-        owner_info = {'org_id': row.org_id, 'owner_id': row.owner}
-        redis_cache.set(cache_key, json.dumps(owner_info), timeout=self.owner_info_cache_timeout)
-        return owner_info
 
     def query_dtable_owners(self, dtable_uuids):
         dtable_owners_dict = {}
@@ -196,10 +199,6 @@ class AIStatsWorker(object):
         team_sql = '''
         INSERT INTO `stats_ai_by_team`(`org_id`, `month`, `model`, `input_tokens`, `output_tokens`, `cost`, `created_at`, `updated_at`) 
         VALUES (:org_id, :month, :model, :input_tokens, :output_tokens, :cost, :created_at, :updated_at)
-        ON DUPLICATE KEY UPDATE `input_tokens`=`input_tokens`+VALUES(`input_tokens`),
-                                `output_tokens`=`output_tokens`+VALUES(`output_tokens`),
-                                `cost`=`cost`+VALUES(`cost`),
-                                `updated_at`=VALUES(`updated_at`)
         '''
         for org_id, models_dict in org_stats.items():
             for model, usage in models_dict.items():
@@ -226,12 +225,8 @@ class AIStatsWorker(object):
 
         owner_data = []
         owner_sql = '''
-        INSERT INTO `stats_ai_by_owner`(`owner_id`, `month`, `model`, `input_tokens`, `output_tokens`, `cost`, `created_at`, `updated_at`) 
-        VALUES (:owner_id, :month, :model, :input_tokens, :output_tokens, :cost, :created_at, :updated_at)
-        ON DUPLICATE KEY UPDATE `input_tokens`=`input_tokens`+VALUES(`input_tokens`),
-                                `output_tokens`=`output_tokens`+VALUES(`output_tokens`),
-                                `cost`=`cost`+VALUES(`cost`),
-                                `updated_at`=VALUES(`updated_at`)
+        INSERT INTO `stats_ai_by_owner`(`owner`, `month`, `model`, `input_tokens`, `output_tokens`, `cost`, `created_at`, `updated_at`) 
+        VALUES (:owner, :month, :model, :input_tokens, :output_tokens, :cost, :created_at, :updated_at)
         '''
         for owner_id, models_dict in owner_stats.items():
             for model, usage in models_dict.items():
@@ -245,7 +240,7 @@ class AIStatsWorker(object):
                 logger.info('owner %s model %s, input_tokens %s cost %s, output_tokens %s cost %s', owner_id, model, input_tokens, input_cost, output_tokens, output_cost)
 
                 params = {
-                    'owner_id': owner_id,
+                    'owner': owner_id,
                     'month': month,
                     'model': model,
                     'input_tokens': input_tokens,
@@ -258,8 +253,8 @@ class AIStatsWorker(object):
 
         dtable_data = []
         dtable_sql = '''
-        INSERT INTO `stats_ai_by_dtable`(`dtable_uuid`, `date`, `model`, `owner`, `org_id`, `input_tokens`, `output_tokens`, `cost`, `created_at`, `updated_at`)
-        VALUES (:dtable_uuid, :date, :model, :owner, :org_id, :input_tokens, :output_tokens, :cost, :created_at, :updated_at)
+        INSERT INTO `stats_ai_by_dtable`(`dtable_uuid`, `date`, `model`, `owner`, `group_id`, `org_id`, `scenario`, `input_tokens`, `output_tokens`, `cost`, `created_at`, `updated_at`)
+        VALUES (:dtable_uuid, :date, :model, :owner, :group_id, :org_id, :scenario, :input_tokens, :output_tokens, :cost, :created_at, :updated_at)
         ON DUPLICATE KEY UPDATE `input_tokens`=`input_tokens`+VALUES(`input_tokens`),
                                 `output_tokens`=`output_tokens`+VALUES(`output_tokens`),
                                 `cost`=`cost`+VALUES(`cost`),
@@ -267,29 +262,41 @@ class AIStatsWorker(object):
         '''
         dtable_owners_dict = self.query_dtable_owners(list(dtable_stats.keys()))
         for dtable_uuid, models_dict in dtable_stats.items():
-            for model, usage in models_dict.items():
+            owner_info = dtable_owners_dict.get(dtable_uuid)
+            if not owner_info:
+                logger.warning('dtable %s owner info not found when flushing stats', dtable_uuid)
+                continue
+
+            workspace_owner = owner_info.get('owner')
+            org_id = owner_info.get('org_id')
+            if workspace_owner is None or org_id is None:
+                logger.warning('dtable %s owner/org_id not found when flushing stats: %s', dtable_uuid, owner_info)
+                continue
+
+            owner = workspace_owner
+            group_id = None
+            if workspace_owner.endswith('@seafile_group'):
+                owner = None
+                group_id = int(workspace_owner.rsplit('@seafile_group', 1)[0])
+
+            for (model, scenario), usage in models_dict.items():
                 input_tokens = usage.get('input_tokens') or 0
                 output_tokens = usage.get('output_tokens') or 0
-                owner_info = dtable_owners_dict.get(dtable_uuid)
-                if owner_info:
-                    owner = owner_info['owner']
-                    org_id = owner_info['org_id']
-                else:
-                    owner = None
-                    org_id = None
 
                 input_tokens_price = AI_PRICES[model].get('input_tokens') or 0
                 output_tokens_price = AI_PRICES[model].get('output_tokens') or 0
                 input_cost = input_tokens_price * (input_tokens / 1000000)
                 output_cost = output_tokens_price * (output_tokens / 1000000)
-                logger.info('dtable %s model %s, input_tokens %s cost %s, output_tokens %s cost %s', dtable_uuid, model, input_tokens, input_cost, output_tokens, output_cost)
+                logger.info('dtable %s model %s scenario %s, input_tokens %s cost %s, output_tokens %s cost %s', dtable_uuid, model, scenario, input_tokens, input_cost, output_tokens, output_cost)
 
                 params = {
                     'dtable_uuid': dtable_uuid,
                     'date': datetime.today().date(),
                     'model': model,
                     'owner': owner,
+                    'group_id': group_id,
                     'org_id': org_id,
+                    'scenario': scenario,
                     'input_tokens': input_tokens,
                     'output_tokens': output_tokens,
                     'cost': input_cost + output_cost,
