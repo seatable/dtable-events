@@ -1535,6 +1535,42 @@ def get_rows_from_dtable_db(dtable_db_api, table_name, limit=50000):
     return dtable_rows
 
 
+def get_export_view_rows_from_dtable_db(dtable_db_api, table_name=None, table_id=None, view_name=None, view_id=None,
+                            convert_link_id=True, convert_keys=True, convert_date=False):
+    rows = []
+    start, limit = 0, 10000
+    while True:
+        rows_rsp = dtable_db_api.list_rows(
+            table_name=table_name,
+            table_id=table_id,
+            view_name=view_name,
+            view_id=view_id,
+            start=start,
+            limit=limit,
+            convert_link_id=convert_link_id,
+            convert_keys=convert_keys,
+            convert_date=convert_date
+        )
+        rows.extend(rows_rsp['rows'])
+        if len(rows_rsp['rows']) < limit:
+            break
+        start += limit
+    return rows
+
+
+def get_export_table_rows_from_dtable_db(dtable_db_api, table_name):
+    rows = []
+    start, limit = 0, 10000
+    while True:
+        sql = f"SELECT * FROM `{table_name}` LIMIT {start}, {limit}"
+        step_rows = dtable_db_api.query(sql, convert=True, server_only=True)[0]
+        rows.extend(step_rows)
+        if len(step_rows) < limit:
+            break
+        start += limit
+    return rows
+
+
 def update_rows_by_dtable_db(dtable_db_api, update_rows, table_name):
     offset = 0
     while True:

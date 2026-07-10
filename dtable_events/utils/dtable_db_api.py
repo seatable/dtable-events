@@ -248,6 +248,32 @@ class DTableDBAPI(object):
         resp = requests.get(url, headers=self.headers, timeout=TIMEOUT)
         return parse_response(resp)
 
+    def list_rows(self, table_name=None, table_id=None, view_name=None, view_id=None, start=None, limit=None,
+                  convert_link_id=True, convert_keys=True, convert_date=False):
+        url = '%s/api/v2/dtables/%s/rows/?from=dtable_events' % (
+            self.dtable_db_url,
+            self.dtable_uuid,
+        )
+        params = {}
+        if table_name:
+            params['table_name'] = table_name
+        if table_id:
+            params['table_id'] = table_id
+        if view_name:
+            params['view_name'] = view_name
+        if view_id:
+            params['view_id'] = view_id
+        if start is not None:
+            params['start'] = start
+        if limit is not None:
+            params['limit'] = limit
+        params['convert_link_id'] = 'true' if convert_link_id else 'false'
+        params['convert_keys'] = 'true' if convert_keys else 'false'
+        params['convert_date'] = 'true' if convert_date else 'false'
+
+        resp = requests.get(url, params=params, headers=self.headers, timeout=TIMEOUT)
+        return parse_response(resp)
+
     def add_index(self, table_id, column_names):
         url = '%s/api/v1/index/%s?from=dtable_events' % (
             self.dtable_db_url,
