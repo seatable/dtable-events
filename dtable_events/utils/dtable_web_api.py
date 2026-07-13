@@ -225,7 +225,8 @@ class DTableWebAPI:
             'month': month
         }
         payload = {
-            'exp': int(time.time()) + 60
+            'exp': int(time.time()) + 60,
+            'is_internal': True
         }
         header_token = 'Token ' + jwt.encode(payload, DTABLE_PRIVATE_KEY, 'HS256')
         resp = requests.post(url, json=data, headers={'Authorization': header_token}, timeout=30)
@@ -238,7 +239,8 @@ class DTableWebAPI:
         }
         params = {'dtable_uuid': dtable_uuid}
         payload = {
-            'exp': int(time.time()) + 60
+            'exp': int(time.time()) + 60,
+            'is_internal': True
         }
         header_token = 'Token ' + jwt.encode(payload, DTABLE_PRIVATE_KEY, 'HS256')
         resp = requests.get(url, params=params, headers={'Authorization': header_token}, timeout=30)
