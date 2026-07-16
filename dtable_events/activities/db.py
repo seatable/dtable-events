@@ -9,6 +9,7 @@ from sqlalchemy import select, update, delete, desc, func, case, text
 
 from dtable_events.activities.models import Activities
 from dtable_events.app.config import TIME_ZONE
+from dtable_events.app.event_redis import redis_cache
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,8 @@ LINK_OPERATION_TYPES = [
 ]
 
 DETAIL_LIMIT = 65535  # 2^16 - 1
+TABLE_ACTIVITIES_CACHE_KEY = 'table_activities:{to_tz}:{dtable_uuid}:{date}'
+TABLE_ACTIVITIES_CACHE_TTL = 24 * 60 * 60
 
 
 class TableActivity(object):
@@ -240,6 +243,139 @@ def get_shifted_days_ago(offset_str, days):
     return days_ago_start
 
 
+def _get_timezone(offset_str):
+    match = re.match(r'([+-])(\d{1,2}):(\d{2})', offset_str)
+    if not match:
+        raise ValueError("Offset format must be like '+8:00' or '-9:00'")
+
+    sign = 1 if match.group(1) == '+' else -1
+    hours = int(match.group(2)) * sign
+    gmt_offset = f"Etc/GMT{'-' if hours >= 0 else '+'}{abs(hours)}"
+    return pytz.timezone(gmt_offset)
+
+
+def _get_local_day_utc_range(day_start_local):
+    day_end_local = day_start_local + timedelta(days=1)
+    return day_start_local.astimezone(pytz.utc), day_end_local.astimezone(pytz.utc)
+
+
+def _get_activity_cache_key(dtable_uuid, to_tz, date_str):
+    return TABLE_ACTIVITIES_CACHE_KEY.format(dtable_uuid=dtable_uuid, to_tz=to_tz, date=date_str)
+
+
+def _serialize_cached_activity(op_date, insert_row, modify_row, delete_row):
+    return json.dumps({
+        'op_date': op_date.strftime('%Y-%m-%d %H:%M:%S') if op_date else None,
+        'insert_row': int(insert_row or 0),
+        'modify_row': int(modify_row or 0),
+        'delete_row': int(delete_row or 0),
+    })
+
+
+def _deserialize_cached_activity(dtable_uuid, date_str, cached_value):
+    if not cached_value:
+        return None
+
+    try:
+        data = json.loads(cached_value)
+        table_activity = TableActivity()
+        table_activity.dtable_uuid = dtable_uuid
+        table_activity.date = date_str
+        table_activity.op_date = datetime.strptime(data['op_date'], '%Y-%m-%d %H:%M:%S') if data.get('op_date') else None
+        table_activity.insert_row = data.get('insert_row', 0)
+        table_activity.modify_row = data.get('modify_row', 0)
+        table_activity.delete_row = data.get('delete_row', 0)
+        return table_activity
+    except Exception as e:
+        logger.warning('Deserialize table activities cache failed: %s', e)
+        return None
+
+
+def _query_table_activities_by_date(session, uuid_list, day_start_local, to_tz):
+    if not uuid_list:
+        return []
+
+    day_start_utc, day_end_utc = _get_local_day_utc_range(day_start_local)
+    date_str = day_start_local.strftime('%Y-%m-%d 00:00:00')
+
+    stmt = select(
+        Activities.dtable_uuid,
+        func.max(Activities.op_time).label('op_date'),
+        func.sum(case((Activities.op_type == 'insert_row', Activities.row_count))).label('insert_row'),
+        func.sum(case((Activities.op_type == 'modify_row', Activities.row_count))).label('modify_row'),
+        func.sum(case((Activities.op_type == 'delete_row', Activities.row_count))).label('delete_row')
+    ).where(
+        Activities.op_time >= day_start_utc,
+        Activities.op_time < day_end_utc,
+        Activities.dtable_uuid.in_(uuid_list)
+    ).group_by(Activities.dtable_uuid)
+
+    activities = session.execute(stmt).all()
+
+    table_activities = list()
+    for dtable_uuid, op_date, insert_row, modify_row, delete_row in activities:
+        insert_row = int(insert_row or 0)
+        modify_row = int(modify_row or 0)
+        delete_row = int(delete_row or 0)
+        if insert_row == modify_row == delete_row == 0:
+            continue
+
+        table_activity = TableActivity()
+        table_activity.dtable_uuid = dtable_uuid
+        table_activity.op_date = op_date
+        table_activity.date = date_str
+        table_activity.insert_row = insert_row
+        table_activity.modify_row = modify_row
+        table_activity.delete_row = delete_row
+        table_activities.append(table_activity)
+
+        cache_key = _get_activity_cache_key(dtable_uuid, to_tz, day_start_local.strftime('%Y-%m-%d'))
+        cache_value = _serialize_cached_activity(op_date, insert_row, modify_row, delete_row)
+        try:
+            redis_cache.set(cache_key, cache_value, timeout=TABLE_ACTIVITIES_CACHE_TTL)
+        except Exception as e:
+            logger.warning('Set table activities cache failed: %s', e)
+
+    return table_activities
+
+
+def _get_cached_table_activities(uuid_list, day_start_local, to_tz):
+    cached_activities = []
+    if not uuid_list:
+        return cached_activities
+
+    date_str = day_start_local.strftime('%Y-%m-%d')
+    cache_key_list = [_get_activity_cache_key(dtable_uuid, to_tz, date_str) for dtable_uuid in uuid_list]
+    try:
+        cached_value_list = redis_cache.mget(cache_key_list)
+    except Exception as e:
+        logger.warning('Get table activities cache failed: %s', e)
+        cached_value_list = [None] * len(cache_key_list)
+
+    for dtable_uuid, cached_value in zip(uuid_list, cached_value_list):
+        table_activity = _deserialize_cached_activity(dtable_uuid, f'{date_str} 00:00:00', cached_value)
+        if table_activity and not (table_activity.insert_row == table_activity.modify_row == table_activity.delete_row == 0):
+            cached_activities.append(table_activity)
+
+    return cached_activities
+
+
+def _get_activity_day_ranges(days, to_tz):
+    target_timezone = _get_timezone(to_tz)
+    utc_now = datetime.utcnow().replace(tzinfo=pytz.utc)
+    local_now = utc_now.astimezone(target_timezone)
+    today_start_local = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_day_local = (local_now - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    day_ranges = []
+    current_day = start_day_local
+    while current_day <= today_start_local:
+        day_ranges.append(current_day)
+        current_day += timedelta(days=1)
+
+    return day_ranges, today_start_local
+
+
 def filter_user_activate_tables(session, days, uuid_list, to_tz):
     start_str = get_shifted_days_ago(to_tz, days).strftime('%Y-%m-%d %H:%M:%S')
     # filter dtable_uuids
@@ -254,35 +390,66 @@ def get_table_activities(session, uuid_list, days, start, limit, to_tz):
     if not uuid_list:
         return []
 
-    activities = list()
     try:
         uuid_list = filter_user_activate_tables(session, days, uuid_list, to_tz)
         if not uuid_list:
             return []
-        start_utc_str = get_shifted_days_ago(to_tz, days).astimezone(pytz.utc).strftime('%Y-%m-%d %H:%M:%S')
-        # query activities
-        stmt = select(
-            Activities.dtable_uuid, Activities.op_time.label('op_date'),
-            func.date_format(func.convert_tz(Activities.op_time, '+00:00', to_tz), '%Y-%m-%d 00:00:00').label('date'),
-            func.sum(case((Activities.op_type == 'insert_row', Activities.row_count))).label('insert_row'),
-            func.sum(case((Activities.op_type == 'modify_row', Activities.row_count))).label('modify_row'),
-            func.sum(case((Activities.op_type == 'delete_row', Activities.row_count))).label('delete_row')
-        ).where(
-            Activities.op_time > start_utc_str, Activities.dtable_uuid.in_(uuid_list)
-        ).group_by(Activities.dtable_uuid, 'date').order_by(desc(Activities.op_time)).slice(start, start + limit)
-        activities = session.execute(stmt).all()
+
+        day_ranges, today_start_local = _get_activity_day_ranges(days, to_tz)
+        activities = []
+        for day_start_local in day_ranges:
+            if day_start_local == today_start_local:
+                day_start_utc, day_end_utc = _get_local_day_utc_range(day_start_local)
+                stmt = select(
+                    Activities.dtable_uuid,
+                    func.max(Activities.op_time).label('op_date'),
+                    func.sum(case((Activities.op_type == 'insert_row', Activities.row_count))).label('insert_row'),
+                    func.sum(case((Activities.op_type == 'modify_row', Activities.row_count))).label('modify_row'),
+                    func.sum(case((Activities.op_type == 'delete_row', Activities.row_count))).label('delete_row')
+                ).where(
+                    Activities.op_time >= day_start_utc,
+                    Activities.op_time < day_end_utc,
+                    Activities.dtable_uuid.in_(uuid_list)
+                ).group_by(Activities.dtable_uuid)
+                today_activities = []
+                for dtable_uuid, op_date, insert_row, modify_row, delete_row in session.execute(stmt).all():
+                    insert_row = int(insert_row or 0)
+                    modify_row = int(modify_row or 0)
+                    delete_row = int(delete_row or 0)
+                    if insert_row == modify_row == delete_row == 0:
+                        continue
+                    table_activity = TableActivity()
+                    table_activity.dtable_uuid = dtable_uuid
+                    table_activity.op_date = op_date
+                    table_activity.date = day_start_local.strftime('%Y-%m-%d 00:00:00')
+                    table_activity.insert_row = insert_row
+                    table_activity.modify_row = modify_row
+                    table_activity.delete_row = delete_row
+                    today_activities.append(table_activity)
+                activities.extend(today_activities)
+            else:
+                cached_activities = _get_cached_table_activities(uuid_list, day_start_local, to_tz)
+                cached_uuid_set = {activity.dtable_uuid for activity in cached_activities}
+                activities.extend(cached_activities)
+
+                missed_uuid_list = [dtable_uuid for dtable_uuid in uuid_list if dtable_uuid not in cached_uuid_set]
+                if missed_uuid_list:
+                    activities.extend(_query_table_activities_by_date(session, missed_uuid_list, day_start_local, to_tz))
+
+        activities.sort(key=lambda activity: activity.op_date or datetime.min, reverse=True)
+        activities = activities[start:start + limit]
     except Exception as e:
         logger.exception('Get table activities failed: %s', e)
 
     table_activities = list()
-    for dtable_uuid, op_date, date, insert_row, modify_row, delete_row in activities:
+    for activity in activities:
         table_activity = TableActivity()
-        table_activity.dtable_uuid = dtable_uuid
-        table_activity.op_date = op_date
-        table_activity.date = date
-        table_activity.insert_row = insert_row
-        table_activity.modify_row = modify_row
-        table_activity.delete_row = delete_row
+        table_activity.dtable_uuid = activity.dtable_uuid
+        table_activity.op_date = activity.op_date
+        table_activity.date = activity.date
+        table_activity.insert_row = activity.insert_row
+        table_activity.modify_row = activity.modify_row
+        table_activity.delete_row = activity.delete_row
         table_activities.append(table_activity)
 
     return table_activities
