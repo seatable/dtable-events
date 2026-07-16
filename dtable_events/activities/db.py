@@ -311,26 +311,41 @@ def _query_table_activities_by_date(session, uuid_list, day_start_local, to_tz):
     ).group_by(Activities.dtable_uuid)
 
     activities = session.execute(stmt).all()
+    activity_map = {
+        dtable_uuid: {
+            'op_date': op_date,
+            'insert_row': int(insert_row or 0),
+            'modify_row': int(modify_row or 0),
+            'delete_row': int(delete_row or 0),
+        }
+        for dtable_uuid, op_date, insert_row, modify_row, delete_row in activities
+    }
 
     table_activities = list()
-    for dtable_uuid, op_date, insert_row, modify_row, delete_row in activities:
-        insert_row = int(insert_row or 0)
-        modify_row = int(modify_row or 0)
-        delete_row = int(delete_row or 0)
-        if insert_row == modify_row == delete_row == 0:
-            continue
+    for dtable_uuid in uuid_list:
+        activity_info = activity_map.get(dtable_uuid, {
+            'op_date': day_start_local,
+            'insert_row': 0,
+            'modify_row': 0,
+            'delete_row': 0,
+        })
 
         table_activity = TableActivity()
         table_activity.dtable_uuid = dtable_uuid
-        table_activity.op_date = op_date
+        table_activity.op_date = activity_info['op_date']
         table_activity.date = date_str
-        table_activity.insert_row = insert_row
-        table_activity.modify_row = modify_row
-        table_activity.delete_row = delete_row
+        table_activity.insert_row = activity_info['insert_row']
+        table_activity.modify_row = activity_info['modify_row']
+        table_activity.delete_row = activity_info['delete_row']
         table_activities.append(table_activity)
 
         cache_key = _get_activity_cache_key(dtable_uuid, to_tz, day_start_local.strftime('%Y-%m-%d'))
-        cache_value = _serialize_cached_activity(op_date, insert_row, modify_row, delete_row)
+        cache_value = _serialize_cached_activity(
+            activity_info['op_date'],
+            activity_info['insert_row'],
+            activity_info['modify_row'],
+            activity_info['delete_row'],
+        )
         try:
             redis_cache.set(cache_key, cache_value, timeout=TABLE_ACTIVITIES_CACHE_TTL)
         except Exception as e:
@@ -354,7 +369,7 @@ def _get_cached_table_activities(uuid_list, day_start_local, to_tz):
 
     for dtable_uuid, cached_value in zip(uuid_list, cached_value_list):
         table_activity = _deserialize_cached_activity(dtable_uuid, f'{date_str} 00:00:00', cached_value)
-        if table_activity and not (table_activity.insert_row == table_activity.modify_row == table_activity.delete_row == 0):
+        if table_activity:
             cached_activities.append(table_activity)
 
     return cached_activities
@@ -416,8 +431,6 @@ def get_table_activities(session, uuid_list, days, start, limit, to_tz):
                     insert_row = int(insert_row or 0)
                     modify_row = int(modify_row or 0)
                     delete_row = int(delete_row or 0)
-                    if insert_row == modify_row == delete_row == 0:
-                        continue
                     table_activity = TableActivity()
                     table_activity.dtable_uuid = dtable_uuid
                     table_activity.op_date = op_date
