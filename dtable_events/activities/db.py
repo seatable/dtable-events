@@ -401,7 +401,7 @@ def filter_user_activate_tables(session, days, uuid_list, to_tz):
     return dtable_uuids
 
 
-def get_table_activities(session, uuid_list, days, start, limit, to_tz):
+def get_table_activities(session, uuid_list, days, to_tz):
     if not uuid_list:
         return []
 
@@ -450,12 +450,13 @@ def get_table_activities(session, uuid_list, days, start, limit, to_tz):
                     activities.extend(_query_table_activities_by_date(session, missed_uuid_list, day_start_local, to_tz))
 
         activities.sort(key=lambda activity: activity.op_date or datetime.min, reverse=True)
-        activities = activities[start:start + limit]
     except Exception as e:
         logger.exception('Get table activities failed: %s', e)
 
     table_activities = list()
     for activity in activities:
+        if activity.insert_row == activity.modify_row == activity.delete_row == 0:
+            continue
         table_activity = TableActivity()
         table_activity.dtable_uuid = activity.dtable_uuid
         table_activity.op_date = activity.op_date
