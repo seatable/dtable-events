@@ -1,8 +1,5 @@
 import json
-import os
 import time
-from copy import deepcopy
-from dataclasses import dataclass, field
 from datetime import datetime, timedelta, date
 from threading import Thread, Lock
 
@@ -10,7 +7,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from sqlalchemy import text
 
 from dtable_events.app.config import INNER_DTABLE_WEB_SERVICE_URL, AUTOMATION_RATE_LIMIT_PERCENT, \
-    AUTOMATION_RATE_LIMIT_WINDOW_SECS, AUTOMATION_WORKERS
+    AUTOMATION_RATE_LIMIT_WINDOW_SECS, AUTOMATION_WORKERS, INNER_DTABLE_DB_URL
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.app.log import auto_rule_logger
 from dtable_events.automations.automations_stats_manager import AutomationsStatsManager
@@ -18,10 +15,14 @@ from dtable_events.ccnet.organization import get_org_admins
 from dtable_events.db import init_db_session_class
 from dtable_events.utils import get_dtable_owner_org_id
 from dtable_events.utils.dtable_web_api import DTableWebAPI
+from dtable_events.utils.dtable_db_api import DTableDBAPI
+from dtable_events.utils.utils_metadata_cache import get_metadata
+from dtable_events.notification_rules.notification_rules_utils import list_rows_near_deadline_with_dtable_db
 from dtable_events.utils.utils_metric import AUTOMATION_QUEUE_10_METRIC_HELP, AUTOMATION_QUEUE_20_METRIC_HELP, \
     AUTOMATION_QUEUE_30_METRIC_HELP, REALTIME_AUTOMATION_RULES_HEARTBEAT_HELP, \
     REALTIME_AUTOMATION_RULES_TRIGGERED_COUNT_HELP, SCHEDULED_AUTOMATION_RULES_TRIGGERED_COUNT_HELP, publish_metric
-from dtable_events.automations.entities import AutomationResult, AutomationTask, QUEUE_AUTOMATION_TASKS_10, QUEUE_AUTOMATION_TASKS_20, QUEUE_AUTOMATION_TASKS_30
+from dtable_events.automations.entities import AutomationResult, AutomationTask, CONDITION_NEAR_DEADLINE, \
+    QUEUE_AUTOMATION_TASKS_10, QUEUE_AUTOMATION_TASKS_20, QUEUE_AUTOMATION_TASKS_30
 
 
 class RateLimiter:
@@ -282,6 +283,67 @@ class AutomationsPipeline(object):
         cached_exceed_keys_set = set()
         gen_exceed_key = lambda owner, org_id: org_id if org_id != -1 else owner
 
+        def put_scheduled_tasks(automation_task):
+            if automation_task.trigger.get('condition') != CONDITION_NEAR_DEADLINE:
+                self.put_task(automation_task)
+                return 1
+
+            trigger = automation_task.trigger
+            try:
+                dtable_metadata = get_metadata(automation_task.dtable_uuid)
+                dtable_db_api = DTableDBAPI('automation-rule', automation_task.dtable_uuid, INNER_DTABLE_DB_URL)
+                rows, _, is_valid = list_rows_near_deadline_with_dtable_db(
+                    dtable_metadata,
+                    trigger.get('table_id'),
+                    trigger.get('view_id'),
+                    trigger.get('date_column_name'),
+                    trigger.get('alarm_days'),
+                    dtable_db_api,
+                )
+            except Exception as e:
+                auto_rule_logger.exception(
+                    'List near-deadline rows failed rule_id=%s dtable_uuid=%s: %s',
+                    automation_task.rule_id,
+                    automation_task.dtable_uuid,
+                    e,
+                )
+                return 0
+            if not is_valid:
+                db_session.execute(
+                    text('UPDATE dtable_automation_rules SET is_valid=0 WHERE id=:rule_id'),
+                    {'rule_id': automation_task.rule_id},
+                )
+                return 0
+
+            table_name = next((table.get('name') for table in dtable_metadata.get('tables', [])
+                               if table.get('_id') == trigger.get('table_id')), '')
+            task_count = 0
+            for row in rows[:25]:
+                if not row.get('_id'):
+                    continue
+                row_task = AutomationTask(
+                    rule_id=automation_task.rule_id,
+                    run_condition=automation_task.run_condition,
+                    trigger=automation_task.trigger,
+                    actions=automation_task.actions,
+                    dtable_uuid=automation_task.dtable_uuid,
+                    org_id=automation_task.org_id,
+                    owner=automation_task.owner,
+                    data={
+                        'op_type': CONDITION_NEAR_DEADLINE,
+                        'table_id': trigger.get('table_id'),
+                        'table_name': table_name,
+                        'row_id': row.get('_id'),
+                        'updated_column_keys': [],
+                        'dtable_uuid': automation_task.dtable_uuid,
+                        'automation_rule_id': automation_task.rule_id,
+                    },
+                    with_test=False,
+                )
+                self.put_task(row_task)
+                task_count += 1
+            return task_count
+
         try:
             for rule in rules:
                 automation_task = AutomationTask(
@@ -301,14 +363,13 @@ class AutomationsPipeline(object):
                 if exceed_key in cached_exceed_keys_set:
                     continue
                 if isinstance(exceed_key, str) and '@seafile_group' in exceed_key:
-                    self.put_task(automation_task)
-                    self.scheduled_trigger_count += 1
+                    self.scheduled_trigger_count += put_scheduled_tasks(automation_task)
                     continue
                 if self.automations_stats_manager.is_exceed(db_session, rule.owner, rule.org_id):
                     cached_exceed_keys_set.add(exceed_key)
                     continue
-                self.put_task(automation_task)
-                self.scheduled_trigger_count += 1
+                self.scheduled_trigger_count += put_scheduled_tasks(automation_task)
+            db_session.commit()
         except Exception as e:
             auto_rule_logger.exception(e)
         finally:

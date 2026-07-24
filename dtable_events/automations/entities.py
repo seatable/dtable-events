@@ -8,13 +8,12 @@ PER_WEEK = 'per_week'
 PER_UPDATE = 'per_update'
 PER_MONTH = 'per_month'
 CRON_CONDITIONS = (PER_DAY, PER_WEEK, PER_MONTH)
-ALL_CONDITIONS = (PER_DAY, PER_WEEK, PER_MONTH, PER_UPDATE)
 
-CONDITION_ROWS_MODIFIED = 'rows_modified'
 CONDITION_ROWS_ADDED = 'rows_added'
 CONDITION_FILTERS_SATISFY = 'filters_satisfy'
 CONDITION_PERIODICALLY = 'run_periodically'
 CONDITION_PERIODICALLY_BY_CONDITION = 'run_periodically_by_condition'
+CONDITION_NEAR_DEADLINE = 'near_deadline'
 
 QUEUE_AUTOMATION_TASKS_10 = 'automation_tasks_10'
 QUEUE_AUTOMATION_TASKS_20 = 'automation_tasks_20'
@@ -45,14 +44,19 @@ class AutomationTask:
         self.warnings.append(warning)
 
     def can_do_actions(self):
-        if self.trigger.get('condition') not in (CONDITION_FILTERS_SATISFY, CONDITION_PERIODICALLY, CONDITION_ROWS_ADDED, CONDITION_PERIODICALLY_BY_CONDITION):
+        if self.trigger.get('condition') not in (
+                CONDITION_FILTERS_SATISFY,
+                CONDITION_PERIODICALLY,
+                CONDITION_ROWS_ADDED,
+                CONDITION_PERIODICALLY_BY_CONDITION,
+                CONDITION_NEAR_DEADLINE):
             return False
 
         if self.trigger.get('condition') == CONDITION_ROWS_ADDED:
             if self.data.get('op_type') not in ['insert_row', 'append_rows', 'insert_rows']:
                 return False
 
-        if self.trigger.get('condition') in [CONDITION_FILTERS_SATISFY, CONDITION_ROWS_MODIFIED]:
+        if self.trigger.get('condition') == CONDITION_FILTERS_SATISFY:
             if self.data.get('op_type') not in ['modify_row', 'modify_rows', 'add_link', 'update_links', 'update_rows_links', 'remove_link', 'move_group_rows']:
                 return False
 
