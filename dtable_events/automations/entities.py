@@ -43,6 +43,21 @@ class AutomationTask:
     def append_warning(self, warning):
         self.warnings.append(warning)
 
+    def is_cron_time_matched(self):
+        if self.run_condition not in CRON_CONDITIONS:
+            return False
+        cur_datetime = datetime.now()
+        cur_hour = cur_datetime.hour
+        cur_week_day = cur_datetime.isoweekday()
+        cur_month_day = cur_datetime.day
+        if self.run_condition == PER_DAY:
+            return cur_hour == self.trigger.get('notify_hour', 12)
+        if self.run_condition == PER_WEEK:
+            return cur_hour == self.trigger.get('notify_week_hour', 12) \
+                and cur_week_day == self.trigger.get('notify_week_day', 7)
+        return cur_hour == self.trigger.get('notify_month_hour', 12) \
+            and cur_month_day == self.trigger.get('notify_month_day', 1)
+
     def can_do_actions(self):
         if self.trigger.get('condition') not in (
                 CONDITION_FILTERS_SATISFY,
@@ -64,25 +79,7 @@ class AutomationTask:
             return True
 
         if self.run_condition in CRON_CONDITIONS:
-            cur_datetime = datetime.now()
-            cur_hour = cur_datetime.hour
-            cur_week_day = cur_datetime.isoweekday()
-            cur_month_day = cur_datetime.day
-            if self.run_condition == PER_DAY:
-                trigger_hour = self.trigger.get('notify_hour', 12)
-                if cur_hour != trigger_hour:
-                    return False
-            elif self.run_condition == PER_WEEK:
-                trigger_hour = self.trigger.get('notify_week_hour', 12)
-                trigger_day = self.trigger.get('notify_week_day', 7)
-                if cur_hour != trigger_hour or cur_week_day != trigger_day:
-                    return False
-            else:
-                trigger_hour = self.trigger.get('notify_month_hour', 12)
-                trigger_day = self.trigger.get('notify_month_day', 1)
-                if cur_hour != trigger_hour or cur_month_day != trigger_day:
-                    return False
-            return True
+            return self.is_cron_time_matched()
 
         return False
 

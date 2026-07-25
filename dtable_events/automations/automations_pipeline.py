@@ -288,6 +288,11 @@ class AutomationsPipeline(object):
                 self.put_task(automation_task)
                 return 1
 
+            # near-deadline rules have to query rows from dtable-db before tasks are put into queue,
+            # so check the scheduled time here in advance to avoid querying rows every scan
+            if not automation_task.is_cron_time_matched():
+                return 0
+
             trigger = automation_task.trigger
             try:
                 dtable_metadata = get_metadata(automation_task.dtable_uuid)
