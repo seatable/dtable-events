@@ -13,7 +13,6 @@ CONDITION_ROWS_ADDED = 'rows_added'
 CONDITION_FILTERS_SATISFY = 'filters_satisfy'
 CONDITION_PERIODICALLY = 'run_periodically'
 CONDITION_PERIODICALLY_BY_CONDITION = 'run_periodically_by_condition'
-CONDITION_NEAR_DEADLINE = 'near_deadline'
 
 QUEUE_AUTOMATION_TASKS_10 = 'automation_tasks_10'
 QUEUE_AUTOMATION_TASKS_20 = 'automation_tasks_20'
@@ -63,8 +62,7 @@ class AutomationTask:
                 CONDITION_FILTERS_SATISFY,
                 CONDITION_PERIODICALLY,
                 CONDITION_ROWS_ADDED,
-                CONDITION_PERIODICALLY_BY_CONDITION,
-                CONDITION_NEAR_DEADLINE):
+                CONDITION_PERIODICALLY_BY_CONDITION):
             return False
 
         if self.trigger.get('condition') == CONDITION_ROWS_ADDED:
