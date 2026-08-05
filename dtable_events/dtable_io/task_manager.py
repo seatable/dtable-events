@@ -244,13 +244,6 @@ class TaskManager(object):
 
     @log_function_call
     def add_run_auto_rule_task(self, automation_rule_id):
-        # from dtable_events.automations.automations_pipeline import AutomationTask
-
-        # task_id = str(uuid.uuid4())
-        # automation_task = AutomationTask(automation_rule_id, run_condition, json.loads(trigger), json.loads(actions), dtable_uuid, org_id, owner, None, True, task_id)
-        # task = (
-        #     self.app._automations_pipeline.put_test_task, 
-        #     (automation_task,))
         task_id = str(uuid.uuid4())
         task = (self.app._automations_pipeline.put_test_task, (automation_rule_id, task_id))
         self.tasks_queue.put(task_id)
