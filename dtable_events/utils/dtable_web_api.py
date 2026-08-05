@@ -189,7 +189,7 @@ class DTableWebAPI:
             'detail': detail,
             'to_users': to_users,
             'type': msg_type
-        }, headers=headers)
+        }, headers=headers, timeout=30)
         return parse_response(resp)
 
     def internal_submit_row_workflow(self, workflow_token, row_id, rule_id=None):
@@ -253,7 +253,7 @@ class DTableWebAPI:
         }
         token = jwt.encode({'is_internal': True}, DTABLE_PRIVATE_KEY, algorithm='HS256')
         headers = {'Authorization': 'Token ' + token}
-        resp = requests.get(url, headers=headers)
+        resp = requests.get(url, headers=headers, timeout=30)
         return parse_response(resp).get('roles', [])
 
     def internal_storage_quota(self, org_id=None, username=None):

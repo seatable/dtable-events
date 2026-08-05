@@ -72,8 +72,11 @@ class AutomationsPipeline(object):
         self.workers = 5
         self._db_session_class = init_db_session_class()
 
-        self._redis_client = RedisClient(socket_connect_timeout=5, socket_timeout=10,
-                                         health_check_interval=30, retry_on_timeout=True)
+        # Keep pubsub reconnects isolated from regular Redis commands.
+        self._command_redis_client = RedisClient(socket_connect_timeout=5, socket_timeout=10,
+                                                 health_check_interval=30, retry_on_timeout=True)
+        self._subscriber_redis_client = RedisClient(socket_connect_timeout=5, socket_timeout=10,
+                                                    health_check_interval=30, retry_on_timeout=True)
         self.per_update_channel = 'automation-rule-triggered'
         self._pubsub_no_message_timeout = 5 * 60
 
@@ -121,9 +124,9 @@ class AutomationsPipeline(object):
         while True:
             publish_metric(self.realtime_trigger_count, 'realtime_automation_triggered_count', REALTIME_AUTOMATION_RULES_TRIGGERED_COUNT_HELP)
             publish_metric(self.scheduled_trigger_count, 'scheduled_automation_triggered_count', SCHEDULED_AUTOMATION_RULES_TRIGGERED_COUNT_HELP)
-            publish_metric(self._redis_client.llen(QUEUE_AUTOMATION_TASKS_10), f'{QUEUE_AUTOMATION_TASKS_10}_size', AUTOMATION_QUEUE_10_METRIC_HELP)
-            publish_metric(self._redis_client.llen(QUEUE_AUTOMATION_TASKS_20), f'{QUEUE_AUTOMATION_TASKS_20}_size', AUTOMATION_QUEUE_20_METRIC_HELP)
-            publish_metric(self._redis_client.llen(QUEUE_AUTOMATION_TASKS_30), f'{QUEUE_AUTOMATION_TASKS_30}_size', AUTOMATION_QUEUE_30_METRIC_HELP)
+            publish_metric(self._command_redis_client.llen(QUEUE_AUTOMATION_TASKS_10), f'{QUEUE_AUTOMATION_TASKS_10}_size', AUTOMATION_QUEUE_10_METRIC_HELP)
+            publish_metric(self._command_redis_client.llen(QUEUE_AUTOMATION_TASKS_20), f'{QUEUE_AUTOMATION_TASKS_20}_size', AUTOMATION_QUEUE_20_METRIC_HELP)
+            publish_metric(self._command_redis_client.llen(QUEUE_AUTOMATION_TASKS_30), f'{QUEUE_AUTOMATION_TASKS_30}_size', AUTOMATION_QUEUE_30_METRIC_HELP)
             publish_metric(self.realtime_automation_heartbeat, 'realtime_automation_heartbeat', REALTIME_AUTOMATION_RULES_HEARTBEAT_HELP)
             time.sleep(10)
 
@@ -156,7 +159,7 @@ class AutomationsPipeline(object):
             automation_task.with_test,
             queue_key
         )
-        self._redis_client.lpush(queue_key, json.dumps(automation_task.to_dict()))
+        self._command_redis_client.lpush(queue_key, json.dumps(automation_task.to_dict()))
 
     def receive(self):
         auto_rule_logger.info(
@@ -164,7 +167,7 @@ class AutomationsPipeline(object):
             self.rate_limiter.window_secs,
             self.rate_limiter.percent,
         )
-        subscriber = self._redis_client.get_subscriber(self.per_update_channel)
+        subscriber = self._subscriber_redis_client.get_subscriber(self.per_update_channel)
         last_pubsub_message_time = time.time()
         while True:
             try:
@@ -224,7 +227,7 @@ class AutomationsPipeline(object):
                                 warnings=automation_task.warnings
                             )
                             self.add_exceed_system_resource_limit_entity(automation_task.owner, automation_task.org_id)
-                            self._redis_client.lpush(self.results_queue_key, json.dumps(automation_result.to_dict()))
+                            self._command_redis_client.lpush(self.results_queue_key, json.dumps(automation_result.to_dict()))
                             continue
                         if self.automations_stats_manager.is_exceed(db_session, owner_info['owner'], owner_info['org_id']):
                             auto_rule_logger.info(
@@ -243,14 +246,15 @@ class AutomationsPipeline(object):
                 else:
                     if time.time() - last_pubsub_message_time >= self._pubsub_no_message_timeout:
                         auto_rule_logger.info('no automation message for %ss', self._pubsub_no_message_timeout)
-                        subscriber = self._redis_client.refresh_subscriber(
+                        subscriber = self._subscriber_redis_client.refresh_subscriber(
                             subscriber, self.per_update_channel, 'no message timeout')
                         last_pubsub_message_time = time.time()
                         continue
                     time.sleep(0.5)
             except Exception as e:
                 auto_rule_logger.error('Redis pubsub receive failed: %s', e)
-                subscriber = self._redis_client.refresh_subscriber(subscriber, self.per_update_channel, str(e))
+                subscriber = self._subscriber_redis_client.refresh_subscriber(
+                    subscriber, self.per_update_channel, str(e))
                 last_pubsub_message_time = time.time()
 
     def scan_rules(self):
@@ -326,37 +330,58 @@ class AutomationsPipeline(object):
 
         sched.start()
 
+    def mark_test_task_done(self, task_id, rule_id):
+        for attempt in range(3):
+            try:
+                self._command_redis_client.set(self.get_test_task_cache_key(task_id), 1, timeout=30)
+                return True
+            except Exception:
+                auto_rule_logger.exception(
+                    'Failed to mark test automation task %s as complete (attempt %s/3)',
+                    task_id, attempt + 1)
+                time.sleep(1)
+        auto_rule_logger.error(
+            'Could not mark test automation task %s for rule %s as complete after 3 attempts',
+            task_id, rule_id)
+        return False
+
     def stats(self):
         auto_rule_logger.info("Start stats thread")
         while True:
-            result_info_str = self._redis_client.rpop(self.results_queue_key)
+            try:
+                result_info_str = self._command_redis_client.rpop(self.results_queue_key)
+            except Exception:
+                auto_rule_logger.exception('Failed to pop automation result from Redis')
+                time.sleep(1)
+                continue
             if not result_info_str:
                 time.sleep(0.2)
                 continue
-            result_info = json.loads(result_info_str)
             try:
+                result_info = json.loads(result_info_str)
                 result_info['trigger_time'] = datetime.fromisoformat(result_info['trigger_time'])
                 result_info['trigger_date'] = datetime.fromisoformat(result_info['trigger_date'])
                 result = AutomationResult(**result_info)
             except Exception as e:
-                auto_rule_logger.exception(f'failed to load result {result_info}')
+                auto_rule_logger.exception(f'failed to load result {result_info_str}')
                 continue
+            result_data = result.data if isinstance(result.data, dict) else {}
             auto_rule_logger.info(
-                "Received automation event: rule_id=%s rule_name=%s run_condition=%s dtable_uuid=%s op_type=%s table_id=%s row_id=%s updated_column_keys=%s success=%s run_time=%s test=%s",
+                "Received automation result: rule_id=%s rule_name=%s run_condition=%s dtable_uuid=%s op_type=%s table_id=%s row_id=%s updated_column_keys=%s success=%s run_time=%s test=%s",
                 result.rule_id,
                 result.rule_name,
                 result.run_condition,
                 result.dtable_uuid,
-                result.data['op_type'] if result.data else None,
-                result.data['table_id'] if result.data else None,
-                result.data['row_id'] if result.data else None,
-                result.data['updated_column_keys'] if result.data else None,
+                result_data.get('op_type'),
+                result_data.get('table_id'),
+                result_data.get('row_id'),
+                result_data.get('updated_column_keys'),
                 result.success,
                 result.run_time,
                 result.with_test
             )
             if result.with_test:
-                self._redis_client.set(self.get_test_task_cache_key(result.task_id), 1, timeout=30)
+                self.mark_test_task_done(result.task_id, result.rule_id)
                 continue
             if result.run_condition == 'per_update' and not result.is_exceed_system_resource_limit:
                 owner = result.owner
@@ -369,13 +394,18 @@ class AutomationsPipeline(object):
                     org_id,
                     self.rate_limiter.get_percent(owner, org_id, self.workers),
                 )
-            db_session = self._db_session_class()
+            db_session = None
             try:
+                db_session = self._db_session_class()
                 self.automations_stats_manager.update_stats(db_session, result)
             except Exception as e:
                 auto_rule_logger.exception(e)
             finally:
-                db_session.close()
+                if db_session:
+                    try:
+                        db_session.close()
+                    except Exception:
+                        auto_rule_logger.exception('Failed to close automation stats database session')
 
     def send_exceed_system_resource_limit_notifications(self):
         sched = BlockingScheduler()
@@ -432,10 +462,10 @@ class AutomationsPipeline(object):
         self.put_task(automation_task)
         start_at = time.time()
         while True:
-            done = self._redis_client.get(self.get_test_task_cache_key(automation_task.task_id))
+            done = self._command_redis_client.get(self.get_test_task_cache_key(automation_task.task_id))
             if done:
                 break
-            if time.time() - start_at > 15 * 60:
+            if time.time() - start_at > 10 * 60:
                 raise Exception(f'Wait test automation {automation_task.rule_id} task id {automation_task.task_id} timeout')
             time.sleep(1)
 
