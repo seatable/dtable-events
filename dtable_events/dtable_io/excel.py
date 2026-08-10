@@ -1625,7 +1625,11 @@ def parse_link(column, cell_data, email2nickname):
             else:
                 options = column.get('data').get('array_data', {}).get('options')
             id2name = {op.get('id'): op.get('name') for op in options}
-            return ', '.join([select_option_to_name(id2name, cell) for cell in cell_data])
+            return ', '.join([
+                select_option_to_name(id2name, cell) if isinstance(cell, dict)
+                else id2name.get(cell_data2str(cell), cell_data2str(cell))
+                for cell in cell_data
+            ])
         elif column.get('data').get('array_type') in (ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER):
             return ', '.join([
                 email_to_nickname(email2nickname, cell) if isinstance(cell, dict)
