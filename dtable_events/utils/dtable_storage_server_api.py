@@ -2,7 +2,7 @@ import os
 import uuid
 import requests
 
-from dtable_events.app.config import DTABLE_STORAGE_SERVER_URL
+from dtable_events.app.config import INNER_DTABLE_STORAGE_SERVER_URL
 
 
 TIMEOUT = 90
@@ -37,7 +37,7 @@ class DTableStorageServerAPI(object):
         """
         :param server_url: str
         """
-        self.server_url = DTABLE_STORAGE_SERVER_URL.rstrip('/')
+        self.server_url = INNER_DTABLE_STORAGE_SERVER_URL.rstrip('/')
 
     def __str__(self):
         return '<DTable Storage Server API [ %s ]>' % self.server_url
