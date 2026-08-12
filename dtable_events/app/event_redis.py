@@ -82,6 +82,9 @@ class RedisClient(object):
     def get(self, key):
         return self._redis.get(key)
 
+    def mget(self, keys):
+        return self._redis.mget(keys)
+
     def set(self, key, value, timeout=None):
         if not timeout:
             return self._redis.set(key, value)
@@ -118,6 +121,9 @@ class RedisCache(object):
 
     def get(self, key):
         return self._redis_client.get(key)
+
+    def mget(self, keys):
+        return self._redis_client.mget(keys)
 
     def set(self, key, value, timeout=None):
         return self._redis_client.set(key, value, timeout=timeout)
