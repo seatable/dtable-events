@@ -1,8 +1,5 @@
 import json
-import os
 import time
-from copy import deepcopy
-from dataclasses import dataclass, field
 from datetime import datetime, timedelta, date
 from threading import Thread, Lock
 
@@ -21,7 +18,8 @@ from dtable_events.utils.dtable_web_api import DTableWebAPI
 from dtable_events.utils.utils_metric import AUTOMATION_QUEUE_10_METRIC_HELP, AUTOMATION_QUEUE_20_METRIC_HELP, \
     AUTOMATION_QUEUE_30_METRIC_HELP, REALTIME_AUTOMATION_RULES_HEARTBEAT_HELP, \
     REALTIME_AUTOMATION_RULES_TRIGGERED_COUNT_HELP, SCHEDULED_AUTOMATION_RULES_TRIGGERED_COUNT_HELP, publish_metric
-from dtable_events.automations.entities import AutomationResult, AutomationTask, QUEUE_AUTOMATION_TASKS_10, QUEUE_AUTOMATION_TASKS_20, QUEUE_AUTOMATION_TASKS_30
+from dtable_events.automations.entities import AutomationResult, AutomationTask, \
+    QUEUE_AUTOMATION_TASKS_10, QUEUE_AUTOMATION_TASKS_20, QUEUE_AUTOMATION_TASKS_30
 
 
 class RateLimiter:
