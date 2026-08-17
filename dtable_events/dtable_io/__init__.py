@@ -966,27 +966,45 @@ def convert_document_to_pdf(dtable_uuid, doc_uuid, row_id, username):
         dtable_io_logger.exception('dtable: %s plugin: document doc_uuid: %s row: %s error: %s', dtable_uuid, doc_uuid, row_id, e)
 
 
-def _merge_view_rows_with_db_rows(view_rows, db_row_map):
-    def merge_node(node):
-        if not isinstance(node, dict):
-            return node
-
-        row_id = node.get('_id')
-        db_row = db_row_map.get(row_id)
-        # Keep the view structure from dtable-server, but always prefer the
-        # actual row values returned by dtable-db for leaf rows.
-        merged_row = deepcopy(db_row if db_row else node)
-
-        if isinstance(merged_row.get('rows'), list):
-            merged_row['rows'] = [merge_node(row) for row in merged_row['rows']]
-        if isinstance(merged_row.get('subgroups'), list):
-            merged_row['subgroups'] = [merge_node(group) for group in merged_row['subgroups']]
-        return merged_row
-
-    merged_rows = []
-    for row in view_rows or []:
-        merged_rows.append(merge_node(row))
-    return merged_rows
+def generate_groups(db_rows, group_bys, table_metadata):
+    if not group_bys:
+        return db_rows
+    group_by = group_bys[0]
+    column_key = group_by.get('column_key')
+    column = next(filter(lambda column: column['key'] == column_key, table_metadata['columns']), None)
+    column_name = column['name']
+    sort_type = group_by.get('sort_type') or 'up'
+    groups = []
+    empty_value_rows = []
+    for row in db_rows:
+        cell_value = row.get(column_name)
+        if not cell_value and cell_value != 0:
+            empty_value_rows.append(row)
+            continue
+        group = next(filter(lambda group: group['cell_value'] == cell_value, groups), None)
+        if group:
+            groups['rows'].append(row)
+        else:
+            groups.append({
+                'column_key': column_key,
+                'column_name': column_name,
+                'cell_value': cell_value,
+                'rows': [row]
+            })
+    groups = sorted(groups, key=lambda group: group.get('cell_value'), reverse=(sort_type != 'up'))
+    if empty_value_rows:
+        groups.append({
+            'column_key': column_key,
+            'column_name': column_name,
+            'cell_value': None,
+            'rows': empty_value_rows
+        })
+    if group_bys[1:]:
+        for group in groups:
+            group_rows = group['rows']
+            group['rows'] = None
+            group['subgroups'] = generate_groups(group_rows, group_bys[1:], table_metadata)
+    return groups
 
 
 def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image=False):
@@ -1062,23 +1080,21 @@ def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, u
     wb = openpyxl.Workbook(write_only=True)
     ws = wb.create_sheet(sheet_name)
 
-    try:
-        view_rows = get_view_rows_from_dtable_server(dtable_uuid, table_name, view_name, username, id_in_org, user_department_ids_map, permission)
-    except BaseExceedsException as e:
-        raise Exception(e.error_msg)
-
-    dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
+    kwargs = {
+        'id_in_org': id_in_org,
+        'user_department_ids_map': user_department_ids_map
+    }
+    dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL, kwargs=kwargs)
     try:
         db_rows = get_export_view_rows_from_dtable_db(dtable_db_api, table_id=table_id, view_id=view_id)
     except Exception as e:
         dtable_io_logger.error('get db rows. ERROR: {}'.format(e))
         return
 
-    db_row_map = {row.get('_id'): row for row in db_rows if row.get('_id')}
-    dtable_rows = _merge_view_rows_with_db_rows(view_rows, db_row_map)
-
     column_name_to_column = {col.get('name'): col for col in cols}
     is_group_view = bool(target_view.get('groupbys'))
+
+    dtable_rows = generate_groups(db_rows, target_view.get('groupbys'), target_table)
 
     params = (dtable_rows, email2nickname, ws, 0, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, is_group_view, summary_col_info, row_height, header_height)
 
