@@ -526,6 +526,28 @@ TEST_CONDITIONS = [
         "expected_sql": "SELECT * FROM `Table1` WHERE (`Modify` not in ('87d485c2281a42adbddb137a1070f395@auth.local', 'xxx')) LIMIT 0, 100",
         "by_group": False,
     },
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'Creator', 'filter_predicate': 'include_me', 'filter_term': ["87d485c2281a42adbddb137a1070f395@auth.local"]}
+            ],
+            "filter_predicate": 'And',
+            "sorts":[],
+        },
+        "expected_sql": "SELECT * FROM `Table1` WHERE (`Creator` = '87d485c2281a42adbddb137a1070f395@auth.local') LIMIT 0, 100",
+        "by_group": False,
+    },
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'Modify', 'filter_predicate': 'include_me', 'filter_term': ["87d485c2281a42adbddb137a1070f395@auth.local"]}
+            ],
+            "filter_predicate": 'And',
+            "sorts":[],
+        },
+        "expected_sql": "SELECT * FROM `Table1` WHERE (`Modify` = '87d485c2281a42adbddb137a1070f395@auth.local') LIMIT 0, 100",
+        "by_group": False,
+    },
 
     # ignore conditions
     ## filter-term incomplete

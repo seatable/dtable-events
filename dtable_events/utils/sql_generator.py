@@ -1107,7 +1107,7 @@ class CreatorOperator(Operator):
         if not isinstance(select_collaborators, list):
             select_collaborators = [select_collaborators, ]
         creator = select_collaborators[0] if select_collaborators else ''
-        return "%s %s '%s'" % (
+        return "`%s` %s '%s'" % (
             self.column_name,
             '=',
             creator
