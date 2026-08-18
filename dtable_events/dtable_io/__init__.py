@@ -966,50 +966,9 @@ def convert_document_to_pdf(dtable_uuid, doc_uuid, row_id, username):
         dtable_io_logger.exception('dtable: %s plugin: document doc_uuid: %s row: %s error: %s', dtable_uuid, doc_uuid, row_id, e)
 
 
-def generate_groups(db_rows, group_bys, table_metadata):
-    if not group_bys:
-        return db_rows
-    group_by = group_bys[0]
-    column_key = group_by.get('column_key')
-    column = next(filter(lambda column: column['key'] == column_key, table_metadata['columns']), None)
-    column_name = column['name']
-    sort_type = group_by.get('sort_type') or 'up'
-    groups = []
-    empty_value_rows = []
-    for row in db_rows:
-        cell_value = row.get(column_name)
-        if not cell_value and cell_value != 0:
-            empty_value_rows.append(row)
-            continue
-        group = next(filter(lambda group: group['cell_value'] == cell_value, groups), None)
-        if group:
-            groups['rows'].append(row)
-        else:
-            groups.append({
-                'column_key': column_key,
-                'column_name': column_name,
-                'cell_value': cell_value,
-                'rows': [row]
-            })
-    groups = sorted(groups, key=lambda group: group.get('cell_value'), reverse=(sort_type != 'up'))
-    if empty_value_rows:
-        groups.append({
-            'column_key': column_key,
-            'column_name': column_name,
-            'cell_value': None,
-            'rows': empty_value_rows
-        })
-    if group_bys[1:]:
-        for group in groups:
-            group_rows = group['rows']
-            group['rows'] = None
-            group['subgroups'] = generate_groups(group_rows, group_bys[1:], table_metadata)
-    return groups
-
-
 def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image=False):
-    from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_view_rows_from_dtable_server, \
-        get_export_view_rows_from_dtable_db
+    from dtable_events.dtable_io.excel_group import generate_groups, compute_group_summaries
+    from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_export_view_rows_from_dtable_db
     from dtable_events.dtable_io.excel import write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR
     from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, escape_sheet_name
     from dtable_events.utils.dtable_db_api import DTableDBAPI
@@ -1094,7 +1053,9 @@ def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, u
     column_name_to_column = {col.get('name'): col for col in cols}
     is_group_view = bool(target_view.get('groupbys'))
 
-    dtable_rows = generate_groups(db_rows, target_view.get('groupbys'), target_table)
+    first_day_of_week = metadata.get('settings', {}).get('date_settings', {}).get('first_day_of_week')
+    dtable_rows = generate_groups(db_rows, target_view.get('groupbys'), target_table, email2nickname, first_day_of_week)
+    compute_group_summaries(dtable_rows, target_table)
 
     params = (dtable_rows, email2nickname, ws, 0, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, is_group_view, summary_col_info, row_height, header_height)
 
