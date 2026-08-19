@@ -143,11 +143,12 @@ def convert_db_rows(metadata, results):
 
 class DTableDBAPI(object):
 
-    def __init__(self, username, dtable_uuid, dtable_db_url):
+    def __init__(self, username, dtable_uuid, dtable_db_url, kwargs=None):
         self.username = username
         self.dtable_uuid = uuid_str_to_36_chars(dtable_uuid) if dtable_uuid else None
         self.headers = None
         self.dtable_db_url = dtable_db_url.rstrip('/') if dtable_db_url else None
+        self.kwargs = kwargs
         self._init()
 
     def _init(self):
@@ -165,6 +166,14 @@ class DTableDBAPI(object):
         }
         if is_db_admin:
             payload['is_db_admin'] = True
+        if self.kwargs and self.kwargs.get('org_id'):
+            payload['org_id'] = self.kwargs['org_id']
+        if self.kwargs and self.kwargs.get('owner_id'):
+            payload['owner_id'] = self.kwargs['owner_id']
+        if self.kwargs and self.kwargs.get('user_department_ids_map'):
+            payload['user_department_ids_map'] = self.kwargs['user_department_ids_map']
+        if self.kwargs and self.kwargs.get('id_in_org'):
+            payload['id_in_org'] = self.kwargs['id_in_org']
         token = jwt.encode(
             payload=payload,
             key=DTABLE_PRIVATE_KEY
