@@ -391,7 +391,7 @@ class SingleSelectOperator(Operator):
         return "`%s` %s '%s'" % (
             self.column_name,
             '=',
-            filter_term
+            self.escape_string(filter_term)
         )
 
     def op_is_not(self):
