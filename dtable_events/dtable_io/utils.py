@@ -1538,7 +1538,7 @@ def get_rows_from_dtable_db(dtable_db_api, table_name, limit=50000):
 def get_export_view_rows_from_dtable_db(dtable_db_api, table_name=None, table_id=None, view_name=None, view_id=None,
                             convert_link_id=True, convert_keys=True, convert_date=False):
     rows = []
-    start, limit = 0, 10000
+    start, limit = 0, 1000
     while True:
         rows_rsp = dtable_db_api.list_rows(
             table_name=table_name,
