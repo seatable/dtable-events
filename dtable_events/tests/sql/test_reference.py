@@ -2,6 +2,8 @@ import os
 import time
 from datetime import timedelta, datetime
 
+from dtable_events.utils.sql_generator import ColumnFilterInvalidError
+
 # set timezone
 os.environ['TZ'] = 'UTC'
 time.tzset()  # 在Unix-like系统上生效
@@ -692,6 +694,137 @@ TEST_CONDITIONS = [
         },
         "by_group": True,
         "expected_error": ValueError
+    },
+
+    # Formula column, result_type = number
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'FNum', 'filter_predicate': 'equal', 'filter_term': 5}
+            ],
+            "filter_predicate": 'And',
+            "sorts": [],
+        },
+        "expected_sql": "SELECT * FROM `Table1` WHERE (`FNum` = 5) LIMIT 0, 100",
+        "by_group": False,
+    },
+    # Formula column, result_type = string
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'FStr', 'filter_predicate': 'contains', 'filter_term': 'abc'}
+            ],
+            "filter_predicate": 'And',
+            "sorts": [],
+        },
+        "expected_sql": "SELECT * FROM `Table1` WHERE (`FStr` ilike '%abc%') LIMIT 0, 100",
+        "by_group": False,
+    },
+    # Formula column, result_type = date
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'FDate', 'filter_predicate': 'is', 'filter_term': '2021-12-20', 'filter_term_modifier': 'exact_date'}
+            ],
+            "filter_predicate": 'And',
+            "sorts": [],
+        },
+        "expected_sql": "SELECT * FROM `Table1` WHERE ((`FDate` >= '2021-12-20' and `FDate` < '2021-12-21')) LIMIT 0, 100",
+        "by_group": False,
+    },
+    # Formula column, result_type = bool
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'FBool', 'filter_predicate': 'is', 'filter_term': 'true'}
+            ],
+            "filter_predicate": 'And',
+            "sorts": [],
+        },
+        "expected_sql": "SELECT * FROM `Table1` WHERE (`FBool` = true) LIMIT 0, 100",
+        "by_group": False,
+    },
+    # Formula column, result_type = array (array_type text)
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'FArr', 'filter_predicate': 'contains', 'filter_term': 'abc'}
+            ],
+            "filter_predicate": 'And',
+            "sorts": [],
+        },
+        "expected_sql": "SELECT * FROM `Table1` WHERE (`FArr` ilike '%abc%') LIMIT 0, 100",
+        "by_group": False,
+    },
+    # Link column, array_type = number
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'LNum', 'filter_predicate': 'equal', 'filter_term': 5}
+            ],
+            "filter_predicate": 'And',
+            "sorts": [],
+        },
+        "expected_sql": "SELECT * FROM `Table1` WHERE (`LNum` = 5) LIMIT 0, 100",
+        "by_group": False,
+    },
+    # Department single select
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'Dept', 'filter_predicate': 'is', 'filter_term': 1}
+            ],
+            "filter_predicate": 'And',
+            "sorts": [],
+        },
+        "expected_sql": "SELECT * FROM `Table1` WHERE (`Dept` = 1) LIMIT 0, 100",
+        "by_group": False,
+    },
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'Dept', 'filter_predicate': 'is_any_of', 'filter_term': [1, 2]}
+            ],
+            "filter_predicate": 'And',
+            "sorts": [],
+        },
+        "expected_sql": "SELECT * FROM `Table1` WHERE (`Dept` IN (1, 2)) LIMIT 0, 100",
+        "by_group": False,
+    },
+    # Geolocation
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'Geo', 'filter_predicate': 'is_empty'}
+            ],
+            "filter_predicate": 'And',
+            "sorts": [],
+        },
+        "expected_sql": "SELECT * FROM `Table1` WHERE (`Geo` is null) LIMIT 0, 100",
+        "by_group": False,
+    },
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'Geo', 'filter_predicate': 'is_not_empty'}
+            ],
+            "filter_predicate": 'And',
+            "sorts": [],
+        },
+        "expected_sql": "SELECT * FROM `Table1` WHERE (`Geo` is not null) LIMIT 0, 100",
+        "by_group": False,
+    },
+    # Unsupported predicate raises ColumnFilterInvalidError
+    {
+        "filter_conditions": {
+            "filters": [
+                {'column_name': 'Num', 'filter_predicate': 'has_any_of', 'filter_term': [1]}
+            ],
+            "filter_predicate": 'And',
+            "sorts": [],
+        },
+        "by_group": False,
+        "expected_error": ColumnFilterInvalidError,
     },
 ]
 

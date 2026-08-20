@@ -1535,24 +1535,21 @@ def get_rows_from_dtable_db(dtable_db_api, table_name, limit=50000):
     return dtable_rows
 
 
-def get_export_view_rows_from_dtable_db(dtable_db_api, table_name=None, table_id=None, view_name=None, view_id=None,
-                            convert_link_id=True, convert_keys=True, convert_date=False):
+def get_export_view_rows_from_dtable_db(dtable_db_api, table_name, columns, filter_conditions, query_column_names=None, server_only=True):
+    from dtable_events.utils.sql_generator import filter2sql
+
     rows = []
-    start, limit = 0, 1000
+    start, limit = 0, 10000
     while True:
-        rows_rsp = dtable_db_api.list_rows(
-            table_name=table_name,
-            table_id=table_id,
-            view_name=view_name,
-            view_id=view_id,
-            start=start,
-            limit=limit,
-            convert_link_id=convert_link_id,
-            convert_keys=convert_keys,
-            convert_date=convert_date
-        )
-        rows.extend(rows_rsp['rows'])
-        if len(rows_rsp['rows']) < limit:
+        filter_conditions['start'] = start
+        filter_conditions['limit'] = limit
+        sql = filter2sql(table_name, columns, filter_conditions, by_group=False)
+        if query_column_names:
+            column_names_str = ', '.join('`%s`' % name for name in query_column_names)
+            sql = sql.replace('*', column_names_str, 1)
+        step_rows, _ = dtable_db_api.query(sql, convert=True, server_only=server_only)
+        rows.extend(step_rows)
+        if len(step_rows) < limit:
             break
         start += limit
     return rows

@@ -1406,30 +1406,10 @@ class StatisticSQLGenerator(object):
         return error_msg
 
     def _normalize_filter(self, filter_item, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids):
-        filter_term = filter_item.get('filter_term')
-        filter_predicate = filter_item.get('filter_predicate')
-        if filter_predicate == 'include_me':
-            filter_item['filter_term'].append(username)
-        if filter_predicate == 'is_current_user_ID':
-            filter_item['filter_term'] = id_in_org
-        if filter_term == 'current_user_department':
-            filter_item['current_user_department'] = current_user_department_ids
-        if filter_term == 'current_user_department_and_sub':
-            filter_item['current_user_department_and_sub'] = current_user_department_and_sub_ids
-        if isinstance(filter_term, list):
-            if 'current_user_department' in filter_term or 'current_user_department_and_sub' in filter_term:
-                filter_item['current_user_department'] = current_user_department_ids
-                filter_item['current_user_department_and_sub'] = current_user_department_and_sub_ids
-        return filter_item
+        return normalize_filter(filter_item, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids)
 
     def _pre_filter_to_filter_term(self, filters, username, id_in_org, current_user_department_ids = [], current_user_department_and_sub_ids = []):
-        for index, filter_item in enumerate(filters):
-            sub_filters = filter_item.get('filters')
-            if sub_filters:
-                filters[index]['filters'] = [self._normalize_filter(filter, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids) for filter in sub_filters]
-            else:
-                filters[index] = self._normalize_filter(filter_item, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids)
-        return filters
+        return pre_filter_to_filter_term(filters, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids)
 
 
     def _get_column_by_key(self, column_key):
@@ -2964,3 +2944,31 @@ def is_user_filter(filter_item):
 
 def has_user_filter(filters):
     return any([is_user_filter(filter_item) for filter_item in filters])
+
+
+def normalize_filter(filter_item, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids):
+    filter_term = filter_item.get('filter_term')
+    filter_predicate = filter_item.get('filter_predicate')
+    if filter_predicate == 'include_me':
+        filter_item['filter_term'].append(username)
+    if filter_predicate == 'is_current_user_ID':
+        filter_item['filter_term'] = id_in_org
+    if filter_term == 'current_user_department':
+        filter_item['current_user_department'] = current_user_department_ids
+    if filter_term == 'current_user_department_and_sub':
+        filter_item['current_user_department_and_sub'] = current_user_department_and_sub_ids
+    if isinstance(filter_term, list):
+        if 'current_user_department' in filter_term or 'current_user_department_and_sub' in filter_term:
+            filter_item['current_user_department'] = current_user_department_ids
+            filter_item['current_user_department_and_sub'] = current_user_department_and_sub_ids
+    return filter_item
+
+
+def pre_filter_to_filter_term(filters, username, id_in_org, current_user_department_ids=[], current_user_department_and_sub_ids=[]):
+    for index, filter_item in enumerate(filters):
+        sub_filters = filter_item.get('filters')
+        if sub_filters:
+            filters[index]['filters'] = [normalize_filter(filter, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids) for filter in sub_filters]
+        else:
+            filters[index] = normalize_filter(filter_item, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids)
+    return filters
