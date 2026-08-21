@@ -1896,6 +1896,9 @@ def handle_grouped_row(row, ws, cols_without_hidden, column_name_to_column, sub_
                 formula_value, number_format = parse_formula_number(first_cell_value, group_column.get('data'))
                 c = WriteOnlyCell(ws, value=formula_value)
                 c.number_format = number_format
+            elif group_column.get('type') == ColumnTypes.DURATION:
+                cell_value = format_duration(first_cell_value, group_column.get('data'))
+                c = WriteOnlyCell(ws, value=ILLEGAL_CHARACTERS_RE.sub('', cell_value))
             else:
                 cell_value = cell_data2str(first_cell_value)
                 c = WriteOnlyCell(ws, value=ILLEGAL_CHARACTERS_RE.sub('', cell_value))

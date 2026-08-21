@@ -972,6 +972,7 @@ def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, u
     from dtable_events.dtable_io.excel import write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR
     from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, escape_sheet_name
     from dtable_events.utils.dtable_db_api import DTableDBAPI
+    from dtable_events.utils.sql_generator import pre_filter_to_filter_term
     import openpyxl
 
     target_dir = TEMP_EXPORT_VIEW_DIR + dtable_uuid
@@ -1044,8 +1045,29 @@ def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, u
         'user_department_ids_map': user_department_ids_map
     }
     dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL, kwargs=kwargs)
+
+    filters = pre_filter_to_filter_term(
+        target_view.get('filters') or [],
+        username,
+        id_in_org,
+        (user_department_ids_map or {}).get('current_user_department_ids') or [],
+        (user_department_ids_map or {}).get('current_user_department_and_sub_ids') or [],
+    )
+    filter_conditions = {
+        'sorts': target_view.get('sorts'),
+        'filters': filters,
+        'filter_conjunction': target_view.get('filter_conjunction'),
+    }
+    selected_columns_map = {col.get('key'): col for col in cols_without_hidden}
+    for group_by in (target_view.get('groupbys') or []):
+        column_key = group_by.get('column_key')
+        if column_key and column_key not in selected_columns_map:
+            column = next((c for c in cols if c.get('key') == column_key), None)
+            if column:
+                selected_columns_map[column_key] = column
+    query_column_names = [col.get('name') for col in selected_columns_map.values()]
     try:
-        db_rows = get_export_view_rows_from_dtable_db(dtable_db_api, table_id=table_id, view_id=view_id)
+        db_rows = get_export_view_rows_from_dtable_db(dtable_db_api, table_name, cols, filter_conditions, query_column_names=query_column_names, server_only=True)
     except Exception as e:
         dtable_io_logger.error('get db rows. ERROR: {}'.format(e))
         return
