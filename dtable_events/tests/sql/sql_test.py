@@ -117,6 +117,57 @@ class SqlTest(unittest.TestCase):
             ]),
             "SELECT * FROM `Table1` WHERE (((`Dept` IN (1, 2)))) LIMIT 0, 100",
         )
+        # deeply nested filter group (3 levels) is_current_user_ID must still be normalized
+        self.assertEqual(
+            to_sql([
+                {
+                    'filters': [
+                        {
+                            'filters': [
+                                {'column_name': '名称', 'filter_predicate': 'is_current_user_ID', 'filter_term': ''},
+                            ],
+                            'filter_conjunction': 'And',
+                        },
+                    ],
+                    'filter_conjunction': 'And',
+                },
+            ]),
+            "SELECT * FROM `Table1` WHERE (((`名称` = 'admin-1'))) LIMIT 0, 100",
+        )
+        # deeply nested filter group (3 levels) current_user_department_and_sub must still be normalized
+        self.assertEqual(
+            to_sql([
+                {
+                    'filters': [
+                        {
+                            'filters': [
+                                {'column_name': 'Dept', 'filter_predicate': 'is', 'filter_term': 'current_user_department_and_sub'},
+                            ],
+                            'filter_conjunction': 'And',
+                        },
+                    ],
+                    'filter_conjunction': 'And',
+                },
+            ]),
+            "SELECT * FROM `Table1` WHERE (((`Dept` IN (1, 2, 3)))) LIMIT 0, 100",
+        )
+        # deeply nested filter group (3 levels) list-valued department filter must still be normalized
+        self.assertEqual(
+            to_sql([
+                {
+                    'filters': [
+                        {
+                            'filters': [
+                                {'column_name': 'Dept', 'filter_predicate': 'is_any_of', 'filter_term': ['current_user_department_and_sub', 999]},
+                            ],
+                            'filter_conjunction': 'And',
+                        },
+                    ],
+                    'filter_conjunction': 'And',
+                },
+            ]),
+            "SELECT * FROM `Table1` WHERE (((`Dept` IN (1, 2, 3, 999)))) LIMIT 0, 100",
+        )
 
 
 if __name__ == '__main__':
