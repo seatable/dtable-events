@@ -38,6 +38,15 @@ def check_auth_token(req):
     return True, None
 
 
+def parse_images_max_size(value):
+    if not value:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 @app.route('/add-export-task', methods=['GET'])
 def add_export_task():
     from dtable_events.utils import parse_bool
@@ -1089,9 +1098,10 @@ def convert_view_to_excel():
     name = context.get('name')
     repo_id = context.get('repo_id')
     is_support_image = to_python_boolean(context.get('is_support_image', 'false'))
+    images_max_size = parse_images_max_size(context.get('images_max_size'))
 
     try:
-        task_id = task_manager.add_convert_view_to_excel_task(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image)
+        task_id = task_manager.add_convert_view_to_excel_task(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image, images_max_size)
     except Exception as e:
         dtable_io_logger.error(e)
         return make_response((e, 500))
@@ -1117,9 +1127,10 @@ def convert_table_to_excel():
     name = request.args.get('name')
     repo_id = request.args.get('repo_id')
     is_support_image = to_python_boolean(request.args.get('is_support_image', 'false'))
+    images_max_size = parse_images_max_size(request.args.get('images_max_size'))
 
     try:
-        task_id = task_manager.add_convert_table_to_excel_task(dtable_uuid, table_id, username, name, repo_id, is_support_image)
+        task_id = task_manager.add_convert_table_to_excel_task(dtable_uuid, table_id, username, name, repo_id, is_support_image, images_max_size)
     except Exception as e:
         dtable_io_logger.error(e)
         return make_response((e, 500))
@@ -1197,9 +1208,10 @@ def convert_big_data_view_to_excel():
     name = data.get('name')
     repo_id = data.get('repo_id')
     is_support_image = to_python_boolean(data.get('is_support_image', 'false'))
+    images_max_size = parse_images_max_size(data.get('images_max_size'))
 
     try:
-        task_id = big_data_task_manager.add_convert_big_data_view_to_excel_task(dtable_uuid, table_id, view_id, username, name, repo_id, is_support_image)
+        task_id = big_data_task_manager.add_convert_big_data_view_to_excel_task(dtable_uuid, table_id, view_id, username, name, repo_id, is_support_image, images_max_size)
     except Exception as e:
         dtable_io_logger.error(e)
         return make_response((e, 500))
@@ -1431,9 +1443,10 @@ def convert_app_table_page_to_excel():
     filter_condition_groups = json.loads(data.get('filter_condition_groups'))
     shown_column_keys = json.loads(data.get('shown_column_keys'))
     is_support_image = to_python_boolean(data.get('is_support_image', 'false'))
+    images_max_size = parse_images_max_size(data.get('images_max_size'))
 
     try:
-        task_id = big_data_task_manager.add_convert_app_table_page_to_excel_task(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_condition_groups, shown_column_keys, is_support_image)
+        task_id = big_data_task_manager.add_convert_app_table_page_to_excel_task(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_condition_groups, shown_column_keys, is_support_image, images_max_size)
     except Exception as e:
         dtable_io_logger.error(e)
         return make_response((e, 500))

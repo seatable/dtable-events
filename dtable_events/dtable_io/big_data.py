@@ -4,7 +4,7 @@ import shutil
 import uuid
 from copy import deepcopy
 
-from dtable_events.dtable_io.excel import parse_row, write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR
+from dtable_events.dtable_io.excel import parse_row, write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR, EXPORT_IMAGE_MAX_SIZE
 from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, get_metadata_from_dtable_server, \
     escape_sheet_name
 from dtable_events.utils import get_location_tree_json, gen_random_option, format_date_in_query
@@ -439,7 +439,7 @@ def update_excel_to_db(
     return
 
 
-def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, task_id, tasks_status_map, repo_id, is_support_image=False):
+def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, task_id, tasks_status_map, repo_id, is_support_image=False, images_max_size=None):
     from dtable_events.dtable_io import dtable_io_logger
 
     # init task_status_map for exporting big data process
@@ -510,7 +510,8 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
     target_path = os.path.join(target_dir, excel_name)
 
     images_target_dir = os.path.join(IMAGE_TMP_DIR, dtable_uuid, str(uuid.uuid4()))
-    image_param = {'num': 0, 'is_support': is_support_image, 'images_target_dir': images_target_dir}
+    image_param = {'num': 0, 'is_support': is_support_image, 'images_target_dir': images_target_dir,
+                   'total_size': 0, 'max_size': int(images_max_size * 1024 * 1024) if images_max_size else EXPORT_IMAGE_MAX_SIZE}
 
     wb = openpyxl.Workbook(write_only=True)
     ws = wb.create_sheet(sheet_name)
@@ -583,7 +584,7 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
         pass
 
 
-def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_condition_groups, shown_column_keys, task_id, tasks_status_map, is_support_image=False):
+def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_condition_groups, shown_column_keys, task_id, tasks_status_map, is_support_image=False, images_max_size=None):
     from dtable_events.dtable_io import dtable_io_logger
 
     tasks_status_map[task_id] = {
@@ -633,7 +634,8 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
     excel_name = app_name + '_' + page_name + '.xlsx'
     target_path = os.path.join(target_dir, excel_name)
     images_target_dir = os.path.join(IMAGE_TMP_DIR, dtable_uuid, str(uuid.uuid4()))
-    image_param = {'num': 0, 'is_support': is_support_image, 'images_target_dir': images_target_dir}
+    image_param = {'num': 0, 'is_support': is_support_image, 'images_target_dir': images_target_dir,
+                   'total_size': 0, 'max_size': int(images_max_size * 1024 * 1024) if images_max_size else EXPORT_IMAGE_MAX_SIZE}
 
     wb = openpyxl.Workbook(write_only=True)
     ws = wb.create_sheet(sheet_name)

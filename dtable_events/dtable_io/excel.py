@@ -63,6 +63,8 @@ IMAGE_TMP_DIR = '/tmp/dtable-io/export-excel/images/'
 
 EXPORT_IMAGE_LIMIT = 1000
 
+EXPORT_IMAGE_MAX_SIZE = 100 * 1024 * 1024
+
 
 EXCEL_IMPORT_DIR = '/tmp/dtable-io/'
 
@@ -1767,7 +1769,7 @@ def get_file_download_url(file_url, dtable_uuid, repo_id):
     url = gen_file_get_url(token, asset_name)
     return url
 
-def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, image_num, images_target_dir, column, row_height):
+def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, image_num, image_total_size, image_max_size, images_target_dir, column, row_height):
     import requests
     from openpyxl.drawing.image import Image
     from PIL import Image as PILImage
@@ -1787,7 +1789,9 @@ def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, i
     to_col_offset = -col_width * 7700
     for image_url in images:
         if image_num >= EXPORT_IMAGE_LIMIT:
-            return image_num
+            return image_num, image_total_size
+        if image_max_size and image_total_size >= image_max_size:
+            return image_num, image_total_size
         real_image_url = urljoin(image_url, urlparse(image_url).path)
 
         image_name = unquote(real_image_url.split('/')[-1].strip())
@@ -1800,6 +1804,7 @@ def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, i
 
         response = requests.get(image_download_url)
         image_content = response.content
+        image_size = len(image_content)
 
         tmp_image_path = os.path.join(image_dir, image_name)
         with open(tmp_image_path, 'wb') as f:
@@ -1838,11 +1843,15 @@ def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, i
         to_anchor = AnchorMarker(col_num + 1, to_col_offset, row_num + 1, to_row_offset)
         img.anchor = TwoCellAnchor('twoCell', from_anchor, to_anchor)
 
+        if image_max_size and image_total_size + image_size > image_max_size:
+            return image_num, image_total_size
+
         ws.add_image(img)
         if to_col_offset < 0:
             from_col_offset += image_column_offset_transfer(row_height, img_width, image_height)
         image_num += 1
-    return image_num
+        image_total_size += image_size
+    return image_num, image_total_size
 
 
 def format_time(cell_data):
@@ -2020,11 +2029,14 @@ def _build_image_excel_cell(ws, cell_value, row_num, dtable_uuid, repo_id, image
 
     c = WriteOnlyCell(ws)
     image_num = image_param.get('num')
+    image_total_size = image_param.get('total_size', 0)
+    image_max_size = image_param.get('max_size')
     images_target_dir = image_param.get('images_target_dir')
-    if image_num < EXPORT_IMAGE_LIMIT:
-        num = add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, image_num,
-                                 images_target_dir, column, row_height)
+    if image_num < EXPORT_IMAGE_LIMIT and (not image_max_size or image_total_size < image_max_size):
+        num, total_size = add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, image_num,
+                                             image_total_size, image_max_size, images_target_dir, column, row_height)
         image_param['num'] = num
+        image_param['total_size'] = total_size
     return c
 
 
