@@ -2961,10 +2961,15 @@ def normalize_filter(filter_item, username, id_in_org, current_user_department_i
         if 'current_user_department' in filter_term or 'current_user_department_and_sub' in filter_term:
             filter_item['current_user_department'] = current_user_department_ids
             filter_item['current_user_department_and_sub'] = current_user_department_and_sub_ids
+    sub_filters = filter_item.get('filters')
+    if sub_filters:
+        filter_item['filters'] = [normalize_filter(filter, username, id_in_org, current_user_department_ids, current_user_department_and_sub_ids) for filter in sub_filters]
     return filter_item
 
 
-def pre_filter_to_filter_term(filters, username, id_in_org, current_user_department_ids=[], current_user_department_and_sub_ids=[]):
+def pre_filter_to_filter_term(filters, username, id_in_org, current_user_department_ids=None, current_user_department_and_sub_ids=None):
+    current_user_department_ids = current_user_department_ids or []
+    current_user_department_and_sub_ids = current_user_department_and_sub_ids or []
     for index, filter_item in enumerate(filters):
         sub_filters = filter_item.get('filters')
         if sub_filters:

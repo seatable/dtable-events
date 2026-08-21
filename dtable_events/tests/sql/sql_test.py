@@ -83,6 +83,40 @@ class SqlTest(unittest.TestCase):
             to_sql([{'filters': [{'column_name': 'Colla', 'filter_predicate': 'include_me', 'filter_term': ['b@x.com']}], 'filter_conjunction': 'And'}]),
             "SELECT * FROM `Table1` WHERE ((`Colla` in ('b@x.com', 'me@x.com'))) LIMIT 0, 100",
         )
+        # deeply nested filter group (3 levels) include_me must still be normalized
+        self.assertEqual(
+            to_sql([
+                {
+                    'filters': [
+                        {
+                            'filters': [
+                                {'column_name': 'Colla', 'filter_predicate': 'include_me', 'filter_term': ['c@x.com']},
+                            ],
+                            'filter_conjunction': 'And',
+                        },
+                    ],
+                    'filter_conjunction': 'And',
+                },
+            ]),
+            "SELECT * FROM `Table1` WHERE (((`Colla` in ('c@x.com', 'me@x.com')))) LIMIT 0, 100",
+        )
+        # deeply nested filter group (3 levels) current_user_department must still be normalized
+        self.assertEqual(
+            to_sql([
+                {
+                    'filters': [
+                        {
+                            'filters': [
+                                {'column_name': 'Dept', 'filter_predicate': 'is', 'filter_term': 'current_user_department'},
+                            ],
+                            'filter_conjunction': 'And',
+                        },
+                    ],
+                    'filter_conjunction': 'And',
+                },
+            ]),
+            "SELECT * FROM `Table1` WHERE (((`Dept` IN (1, 2)))) LIMIT 0, 100",
+        )
 
 
 if __name__ == '__main__':
