@@ -6,7 +6,8 @@ d = os.path.dirname
 sys.path.append(sys.path.append(d(d(d(d(__file__))))))
 from sql.column_reference import TEST_COLUMNS, TABLES, LINK_COLUMN
 from sql.test_reference import TEST_CONDITIONS, TEST_CONDITIONS_LINK
-from dtable_events import filter2sql, linkRecords2sql
+from dtable_events import filter2sql, linkRecords2sql, statistic2sql
+from dtable_events.utils.constants import StatisticType
 from dtable_events.utils.sql_generator import pre_filter_to_filter_term
 
 class SqlTest(unittest.TestCase):
@@ -49,8 +50,25 @@ class SqlTest(unittest.TestCase):
             record_ids = condition_l.get('row_ids')
             sql_link = linkRecords2sql(current_table, link_column, record_ids, tables)
             self.assertEqual(sql_link, expected_sql_link)
-        
 
+    def test_include_me_with_hyphenated_creator_column(self):
+        username = '87d485c2281a42adbddb137a1070f395@auth.local'
+        table = {
+            'name': self.table_name,
+            'columns': [{'key': '_creator', 'type': 'creator', 'name': 'Creator-Name'}],
+        }
+        statistic = {
+            'summary_type': 'count',
+            'filters': [{'column_key': '_creator', 'filter_predicate': 'include_me', 'filter_term': []}],
+        }
+
+        sql, error = statistic2sql(table, StatisticType.BASIC_NUMBER_CARD, statistic, username=username)
+
+        self.assertIsNone(error)
+        self.assertEqual(
+            sql,
+            "SELECT COUNT(*) FROM `Table1` WHERE (`Creator-Name` = '%s') LIMIT 0, 5000" % username,
+        )
 
 
     def test_user_filter_normalization(self):
