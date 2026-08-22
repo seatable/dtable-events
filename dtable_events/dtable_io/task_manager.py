@@ -432,11 +432,11 @@ class TaskManager(object):
         return task_id, None
 
     @log_function_call
-    def add_convert_view_to_excel_task(self, dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image):
+    def add_convert_view_to_excel_task(self, dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image, images_max_size=None):
         from dtable_events.dtable_io import convert_view_to_excel
 
         task_id = str(uuid.uuid4())
-        task = (convert_view_to_excel, (dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image))
+        task = (convert_view_to_excel, (dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image, images_max_size))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
@@ -444,11 +444,11 @@ class TaskManager(object):
         return task_id
 
     @log_function_call
-    def add_convert_table_to_excel_task(self, dtable_uuid, table_id, username, name, repo_id, is_support_image):
+    def add_convert_table_to_excel_task(self, dtable_uuid, table_id, username, name, repo_id, is_support_image, images_max_size=None):
         from dtable_events.dtable_io import convert_table_to_excel
 
         task_id = str(uuid.uuid4())
-        task = (convert_table_to_excel, (dtable_uuid, table_id, username, name, repo_id, is_support_image))
+        task = (convert_table_to_excel, (dtable_uuid, table_id, username, name, repo_id, is_support_image, images_max_size))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
