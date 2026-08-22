@@ -1789,9 +1789,9 @@ def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, i
     to_col_offset = -col_width * 7700
     for image_url in images:
         if image_num >= EXPORT_IMAGE_LIMIT:
-            return image_num, image_total_size
+            return {'num': image_num, 'total_size': image_total_size, 'stop': True}
         if image_max_size and image_total_size >= image_max_size:
-            return image_num, image_total_size
+            return {'num': image_num, 'total_size': image_total_size, 'stop': True}
         real_image_url = urljoin(image_url, urlparse(image_url).path)
 
         image_name = unquote(real_image_url.split('/')[-1].strip())
@@ -1844,14 +1844,14 @@ def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, i
         img.anchor = TwoCellAnchor('twoCell', from_anchor, to_anchor)
 
         if image_max_size and image_total_size + image_size > image_max_size:
-            return image_num, image_total_size
+            return {'num': image_num, 'total_size': image_total_size, 'stop': True}
 
         ws.add_image(img)
         if to_col_offset < 0:
             from_col_offset += image_column_offset_transfer(row_height, img_width, image_height)
         image_num += 1
         image_total_size += image_size
-    return image_num, image_total_size
+    return {'num': image_num, 'total_size': image_total_size, 'stop': False}
 
 
 def format_time(cell_data):
@@ -2031,12 +2031,14 @@ def _build_image_excel_cell(ws, cell_value, row_num, dtable_uuid, repo_id, image
     image_num = image_param.get('num')
     image_total_size = image_param.get('total_size', 0)
     image_max_size = image_param.get('max_size')
+    is_stop = image_param.get('stop', False)
     images_target_dir = image_param.get('images_target_dir')
-    if image_num < EXPORT_IMAGE_LIMIT and (not image_max_size or image_total_size < image_max_size):
-        num, total_size = add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, image_num,
-                                             image_total_size, image_max_size, images_target_dir, column, row_height)
-        image_param['num'] = num
-        image_param['total_size'] = total_size
+    if not is_stop and image_num < EXPORT_IMAGE_LIMIT and (not image_max_size or image_total_size < image_max_size):
+        result = add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, image_num,
+                                    image_total_size, image_max_size, images_target_dir, column, row_height)
+        image_param['num'] = result['num']
+        image_param['total_size'] = result['total_size']
+        image_param['stop'] = result['stop']
     return c
 
 

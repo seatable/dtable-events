@@ -511,7 +511,8 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
 
     images_target_dir = os.path.join(IMAGE_TMP_DIR, dtable_uuid, str(uuid.uuid4()))
     image_param = {'num': 0, 'is_support': is_support_image, 'images_target_dir': images_target_dir,
-                   'total_size': 0, 'max_size': int(images_max_size * 1024 * 1024) if images_max_size else EXPORT_IMAGE_MAX_SIZE}
+                   'total_size': 0, 'max_size': int(images_max_size * 1024 * 1024) if images_max_size else EXPORT_IMAGE_MAX_SIZE,
+                   'stop': False}
 
     wb = openpyxl.Workbook(write_only=True)
     ws = wb.create_sheet(sheet_name)
@@ -635,7 +636,8 @@ def export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app
     target_path = os.path.join(target_dir, excel_name)
     images_target_dir = os.path.join(IMAGE_TMP_DIR, dtable_uuid, str(uuid.uuid4()))
     image_param = {'num': 0, 'is_support': is_support_image, 'images_target_dir': images_target_dir,
-                   'total_size': 0, 'max_size': int(images_max_size * 1024 * 1024) if images_max_size else EXPORT_IMAGE_MAX_SIZE}
+                   'total_size': 0, 'max_size': int(images_max_size * 1024 * 1024) if images_max_size else EXPORT_IMAGE_MAX_SIZE,
+                   'stop': False}
 
     wb = openpyxl.Workbook(write_only=True)
     ws = wb.create_sheet(sheet_name)

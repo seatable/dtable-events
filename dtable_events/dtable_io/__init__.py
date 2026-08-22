@@ -1032,7 +1032,8 @@ def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, u
 
     images_target_dir = os.path.join(IMAGE_TMP_DIR, dtable_uuid, str(uuid.uuid4()))
     image_param = {'num': 0, 'is_support': is_support_image, 'images_target_dir': images_target_dir,
-                   'total_size': 0, 'max_size': int(images_max_size * 1024 * 1024) if images_max_size else EXPORT_IMAGE_MAX_SIZE}
+                   'total_size': 0, 'max_size': int(images_max_size * 1024 * 1024) if images_max_size else EXPORT_IMAGE_MAX_SIZE,
+                   'stop': False}
 
     sheet_name = table_name + ('_' + view_name if view_name else '')
     sheet_name = escape_sheet_name(sheet_name)
@@ -1148,7 +1149,8 @@ def convert_table_to_excel(dtable_uuid, table_id, username, name, repo_id, is_su
 
     images_target_dir = os.path.join(IMAGE_TMP_DIR, dtable_uuid, str(uuid.uuid4()))
     image_param = {'num': 0, 'is_support': is_support_image, 'images_target_dir': images_target_dir,
-                   'total_size': 0, 'max_size': int(images_max_size * 1024 * 1024) if images_max_size else EXPORT_IMAGE_MAX_SIZE}
+                   'total_size': 0, 'max_size': int(images_max_size * 1024 * 1024) if images_max_size else EXPORT_IMAGE_MAX_SIZE,
+                   'stop': False}
 
     sheet_name = escape_sheet_name(table_name)
     excel_name = name + '_' + table_name + '.xlsx'
