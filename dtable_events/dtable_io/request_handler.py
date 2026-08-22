@@ -42,7 +42,7 @@ def parse_images_max_size(value):
     if not value:
         return None
     try:
-        return float(value)
+        return float(value) if float(value) > 0 else None
     except (TypeError, ValueError):
         return None
 
