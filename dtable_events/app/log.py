@@ -37,21 +37,28 @@ class LogConfigurator(object):
         self._rotating_config()
 
     def _rotating_config(self):
-        logging.root.setLevel(self._level)
+        root_logger = logging.getLogger()
+
+        # Replace handlers installed by imported dependencies such as seafobj.
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
+            handler.close()
+
+        root_logger.setLevel(self._level)
 
         if SEATABLE_LOG_TO_STDOUT:
             # logs to stdout
             stdout_formatter = logging.Formatter(get_format(component='dtable-events'), datefmt="%Y-%m-%d %H:%M:%S")
             stdout_handler = logging.StreamHandler()
             stdout_handler.setFormatter(stdout_formatter)
-            logging.root.addHandler(stdout_handler)
+            root_logger.addHandler(stdout_handler)
         else:
             # logs to file
             file_formatter = logging.Formatter(get_format(), datefmt="%Y-%m-%d %H:%M:%S")
             file_handler = handlers.TimedRotatingFileHandler(self._logfile, when='W0', interval=1, backupCount=7)
             file_handler.setLevel(self._level)
             file_handler.setFormatter(file_formatter)
-            logging.root.addHandler(file_handler)
+            root_logger.addHandler(file_handler)
 
 
 def setup_logger(logname, fmt=None, level=None, propagate=None):
