@@ -966,10 +966,10 @@ def convert_document_to_pdf(dtable_uuid, doc_uuid, row_id, username):
         dtable_io_logger.exception('dtable: %s plugin: document doc_uuid: %s row: %s error: %s', dtable_uuid, doc_uuid, row_id, e)
 
 
-def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image=False):
+def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image=False, images_max_size=None):
     from dtable_events.dtable_io.excel_group import generate_groups, compute_group_summaries
     from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_export_view_rows_from_dtable_db
-    from dtable_events.dtable_io.excel import write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR
+    from dtable_events.dtable_io.excel import write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR, EXPORT_IMAGE_MAX_SIZE
     from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, escape_sheet_name
     from dtable_events.utils.dtable_db_api import DTableDBAPI
     from dtable_events.utils.sql_generator import pre_filter_to_filter_term
@@ -1031,7 +1031,9 @@ def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, u
             summary_col_info.update({col.get('name'): summary_configs.get(col.get('key'))})
 
     images_target_dir = os.path.join(IMAGE_TMP_DIR, dtable_uuid, str(uuid.uuid4()))
-    image_param = {'num': 0, 'is_support': is_support_image, 'images_target_dir': images_target_dir}
+    image_param = {'num': 0, 'is_support': is_support_image, 'images_target_dir': images_target_dir,
+                   'total_size': 0, 'max_size': int(images_max_size * 1024 * 1024) if images_max_size else EXPORT_IMAGE_MAX_SIZE,
+                   'stop': False}
 
     sheet_name = table_name + ('_' + view_name if view_name else '')
     sheet_name = escape_sheet_name(sheet_name)
@@ -1096,9 +1098,9 @@ def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, u
         pass
 
 
-def convert_table_to_excel(dtable_uuid, table_id, username, name, repo_id, is_support_image=False):
+def convert_table_to_excel(dtable_uuid, table_id, username, name, repo_id, is_support_image=False, images_max_size=None):
     from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_export_table_rows_from_dtable_db
-    from dtable_events.dtable_io.excel import write_xls_with_type, IMAGE_TMP_DIR
+    from dtable_events.dtable_io.excel import write_xls_with_type, IMAGE_TMP_DIR, EXPORT_IMAGE_MAX_SIZE
     from dtable_events.dtable_io.utils import get_related_nicknames_from_dtable, escape_sheet_name
     from dtable_events.utils.dtable_db_api import DTableDBAPI
     import openpyxl
@@ -1146,7 +1148,9 @@ def convert_table_to_excel(dtable_uuid, table_id, username, name, repo_id, is_su
     column_name_to_column = {col.get('name'): col for col in cols}
 
     images_target_dir = os.path.join(IMAGE_TMP_DIR, dtable_uuid, str(uuid.uuid4()))
-    image_param = {'num': 0, 'is_support': is_support_image, 'images_target_dir': images_target_dir}
+    image_param = {'num': 0, 'is_support': is_support_image, 'images_target_dir': images_target_dir,
+                   'total_size': 0, 'max_size': int(images_max_size * 1024 * 1024) if images_max_size else EXPORT_IMAGE_MAX_SIZE,
+                   'stop': False}
 
     sheet_name = escape_sheet_name(table_name)
     excel_name = name + '_' + table_name + '.xlsx'
@@ -1298,10 +1302,10 @@ def update_big_excel(username, dtable_uuid, table_name, file_path, ref_columns, 
         dtable_io_logger.info('update big excel %s.xlsx success!' % table_name)
 
 
-def convert_big_data_view_to_excel(dtable_uuid, table_id, view_id, username, name, task_id, tasks_status_map, repo_id, is_support_image):
+def convert_big_data_view_to_excel(dtable_uuid, table_id, view_id, username, name, task_id, tasks_status_map, repo_id, is_support_image, images_max_size=None):
     dtable_io_logger.info('Start export big data view to excel: {}.'.format(dtable_uuid))
     try:
-        export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, task_id, tasks_status_map, repo_id, is_support_image)
+        export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, task_id, tasks_status_map, repo_id, is_support_image, images_max_size)
     except Exception as e:
         dtable_io_logger.error('export big data view failed. ERROR: {}'.format(e))
     else:
@@ -1378,10 +1382,10 @@ def import_page_design(repo_id, workspace_id, dtable_uuid, page_id, is_dir, user
             clear_tmp_file(tmp_page_path)
 
 
-def convert_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_condition_groups, shown_column_keys, task_id, tasks_status_map, is_support_image):
+def convert_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_condition_groups, shown_column_keys, task_id, tasks_status_map, is_support_image, images_max_size=None):
     dtable_io_logger.info('Start export app table to excel: {}.'.format(dtable_uuid))
     try:
-        export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_condition_groups, shown_column_keys, task_id, tasks_status_map, is_support_image)
+        export_app_table_page_to_excel(dtable_uuid, repo_id, table_id, username, app_name, page_name, filter_condition_groups, shown_column_keys, task_id, tasks_status_map, is_support_image, images_max_size)
     except Exception as e:
         dtable_io_logger.exception('export app table failed. ERROR: {}'.format(e))
     else:
