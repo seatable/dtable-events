@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import date, timedelta
 from types import SimpleNamespace
 
 from sqlalchemy import text
@@ -154,8 +154,8 @@ class AutomationsStatsManager:
             UPDATE dtable_automation_rules SET last_trigger_time=:trigger_time, is_valid=:is_valid, trigger_count=trigger_count+1 WHERE id=:rule_id;
         '''
         insert_rule_log = '''
-            INSERT INTO auto_rules_task_log (trigger_time, success, rule_id, run_condition, dtable_uuid, org_id, owner, warnings) VALUES
-            (:trigger_time, :success, :rule_id, :run_condition, :dtable_uuid, :org_id, :owner, :warnings)
+            INSERT INTO auto_rules_task_log (trigger_time, end_time, success, rule_id, run_condition, dtable_uuid, org_id, owner, warnings) VALUES
+            (:trigger_time, :end_time, :success, :rule_id, :run_condition, :dtable_uuid, :org_id, :owner, :warnings)
         '''
         org_id = auto_rule_result.org_id
         owner = auto_rule_result.owner
@@ -179,6 +179,7 @@ class AutomationsStatsManager:
             'owner': auto_rule_result.owner,
             'trigger_time': auto_rule_result.trigger_time,
             'trigger_date': auto_rule_result.trigger_date,
+            'end_time': auto_rule_result.trigger_time + timedelta(seconds=auto_rule_result.run_time),
             'is_valid': auto_rule_result.is_valid,
             'success': 1 if auto_rule_result.success else 0,
             'run_condition': auto_rule_result.run_condition,
