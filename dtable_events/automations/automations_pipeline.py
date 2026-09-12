@@ -277,17 +277,21 @@ class AutomationsPipeline(object):
                 'per_day_check_time': per_day_check_time,
                 'per_week_check_time': per_week_check_time,
                 'per_month_check_time': per_month_check_time
-            })
+            }).fetchall()
         except Exception as e:
             auto_rule_logger.exception('Failed to query scheduled automation rules: %s', e)
-            db_session.close()
             return
+        finally:
+            db_session.close()
 
         cached_exceed_keys_set = set()
         gen_exceed_key = lambda owner, org_id: org_id if org_id != -1 else owner
 
-        try:
-            for rule in rules:
+        db_session = None
+        for rule in rules:
+            try:
+                if db_session is None:
+                    db_session = self._db_session_class()
                 automation_task = AutomationTask(
                     rule_id=rule.id,
                     run_condition=rule.run_condition,
@@ -313,9 +317,15 @@ class AutomationsPipeline(object):
                     continue
                 self.put_task(automation_task)
                 self.scheduled_trigger_count += 1
-        except Exception as e:
-            auto_rule_logger.exception(e)
-        finally:
+            except Exception:
+                auto_rule_logger.exception('run scheduled rule %s error', rule.id)
+                if db_session is not None:
+                    try:
+                        db_session.close()
+                    except Exception:
+                        pass
+                    db_session = None
+        if db_session is not None:
             db_session.close()
 
     def scheduled_scan(self):
