@@ -1401,6 +1401,8 @@ def _format_array_item_value(item, email2nickname, array_type, array_data):
         return _format_number_display_string(item_value, array_data)
     if array_type in (ColumnTypes.CREATOR, ColumnTypes.LAST_MODIFIER):
         return email2nickname.get(cell_data2str(item_value), '')
+    if array_type == ColumnTypes.COLLABORATOR:
+        return email2nickname.get(cell_data2str(item_value), cell_data2str(item_value))
     if array_type in (ColumnTypes.CTIME, ColumnTypes.MTIME):
         return convert_time_to_utc_str(cell_data2str(item_value))
     if array_type == ColumnTypes.DATE:
