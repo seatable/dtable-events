@@ -129,7 +129,7 @@ IS_PRO_VERSION = os.environ.get('IS_PRO_VERSION', default=True)
 UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_DAYS = configs.get('UNIVERSAL_APP_SNAPSHOT_AUTO_SAVE_DAYS', default=7)
 
 # storage server
-DTABLE_STORAGE_SERVER_URL = configs.get('DTABLE_STORAGE_SERVER_URL', default='http://127.0.0.1:6666')
+INNER_DTABLE_STORAGE_SERVER_URL = configs.get('INNER_DTABLE_STORAGE_SERVER_URL', default='http://127.0.0.1:6666')
 
 # org member quota
 ORG_MEMBER_QUOTA_DEFAULT = configs.get('ORG_MEMBER_QUOTA_DEFAULT', 10)
