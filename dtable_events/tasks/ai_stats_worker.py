@@ -13,6 +13,7 @@ from sqlalchemy import text
 from dtable_events.app.config import AI_PRICES, AI_STATS_ENABLED
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.db import init_db_session_class
+from dtable_events.tasks.ai_additional_credits import AIAdditionalCreditsManager
 from dtable_events.utils import uuid_str_to_32_chars
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ class AIStatsWorker(object):
 
     def __init__(self):
         self._db_session_class = init_db_session_class()
+        self.additional_credits_manager = AIAdditionalCreditsManager(self._db_session_class)
         self._redis_client = RedisClient(socket_connect_timeout=5, socket_timeout=5,
                                          health_check_interval=30, retry_on_timeout=True)
         self.stats_lock = Lock()
@@ -318,6 +320,11 @@ class AIStatsWorker(object):
             logger.exception(e)
         finally:
             session.close()
+
+        org_cost_delta = defaultdict(float)
+        for data in team_data:
+            org_cost_delta[data['org_id']] += data['cost']
+        self.additional_credits_manager.deduct(org_cost_delta, month)
 
     def stats(self):
         sched = BlockingScheduler()
