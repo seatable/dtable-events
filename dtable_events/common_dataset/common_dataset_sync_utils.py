@@ -363,8 +363,11 @@ def get_link_formula_converted_cell_value(transfered_column, dtable_db_cell_valu
     transfered_type = transfered_column.get('type')
     if not isinstance(dtable_db_cell_value, list):
         return
-    if src_col_type == ColumnTypes.LINK:
-        dtable_db_cell_value = [v['display_value'] for v in dtable_db_cell_value]
+    if src_col_type in (ColumnTypes.LINK, ColumnTypes.LINK_FORMULA):
+        dtable_db_cell_value = [
+            v['display_value'] if isinstance(v, dict) and 'display_value' in v else v
+            for v in dtable_db_cell_value
+        ]
     if transfered_type in [
         ColumnTypes.TEXT,
         ColumnTypes.RATE,
@@ -573,7 +576,23 @@ EXPECT_VALUE_TYPES = {
 
 
 def get_converted_cell_value_with_check(dtable_db_cell_value, transfered_column, col):
-    value = get_converted_cell_value(dtable_db_cell_value, transfered_column, col)
+    try:
+        value = get_converted_cell_value(dtable_db_cell_value, transfered_column, col)
+    except Exception as e:
+        cds_logger.warning(
+            'convert cell value error, src_col=%s(key=%s,type=%s) dst_col=%s(key=%s,type=%s) cell_value=%r error=%s',
+            col.get('name'), col.get('key'), col.get('type'),
+            transfered_column.get('name'), transfered_column.get('key'), transfered_column.get('type'),
+            dtable_db_cell_value, e)
+        cds_logger.warning('convert cell value error traceback: %s', traceback.format_exc())
+        return None, {
+            'column_key': col['key'],
+            'src_column_type': col['type'],
+            'dst_column_type': transfered_column.get('type', ColumnTypes.TEXT),
+            'src_column_name': col['name'],
+            'dst_column_name': transfered_column.get('name'),
+            'invalid_type': 'cell_type_invalid',
+        }
     column_type = transfered_column.get('type', ColumnTypes.TEXT)
     invalid_cell_info = None
     if column_type not in EXPECT_VALUE_TYPES:
@@ -1065,7 +1084,10 @@ def _import_sync_CDS(context):
             return error_resp
 
     if rows_invalid_infos:
-        logs = [f"dst_dtable_uuid: {dst_dtable_uuid} dst_table_id: {dst_table_id} src_view_id: {src_view_id} some invalid cells warnings"]
+        logs = [f"dataset_id: {context.get('dataset_id')} sync_id: {context.get('dataset_sync_id')} "
+                f"src_dtable_uuid: {context.get('src_dtable_uuid')} src_table_id: {src_table.get('_id')} "
+                f"src_view_id: {src_view_id} dst_dtable_uuid: {dst_dtable_uuid} dst_table_id: {dst_table_id} "
+                f"some invalid cells warnings"]
         for row_invalid_info in rows_invalid_infos:
             row_id = row_invalid_info['row_id']
             invalid_cell_infos = row_invalid_info['invalid_cell_infos']
