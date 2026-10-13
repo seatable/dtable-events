@@ -531,6 +531,7 @@ def parse_and_update_file_to_table(file_name, username, dtable_uuid, table_name,
 
     dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
     columns = dtable_server_api.list_columns(table_name)
+    dtable_col_name_to_column = {col['name']: col for col in columns}
 
     try:
         # file_type is xlsx or csv
@@ -547,9 +548,8 @@ def parse_and_update_file_to_table(file_name, username, dtable_uuid, table_name,
     key_columns = selected_columns.split(',')
 
     dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
-    dtable_rows = get_rows_from_dtable_db(dtable_db_api, table_name)
-
-    dtable_col_name_to_column = {col['name']: col for col in columns}
+    query_columns = get_import_update_query_columns(dtable_col_name_to_column, file_rows, key_columns)
+    dtable_rows = get_rows_from_dtable_db(dtable_db_api, table_name, columns=query_columns)
 
     insert_rows, update_rows, excel_select_column_options = \
         get_insert_update_rows(dtable_col_name_to_column, file_rows, dtable_rows, key_columns, need_select_option=True)
@@ -778,14 +778,15 @@ def update_parsed_file_by_dtable_server(username, dtable_uuid, file_name, table_
     excel_rows = excel_rows[0].get('rows', [])
     key_columns = selected_columns.split(',')
 
-    dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
-    dtable_rows = get_rows_from_dtable_db(dtable_db_api, table_name)
-
     dtable_server_api = DTableServerAPI(username, dtable_uuid, INNER_DTABLE_SERVER_URL)
 
     columns = dtable_server_api.list_columns(table_name)
 
     dtable_col_name_to_column = {col['name']: col for col in columns}
+
+    dtable_db_api = DTableDBAPI(username, dtable_uuid, INNER_DTABLE_DB_URL)
+    query_columns = get_import_update_query_columns(dtable_col_name_to_column, excel_rows, key_columns)
+    dtable_rows = get_rows_from_dtable_db(dtable_db_api, table_name, columns=query_columns)
 
     insert_rows, update_rows, excel_select_column_options = \
         get_insert_update_rows(dtable_col_name_to_column, excel_rows, dtable_rows, key_columns, need_select_option=True)
@@ -815,6 +816,23 @@ def get_cell_value(row, col, excel_col_name_to_type):
             cell_value = int(cell_value.rstrip('.')) if cell_value.endswith('.') else float(cell_value)
     cell_value = '' if cell_value is None else cell_value
     return cell_value
+
+
+def get_import_update_query_columns(dtable_col_name_to_column, excel_rows, key_columns):
+    """Return the minimal column names needed from dtable-db to decide update vs append.
+
+    The update/append decision only needs the key columns (used to match rows) and the
+    matched columns whose type is in UPDATE_TYPE_LIST (used to diff cells). The row id is
+    also required to update existing rows.
+    """
+    columns = set(key_columns)
+    if excel_rows:
+        for col_name in excel_rows[0].keys():
+            col = dtable_col_name_to_column.get(col_name)
+            if col and col.get('type') in UPDATE_TYPE_LIST:
+                columns.add(col_name)
+    columns.add('_id')
+    return [col for col in columns if col == '_id' or col in dtable_col_name_to_column]
 
 
 def get_insert_update_rows(dtable_col_name_to_column, excel_rows, dtable_rows, key_columns, need_select_option=False):
