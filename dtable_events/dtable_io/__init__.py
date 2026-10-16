@@ -23,7 +23,7 @@ from dtable_events.dtable_io.utils import import_archive_from_src_dtable, post_b
     prepare_dtable_json_from_memory, update_page_design_static_image, \
     copy_src_auto_rules_to_json, create_auto_rules_from_src_dtable, sync_app_users_to_table, \
     copy_src_workflows_to_json, create_workflows_from_src_dtable, copy_src_external_app_to_json,\
-    create_external_apps_from_src_dtable, zip_big_data_screen, post_big_data_screen_zip_file, \
+    create_external_apps_from_src_dtable, \
     export_page_design_dir_to_path, update_page_design_content_to_path, upload_page_design, \
     download_page_design_file, zip_big_data_screen_app, prepare_asset_files_download, copy_src_archive_backup
 from dtable_events.db import init_db_session_class
@@ -514,40 +514,6 @@ def get_dtable_export_asset_files(username, repo_id, dtable_uuid, files, task_id
         dtable_io_logger.info('export files from dtable: %s success!', dtable_uuid)
     finally:
         db_session.close()
-
-def get_dtable_export_big_data_screen(username, repo_id, dtable_uuid, page_id, task_id):
-    """
-    parse json file in big data screen, and zip it for download
-    """
-    tmp_file_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'big-data-screen', str(task_id))
-    tmp_zip_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'big-data-screen', str(task_id) + '.zip')
-    clear_tmp_files_and_dirs(tmp_file_path, tmp_zip_path)
-    os.makedirs(tmp_file_path.rstrip('/') + '/images', exist_ok=True)
-
-    try:
-        zip_big_data_screen(username, repo_id, dtable_uuid, page_id, tmp_file_path)
-        shutil.make_archive(tmp_zip_path.split('.')[0], 'zip', root_dir=tmp_file_path)
-    except Exception as e:
-        dtable_io_logger.error('export big data screen from dtable failed. ERROR: {}'.format(e))
-    else:
-        dtable_io_logger.info('export big data screen from dtable: %s success!', dtable_uuid)
-
-def import_big_data_screen(username, repo_id, dtable_uuid, page_id):
-    """
-    parse the zip in tmp folders and upload it
-    """
-    tmp_extracted_path = os.path.join('/tmp/dtable-io', dtable_uuid, 'big_data_screen_zip_extracted/')
-    try:
-        post_big_data_screen_zip_file(username, repo_id, dtable_uuid, page_id, tmp_extracted_path)
-    except Exception as e:
-        dtable_io_logger.error('import big data screen from dtable failed. ERROR: {}'.format(e))
-    else:
-        dtable_io_logger.info('import big data screen to dtable: %s success!', dtable_uuid)
-    try:
-        shutil.rmtree(tmp_extracted_path)
-    except Exception as e:
-        dtable_io_logger.error('rm extracted tmp file failed. ERROR: {}'.format(e))
-
 
 def get_dtable_export_big_data_screen_app(username, repo_id, dtable_uuid, app_uuid, app_id, task_id):
     """

@@ -118,28 +118,6 @@ class TaskManager(object):
         return task_id
 
     @log_function_call
-    def add_export_dtable_big_data_screen_task(self, username, repo_id, dtable_uuid, page_id):
-        from  dtable_events.dtable_io import get_dtable_export_big_data_screen
-        task_id = str(uuid.uuid4())
-        task = (get_dtable_export_big_data_screen,
-                (username, repo_id, dtable_uuid, page_id, task_id))
-        self.tasks_queue.put(task_id)
-        self.tasks_map[task_id] = task
-        publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
-        return task_id
-
-    @log_function_call
-    def add_import_dtable_big_data_screen_task(self, username, repo_id, dtable_uuid, page_id):
-        from  dtable_events.dtable_io import import_big_data_screen
-        task_id = str(uuid.uuid4())
-        task = (import_big_data_screen,
-                (username, repo_id, dtable_uuid, page_id))
-        self.tasks_queue.put(task_id)
-        self.tasks_map[task_id] = task
-        publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
-        return task_id
-
-    @log_function_call
     def add_export_dtable_big_data_screen_app_task(self, username, repo_id, dtable_uuid, app_uuid, app_id):
         from  dtable_events.dtable_io import get_dtable_export_big_data_screen_app
         task_id = str(uuid.uuid4())
