@@ -589,6 +589,8 @@ class DTableServerAPI(object):
         }
 
     def batch_send_notification(self, user_msg_list):
+        if not user_msg_list:
+            return
         url = self.dtable_server_url + '/api/v1/dtables/' + self.dtable_uuid + '/notifications-batch/?from=dtable_events'
         body = {
             'user_messages': user_msg_list,
