@@ -48,7 +48,7 @@ jobs:
         cd /tmp/seafobj && pip install -r requirements.txt  && pip install pylibmc
         cd $GITHUB_WORKSPACE && pip install -r test-requirements.txt
 
-    - name: test sql
+    - name: test sql and webhooks
       run: |
         cd $GITHUB_WORKSPACE
         export SEAFILE_CENTRAL_CONF_DIR=/tmp/conf CCNET_CONF_DIR=/tmp/ccnet SEAFILE_DATA_DIR=/tmp/seafile-data IS_PRO_VERSION=True

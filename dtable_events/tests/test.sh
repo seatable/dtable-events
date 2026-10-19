@@ -67,6 +67,8 @@ function run_tests() {
     set -e
     # test sql
     python ${EVENTS_TESTDIR}/sql/sql_test.py
+    # test webhook destination validation, transport, and worker behavior
+    $PYTHON -m unittest dtable_events.webhook.tests -v
 }
 
 case $1 in
