@@ -5,12 +5,12 @@ from datetime import datetime
 from threading import Thread
 from queue import Queue
 
-import requests
 from requests.exceptions import ReadTimeout
 from sqlalchemy import select, text
 
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.db import init_db_session_class
+from dtable_events.utils.webhook import post_webhook
 from dtable_events.webhook.models import Webhooks, WebhookJobs, PENDING, FAILURE
 
 logger = logging.getLogger(__name__)
@@ -115,7 +115,7 @@ class Webhooker(object):
                 try:
                     body = job.get('request_body')
                     headers = job.get('request_headers')
-                    response = requests.post(job['url'], json=body, headers=headers, timeout=30)
+                    response = post_webhook(job['url'], body, headers)
                 except ReadTimeout:
                     logger.warning('request webhook url: %s timeout', job['url'])
 
