@@ -71,11 +71,14 @@ class Operator(object):
         s = s.replace("'", "''")        # convert '
         return s
 
+    def get_column_sql(self):
+        return '`%s`' % self.column_name
+
     def op_is(self):
         if not self.filter_term:
             return ""
-        return "`%s` %s '%s'" % (
-            self.column_name,
+        return "%s %s '%s'" % (
+            self.get_column_sql(),
             '=',
             self.escape_string(self.filter_term)
         )
@@ -83,8 +86,8 @@ class Operator(object):
     def op_is_not(self):
         if not self.filter_term:
             return ""
-        return "`%s` %s '%s'" % (
-            self.column_name,
+        return "%s %s '%s'" % (
+            self.get_column_sql(),
             '<>',
             self.escape_string(self.filter_term)
         )
@@ -92,8 +95,8 @@ class Operator(object):
     def op_contains(self):
         if not self.filter_term:
             return ""
-        return "`%s` %s '%%%s%%'" % (
-            self.column_name,
+        return "%s %s '%%%s%%'" % (
+            self.get_column_sql(),
             'like' if self.case_sensitive is True else 'ilike',
             self.escape_string(self.filter_term)
         )
@@ -101,8 +104,8 @@ class Operator(object):
     def op_does_not_contain(self):
         if not self.filter_term:
             return ''
-        return "`%s` %s '%%%s%%'" % (
-            self.column_name,
+        return "%s %s '%%%s%%'" % (
+            self.get_column_sql(),
             'not like' if self.case_sensitive is True else 'not ilike',
             self.escape_string(self.filter_term)
         )
@@ -191,6 +194,12 @@ class TextOperator(Operator):
 
     def __init__(self, column, filter_item):
         super(TextOperator, self).__init__(column, filter_item)
+
+
+class GeolocationOperator(TextOperator):
+
+    def get_column_sql(self):
+        return 'DISPLAYGEO(%s)' % super().get_column_sql()
 
 
 class NumberOperator(Operator):
@@ -1270,9 +1279,11 @@ def _get_operator_by_type(column_type):
         ColumnTypes.URL,
         ColumnTypes.AUTO_NUMBER,
         ColumnTypes.EMAIL,
-        ColumnTypes.GEOLOCATION,
     ]:
         return TextOperator
+
+    if column_type == ColumnTypes.GEOLOCATION:
+        return GeolocationOperator
 
     if column_type in [
         ColumnTypes.DURATION,

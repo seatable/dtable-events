@@ -932,7 +932,7 @@ def convert_document_to_pdf(dtable_uuid, doc_uuid, row_id, username):
         dtable_io_logger.exception('dtable: %s plugin: document doc_uuid: %s row: %s error: %s', dtable_uuid, doc_uuid, row_id, e)
 
 
-def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image=False, images_max_size=None):
+def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, task_id, is_support_image=False, images_max_size=None):
     from dtable_events.dtable_io.excel_group import generate_groups, compute_group_summaries
     from dtable_events.dtable_io.utils import get_metadata_from_dtable_server, get_export_view_rows_from_dtable_db
     from dtable_events.dtable_io.excel import write_xls_with_type, TEMP_EXPORT_VIEW_DIR, IMAGE_TMP_DIR, EXPORT_IMAGE_MAX_SIZE
@@ -949,14 +949,14 @@ def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, u
         nicknames = get_related_nicknames_from_dtable(dtable_uuid)
     except Exception as e:
         dtable_io_logger.error('get nicknames. ERROR: {}'.format(e))
-        return
+        raise
     email2nickname = {nickname['email']: nickname['name'] for nickname in nicknames}
 
     try:
         metadata = get_metadata_from_dtable_server(dtable_uuid, username)
     except Exception as e:
         dtable_io_logger.error('get metadata. ERROR: {}'.format(e))
-        return
+        raise
 
     target_table = {}
     target_view = {}
@@ -966,16 +966,14 @@ def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, u
             break
 
     if not target_table:
-        dtable_io_logger.warning('Table %s not found.' % table_id)
-        return
+        raise ValueError('Table %s not found.' % table_id)
 
     for view in target_table.get('views', []):
         if view.get('_id', '') == view_id:
             target_view = view
             break
     if not target_view:
-        dtable_io_logger.warning('View %s not found.' % view_id)
-        return
+        raise ValueError('View %s not found.' % view_id)
 
     table_name = target_table.get('name', '')
     view_name = target_view.get('name', '')
@@ -1003,7 +1001,7 @@ def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, u
 
     sheet_name = table_name + ('_' + view_name if view_name else '')
     sheet_name = escape_sheet_name(sheet_name)
-    excel_name = name + '_' + table_name + ('_' + view_name if view_name else '') + '.xlsx'
+    excel_name = task_id + '.xlsx'
 
     wb = openpyxl.Workbook(write_only=True)
     ws = wb.create_sheet(sheet_name)
@@ -1038,7 +1036,7 @@ def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, u
         db_rows = get_export_view_rows_from_dtable_db(dtable_db_api, table_name, cols, filter_conditions, query_column_names=query_column_names, server_only=True)
     except Exception as e:
         dtable_io_logger.error('get db rows. ERROR: {}'.format(e))
-        return
+        raise
 
     column_name_to_column = {col.get('name'): col for col in cols}
     is_group_view = bool(target_view.get('groupbys'))
@@ -1054,7 +1052,7 @@ def convert_view_to_excel(dtable_uuid, table_id, view_id, username, id_in_org, u
     except Exception as e:
         dtable_io_logger.exception(e)
         dtable_io_logger.error('head_list = {}\n{}'.format(cols_without_hidden, e))
-        return
+        raise
     target_path = os.path.join(target_dir, excel_name)
     wb.save(target_path)
     # remove tmp images

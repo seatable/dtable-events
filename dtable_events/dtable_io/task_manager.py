@@ -414,7 +414,7 @@ class TaskManager(object):
         from dtable_events.dtable_io import convert_view_to_excel
 
         task_id = str(uuid.uuid4())
-        task = (convert_view_to_excel, (dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, is_support_image, images_max_size))
+        task = (convert_view_to_excel, (dtable_uuid, table_id, view_id, username, id_in_org, user_department_ids_map, permission, name, repo_id, task_id, is_support_image, images_max_size))
         self.tasks_queue.put(task_id)
         self.tasks_map[task_id] = task
         publish_metric(self.tasks_queue.qsize(), 'io_task_queue_size', metric_help=TASK_MANAGER_METRIC_HELP)
