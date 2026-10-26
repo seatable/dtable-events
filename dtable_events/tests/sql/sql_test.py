@@ -70,6 +70,47 @@ class SqlTest(unittest.TestCase):
             "SELECT COUNT(*) FROM `Table1` WHERE (`Creator-Name` = '%s') LIMIT 0, 5000" % username,
         )
 
+    def test_geolocation_text_filters_use_display_value(self):
+        cases = [
+            ('contains', False, "ilike '%昌平%'"),
+            ('contains', True, "like '%昌平%'"),
+            ('does_not_contain', False, "not ilike '%昌平%'"),
+            ('does_not_contain', True, "not like '%昌平%'"),
+            ('is', False, "= '昌平'"),
+            ('is_not', False, "<> '昌平'"),
+        ]
+        for predicate, case_sensitive, expected_condition in cases:
+            with self.subTest(predicate=predicate, case_sensitive=case_sensitive):
+                sql = self._toSql({'filters': [{
+                    'column_key': 'G001',
+                    'filter_predicate': predicate,
+                    'filter_term': '昌平',
+                    'case_sensitive': case_sensitive,
+                }]})
+                self.assertEqual(
+                    sql,
+                    'SELECT * FROM `Table1` WHERE (DISPLAYGEO(`Geo`) %s) LIMIT 0, 100' % expected_condition,
+                )
+
+    def test_geolocation_filter_escapes_quotes_in_nested_group(self):
+        sql = self._toSql({'filters': [{
+            'filter_conjunction': 'Or',
+            'filters': [
+                {'column_key': 'G001', 'filter_predicate': 'contains', 'filter_term': "O'Reilly"},
+                {'column_key': 'G001', 'filter_predicate': 'is_empty'},
+            ],
+        }]})
+        self.assertEqual(
+            sql,
+            "SELECT * FROM `Table1` WHERE ((DISPLAYGEO(`Geo`) ilike '%O''Reilly%') Or (`Geo` is null)) LIMIT 0, 100",
+        )
+
+    def test_geolocation_filter_with_empty_term_is_ignored(self):
+        sql = self._toSql({'filters': [{
+            'column_key': 'G001', 'filter_predicate': 'contains', 'filter_term': '',
+        }]})
+        self.assertEqual(sql, 'SELECT * FROM `Table1` LIMIT 0, 100')
+
 
     def test_user_filter_normalization(self):
 

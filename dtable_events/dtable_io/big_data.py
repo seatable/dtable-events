@@ -506,7 +506,7 @@ def export_big_data_to_excel(dtable_uuid, table_id, view_id, username, name, tas
 
     sheet_name = table_name + ('_' + view_name if view_name else '')
     sheet_name = escape_sheet_name(sheet_name)
-    excel_name = name + '_' + table_name + ('_' + view_name if view_name else '') + '.xlsx'
+    excel_name = task_id + '.xlsx'
     target_path = os.path.join(target_dir, excel_name)
 
     images_target_dir = os.path.join(IMAGE_TMP_DIR, dtable_uuid, str(uuid.uuid4()))
