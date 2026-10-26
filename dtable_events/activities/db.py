@@ -9,8 +9,10 @@ from sqlalchemy import select, update, delete, desc, func, case, text
 
 from dtable_events.activities.models import Activities
 from dtable_events.app.config import TIME_ZONE
+from dtable_events.utils.constants import ColumnTypes
 
 logger = logging.getLogger(__name__)
+TIME_ZONE_OBJ = pytz.timezone(TIME_ZONE)
 
 ROWS_OPERATION_TYPES = [
         'insert_row',
@@ -55,8 +57,54 @@ class TableActivityDetail(object):
         return self.__dict__[key]
 
 
+def normalize_activity_date_value(value):
+    if not isinstance(value, str):
+        return value
+
+    value = value.strip()
+    if not value:
+        return value
+
+    try:
+        date_value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+    except ValueError:
+        try:
+            date_value = datetime.strptime(value, '%Y-%m-%d %H:%M:%S')
+        except ValueError:
+            try:
+                date_value = datetime.strptime(value, '%Y-%m-%d %H:%M')
+            except ValueError:
+                try:
+                    date_value = datetime.strptime(value, '%Y-%m-%d')
+                except ValueError:
+                    return value
+
+    if date_value.tzinfo is None:
+        date_value = TIME_ZONE_OBJ.localize(date_value)
+    else:
+        date_value = date_value.astimezone(TIME_ZONE_OBJ)
+
+    return date_value.isoformat()
+
+
+def normalize_activity_row_data(row_data):
+    if not isinstance(row_data, list):
+        return row_data
+
+    for cell_data in row_data:
+        if not isinstance(cell_data, dict):
+            continue
+        if cell_data.get('column_type') in (ColumnTypes.DATE, ColumnTypes.MTIME, ColumnTypes.CTIME):
+            cell_data['value'] = normalize_activity_date_value(cell_data.get('value'))
+            if 'old_value' in cell_data:
+                cell_data['old_value'] = normalize_activity_date_value(cell_data.get('old_value'))
+    return row_data
+
+
 def save_or_update_or_delete(session, event):
     # ignore a few column data: creator, ctime, last-modifier, mtime
+
+    event['row_data'] = normalize_activity_row_data(event.get('row_data', []))
 
     if event['op_type'] in ROWS_OPERATION_TYPES:
         for cell_data in event['row_data']:
@@ -76,6 +124,7 @@ def save_or_update_or_delete(session, event):
             if row:
                 detail = json.loads(row.detail)
                 if detail['table_id'] == event['table_id']:
+                    detail['row_data'] = normalize_activity_row_data(detail.get('row_data', []))
                     if row.op_type == 'insert_row':
                         cells_data = event['row_data']
                         # Update cells values.
@@ -151,6 +200,7 @@ def save_or_update_or_delete(session, event):
             row2 = session.scalars(stmt2).first()
             if row1:
                 detail1 = json.loads(row1.detail)
+                detail1['row_data'] = normalize_activity_row_data(detail1.get('row_data', []))
                 cells_data1 = event['row_data1']
                 for cell_data in cells_data1:
                     for i in detail1['row_data']:
@@ -167,6 +217,7 @@ def save_or_update_or_delete(session, event):
             
             if row2:
                 detail2 = json.loads(row2.detail)
+                detail2['row_data'] = normalize_activity_row_data(detail2.get('row_data', []))
                 cells_data2 = event['row_data2']
                 for cell_data in cells_data2:
                     for i in detail2['row_data']:
