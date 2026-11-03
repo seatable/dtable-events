@@ -24,6 +24,7 @@ from playwright.async_api import async_playwright, Playwright, Browser, BrowserC
 from dtable_events.app.config import (
     CONVERT_PDF_BROWSERS, CONVERT_PDF_SESSIONS_PER_BROWSER,
     CONVERT_PDF_BLOCK_EXTERNAL_REQUESTS, CONVERT_PDF_ALLOWED_HOSTS,
+    CONVERT_PDF_BROWSER_EXECUTABLE_PATH,
     DTABLE_WEB_SERVICE_URL, INNER_DTABLE_WEB_SERVICE_URL, INNER_FILE_SERVER_ROOT,
 )
 from dtable_events.convert_page.utils import wait_for_images
@@ -249,6 +250,8 @@ class RobustPlaywrightManager:
         """Launch a single Chromium browser instance. Isolated to worker loop."""
         kwargs = dict(headless=True)
         kwargs.update(self.browser_launch_kwargs)
+        if CONVERT_PDF_BROWSER_EXECUTABLE_PATH:
+            kwargs['executable_path'] = CONVERT_PDF_BROWSER_EXECUTABLE_PATH
         # Chromium refuses to enable the sandbox when running as root
         # (see https://crbug.com/638180), so only enable it for non-root users.
         if os.geteuid() != 0:
