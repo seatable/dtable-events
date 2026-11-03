@@ -343,7 +343,7 @@ class DTableServerAPI(object):
         }
         if need_convert_back is not None:
             json_data['need_convert_back'] = need_convert_back
-        response = requests.post(url, json=json_data, headers=self.headers, timeout=self.timeout)
+        response = requests.post(url, json=json_data, headers=self.internal_headers, timeout=self.timeout)
         return parse_response(response)
 
     def append_row(self, table_name, row_data, apply_default=None):
