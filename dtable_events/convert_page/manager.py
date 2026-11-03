@@ -286,9 +286,9 @@ class RobustPlaywrightManager:
 
     async def _apply_request_filter(self, context: BrowserContext):
         """
-        Attach a route handler to the context that blocks external requests when
-        CONVERT_PDF_BLOCK_EXTERNAL_REQUESTS is enabled. Requests whose host is in the
-        allowed set are continued, all others are aborted.
+        Attach route handlers to the context that block external requests and WebSocket
+        connections when CONVERT_PDF_BLOCK_EXTERNAL_REQUESTS is enabled. Requests whose
+        host is in the allowed set are continued / connected, all others are aborted / closed.
         """
         if not self.block_external_requests:
             return
@@ -305,7 +305,20 @@ class RobustPlaywrightManager:
                 logger.debug("block external request: %s", route.request.url)
                 await route.abort()
 
+        async def _ws_handler(ws):
+            try:
+                host = urlparse(ws.url).hostname
+            except Exception:
+                host = None
+            # allow websockets without a host as well as allowed hosts
+            if host is None or host in self._allowed_hosts:
+                ws.connect_to_server()
+            else:
+                logger.debug("block external websocket: %s", ws.url)
+                await ws.close()
+
         await context.route("**/*", _route_handler)
+        await context.route_web_socket("**/*", _ws_handler)
 
     async def _cleanup_browsers(self):
         # close all contexts per browser
