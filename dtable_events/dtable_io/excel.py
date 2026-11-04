@@ -1791,9 +1791,10 @@ def get_file_download_url(file_url, dtable_uuid, repo_id):
 
 def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, image_num, image_total_size, image_max_size, images_target_dir, column, row_height):
     import requests
+    from uuid import uuid4
     from openpyxl.drawing.image import Image
     from PIL import Image as PILImage
-    from urllib.parse import unquote, urljoin, urlparse
+    from urllib.parse import urljoin, urlparse
     from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, TwoCellAnchor
     from dtable_events.dtable_io.utils import image_column_offset_transfer, image_row_offset_transfer
     from dtable_events.dtable_io import dtable_io_logger
@@ -1814,8 +1815,9 @@ def add_image_to_excel(ws, cell_value, col_num, row_num, dtable_uuid, repo_id, i
             return {'num': image_num, 'total_size': image_total_size, 'stop': True}
         real_image_url = urljoin(image_url, urlparse(image_url).path)
 
-        image_name = unquote(real_image_url.split('/')[-1].strip())
-        image_dir = os.path.join(images_target_dir, '/'.join(real_image_url.split('/')[7:-1]))
+        # Use a random name in the fixed target dir; never derive the path from the (user-controlled) image URL (arbitrary file write).
+        image_name = uuid4().hex
+        image_dir = images_target_dir
         os.makedirs(image_dir, exist_ok=True)
 
         image_download_url = get_file_download_url(real_image_url, dtable_uuid, repo_id)
