@@ -12,15 +12,21 @@ import logging
 import threading
 import time
 import os
-from typing import List, Dict, Optional, Any, Tuple
+from typing import List, Dict, Optional, Any, Tuple, Set
 from concurrent.futures import Future, wait as wait_futures
 import queue
 import uuid
+from urllib.parse import urlparse
 
 import psutil
 from playwright.async_api import async_playwright, Playwright, Browser, BrowserContext
 
-from dtable_events.app.config import CONVERT_PDF_BROWSERS, CONVERT_PDF_SESSIONS_PER_BROWSER
+from dtable_events.app.config import (
+    CONVERT_PDF_BROWSERS, CONVERT_PDF_SESSIONS_PER_BROWSER,
+    CONVERT_PDF_BLOCK_EXTERNAL_REQUESTS, CONVERT_PDF_ALLOWED_HOSTS,
+    CONVERT_PDF_BROWSER_EXECUTABLE_PATH,
+    DTABLE_WEB_SERVICE_URL, INNER_DTABLE_WEB_SERVICE_URL, INNER_FILE_SERVER_ROOT,
+)
 from dtable_events.convert_page.utils import wait_for_images
 
 logger = logging.getLogger(__name__)
@@ -44,12 +50,16 @@ class RobustPlaywrightManager:
         page_timeout: int = 30_000,
         browser_launch_kwargs: Optional[Dict[str, Any]] = None,
         health_check_interval: int = 30,
+        block_external_requests: bool = False,
+        allowed_hosts: Optional[List[str]] = None,
     ):
         self.num_browsers = max(1, num_browsers)
         self.contexts_per_browser = max(1, contexts_per_browser)
         self.page_timeout = page_timeout
         self.browser_launch_kwargs = browser_launch_kwargs or {}
         self.health_check_interval = health_check_interval
+        self.block_external_requests = block_external_requests
+        self._allowed_hosts = self._build_allowed_hosts(allowed_hosts or [])
 
         # thread & loop
         self._thread: Optional[threading.Thread] = None
@@ -238,18 +248,77 @@ class RobustPlaywrightManager:
 
     async def _launch_browser(self, idx: int) -> Browser:
         """Launch a single Chromium browser instance. Isolated to worker loop."""
-        kwargs = dict(executable_path=os.environ.get('CONVERT_PDF_CHROME_PATH', '/usr/bin/google-chrome'), headless=True)
+        kwargs = dict(headless=True)
         kwargs.update(self.browser_launch_kwargs)
-        # safe defaults
-        if 'args' not in kwargs:
-            kwargs['args'] = [
-                '--no-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu',
-                '--disable-software-rasterizer',
-            ]
+        if CONVERT_PDF_BROWSER_EXECUTABLE_PATH:
+            kwargs['executable_path'] = CONVERT_PDF_BROWSER_EXECUTABLE_PATH
+        # Chromium refuses to enable the sandbox when running as root
+        # (see https://crbug.com/638180), so only enable it for non-root users.
+        if os.geteuid() != 0:
+            kwargs['chromium_sandbox'] = True
         browser = await self._playwright.chromium.launch(**kwargs)
         return browser
+
+    def _build_allowed_hosts(self, extra_hosts: List[str]) -> Set[str]:
+        """
+        Derive the set of hostnames that are allowed to be requested during rendering.
+
+        Always allows loopback, and derives hosts from the internal service URLs so that
+        the rendered page's own resources (html/js/css/images served from dtable-web,
+        dtable-server and the file server) are never blocked. Extra hosts come from the
+        CONVERT_PDF_ALLOWED_HOSTS configuration.
+        """
+        hosts: Set[str] = {'127.0.0.1', 'localhost', '::1'}
+        service_urls = [DTABLE_WEB_SERVICE_URL, INNER_DTABLE_WEB_SERVICE_URL, INNER_FILE_SERVER_ROOT]
+        for url in service_urls:
+            if not url:
+                continue
+            try:
+                host = urlparse(url).hostname
+            except Exception:
+                host = None
+            if host:
+                hosts.add(host)
+        for host in extra_hosts:
+            if host and isinstance(host, str):
+                hosts.add(host.strip())
+        return hosts
+
+    async def _apply_request_filter(self, context: BrowserContext):
+        """
+        Attach route handlers to the context that block external requests and WebSocket
+        connections when CONVERT_PDF_BLOCK_EXTERNAL_REQUESTS is enabled. Requests whose
+        host is in the allowed set are continued / connected, all others are aborted / closed.
+        """
+        if not self.block_external_requests:
+            return
+
+        async def _route_handler(route):
+            try:
+                host = urlparse(route.request.url).hostname
+            except Exception:
+                host = None
+            # allow requests without a host (data:/blob: etc.) as well as allowed hosts
+            if host is None or host in self._allowed_hosts:
+                await route.continue_()
+            else:
+                logger.debug("block external request: %s", route.request.url)
+                await route.abort()
+
+        async def _ws_handler(ws):
+            try:
+                host = urlparse(ws.url).hostname
+            except Exception:
+                host = None
+            # allow websockets without a host as well as allowed hosts
+            if host is None or host in self._allowed_hosts:
+                ws.connect_to_server()
+            else:
+                logger.debug("block external websocket: %s", ws.url)
+                await ws.close()
+
+        await context.route("**/*", _route_handler)
+        await context.route_web_socket("**/*", _ws_handler)
 
     async def _cleanup_browsers(self):
         # close all contexts per browser
@@ -374,6 +443,7 @@ class RobustPlaywrightManager:
 
             # create a new context for the batch
             context = await browser.new_context(ignore_https_errors=True)
+            await self._apply_request_filter(context)
 
             # register context
             self._contexts[browser_idx].append(context)
@@ -432,6 +502,7 @@ class RobustPlaywrightManager:
                 # create a fresh context for the batch and record it
                 try:
                     new_context = await browser.new_context(viewport={'width': 1920, 'height': 1080}, ignore_https_errors=True)
+                    await self._apply_request_filter(new_context)
                     # replace the old context in contexts list (best-effort)
                     try:
                         # remove old context reference if present
@@ -544,6 +615,8 @@ def get_playwright_manager():
     if not playwright_manager:
         playwright_manager = RobustPlaywrightManager(
             num_browsers=CONVERT_PDF_BROWSERS,
-            contexts_per_browser=CONVERT_PDF_SESSIONS_PER_BROWSER
+            contexts_per_browser=CONVERT_PDF_SESSIONS_PER_BROWSER,
+            block_external_requests=CONVERT_PDF_BLOCK_EXTERNAL_REQUESTS,
+            allowed_hosts=CONVERT_PDF_ALLOWED_HOSTS,
         )
     return playwright_manager
