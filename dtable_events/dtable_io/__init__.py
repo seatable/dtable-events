@@ -39,6 +39,7 @@ from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.utils.dtable_server_api import DTableServerAPI, BaseExceedsException
 from dtable_events.utils.dtable_web_api import DTableWebAPI
 from dtable_events.utils.exception import ExcelFormatError
+from dtable_events.utils.seafile import check_seafile_url, request_seafile
 from dtable_events.utils.email_sender import toggle_send_email
 from dtable_events.dtable_io.utils import clear_tmp_dir, clear_tmp_file, clear_tmp_files_and_dirs, \
     SDOC_IMAGES_DIR, get_seadoc_download_link, gen_seadoc_base_dir, export_sdoc_prepare_images_folder,\
@@ -735,6 +736,7 @@ def append_excel_csv_to_table(username, file_name, dtable_uuid, table_name, file
 
 
 def _get_upload_link_to_seafile(seafile_server_url, access_token, parent_dir="/"):
+    check_seafile_url(seafile_server_url)
     upload_link_api_url = "%s%s" % (seafile_server_url.rstrip('/'),  '/api/v2.1/via-repo-token/upload-link/')
     headers = {
         'authorization': 'Token ' + access_token
@@ -742,14 +744,14 @@ def _get_upload_link_to_seafile(seafile_server_url, access_token, parent_dir="/"
     params = {
         'path': parent_dir
     }
-    response = requests.get(upload_link_api_url, headers=headers, params=params)
+    response = request_seafile('GET', upload_link_api_url, headers=headers, params=params)
     return response.json()
 
 def _upload_to_seafile(seafile_server_url, access_token, files, parent_dir="/", relative_path="", replace=None):
     upload_url = _get_upload_link_to_seafile(seafile_server_url, access_token, parent_dir)
     files_tuple_list = [('file', open(file, 'rb')) for file in files]
     files = files_tuple_list + [('parent_dir', parent_dir), ('relative_path', relative_path), ('replace', replace)]
-    response = requests.post(upload_url, files=files)
+    response = request_seafile('POST', upload_url, files=files)
     return response
 
 def get_dtable_transfer_asset_files(username, repo_id, dtable_uuid, files, task_id, files_map, parent_dir, relative_path, replace, repo_api_token, seafile_server_url):
