@@ -32,6 +32,9 @@ from dtable_events.activities.dtable_update_handler import DTableUpdateHander
 from dtable_events.activities.dtable_update_cache_manager import DTableUpdateCacheManager
 from dtable_events.tasks.metrics import MetricManager
 from dtable_events.tasks.ai_stats_worker import AIStatsWorker
+from dtable_events.tasks.seadb_connections_worker import SeaDBConnectionsWorker
+from dtable_events.seadb_connections.sync_manager import sync_manager
+from dtable_events.seadb_connections.sync_task_publisher import SyncTaskPublisher
 
 
 class App(object):
@@ -73,6 +76,8 @@ class App(object):
             self._big_data_storage_stats_worker = BigDataStorageStatsWorker()
             self._clean_db_records_worker = CleanDBRecordsWorker()
             self._data_sync = DataSyncer()
+            self._seadb_connections_worker = SeaDBConnectionsWorker()
+            self._seadb_sync_task_publisher = SyncTaskPublisher(sync_manager)
             self._workflow_schedule_scanner = WorkflowSchedulesScanner()
             self._dtable_asset_trash_cleaner = DTableAssetTrashCleaner()
             self._license_expiring_notices_sender = LicenseExpiringNoticesSender()
@@ -112,6 +117,8 @@ class App(object):
             self._big_data_storage_stats_worker.start()      # always True
             self._clean_db_records_worker.start()            # default True
             self._data_sync.start()                          # default True
+            self._seadb_connections_worker.start()           # default True
+            self._seadb_sync_task_publisher.start()          # default True
             self._workflow_schedule_scanner.start()          # default True
             self._dtable_asset_trash_cleaner.start()         # always True
             self._license_expiring_notices_sender.start()    # always True
