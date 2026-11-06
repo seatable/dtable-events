@@ -8,8 +8,8 @@ from sqlalchemy.exc import OperationalError
 
 from dtable_events.seadb_connections import SYNC_HANDLERS
 from dtable_events.seadb_connections.mapping import InvalidConnection
+from dtable_events.seadb_connections.seatable_sync import UpstreamUnavailable
 from dtable_events.seadb_connections.sync_logger import SyncLogger
-from dtable_events.seadb_connections.utils import UpstreamUnavailable
 
 
 logger = logging.getLogger(__name__)

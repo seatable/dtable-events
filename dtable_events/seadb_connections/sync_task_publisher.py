@@ -7,11 +7,11 @@ from sqlalchemy import bindparam, text
 from dtable_events.app.config import SEADB_SERVER_URL, SEADB_USER, SEADB_PASSWORD
 from dtable_events.db import init_db_session_class
 from dtable_events.seadb_connections import SYNC_HANDLERS
-from dtable_events.seadb_connections.utils import SYNC_INTERVAL
 
 
 logger = logging.getLogger(__name__)
 SCAN_INTERVAL = 60
+SYNC_INTERVAL = 600
 
 
 class SyncTaskPublisher(Thread):

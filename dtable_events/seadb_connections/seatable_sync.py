@@ -10,12 +10,15 @@ from dtable_events.automations.hasher import AESPasswordHasher
 from dtable_events.seadb_connections.mapping import (
     InvalidConnection, SYSTEM_COLUMNS, convert_field_value, validate_field_mapping,
 )
-from dtable_events.seadb_connections.utils import UpstreamUnavailable
 from dtable_events.utils.seadb_api import SeaDBAPI, get_seadb_table_id, quote_identifier
 
 
 BATCH_SIZE = 200
 SYNC_LOOKBACK = timedelta(hours=1)
+
+
+class UpstreamUnavailable(Exception):
+    pass
 
 
 class SourcePermissionDenied(InvalidConnection):
