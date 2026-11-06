@@ -3,12 +3,12 @@ SQLAlchemy==2.0.18
 apscheduler==3.9.*
 openpyxl==3.1.*
 waitress==3.0.2
-Flask==2.2.*
+Flask==3.1.*
 python-dateutil==2.8.*
 imapclient==2.3.*
-Markdown==3.6.*
-mammoth==1.4.*
-pdfminer.six==20221105
+Markdown==3.11.*
+mammoth==1.13.*
+pdfminer.six==20260107
 pdf2image~=1.17.0
 playwright==1.64.*
 psutil==6.1.0
