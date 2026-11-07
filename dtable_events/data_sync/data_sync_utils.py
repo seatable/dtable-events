@@ -62,24 +62,24 @@ def check_imap_account(imap_server, email_user, email_password, port=None, retur
         return imap, None
 
 
-def fixed_sql_query(seatable, sql):
+def fixed_sql_query(seatable, sql, parameters=None):
     try:
-        rows, _ = seatable.query(sql)
+        rows, _ = seatable.query(sql, parameters=parameters)
         return rows
     except TypeError:
         return []
 
 
-def query_table_rows(dtable_db_api, table_name, fields='*', conditions='', all=True, limit=None):
+def query_table_rows(dtable_db_api, table_name, fields='*', conditions='', all=True, limit=None, parameters=None):
     where_conditions = f"where {conditions}" if conditions else ''
     if all:
-        result = fixed_sql_query(dtable_db_api, f"select count(*) from `{table_name}` {where_conditions}")[0]
+        result = fixed_sql_query(dtable_db_api, f"select count(*) from `{table_name}` {where_conditions}", parameters=parameters)[0]
         limit = result['COUNT(*)']
         if limit == 0:
             return []
     else:
         limit = 100 if not limit else limit
-    return fixed_sql_query(dtable_db_api, f"select {fields} from `{table_name}` {where_conditions} limit {limit}")
+    return fixed_sql_query(dtable_db_api, f"select {fields} from `{table_name}` {where_conditions} limit {limit}", parameters=parameters)
 
 
 def str_2_datetime(s: str):
@@ -115,13 +115,15 @@ def update_email_thread_ids(dtable_db_api, email_table_name, send_date, email_li
     if no_thread_reply_message_ids:
         step = 100
         for i in range(0, len(no_thread_reply_message_ids), step):
-            message_ids_str = ', '.join([f"'{message_id}'" for message_id in no_thread_reply_message_ids[i: i+step]])
+            message_ids = no_thread_reply_message_ids[i: i+step]
+            message_ids_str = ', '.join(['?'] * len(message_ids))
             conditions = f"`Message ID`in ({message_ids_str})"
             earlier_email_rows = query_table_rows(dtable_db_api, email_table_name,
                                                   fields='`Message ID`, `Thread ID`',
                                                   conditions=conditions,
                                                   all=False,
-                                                  limit=step)
+                                                  limit=step,
+                                                  parameters=message_ids)
             for email in earlier_email_rows:
                 message2thread[email['Message ID']] = email['Thread ID']
 
@@ -181,13 +183,15 @@ def fill_email_list_with_row_id(dtable_db_api, email_table_name, email_list):
     step = 100
     message_id_row_id_dict = {}  # {message_id: row._id}
     for i in range(0, len(email_list), step):
-        message_ids_str = ', '.join([f"'{email['Message ID']}'" for email in email_list[i: i+step]])
+        message_ids = [email['Message ID'] for email in email_list[i: i+step]]
+        message_ids_str = ', '.join(['?'] * len(message_ids))
         conditions = f'`Message ID` in ({message_ids_str})'
         email_rows = query_table_rows(dtable_db_api, email_table_name,
                                       fields='`_id`, `Message ID`',
                                       conditions=conditions,
                                       all=False,
-                                      limit=step)
+                                      limit=step,
+                                      parameters=message_ids)
         message_id_row_id_dict.update({row['Message ID']: {
             '_id': row['_id'],
         } for row in email_rows})
@@ -212,13 +216,15 @@ def update_threads(seatable, dtable_db_api, email_table_name, link_table_name, e
     thread_id_row_id_dict = {}
     step = 100
     for i in range(0, len(to_be_updated_thread_ids), step):
-        thread_ids_str = ', '.join([f"'{thread_id}'" for thread_id in to_be_updated_thread_ids[i: i+step]])
+        thread_ids = to_be_updated_thread_ids[i: i+step]
+        thread_ids_str = ', '.join(['?'] * len(thread_ids))
         conditions = f"`Thread ID` in ({thread_ids_str})"
         thread_rows = query_table_rows(dtable_db_api, link_table_name,
                                        fields='`Thread ID`, `_id`, `Emails`',
                                        conditions=conditions,
                                        all=False,
-                                       limit=step)
+                                       limit=step,
+                                       parameters=thread_ids)
         thread_id_row_id_dict.update({row['Thread ID']: [row['_id'], get_thread_email_ids(row.get('Emails'))] for row in thread_rows})
 
     if not to_be_updated_thread_dict:
@@ -269,13 +275,15 @@ def update_emails(seatable, dtable_db_api, email_table_name, email_list):
     message_id_row_id_dict = {}
     step = 100
     for i in range(0, len(to_be_updated_message_ids), step):
-        message_ids_str = ', '.join([f"'{message_id}'" for message_id in to_be_updated_message_ids[i: i + step]])
+        message_ids = to_be_updated_message_ids[i: i + step]
+        message_ids_str = ', '.join(['?'] * len(message_ids))
         conditions = f"`Message ID` in ({message_ids_str})"
         email_rows = query_table_rows(dtable_db_api, email_table_name,
                                       fields='`Message ID`, `_id`',
                                       conditions=conditions,
                                       all=False,
-                                      limit=step)
+                                      limit=step,
+                                      parameters=message_ids)
         message_id_row_id_dict.update({row['Message ID']: row['_id'] for row in email_rows})
 
     message_id_attachment_dict = {}

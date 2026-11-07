@@ -182,10 +182,11 @@ class DTableDBAPI(object):
             token = token.decode()
         return token
 
-    def query(self, sql, convert=True, server_only=True):
+    def query(self, sql, convert=True, server_only=True, parameters=None):
         """
         :param sql: str
         :param convert: bool
+        :param parameters: list of values for SQL placeholders
         :return: list
         """
 
@@ -193,6 +194,8 @@ class DTableDBAPI(object):
             raise ValueError('sql can not be empty.')
         url = self.dtable_db_url + '/api/v1/query/' + self.dtable_uuid + '/?from=dtable_events'
         json_data = {'sql': sql, 'server_only': server_only, 'convert_keys': convert, 'convert_date': convert}
+        if parameters is not None:
+            json_data['parameters'] = parameters
         response = requests.post(url, json=json_data, headers=self.headers, timeout=TIMEOUT)
         data = parse_response(response)
         if not data.get('success'):

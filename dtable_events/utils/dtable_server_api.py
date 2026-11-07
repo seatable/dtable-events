@@ -1,3 +1,4 @@
+import hashlib
 import io
 import json
 import logging
@@ -560,7 +561,8 @@ class DTableServerAPI(object):
 
     def upload_email_attachment(self, name, content: bytes, email_id):
         file_type = 'file'
-        attach_path = os.path.join('emails', str(datetime.today())[:7], email_id)
+        email_dir = hashlib.sha256(email_id.encode('utf-8')).hexdigest()
+        attach_path = os.path.join('emails', str(datetime.today())[:7], email_dir)
         upload_link_dict = self.get_file_upload_link(attach_path)
         parent_dir = upload_link_dict['parent_path']
         upload_link = upload_link_dict['upload_link'] + '?ret-json=1'
