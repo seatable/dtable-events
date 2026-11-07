@@ -40,7 +40,8 @@ class SyncTaskPublisher(Thread):
         JOIN seadb_databases d ON d.uuid = c.database_uuid
         WHERE c.deleted = 0 AND c.is_active = 1 AND d.deleted = 0
           AND c.type IN :connection_types
-          AND (c.last_sync_time IS NULL OR
+          AND (JSON_UNQUOTE(JSON_EXTRACT(c.status, '$.last_sync_status')) = 'pending' OR
+               c.last_sync_time IS NULL OR
                TIMESTAMPDIFF(SECOND, c.last_sync_time, UTC_TIMESTAMP()) > :sync_interval)
         ORDER BY c.id
         LIMIT :start, :limit

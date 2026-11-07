@@ -4,7 +4,7 @@ import logging
 import traceback
 from threading import Event, Thread
 
-from sqlalchemy import event
+from sqlalchemy import event, text
 
 from dtable_events.app.config import SEADB_SERVER_URL, SEADB_USER, SEADB_PASSWORD
 from dtable_events.db import init_db_session_class
@@ -39,6 +39,14 @@ class SeaDBConnectionsWorker(Thread):
     def cancel(self):
         self.stop_event.set()
 
+    def recover_interrupted_syncs(self):
+        with self.db_session_class() as session:
+            result = session.execute(text("""UPDATE connections
+                SET status = JSON_SET(status, '$.last_sync_status', 'pending', '$.last_sync_count', 0)
+                WHERE deleted = 0 AND JSON_UNQUOTE(JSON_EXTRACT(status, '$.last_sync_status')) = 'syncing'"""))
+            session.commit()
+            logger.info('Recovered %s interrupted ScaleDB connections', result.rowcount)
+
     def consume_sync_tasks(self):
         while not self.stop_event.is_set():
             try:
@@ -64,12 +72,21 @@ class SeaDBConnectionsWorker(Thread):
         sync_connection(self.db_session_class, connection_id)
 
     def run(self):
-        workers = [Thread(target=self.consume_sync_tasks, name='seadb-sync-%s' % index, daemon=True)
-                   for index in range(WORKER_COUNT)]
-        for worker in workers:
-            worker.start()
-        logger.info('Starting ScaleDB sync worker: concurrency=%s', WORKER_COUNT)
+        workers = []
         try:
+            if self.stop_event.is_set():
+                return
+            try:
+                self.recover_interrupted_syncs()
+            except Exception as error:
+                logger.error('Unable to recover ScaleDB connections: error_type=%s', type(error).__name__)
+            if self.stop_event.is_set():
+                return
+            workers = [Thread(target=self.consume_sync_tasks, name='seadb-sync-%s' % index, daemon=True)
+                       for index in range(WORKER_COUNT)]
+            for worker in workers:
+                worker.start()
+            logger.info('Starting ScaleDB sync worker: concurrency=%s', WORKER_COUNT)
             self.stop_event.wait()
         finally:
             self.cancel()
