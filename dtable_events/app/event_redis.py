@@ -90,6 +90,9 @@ class RedisClient(object):
 
     def delete(self, key):
         return self._redis.delete(key)
+
+    def lock(self, name, timeout, blocking_timeout):
+        return self._redis.lock(name, timeout=timeout, blocking_timeout=blocking_timeout)
     
     def publish(self, channel_name, message):
         try:
@@ -104,6 +107,9 @@ class RedisClient(object):
 
     def rpop(self, key):
         return self._redis.rpop(key)
+
+    def brpop(self, key, timeout=0):
+        return self._redis.brpop(key, timeout=timeout)
 
     def llen(self, key):
         return self._redis.llen(key)

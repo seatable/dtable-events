@@ -82,6 +82,9 @@ REDIS_PASSWORD = configs.get('REDIS_PASSWORD', default='')
 # inner server url
 INNER_DTABLE_SERVER_URL = configs.get('INNER_DTABLE_SERVER_URL', default='http://127.0.0.1:5000')
 INNER_DTABLE_DB_URL = configs.get('INNER_DTABLE_DB_URL', default='http://127.0.0.1:7777')
+SEADB_SERVER_URL = configs.get('SEADB_SERVER_URL', default='http://seadb:8888')
+SEADB_USER = configs.get('SEADB_USER', default='seatable')
+SEADB_PASSWORD = configs.get('SEADB_PASSWORD', default='')
 
 # file server
 FILE_SERVER_ROOT = DTABLE_WEB_SERVICE_URL.strip('/') + '/seafhttp'

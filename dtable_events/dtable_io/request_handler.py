@@ -1,7 +1,6 @@
 import datetime
 import json
 import jwt
-import logging
 from zoneinfo import ZoneInfo
 
 from flask import Flask, request, make_response
@@ -15,9 +14,9 @@ from dtable_events.dtable_io.task_plugin_email_manager import plugin_email_task_
 from dtable_events.dtable_io.task_big_data_manager import big_data_task_manager
 from dtable_events.dtable_io.utils import to_python_boolean
 from dtable_events.app.event_redis import redis_cache, REDIS_METRIC_KEY
+from dtable_events.seadb_connections.sync_manager import sync_manager
 
 app = Flask(__name__)
-logger = logging.getLogger(__name__)
 
 
 def check_auth_token(req):
@@ -45,6 +44,28 @@ def parse_images_max_size(value):
         return float(value) if float(value) > 0 else None
     except (TypeError, ValueError):
         return None
+
+
+@app.route('/add-seadb-connection-sync-task', methods=['POST'])
+def add_seadb_connection_sync_task():
+    try:
+        is_valid, error = check_auth_token(request)
+    except jwt.InvalidTokenError:
+        is_valid, error = False, 'Token invalid.'
+    if not is_valid:
+        return make_response((str(error), 403))
+    try:
+        data = json.loads(request.data)
+    except ValueError:
+        return make_response(({'success': False, 'error_msg': 'Invalid JSON data.'}, 400))
+    if 'connection_id' not in data:
+        return make_response(({'success': False, 'error_msg': 'connection_id is required.'}, 400))
+    try:
+        sync_manager.add_sync_task(data['connection_id'])
+    except Exception as error:
+        dtable_io_logger.error(error)
+        return make_response(({'success': False, 'error_msg': 'Unable to submit the sync task.'}, 503))
+    return make_response(({'success': True}, 200))
 
 
 @app.route('/add-export-task', methods=['GET'])
