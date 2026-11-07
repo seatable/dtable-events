@@ -15,6 +15,7 @@ from dtable_events.utils.seadb_api import SeaDBAPI, get_seadb_table_id, quote_id
 
 BATCH_SIZE = 200
 SYNC_LOOKBACK = timedelta(hours=1)
+DEFAULT_SYNC_YEARS = 3
 
 
 class UpstreamUnavailable(Exception):
@@ -270,8 +271,9 @@ def sync_seatable_connection(db_session_class, connection, progress):
     if not source_table:
         raise InvalidConnection('Source table does not exist.')
 
-    since_at = connection.last_sync_time - SYNC_LOOKBACK if connection.last_sync_time else None
     sync_before = datetime.utcnow()
+    since_at = (connection.last_sync_time - SYNC_LOOKBACK if connection.last_sync_time
+                else sync_before - timedelta(days=365 * DEFAULT_SYNC_YEARS))
     with SeaDBAPI(config.SEADB_SERVER_URL, config.SEADB_USER, config.SEADB_PASSWORD) as seadb_api:
         target_metadata = seadb_api.get_base_info(connection.database_uuid)
         target_table = next((table for table in target_metadata['tables']
