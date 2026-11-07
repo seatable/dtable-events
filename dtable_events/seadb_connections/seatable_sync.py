@@ -2,7 +2,6 @@
 from datetime import datetime, timedelta, timezone
 import uuid
 
-import requests
 from sqlalchemy import text
 
 from dtable_events.app import config
@@ -10,6 +9,7 @@ from dtable_events.automations.hasher import AESPasswordHasher
 from dtable_events.seadb_connections.mapping import (
     InvalidConnection, SYSTEM_COLUMNS, convert_field_value, validate_field_mapping,
 )
+from dtable_events.seadb_connections.source_transport import request_source
 from dtable_events.utils.seadb_api import SeaDBAPI, get_seadb_table_id, quote_identifier
 
 
@@ -23,6 +23,13 @@ class UpstreamUnavailable(Exception):
 
 class SourcePermissionDenied(InvalidConnection):
     pass
+
+
+def source_request(method, url, **kwargs):
+    try:
+        return request_source(method, url, **kwargs)
+    except ValueError as error:
+        raise InvalidConnection(str(error)) from error
 
 
 def validate_source_key_index(table):
@@ -206,8 +213,7 @@ class SeaTableSourceAPI:
 
     def _auth(self):
         url = self.server_url + '/api/v2.1/dtable/app-access-token/'
-        response = requests.get(url, headers={'Authorization': 'Token ' + self.api_token},
-                                timeout=30, allow_redirects=False)
+        response = source_request('GET', url, headers={'Authorization': 'Token ' + self.api_token}, timeout=30)
         data = parse_source_response(response)
         try:
             base_id = str(uuid.UUID(data['dtable_uuid']))
@@ -225,11 +231,11 @@ class SeaTableSourceAPI:
 
     def _request(self, method, url, **kwargs):
         headers = {'Authorization': 'Token ' + self.access_token}
-        response = requests.request(method, url, headers=headers, allow_redirects=False, **kwargs)
+        response = source_request(method, url, headers=headers, **kwargs)
         if response.status_code in (401, 403):
             self._auth()
             headers = {'Authorization': 'Token ' + self.access_token}
-            response = requests.request(method, url, headers=headers, allow_redirects=False, **kwargs)
+            response = source_request(method, url, headers=headers, **kwargs)
         return parse_source_response(response)
 
     def get_metadata(self):
