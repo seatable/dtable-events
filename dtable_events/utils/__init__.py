@@ -240,6 +240,12 @@ def uuid_str_to_32_chars(dtable_uuid):
 
 
 def gen_dtable_temp_api_token(dtable_uuid, username=None, app_name=None, expire_seconds=60 * 60):
+    if not SEATABLE_FAAS_AUTH_TOKEN:
+        raise RuntimeError(
+            'SEATABLE_FAAS_AUTH_TOKEN (PYTHON_SCHEDULER_AUTH_TOKEN) is not configured. '
+            'It is required to issue temp api tokens for the Python script runner and for '
+            'older seatable-api clients. Configure it in dtable.conf, or upgrade '
+            'seatable-api to a version that uses dtable access tokens instead.')
     payload = {
         'dtable_uuid': uuid_str_to_36_chars(dtable_uuid),
         'exp': int(time.time()) + expire_seconds,
