@@ -7,6 +7,7 @@ import configparser
 import subprocess
 import uuid
 import json
+import time
 from dateutil import parser
 from datetime import datetime
 from pathlib import Path
@@ -19,8 +20,9 @@ from seaserv import ccnet_api
 from sqlalchemy import text
 from pdfminer.high_level import extract_text
 import mammoth
+import jwt
 
-from dtable_events.app.config import INNER_FILE_SERVER_ROOT
+from dtable_events.app.config import INNER_FILE_SERVER_ROOT, SEATABLE_FAAS_AUTH_TOKEN
 from dtable_events.app.event_redis import redis_cache
 
 logger = logging.getLogger(__name__)
@@ -235,6 +237,25 @@ def uuid_str_to_32_chars(dtable_uuid):
         return uuid.UUID(dtable_uuid).hex
     else:
         return dtable_uuid
+
+
+def gen_dtable_temp_api_token(dtable_uuid, username=None, app_name=None, expire_seconds=60 * 60):
+    if not SEATABLE_FAAS_AUTH_TOKEN:
+        raise RuntimeError(
+            'SEATABLE_FAAS_AUTH_TOKEN (PYTHON_SCHEDULER_AUTH_TOKEN) is not configured. '
+            'It is required to issue temp api tokens for the Python script runner and for '
+            'older seatable-api clients. Configure it in dtable.conf, or upgrade '
+            'seatable-api to a version that uses dtable access tokens instead.')
+    payload = {
+        'dtable_uuid': uuid_str_to_36_chars(dtable_uuid),
+        'exp': int(time.time()) + expire_seconds,
+    }
+    if username:
+        payload['username'] = username
+    if app_name:
+        payload['app_name'] = app_name
+    return jwt.encode(payload, SEATABLE_FAAS_AUTH_TOKEN, algorithm='HS256')
+
 
 def is_valid_email(email):
     if email and (isinstance(email, str) or isinstance(email, bytes)):
