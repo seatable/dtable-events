@@ -357,7 +357,7 @@ def copy_src_auto_rules_to_json(dtable_uuid, tmp_file_path, db_session):
     if not db_session:
         return
     # copy auto-rules
-    sql = """SELECT `id`, `run_condition`, `trigger`, `actions` FROM dtable_automation_rules WHERE dtable_uuid=:dtable_uuid"""
+    sql = """SELECT `id`, `run_condition`, `trigger`, `actions`, `is_valid`, `is_pause` FROM dtable_automation_rules WHERE dtable_uuid=:dtable_uuid"""
     src_auto_rules = db_session.execute(text(sql), {'dtable_uuid': ''.join(dtable_uuid.split('-'))})
     src_auto_rules_json = []
     for src_auto_rule in src_auto_rules:
@@ -366,6 +366,8 @@ def copy_src_auto_rules_to_json(dtable_uuid, tmp_file_path, db_session):
             'run_condition': src_auto_rule.run_condition,
             'trigger': src_auto_rule.trigger,
             'actions': src_auto_rule.actions,
+            'is_valid': bool(src_auto_rule.is_valid),
+            'is_pause': bool(src_auto_rule.is_pause),
         }
         src_auto_rules_json.append(auto_rule)
     if src_auto_rules_json:
@@ -964,8 +966,8 @@ def add_a_auto_rule_to_db(username, auto_rule, workspace_id, repo_id, owner, org
             action['workspace_id'] = int(workspace_id)
 
     sql = """INSERT INTO dtable_automation_rules (`dtable_uuid`, `run_condition`, `trigger`, `actions`,
-             `creator`, `ctime`, `org_id`, `last_trigger_time`) VALUES (:dtable_uuid, :run_condition,
-             :trigger, :actions, :creator, :ctime, :org_id, :last_trigger_time)"""
+             `creator`, `ctime`, `org_id`, `last_trigger_time`, `is_valid`, `is_pause`) VALUES (:dtable_uuid, :run_condition,
+             :trigger, :actions, :creator, :ctime, :org_id, :last_trigger_time, :is_valid, :is_pause)"""
     result = db_session.execute(text(sql), {
         'dtable_uuid': ''.join(dtable_uuid.split('-')),
         'run_condition': auto_rule['run_condition'],
@@ -975,6 +977,8 @@ def add_a_auto_rule_to_db(username, auto_rule, workspace_id, repo_id, owner, org
         'ctime': datetime.datetime.utcnow(),
         'org_id': org_id,
         'last_trigger_time': None,
+        'is_valid': auto_rule.get('is_valid', True),
+        'is_pause': auto_rule.get('is_pause', False),
         })
     db_session.commit()
     return result.lastrowid
