@@ -92,13 +92,6 @@ ENABLE_PYTHON_SCRIPT = configs.get('ENABLE_PYTHON_SCRIPT', default=False)
 SEATABLE_FAAS_URL = configs.get('PYTHON_SCHEDULER_URL', default='http://python-scheduler')
 SEATABLE_FAAS_AUTH_TOKEN = configs.get('PYTHON_SCHEDULER_AUTH_TOKEN', default='')
 
-# PyJWT >= 2.x rejects empty HMAC keys. Older deployments may not set
-# PYTHON_SCHEDULER_AUTH_TOKEN, so derive a stable secret from the shared JWT
-# private key. The domain prefix keeps the FaaS temp token separate from the
-# main JWT_PRIVATE_KEY trust domain. Must match dtable-web's derivation.
-if not SEATABLE_FAAS_AUTH_TOKEN and DTABLE_PRIVATE_KEY:
-    SEATABLE_FAAS_AUTH_TOKEN = 'faas-auth:' + DTABLE_PRIVATE_KEY
-
 # AI
 ENABLE_SEATABLE_AI = configs.get('ENABLE_SEATABLE_AI', default=False)
 INNER_SEATABLE_AI_SERVER_URL = configs.get('INNER_SEATABLE_AI_SERVER_URL', default='http://127.0.0.1:8888')
