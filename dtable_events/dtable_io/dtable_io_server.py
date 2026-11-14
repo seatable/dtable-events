@@ -9,6 +9,7 @@ from dtable_events.dtable_io.task_manager import task_manager
 from dtable_events.dtable_io.task_message_manager import message_task_manager
 from dtable_events.dtable_io.task_data_sync_manager import data_sync_task_manager
 from dtable_events.dtable_io.task_plugin_email_manager import plugin_email_task_manager
+from dtable_events.dtable_io.task_seadb_manager import seadb_task_manager
 
 
 class DTableIOServer(Thread):
@@ -22,12 +23,14 @@ class DTableIOServer(Thread):
         data_sync_task_manager.init(self._workers, self._io_task_timeout)
         plugin_email_task_manager.init(self._workers, self._io_task_timeout)
         big_data_task_manager.init(self._workers, self._io_task_timeout)
+        seadb_task_manager.init(self._workers, self._io_task_timeout)
 
         task_manager.run()
         message_task_manager.run()
         data_sync_task_manager.run()
         plugin_email_task_manager.run()
         big_data_task_manager.run()
+        seadb_task_manager.run()
 
     def _parse_config(self):
         self._host = IO_SERVER_HOST
