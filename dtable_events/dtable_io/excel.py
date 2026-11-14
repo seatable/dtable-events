@@ -1562,17 +1562,14 @@ def parse_formula_number(cell_data, column_data):
     return value, number_format
 
 
-def parse_number_format(column_data, cell_value, *, decimal_formatter=None):
+def parse_number_format(column_data, cell_value):
     """
     parse number to regular format
     :param column_data: info of number column
     :param cell_value: value of int or float
-    :param decimal_formatter: optional formatter for automatic decimal precision
     """
-    if decimal_formatter is None:
-        decimal_formatter = gen_decimal_format
     if not column_data:
-        return decimal_formatter(cell_value)
+        return gen_decimal_format(cell_value)
     # src_format is None, if column format does not be changed
     src_format = column_data.get('format', 'number')
     enable_precision = column_data.get('enable_precision', False)
@@ -1584,7 +1581,7 @@ def parse_number_format(column_data, cell_value, *, decimal_formatter=None):
         if src_format in ['number', 'percent']:
             if src_format == 'percent':
                 cell_value *= 100
-            number_format = decimal_formatter(cell_value)
+            number_format = gen_decimal_format(cell_value)
     else:
         number_format = '0.' + precision * '0'
     if src_format == 'number':

@@ -140,9 +140,6 @@ LOG_DIR = configs.get('LOG_DIR', '/opt/seatable/logs')
 SEATABLE_LOG_TO_STDOUT = configs.get('SEATABLE_LOG_TO_STDOUT', default=False)
 
 # IO server
-SEADB_SERVER_URL = configs.get('SEADB_SERVER_URL', default='http://seadb:8888')
-SEADB_VIEW_EXPORT_ROW_LIMIT = configs.get('SEADB_VIEW_EXPORT_ROW_LIMIT', default=ARCHIVE_VIEW_EXPORT_ROW_LIMIT)
-SEADB_VIEW_EXPORT_CELL_LIMIT = configs.get('SEADB_VIEW_EXPORT_CELL_LIMIT', default=5000000)
 IO_SERVER_HOST = configs.get('IO_SERVER_HOST', default='127.0.0.1')
 IO_SERVER_PORT = configs.get('IO_SERVER_PORT', default=6000)
 IO_SERVER_WORKERS = configs.get('IO_SERVER_WORKERS', default=3)
