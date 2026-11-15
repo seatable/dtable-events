@@ -8,6 +8,7 @@ from dtable_events.dtable_io.dtable_io_server import DTableIOServer
 from dtable_events.tasks.instant_notices_sender import InstantNoticeSender
 from dtable_events.tasks.email_notices_sender import EmailNoticesSender
 from dtable_events.tasks.dtables_cleaner import DTablesCleaner
+from dtable_events.tasks.seadb_databases_cleaner import SeaDBDatabasesCleaner
 from dtable_events.tasks.dtable_updates_sender import DTableUpdatesSender
 from dtable_events.tasks.dtable_real_time_rows_counter import DTableRealTimeRowsCounter
 from dtable_events.tasks.ldap_syncer import LDAPSyncer
@@ -66,6 +67,7 @@ class App(object):
             self._instant_notices_sender = InstantNoticeSender()
             self._email_notices_sender = EmailNoticesSender()
             self._dtables_cleaner = DTablesCleaner()
+            self._seadb_databases_cleaner = SeaDBDatabasesCleaner()
             self._dtable_updates_sender = DTableUpdatesSender()
             self._dtable_notification_rules_scanner = DTableNofiticationRulesScanner()
             self._ldap_syncer = LDAPSyncer()
@@ -105,6 +107,7 @@ class App(object):
             self._instant_notices_sender.start()             # default True
             self._email_notices_sender.start()               # default True
             self._dtables_cleaner.start()                    # default True
+            self._seadb_databases_cleaner.start()            # default True
             self._dtable_updates_sender.start()              # default True
             self._dtable_notification_rules_scanner.start()  # default True
             self._ldap_syncer.start()                        # default False
