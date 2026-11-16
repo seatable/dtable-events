@@ -6,7 +6,7 @@ import jwt
 import requests
 
 from dtable_events.app.config import SEATABLE_FAAS_URL, SEATABLE_FAAS_AUTH_TOKEN, DTABLE_PRIVATE_KEY
-from dtable_events.utils import uuid_str_to_36_chars
+from dtable_events.utils import uuid_str_to_36_chars, gen_dtable_temp_api_token
 
 
 logger = logging.getLogger(__name__)
@@ -134,16 +134,7 @@ class DTableWebAPI:
         return scripts_running_limit
 
     def get_script_api_token(self, dtable_uuid, username=None, app_name=None):
-        payload = {
-            'dtable_uuid': uuid_str_to_36_chars(dtable_uuid),
-            'exp': int(time.time()) + 60 * 60,
-        }
-        if username:
-            payload['username'] = username
-        if app_name:
-            payload['app_name'] = app_name
-        temp_api_token = jwt.encode(payload, SEATABLE_FAAS_AUTH_TOKEN, algorithm='HS256')
-        return temp_api_token
+        return gen_dtable_temp_api_token(dtable_uuid, username=username, app_name=app_name)
 
     def run_script(self, dtable_uuid, script_name, context_data, owner, org_id, scripts_running_limit, operate_from, operator):
         headers = {'Authorization': 'Token ' + SEATABLE_FAAS_AUTH_TOKEN}
