@@ -1889,8 +1889,7 @@ def clear_tmp_dir(tmp_dir_path):
 
 # Require a single filename to prevent directory traversal.
 def is_plain_file_name(name):
-    return (isinstance(name, str) and bool(name)
-            and os.path.basename(name) == name)
+    return (isinstance(name, str) and bool(name) and os.path.basename(name) == name)
 
 
 def clear_tmp_file(tmp_file_path):
