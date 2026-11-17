@@ -18,6 +18,18 @@ from dtable_events.utils import uuid_str_to_32_chars
 logger = logging.getLogger(__name__)
 
 
+def calculate_usage_cost(model, input_tokens, cached_tokens, output_tokens):
+    prices = AI_PRICES[model]
+    input_price = prices.get('input_tokens') or 0
+    cached_price = prices.get('cached_tokens', input_price)
+    output_price = prices.get('output_tokens') or 0
+    return (
+        input_price * ((input_tokens - cached_tokens) / 1000000) +
+        cached_price * (cached_tokens / 1000000) +
+        output_price * (output_tokens / 1000000)
+    )
+
+
 class AIStatsWorker(object):
 
     def __init__(self):
@@ -36,9 +48,9 @@ class AIStatsWorker(object):
         self._enabled = AI_STATS_ENABLED
 
     def reset_stats(self):
-        self.org_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
-        self.owner_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
-        self.dtable_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'output_tokens': 0}))
+        self.org_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'cached_tokens': 0, 'output_tokens': 0}))
+        self.owner_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'cached_tokens': 0, 'output_tokens': 0}))
+        self.dtable_stats = defaultdict(lambda: defaultdict(lambda: {'input_tokens': 0, 'cached_tokens': 0, 'output_tokens': 0}))
         self.dtable_org_cache = {}
         self.dtable_workspace_owner_cache = {}
 
@@ -102,6 +114,10 @@ class AIStatsWorker(object):
             usage['input_tokens'] = 0
         if not isinstance(usage.get('output_tokens'), int):
             usage['output_tokens'] = 0
+        cached_tokens = usage.get('cached_tokens') or 0
+        if not isinstance(cached_tokens, int):
+            cached_tokens = 0
+        cached_tokens = min(max(cached_tokens, 0), max(usage['input_tokens'], 0))
 
         owner_info = self._get_dtable_owner_info(dtable_uuid, session, org_id=org_id)
         if not owner_info:
@@ -115,11 +131,14 @@ class AIStatsWorker(object):
             return
 
         self.org_stats[org_id][model]['input_tokens'] += usage.get('input_tokens') or 0
+        self.org_stats[org_id][model]['cached_tokens'] += cached_tokens
         self.org_stats[org_id][model]['output_tokens'] += usage.get('output_tokens') or 0
         self.owner_stats[owner][model]['input_tokens'] += usage.get('input_tokens') or 0
+        self.owner_stats[owner][model]['cached_tokens'] += cached_tokens
         self.owner_stats[owner][model]['output_tokens'] += usage.get('output_tokens') or 0
         key = (model, scenario)
         self.dtable_stats[dtable_uuid][key]['input_tokens'] += usage.get('input_tokens') or 0
+        self.dtable_stats[dtable_uuid][key]['cached_tokens'] += cached_tokens
         self.dtable_stats[dtable_uuid][key]['output_tokens'] += usage.get('output_tokens') or 0
 
     def receive(self):
@@ -197,27 +216,26 @@ class AIStatsWorker(object):
 
         team_data = []
         team_sql = '''
-        INSERT INTO `stats_ai_by_team`(`org_id`, `month`, `model`, `input_tokens`, `output_tokens`, `cost`, `created_at`, `updated_at`) 
-        VALUES (:org_id, :month, :model, :input_tokens, :output_tokens, :cost, :created_at, :updated_at)
+        INSERT INTO `stats_ai_by_team`(`org_id`, `month`, `model`, `input_tokens`, `cached_tokens`, `output_tokens`, `cost`, `created_at`, `updated_at`)
+        VALUES (:org_id, :month, :model, :input_tokens, :cached_tokens, :output_tokens, :cost, :created_at, :updated_at)
         '''
         for org_id, models_dict in org_stats.items():
             for model, usage in models_dict.items():
                 input_tokens = usage.get('input_tokens') or 0
+                cached_tokens = usage.get('cached_tokens') or 0
                 output_tokens = usage.get('output_tokens') or 0
 
-                input_tokens_price = AI_PRICES[model].get('input_tokens') or 0
-                output_tokens_price = AI_PRICES[model].get('output_tokens') or 0
-                input_cost = input_tokens_price * (input_tokens / 1000000)
-                output_cost = output_tokens_price * (output_tokens / 1000000)
-                logger.info('org %s model %s, input_tokens %s cost %s, output_tokens %s cost %s', org_id, model, input_tokens, input_cost, output_tokens, output_cost)
+                cost = calculate_usage_cost(model, input_tokens, cached_tokens, output_tokens)
+                logger.info('org %s model %s, input_tokens %s, cached_tokens %s, output_tokens %s, cost %s', org_id, model, input_tokens, cached_tokens, output_tokens, cost)
 
                 params = {
                     'org_id': org_id,
                     'month': month,
                     'model': model,
                     'input_tokens': input_tokens,
+                    'cached_tokens': cached_tokens,
                     'output_tokens': output_tokens,
-                    'cost': input_cost + output_cost,
+                    'cost': cost,
                     'created_at': datetime.now(),
                     'updated_at': datetime.now()
                 }
@@ -225,27 +243,26 @@ class AIStatsWorker(object):
 
         owner_data = []
         owner_sql = '''
-        INSERT INTO `stats_ai_by_owner`(`owner`, `month`, `model`, `input_tokens`, `output_tokens`, `cost`, `created_at`, `updated_at`) 
-        VALUES (:owner, :month, :model, :input_tokens, :output_tokens, :cost, :created_at, :updated_at)
+        INSERT INTO `stats_ai_by_owner`(`owner`, `month`, `model`, `input_tokens`, `cached_tokens`, `output_tokens`, `cost`, `created_at`, `updated_at`)
+        VALUES (:owner, :month, :model, :input_tokens, :cached_tokens, :output_tokens, :cost, :created_at, :updated_at)
         '''
         for owner_id, models_dict in owner_stats.items():
             for model, usage in models_dict.items():
                 input_tokens = usage.get('input_tokens') or 0
+                cached_tokens = usage.get('cached_tokens') or 0
                 output_tokens = usage.get('output_tokens') or 0
 
-                input_tokens_price = AI_PRICES[model].get('input_tokens') or 0
-                output_tokens_price = AI_PRICES[model].get('output_tokens') or 0
-                input_cost = input_tokens_price * (input_tokens / 1000000)
-                output_cost = output_tokens_price * (output_tokens / 1000000)
-                logger.info('owner %s model %s, input_tokens %s cost %s, output_tokens %s cost %s', owner_id, model, input_tokens, input_cost, output_tokens, output_cost)
+                cost = calculate_usage_cost(model, input_tokens, cached_tokens, output_tokens)
+                logger.info('owner %s model %s, input_tokens %s, cached_tokens %s, output_tokens %s, cost %s', owner_id, model, input_tokens, cached_tokens, output_tokens, cost)
 
                 params = {
                     'owner': owner_id,
                     'month': month,
                     'model': model,
                     'input_tokens': input_tokens,
+                    'cached_tokens': cached_tokens,
                     'output_tokens': output_tokens,
-                    'cost': input_cost + output_cost,
+                    'cost': cost,
                     'created_at': datetime.now(),
                     'updated_at': datetime.now()
                 }
@@ -253,9 +270,10 @@ class AIStatsWorker(object):
 
         dtable_data = []
         dtable_sql = '''
-        INSERT INTO `stats_ai_by_dtable`(`dtable_uuid`, `date`, `model`, `owner`, `group_id`, `org_id`, `scenario`, `input_tokens`, `output_tokens`, `cost`, `created_at`, `updated_at`)
-        VALUES (:dtable_uuid, :date, :model, :owner, :group_id, :org_id, :scenario, :input_tokens, :output_tokens, :cost, :created_at, :updated_at)
+        INSERT INTO `stats_ai_by_dtable`(`dtable_uuid`, `date`, `model`, `owner`, `group_id`, `org_id`, `scenario`, `input_tokens`, `cached_tokens`, `output_tokens`, `cost`, `created_at`, `updated_at`)
+        VALUES (:dtable_uuid, :date, :model, :owner, :group_id, :org_id, :scenario, :input_tokens, :cached_tokens, :output_tokens, :cost, :created_at, :updated_at)
         ON DUPLICATE KEY UPDATE `input_tokens`=`input_tokens`+VALUES(`input_tokens`),
+                                `cached_tokens`=`cached_tokens`+VALUES(`cached_tokens`),
                                 `output_tokens`=`output_tokens`+VALUES(`output_tokens`),
                                 `cost`=`cost`+VALUES(`cost`),
                                 `updated_at`=VALUES(`updated_at`)
@@ -281,13 +299,11 @@ class AIStatsWorker(object):
 
             for (model, scenario), usage in models_dict.items():
                 input_tokens = usage.get('input_tokens') or 0
+                cached_tokens = usage.get('cached_tokens') or 0
                 output_tokens = usage.get('output_tokens') or 0
 
-                input_tokens_price = AI_PRICES[model].get('input_tokens') or 0
-                output_tokens_price = AI_PRICES[model].get('output_tokens') or 0
-                input_cost = input_tokens_price * (input_tokens / 1000000)
-                output_cost = output_tokens_price * (output_tokens / 1000000)
-                logger.info('dtable %s model %s scenario %s, input_tokens %s cost %s, output_tokens %s cost %s', dtable_uuid, model, scenario, input_tokens, input_cost, output_tokens, output_cost)
+                cost = calculate_usage_cost(model, input_tokens, cached_tokens, output_tokens)
+                logger.info('dtable %s model %s scenario %s, input_tokens %s, cached_tokens %s, output_tokens %s, cost %s', dtable_uuid, model, scenario, input_tokens, cached_tokens, output_tokens, cost)
 
                 params = {
                     'dtable_uuid': dtable_uuid,
@@ -298,8 +314,9 @@ class AIStatsWorker(object):
                     'org_id': org_id,
                     'scenario': scenario,
                     'input_tokens': input_tokens,
+                    'cached_tokens': cached_tokens,
                     'output_tokens': output_tokens,
-                    'cost': input_cost + output_cost,
+                    'cost': cost,
                     'created_at': datetime.now(),
                     'updated_at': datetime.now()
                 }
