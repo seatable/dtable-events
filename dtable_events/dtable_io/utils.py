@@ -1891,6 +1891,11 @@ def clear_tmp_dir(tmp_dir_path):
         shutil.rmtree(tmp_dir_path)
 
 
+# Require a single filename to prevent directory traversal.
+def is_plain_file_name(name):
+    return (isinstance(name, str) and bool(name) and os.path.basename(name) == name)
+
+
 def clear_tmp_file(tmp_file_path):
     if os.path.exists(tmp_file_path):
         os.remove(tmp_file_path)

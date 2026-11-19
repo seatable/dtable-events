@@ -15,7 +15,7 @@ from dtable_events.utils.constants import ColumnTypes, FormulaResultType
 from dtable_events.utils.geo_location_parser import parse_geolocation_from_tree
 from dtable_events.utils.dtable_db_api import DTableDBAPI
 from dtable_events.utils.dtable_server_api import DTableServerAPI
-from dtable_events.dtable_io.utils import clear_tmp_file, save_file_by_path, get_csv_file, \
+from dtable_events.dtable_io.utils import is_plain_file_name, clear_tmp_file, save_file_by_path, get_csv_file, \
     upload_excel_json_add_table_to_dtable_server, append_rows_by_dtable_server, get_related_nicknames_from_dtable, \
     extract_select_options, upload_excel_json_to_dtable_server, get_rows_from_dtable_db, update_rows_by_dtable_db, \
     get_nicknames_from_dtable, get_table_names_by_dtable_server, get_non_duplicated_name, filter_imported_tables
@@ -629,6 +629,9 @@ def parse_excel_csv_to_json(username, repo_id, file_name, file_type, parse_type,
 
 
 def import_excel_csv_by_dtable_server(username, repo_id, dtable_uuid, dtable_name, included_tables, lang):
+    if not is_plain_file_name(dtable_name):
+        raise ValueError('dtable_name invalid.')
+
     # get json file
     tmp_file_path = os.path.join(EXCEL_IMPORT_DIR, repo_id, dtable_name + '.json')
     with open(tmp_file_path, 'r') as f:
@@ -647,6 +650,9 @@ def import_excel_csv_by_dtable_server(username, repo_id, dtable_uuid, dtable_nam
 
 
 def import_excel_csv_add_table_by_dtable_server(username, dtable_uuid, dtable_name, included_tables, lang):
+    if not is_plain_file_name(dtable_name):
+        raise ValueError('dtable_name invalid.')
+
     # get json file
     tmp_file_path = os.path.join(EXCEL_IMPORT_DIR, dtable_uuid, dtable_name + '.json')
     with open(tmp_file_path, 'r') as f:
@@ -666,6 +672,9 @@ def import_excel_csv_add_table_by_dtable_server(username, dtable_uuid, dtable_na
 
 
 def append_parsed_file_by_dtable_server(username, dtable_uuid, file_name, table_name):
+    if not is_plain_file_name(file_name):
+        raise ValueError('file_name invalid.')
+
     # get json file
     tmp_file_path = os.path.join(EXCEL_IMPORT_DIR, dtable_uuid, file_name + '.json')
     with open(tmp_file_path, 'r') as f:
@@ -763,6 +772,9 @@ def get_dtable_row_data(dtable_rows, key_columns, excel_col_name_to_type, excel_
 
 
 def update_parsed_file_by_dtable_server(username, dtable_uuid, file_name, table_name, selected_columns, can_add_row, can_update_row):
+    if not is_plain_file_name(file_name):
+        raise ValueError('file_name invalid.')
+
     if not can_add_row and not can_update_row:
         return
 
