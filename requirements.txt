@@ -5,7 +5,7 @@ openpyxl==3.1.*
 waitress==3.0.2
 Flask==3.1.*
 python-dateutil==2.9.*
-imapclient==2.3.*
+imapclient==4.3.*
 Markdown==3.11.*
 mammoth==1.13.*
 pdfminer.six==20260107
