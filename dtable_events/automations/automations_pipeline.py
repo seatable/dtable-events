@@ -7,7 +7,7 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from sqlalchemy import text
 
 from dtable_events.app.config import INNER_DTABLE_WEB_SERVICE_URL, AUTOMATION_RATE_LIMIT_PERCENT, \
-    AUTOMATION_RATE_LIMIT_WINDOW_SECS, AUTOMATION_WORKERS
+    AUTOMATION_RATE_LIMIT_WINDOW_SECS, AUTOMATION_WORKERS, TIME_ZONE
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.app.log import auto_rule_logger
 from dtable_events.automations.automations_stats_manager import AutomationsStatsManager
@@ -327,7 +327,7 @@ class AutomationsPipeline(object):
             db_session.close()
 
     def scheduled_scan(self):
-        sched = BlockingScheduler()
+        sched = BlockingScheduler(timezone=TIME_ZONE)
         # fire at every hour in every day of week
         @sched.scheduled_job('cron', day_of_week='*', hour='*', misfire_grace_time=600)
         def timed_job():

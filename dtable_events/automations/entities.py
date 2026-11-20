@@ -1,6 +1,9 @@
 from copy import deepcopy
 from datetime import datetime, date
 from dataclasses import dataclass, field
+from zoneinfo import ZoneInfo
+
+from dtable_events.app.config import TIME_ZONE
 
 
 PER_DAY = 'per_day'
@@ -45,7 +48,7 @@ class AutomationTask:
     def is_cron_time_matched(self):
         if self.run_condition not in CRON_CONDITIONS:
             return False
-        cur_datetime = datetime.now()
+        cur_datetime = datetime.now(tz=ZoneInfo(TIME_ZONE))
         cur_hour = cur_datetime.hour
         cur_week_day = cur_datetime.isoweekday()
         cur_month_day = cur_datetime.day
