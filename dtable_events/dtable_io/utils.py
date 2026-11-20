@@ -1277,6 +1277,8 @@ def download_files_to_path(username, repo_id, dtable_uuid, files, path, db_sessi
         file_name = os.path.basename(file)
         if files_map and files_map.get(file, None):
             file_name = files_map.get(file)
+        if not is_plain_file_name(file_name):
+            raise ValueError('file_name invalid.')
         file_url = gen_inner_file_get_url(token, file_name)
         content = requests.get(file_url).content
         filename_by_path = os.path.join(path, file_name)
@@ -1291,6 +1293,8 @@ def download_files_to_path(username, repo_id, dtable_uuid, files, path, db_sessi
         )
         if files_map and files_map.get(custom_uuid):
             file_name = files_map.get(custom_uuid)
+        if not is_plain_file_name(file_name):
+            raise ValueError('file_name invalid.')
         file_url = gen_inner_file_get_url(token, file_name)
         content = requests.get(file_url).content
         filename_by_path = os.path.join(path, file_name)
