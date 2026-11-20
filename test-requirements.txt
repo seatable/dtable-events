@@ -1,6 +1,6 @@
 -r requirements.txt
 
 pyjwt==2.15.*
-requests==2.32.*
+requests==2.34.*
 pycryptodome==3.20.*
 pillow==13.0.*
