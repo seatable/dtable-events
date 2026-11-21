@@ -1,4 +1,4 @@
-redis==4.4.*
+redis==8.1.*
 SQLAlchemy==2.0.*
 apscheduler==3.11.*
 openpyxl==3.1.*
