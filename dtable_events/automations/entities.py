@@ -25,7 +25,8 @@ QUEUE_AUTOMATION_TASKS_DEFAULT = QUEUE_AUTOMATION_TASKS_20
 
 class AutomationTask:
 
-    def __init__(self, rule_id, run_condition, trigger, actions, dtable_uuid, org_id, owner, data, with_test, task_id=None):
+    def __init__(self, rule_id, run_condition, trigger, actions, dtable_uuid, org_id, owner, data, with_test,
+                 task_id=None, scheduled_at=None):
         self.rule_id = rule_id
         self.run_condition = run_condition
         self.trigger = trigger
@@ -37,10 +38,14 @@ class AutomationTask:
         self.data = data
         self.with_test = with_test
         self.task_id = task_id
+        self.scheduled_at = scheduled_at
         self.warnings = []
 
     def to_dict(self):
-        return {key: value for key, value in self.__dict__.items() if key not in ['trigger', 'actions']}
+        payload = {key: value for key, value in self.__dict__.items() if key not in ('trigger', 'actions', 'scheduled_at')}
+        if self.scheduled_at is not None:
+            payload['scheduled_at'] = self.scheduled_at.isoformat()
+        return payload
 
     def append_warning(self, warning):
         self.warnings.append(warning)
@@ -48,7 +53,7 @@ class AutomationTask:
     def is_cron_time_matched(self):
         if self.run_condition not in CRON_CONDITIONS:
             return False
-        cur_datetime = datetime.now(tz=ZoneInfo(TIME_ZONE))
+        cur_datetime = self.scheduled_at or datetime.now(tz=ZoneInfo(TIME_ZONE))
         cur_hour = cur_datetime.hour
         cur_week_day = cur_datetime.isoweekday()
         cur_month_day = cur_datetime.day
