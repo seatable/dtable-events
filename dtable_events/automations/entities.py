@@ -1,6 +1,9 @@
 from copy import deepcopy
 from datetime import datetime, date
 from dataclasses import dataclass, field
+from zoneinfo import ZoneInfo
+
+from dtable_events.app.config import TIME_ZONE
 
 
 PER_DAY = 'per_day'
@@ -8,9 +11,7 @@ PER_WEEK = 'per_week'
 PER_UPDATE = 'per_update'
 PER_MONTH = 'per_month'
 CRON_CONDITIONS = (PER_DAY, PER_WEEK, PER_MONTH)
-ALL_CONDITIONS = (PER_DAY, PER_WEEK, PER_MONTH, PER_UPDATE)
 
-CONDITION_ROWS_MODIFIED = 'rows_modified'
 CONDITION_ROWS_ADDED = 'rows_added'
 CONDITION_FILTERS_SATISFY = 'filters_satisfy'
 CONDITION_PERIODICALLY = 'run_periodically'
@@ -24,7 +25,8 @@ QUEUE_AUTOMATION_TASKS_DEFAULT = QUEUE_AUTOMATION_TASKS_20
 
 class AutomationTask:
 
-    def __init__(self, rule_id, run_condition, trigger, actions, dtable_uuid, org_id, owner, data, with_test, task_id=None):
+    def __init__(self, rule_id, run_condition, trigger, actions, dtable_uuid, org_id, owner, data, with_test,
+                 task_id=None, scheduled_at=None):
         self.rule_id = rule_id
         self.run_condition = run_condition
         self.trigger = trigger
@@ -36,23 +38,46 @@ class AutomationTask:
         self.data = data
         self.with_test = with_test
         self.task_id = task_id
+        self.scheduled_at = scheduled_at
         self.warnings = []
 
     def to_dict(self):
-        return {key: value for key, value in self.__dict__.items() if key not in ['trigger', 'actions']}
+        payload = {key: value for key, value in self.__dict__.items() if key not in ('trigger', 'actions', 'scheduled_at')}
+        if self.scheduled_at is not None:
+            payload['scheduled_at'] = self.scheduled_at.isoformat()
+        return payload
 
     def append_warning(self, warning):
         self.warnings.append(warning)
 
+    def is_cron_time_matched(self):
+        if self.run_condition not in CRON_CONDITIONS:
+            return False
+        cur_datetime = self.scheduled_at or datetime.now(tz=ZoneInfo(TIME_ZONE))
+        cur_hour = cur_datetime.hour
+        cur_week_day = cur_datetime.isoweekday()
+        cur_month_day = cur_datetime.day
+        if self.run_condition == PER_DAY:
+            return cur_hour == self.trigger.get('notify_hour', 12)
+        if self.run_condition == PER_WEEK:
+            return cur_hour == self.trigger.get('notify_week_hour', 12) \
+                and cur_week_day == self.trigger.get('notify_week_day', 7)
+        return cur_hour == self.trigger.get('notify_month_hour', 12) \
+            and cur_month_day == self.trigger.get('notify_month_day', 1)
+
     def can_do_actions(self):
-        if self.trigger.get('condition') not in (CONDITION_FILTERS_SATISFY, CONDITION_PERIODICALLY, CONDITION_ROWS_ADDED, CONDITION_PERIODICALLY_BY_CONDITION):
+        if self.trigger.get('condition') not in (
+                CONDITION_FILTERS_SATISFY,
+                CONDITION_PERIODICALLY,
+                CONDITION_ROWS_ADDED,
+                CONDITION_PERIODICALLY_BY_CONDITION):
             return False
 
         if self.trigger.get('condition') == CONDITION_ROWS_ADDED:
             if self.data.get('op_type') not in ['insert_row', 'append_rows', 'insert_rows']:
                 return False
 
-        if self.trigger.get('condition') in [CONDITION_FILTERS_SATISFY, CONDITION_ROWS_MODIFIED]:
+        if self.trigger.get('condition') == CONDITION_FILTERS_SATISFY:
             if self.data.get('op_type') not in ['modify_row', 'modify_rows', 'add_link', 'update_links', 'update_rows_links', 'remove_link', 'move_group_rows']:
                 return False
 
@@ -60,25 +85,7 @@ class AutomationTask:
             return True
 
         if self.run_condition in CRON_CONDITIONS:
-            cur_datetime = datetime.now()
-            cur_hour = cur_datetime.hour
-            cur_week_day = cur_datetime.isoweekday()
-            cur_month_day = cur_datetime.day
-            if self.run_condition == PER_DAY:
-                trigger_hour = self.trigger.get('notify_hour', 12)
-                if cur_hour != trigger_hour:
-                    return False
-            elif self.run_condition == PER_WEEK:
-                trigger_hour = self.trigger.get('notify_week_hour', 12)
-                trigger_day = self.trigger.get('notify_week_day', 7)
-                if cur_hour != trigger_hour or cur_week_day != trigger_day:
-                    return False
-            else:
-                trigger_hour = self.trigger.get('notify_month_hour', 12)
-                trigger_day = self.trigger.get('notify_month_day', 1)
-                if cur_hour != trigger_hour or cur_month_day != trigger_day:
-                    return False
-            return True
+            return self.is_cron_time_matched()
 
         return False
 
