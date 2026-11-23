@@ -1,14 +1,13 @@
 import json
 import time
-from datetime import datetime, timedelta, date, timezone
+from datetime import datetime, timedelta, date
 from threading import Thread, Lock
-from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 from sqlalchemy import text
 
 from dtable_events.app.config import INNER_DTABLE_WEB_SERVICE_URL, AUTOMATION_RATE_LIMIT_PERCENT, \
-    AUTOMATION_RATE_LIMIT_WINDOW_SECS, AUTOMATION_WORKERS, TIME_ZONE
+    AUTOMATION_RATE_LIMIT_WINDOW_SECS, AUTOMATION_WORKERS
 from dtable_events.app.event_redis import RedisClient
 from dtable_events.app.log import auto_rule_logger
 from dtable_events.automations.automations_stats_manager import AutomationsStatsManager
@@ -266,12 +265,9 @@ class AutomationsPipeline(object):
             OR (run_condition='per_month' AND (last_trigger_time<:per_month_check_time OR last_trigger_time IS NULL)))
             AND dar.is_valid=1 AND d.deleted=0 AND is_pause=0
         '''
-        scheduled_at = datetime.now(tz=ZoneInfo(TIME_ZONE))
-        local_day_start = scheduled_at.replace(hour=0, minute=0, second=0, microsecond=0, fold=0)
-        per_day_check_time = local_day_start.astimezone(timezone.utc).replace(tzinfo=None)
-        now_utc = scheduled_at.astimezone(timezone.utc).replace(tzinfo=None)
-        per_week_check_time = now_utc - timedelta(days=6)
-        per_month_check_time = now_utc - timedelta(days=27)  # consider the least month-days 28 in February (the 2nd month) in common years
+        per_day_check_time = datetime.utcnow() - timedelta(hours=23)
+        per_week_check_time = datetime.utcnow() - timedelta(days=6)
+        per_month_check_time = datetime.utcnow() - timedelta(days=27)  # consider the least month-days 28 in February (the 2nd month) in common years
         db_session = self._db_session_class()
         try:
             auto_rule_logger.info('Scanning scheduled automation rules...')
@@ -303,8 +299,7 @@ class AutomationsPipeline(object):
                     org_id=rule.org_id,
                     owner=rule.owner,
                     data=None,
-                    with_test=False,
-                    scheduled_at=scheduled_at,
+                    with_test=False
                 )
                 if not automation_task.can_do_actions():
                     continue
@@ -332,7 +327,7 @@ class AutomationsPipeline(object):
             db_session.close()
 
     def scheduled_scan(self):
-        sched = BlockingScheduler(timezone=TIME_ZONE)
+        sched = BlockingScheduler()
         # fire at every hour in every day of week
         @sched.scheduled_job('cron', day_of_week='*', hour='*', misfire_grace_time=600)
         def timed_job():
