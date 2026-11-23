@@ -15,7 +15,7 @@ from dtable_events.dtable_io.task_data_sync_manager import data_sync_task_manage
 from dtable_events.dtable_io.task_plugin_email_manager import plugin_email_task_manager
 from dtable_events.dtable_io.task_big_data_manager import big_data_task_manager
 from dtable_events.dtable_io.task_seadb_manager import seadb_task_manager
-from dtable_events.dtable_io.utils import to_python_boolean
+from dtable_events.dtable_io.utils import is_plain_file_name, to_python_boolean
 from dtable_events.app.event_redis import redis_cache, REDIS_METRIC_KEY
 
 app = Flask(__name__)
@@ -1287,20 +1287,18 @@ def add_import_page_design_task():
 
 @app.route('/add-convert-seadb-view-to-excel-task', methods=['POST'])
 def add_seadb_export_task():
-    try:
-        is_valid = bool(DTABLE_PRIVATE_KEY) and check_auth_token(request)[0]
-    except jwt.InvalidTokenError:
-        is_valid = False
+    is_valid, error = check_auth_token(request)
     if not is_valid:
-        return make_response(('Permission denied.', 403))
+        return make_response((error, 403))
 
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         return make_response(('Invalid export payload.', 400))
-    text_fields = ('database_uuid', 'username', 'table_id', 'view_id', 'filename',
-                   'sheet_name', 'read_token', 'select_sql')
+    text_fields = ('database_uuid', 'filename', 'sheet_name', 'read_token', 'select_sql')
     if not all(isinstance(payload.get(key), str) and payload[key] for key in text_fields):
         return make_response(('Invalid export payload.', 400))
+    if not is_plain_file_name(payload['filename']) or not payload['filename'].endswith('.xlsx'):
+        return make_response(('Invalid export filename.', 400))
     if not isinstance(payload.get('parameters'), list) or not isinstance(payload.get('cursor_sql'), str):
         return make_response(('Invalid export query.', 400))
     if 'count_sql' in payload and not isinstance(payload['count_sql'], str):
@@ -1309,15 +1307,38 @@ def add_seadb_export_task():
         return make_response(('Invalid export columns.', 400))
 
     try:
-        task_id = seadb_task_manager.add_export_task(payload)
+        from uuid import UUID
+        payload['database_uuid'] = str(UUID(payload['database_uuid']))
     except ValueError:
         return make_response(('Invalid database ID.', 400))
+
+    try:
+        task_id = seadb_task_manager.add_export_task(payload)
     except queue.Full:
         return make_response(('Export queue is full.', 503))
-    except OSError:
-        dtable_io_logger.error('Could not create ScaleDB export task directory')
+    except Exception as e:
+        dtable_io_logger.error('Could not create ScaleDB export task: %s', e)
         return make_response(('Could not create export task.', 500))
-    return make_response(({'task_id': task_id}, 202))
+    return make_response(({'task_id': task_id}, 200))
+
+
+@app.route('/query-seadb-export-status', methods=['GET'])
+def query_seadb_export_status():
+    is_valid, error = check_auth_token(request)
+    if not is_valid:
+        return make_response((error, 403))
+
+    task_id = request.args.get('task_id')
+    if not seadb_task_manager.is_valid_task_id(task_id):
+        return make_response(('task_id invalid.', 400))
+
+    try:
+        is_finished, result = seadb_task_manager.query_status(task_id)
+    except Exception as e:
+        dtable_io_logger.debug(e)
+        return make_response((e, 500))
+
+    return make_response(({'is_finished': is_finished, 'result': result or {}}, 200))
 
 
 @app.route('/query-big-data-status', methods=['GET'])

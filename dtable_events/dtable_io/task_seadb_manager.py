@@ -1,55 +1,73 @@
 import queue
-import shutil
 import threading
 import time
+import uuid
 
-from dtable_events.dtable_io import dtable_io_logger, seadb_export
 
+class SeaDBTaskManager(object):
 
-class SeaDBTaskManager:
     def __init__(self):
-        self.tasks_queue = queue.Queue(maxsize=10)
-        self._cleanup_lock = threading.Lock()
-        self._next_cleanup = 0
+        self.tasks_map = {}
+        self.tasks_status_map = {}
+        self.tasks_queue = queue.Queue(10)
         self.conf = {}
 
     def init(self, workers, io_task_timeout):
         self.conf['workers'] = workers
         self.conf['io_task_timeout'] = io_task_timeout
 
+    def is_valid_task_id(self, task_id):
+        return task_id in self.tasks_status_map
+
+    def query_status(self, task_id):
+        task_status_result = self.tasks_status_map.get(task_id, {})
+        if task_status_result.get('status') in ('success', 'failed'):
+            self.tasks_status_map.pop(task_id, None)
+            return True, task_status_result
+        return False, task_status_result
+
     def add_export_task(self, payload):
-        task_id, directory, state = seadb_export.create_job(payload, timeout=self.conf['io_task_timeout'])
+        from dtable_events.dtable_io.seadb_export import export_seadb_view_to_excel
+
+        task_id = str(uuid.uuid4())
+        timeout = self.conf['io_task_timeout']
+        self.tasks_status_map[task_id] = {
+            'status': 'queued',
+            'handled_row_count': 0,
+            'filename': payload['filename'],
+        }
+        self.tasks_map[task_id] = (export_seadb_view_to_excel, (payload, task_id, self.tasks_status_map, timeout))
         try:
-            self.tasks_queue.put_nowait((directory, state, payload))
+            self.tasks_queue.put_nowait(task_id)
         except queue.Full:
-            shutil.rmtree(directory, ignore_errors=True)
+            self.tasks_map.pop(task_id, None)
+            self.tasks_status_map.pop(task_id, None)
             raise
         return task_id
 
-    def _clean_expired_jobs(self):
-        with self._cleanup_lock:
-            now = time.monotonic()
-            if now < self._next_cleanup:
-                return
-            self._next_cleanup = now + 300
-
-        try:
-            seadb_export.clean_expired_jobs()
-        except OSError as error:
-            dtable_io_logger.warning('Could not clean ScaleDB exports (%s)', type(error).__name__)
-
     def handle_tasks(self):
+        from dtable_events.dtable_io import dtable_io_logger
+
         while True:
-            self._clean_expired_jobs()
             try:
-                directory, state, payload = self.tasks_queue.get(timeout=2)
+                task_id = self.tasks_queue.get(timeout=2)
             except queue.Empty:
+                continue
+            except Exception as e:
+                dtable_io_logger.error(e)
                 continue
 
             try:
-                seadb_export.export_job(directory, state, payload)
-            except Exception as error:
-                dtable_io_logger.error('Could not finalize ScaleDB export %s (%s)', directory.name, type(error).__name__)
+                task = self.tasks_map.pop(task_id, None)
+                if not isinstance(task, tuple):
+                    continue
+                dtable_io_logger.info('Run ScaleDB export task: %s', task_id)
+                start_time = time.time()
+                task[0](*task[1])
+                dtable_io_logger.info('Run ScaleDB export task %s cost %ds', task_id, int(time.time() - start_time))
+            except Exception as e:
+                dtable_io_logger.exception('Failed to handle ScaleDB export task %s: %s', task_id, e)
+                self.tasks_status_map.pop(task_id, None)
             finally:
                 self.tasks_queue.task_done()
 

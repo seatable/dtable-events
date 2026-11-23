@@ -1,15 +1,12 @@
-"""ScaleDB export jobs executed by the existing IO workers."""
+"""ScaleDB view export jobs executed by the IO workers."""
 import json
 import logging
 import math
 import os
 import re
-import shutil
-import threading
 import time
-from hashlib import sha256
 from pathlib import Path
-from uuid import UUID, uuid4
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import requests
@@ -25,79 +22,11 @@ from dtable_events.dtable_io.utils import DTABLE_IO_DIR, escape_sheet_name
 
 logger = logging.getLogger(__name__)
 EXPORT_ROOT = Path(DTABLE_IO_DIR) / 'export-seadb-view-to-excel'
-UNSUCCESSFUL_JOB_TTL = 86400
 BATCH_SIZE = 1000
-HEARTBEAT_INTERVAL = 15
 XML_INVALID_CHARACTERS = re.compile(r'[^\x09\x0a\x0d\x20-\ud7ff\ue000-\ufffd\U00010000-\U0010ffff]')
 NUMBER_TYPES = ('int32', 'int64', 'float32', 'float64', 'number', 'rate')
 DATE_TYPES = ('datetime', 'date')
 SELECT_TYPES = ('single-select', 'multiple-select')
-
-
-def write_status(directory, state):
-    temporary = directory / 'status.tmp'
-    temporary.write_text(json.dumps(state, ensure_ascii=False), encoding='utf-8')
-    temporary.replace(directory / 'status.json')
-
-
-def _refresh_heartbeat(path, stop):
-    # Progress updates can pause during a query or workbook compression.
-    while not stop.wait(HEARTBEAT_INTERVAL):
-        try:
-            path.touch()
-        except OSError:
-            logger.warning('Could not refresh ScaleDB export heartbeat %s', path.parent.name)
-
-
-def create_job(payload, *, timeout=IO_SERVER_TASK_TIMEOUT):
-    database_id = str(UUID(payload['database_uuid']))
-    task_id = str(uuid4())
-    directory = EXPORT_ROOT / database_id / task_id
-    directory.mkdir(parents=True, mode=0o750)
-    state = {
-        'username': payload['username'],
-        'table_id': payload['table_id'],
-        'view_id': payload['view_id'],
-        'filename': payload['filename'],
-        'status': 'queued',
-        'handled_row_count': 0,
-        'expires_at': time.time() + timeout,
-    }
-    try:
-        write_status(directory, state)
-    except OSError:
-        shutil.rmtree(directory, ignore_errors=True)
-        raise
-    return task_id, directory, state
-
-
-def clean_expired_jobs():
-    if not EXPORT_ROOT.is_dir():
-        return
-    now = time.time()
-    for directory in EXPORT_ROOT.glob('*/*'):
-        try:
-            if directory.name == 'results':
-                continue
-            if directory.is_symlink() or directory.parent.is_symlink() or not directory.is_dir():
-                continue
-            status_path = directory / 'status.json'
-            try:
-                state = json.loads(status_path.read_text(encoding='utf-8'))
-                if state['status'] == 'success':
-                    continue
-                expiry = state['expires_at']
-                if state['status'] in ('queued', 'running'):
-                    # Leave time for an in-flight request or workbook save to unwind.
-                    expiry += UNSUCCESSFUL_JOB_TTL
-            except FileNotFoundError:
-                expiry = directory.stat().st_mtime + UNSUCCESSFUL_JOB_TTL
-            if expiry <= now:
-                shutil.rmtree(directory)
-        except FileNotFoundError:
-            continue
-        except (OSError, ValueError, KeyError, TypeError):
-            logger.warning('Could not clean ScaleDB export directory %s', directory.name)
 
 
 def _query_rows(session, url, sql, parameters, timeout):
@@ -293,23 +222,21 @@ def value_cell(sheet, column, value, names, timezone):
     return text_cell(sheet, display_value(value, names))
 
 
-def export_job(directory, state, payload):
-    deadline = state['expires_at']
-    temporary = directory / 'export.tmp'
+def export_seadb_view_to_excel(payload, task_id, tasks_status_map, timeout=IO_SERVER_TASK_TIMEOUT):
+    deadline = time.time() + timeout
+    database_id = str(UUID(payload['database_uuid']))
+    target_dir = EXPORT_ROOT / database_id
+    temporary = target_dir / f'.{task_id}.tmp'
     workbook = None
     sheet = None
-    stop_heartbeat = threading.Event()
-    heartbeat_thread = None
+    state = {
+        'status': 'running',
+        'handled_row_count': 0,
+        'filename': payload['filename'],
+    }
+    tasks_status_map[task_id] = dict(state)
     try:
-        if time.time() >= deadline:
-            raise TimeoutError('ScaleDB export expired in the queue')
-        heartbeat_path = directory / 'heartbeat'
-        heartbeat_path.touch()
-        heartbeat_thread = threading.Thread(target=_refresh_heartbeat, args=(heartbeat_path, stop_heartbeat), daemon=True)
-        heartbeat_thread.start()
-        state['status'] = 'running'
-        write_status(directory, state)
-
+        target_dir.mkdir(parents=True, exist_ok=True)
         columns = [_get_result_column(column) for column in payload['columns']]
         row_limit = min(SEADB_VIEW_EXPORT_ROW_LIMIT, SEADB_VIEW_EXPORT_CELL_LIMIT // len(columns), 1048575)
         if len(columns) > 16384 or row_limit < 1:
@@ -331,32 +258,23 @@ def export_job(directory, state, payload):
                     for column, name_map in zip(columns, names)
                 ])
             state['handled_row_count'] += min(len(rows), remaining)
-            write_status(directory, state)
+            tasks_status_map[task_id] = dict(state)
             if len(rows) > remaining:
                 truncated = True
                 break
         workbook.save(temporary)
         if time.time() >= deadline:
             raise TimeoutError('ScaleDB export timed out')
-        result_identity = json.dumps([state[key] for key in ('username', 'table_id', 'view_id', 'filename')])
-        result_key = sha256(result_identity.encode('utf-8')).hexdigest()
-        result_directory = directory.parent / 'results'
-        result_directory.mkdir(exist_ok=True, mode=0o750)
-        os.replace(temporary, result_directory / f'{result_key}.xlsx')
-        state.pop('expires_at')
-        state.update(status='success', is_truncated=truncated, result_key=result_key,
-                     total_row_count=state['handled_row_count'])
-        write_status(directory, state)
+        os.replace(temporary, target_dir / payload['filename'])
+        state.update(status='success', is_truncated=truncated, total_row_count=state['handled_row_count'])
+        tasks_status_map[task_id] = dict(state)
     except Exception as error:
-        logger.error('ScaleDB export %s failed (%s)', directory.name, type(error).__name__)
+        logger.exception('ScaleDB export %s failed', task_id)
         temporary.unlink(missing_ok=True)
         error_code = 'timeout' if isinstance(error, (TimeoutError, requests.Timeout)) else 'export_failed'
-        state.update(status='failed', error_code=error_code, expires_at=time.time() + UNSUCCESSFUL_JOB_TTL)
-        write_status(directory, state)
+        state.update(status='failed', error_code=error_code)
+        tasks_status_map[task_id] = dict(state)
     finally:
-        stop_heartbeat.set()
-        if heartbeat_thread is not None and heartbeat_thread.ident is not None:
-            heartbeat_thread.join()
         if sheet is not None and sheet._writer is not None:
             # A failed write-only workbook may still own the uncompressed sheet file.
             try:
