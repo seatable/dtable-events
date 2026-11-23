@@ -34,7 +34,6 @@ PER_MONTH = 'per_month'
 CONDITION_ROWS_MODIFIED = 'rows_modified'
 CONDITION_ROWS_ADDED = 'rows_added'
 CONDITION_FILTERS_SATISFY = 'filters_satisfy'
-CONDITION_NEAR_DEADLINE = 'near_deadline'
 CONDITION_PERIODICALLY = 'run_periodically'
 CONDITION_PERIODICALLY_BY_CONDITION = 'run_periodically_by_condition'
 

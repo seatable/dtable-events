@@ -8,9 +8,7 @@ PER_WEEK = 'per_week'
 PER_UPDATE = 'per_update'
 PER_MONTH = 'per_month'
 CRON_CONDITIONS = (PER_DAY, PER_WEEK, PER_MONTH)
-ALL_CONDITIONS = (PER_DAY, PER_WEEK, PER_MONTH, PER_UPDATE)
 
-CONDITION_ROWS_MODIFIED = 'rows_modified'
 CONDITION_ROWS_ADDED = 'rows_added'
 CONDITION_FILTERS_SATISFY = 'filters_satisfy'
 CONDITION_PERIODICALLY = 'run_periodically'
@@ -44,15 +42,34 @@ class AutomationTask:
     def append_warning(self, warning):
         self.warnings.append(warning)
 
+    def is_cron_time_matched(self):
+        if self.run_condition not in CRON_CONDITIONS:
+            return False
+        cur_datetime = datetime.now()
+        cur_hour = cur_datetime.hour
+        cur_week_day = cur_datetime.isoweekday()
+        cur_month_day = cur_datetime.day
+        if self.run_condition == PER_DAY:
+            return cur_hour == self.trigger.get('notify_hour', 12)
+        if self.run_condition == PER_WEEK:
+            return cur_hour == self.trigger.get('notify_week_hour', 12) \
+                and cur_week_day == self.trigger.get('notify_week_day', 7)
+        return cur_hour == self.trigger.get('notify_month_hour', 12) \
+            and cur_month_day == self.trigger.get('notify_month_day', 1)
+
     def can_do_actions(self):
-        if self.trigger.get('condition') not in (CONDITION_FILTERS_SATISFY, CONDITION_PERIODICALLY, CONDITION_ROWS_ADDED, CONDITION_PERIODICALLY_BY_CONDITION):
+        if self.trigger.get('condition') not in (
+                CONDITION_FILTERS_SATISFY,
+                CONDITION_PERIODICALLY,
+                CONDITION_ROWS_ADDED,
+                CONDITION_PERIODICALLY_BY_CONDITION):
             return False
 
         if self.trigger.get('condition') == CONDITION_ROWS_ADDED:
             if self.data.get('op_type') not in ['insert_row', 'append_rows', 'insert_rows']:
                 return False
 
-        if self.trigger.get('condition') in [CONDITION_FILTERS_SATISFY, CONDITION_ROWS_MODIFIED]:
+        if self.trigger.get('condition') == CONDITION_FILTERS_SATISFY:
             if self.data.get('op_type') not in ['modify_row', 'modify_rows', 'add_link', 'update_links', 'update_rows_links', 'remove_link', 'move_group_rows']:
                 return False
 
@@ -60,25 +77,7 @@ class AutomationTask:
             return True
 
         if self.run_condition in CRON_CONDITIONS:
-            cur_datetime = datetime.now()
-            cur_hour = cur_datetime.hour
-            cur_week_day = cur_datetime.isoweekday()
-            cur_month_day = cur_datetime.day
-            if self.run_condition == PER_DAY:
-                trigger_hour = self.trigger.get('notify_hour', 12)
-                if cur_hour != trigger_hour:
-                    return False
-            elif self.run_condition == PER_WEEK:
-                trigger_hour = self.trigger.get('notify_week_hour', 12)
-                trigger_day = self.trigger.get('notify_week_day', 7)
-                if cur_hour != trigger_hour or cur_week_day != trigger_day:
-                    return False
-            else:
-                trigger_hour = self.trigger.get('notify_month_hour', 12)
-                trigger_day = self.trigger.get('notify_month_day', 1)
-                if cur_hour != trigger_hour or cur_month_day != trigger_day:
-                    return False
-            return True
+            return self.is_cron_time_matched()
 
         return False
 
