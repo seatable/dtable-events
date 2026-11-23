@@ -1,9 +1,9 @@
 import unittest
 import os
 import sys
-sys.path.append(sys.path.append(os.path.join(os.path.dirname(__file__), '../')))
+sys.path.append(os.path.join(os.path.dirname(__file__), '../'))
 d = os.path.dirname
-sys.path.append(sys.path.append(d(d(d(d(__file__))))))
+sys.path.append(d(d(d(d(__file__)))))
 from sql.column_reference import TEST_COLUMNS, TABLES, LINK_COLUMN
 from sql.test_reference import TEST_CONDITIONS, TEST_CONDITIONS_LINK
 from dtable_events import filter2sql, linkRecords2sql, statistic2sql
