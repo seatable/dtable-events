@@ -56,6 +56,7 @@ def _parse_excel_row(excel_row_data, column_name_type_map, name_to_email, locati
 
 def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column_name_type_map, column_name_data_map, name_to_email, location_tree, insert_new_row=False):
     where_clauses = []
+    parameters = []
     for ref_col in ref_cols:
         value_list = []
         none_in_list = False
@@ -65,30 +66,30 @@ def handle_excel_row_datas(db_api, table_name, excel_row_datas, ref_cols, column
                 none_in_list = True
             if value and value not in value_list:
                 value_list.append(value)
+        escaped_ref_col = ref_col.replace('`', '``')
+        placeholders = ', '.join('?' for _ in value_list)
+        parameters.extend(value_list)
         if none_in_list:
             where_clauses.append(
                 "(`%s` in (%s) or `%s` is null)" % (
-                    ref_col,
-                    str(value_list).replace('[', '').replace(']', ''),
-                    ref_col)
+                    escaped_ref_col, placeholders, escaped_ref_col)
             )
         else:
             where_clauses.append(
                 "`%s` in (%s)" % (
-                    ref_col,
-                    str(value_list).replace('[', '').replace(']', ''),
+                    escaped_ref_col, placeholders,
                 )
             )
 
     sql = "Select * from `%s` where %s" % (
-        table_name,
+        table_name.replace('`', '``'),
         ' And '.join(where_clauses)
     )
 
     rows_for_import = []
     rows_for_update = []
 
-    query_rows_from_base, db_metadata = db_api.query(sql, convert=True, server_only=False)
+    query_rows_from_base, db_metadata = db_api.query(sql, convert=True, server_only=False, parameters=parameters)
     query_rows_from_base = convert_db_rows(db_metadata, query_rows_from_base)
     excel_select_column_options = {}
     for excel_row in excel_row_datas:
