@@ -787,7 +787,7 @@ def send_wechat_msg(webhook_url, msg, msg_type="text"):
         msg_format = {"msgtype": "text", "text": {"content": msg}}
     result = {}
     try:
-        requests.post(webhook_url, json=msg_format, headers={"Content-Type": "application/json"})
+        requests.post(webhook_url, json=msg_format, headers={"Content-Type": "application/json"}, timeout=30)
     except Exception as e:
         dtable_message_logger.error('Wechat sending failed. ERROR: {}'.format(e))
         result['err_msg'] = 'Webhook URL invalid'
@@ -807,7 +807,7 @@ def send_dingtalk_msg(webhook_url, msg, msg_type="text", msg_title=None):
         msg_format = {"msgtype": "text", "text": {"content": msg}}
 
     try:
-        requests.post(webhook_url, json=msg_format, headers={"Content-Type": "application/json"})
+        requests.post(webhook_url, json=msg_format, headers={"Content-Type": "application/json"}, timeout=30)
     except Exception as e:
         dtable_message_logger.error('Dingtalk sending failed. ERROR: {}'.format(e))
         result['err_msg'] = 'Dingtalk URL invalid'
