@@ -1629,8 +1629,7 @@ def convert_time_to_utc_str(time_str):
         return utc_to_tz(utc_time, timezone).strftime('%Y-%m-%d %H:%M:%S')
     elif '+' in time_str:
         # deal big_data time_str
-        time_format = "%Y-%m-%dT%H:%M:%S.%f%z"
-        time_stamp = datetime.strptime(time_str, time_format).timestamp()
+        time_stamp = parser.isoparse(time_str).timestamp()
         target_timezone = pytz.timezone('UTC')
         utc_time = datetime.fromtimestamp(time_stamp, target_timezone)
         return utc_to_tz(utc_time, timezone).strftime('%Y-%m-%d %H:%M:%S')
