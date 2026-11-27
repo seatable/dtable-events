@@ -2125,6 +2125,14 @@ def handle_row(row, row_num, ws, email2nickname, unknown_user_set, unknown_cell_
     return cell_list
 
 
+def _append_export_row(ws, cells):
+    # SeaTable exports calculated values. Preserve formula-like text literally.
+    for cell in cells:
+        if cell.data_type == 'f':
+            cell.data_type = 's'
+    ws.append(cells)
+
+
 def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, repo_id, image_param, cols_without_hidden, column_name_to_column, is_group_view=False, summary_col_info=None, row_height='default', header_height='default'):
     """ write listed data into excel
     """
@@ -2167,7 +2175,7 @@ def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, rep
                 c = WriteOnlyCell(ws, value='illegal character in excel')
             head_cell_list.append(c)
             col_num += 1
-        ws.append(head_cell_list)
+        _append_export_row(ws, head_cell_list)
 
     # write table data
     row_error_log_exists = False
@@ -2205,7 +2213,7 @@ def write_xls_with_type(data_list, email2nickname, ws, row_num, dtable_uuid, rep
         except Exception as e:
             dtable_io_logger.exception('add nickname to cell error: {}'.format(e))
     for row in row_list:
-        ws.append(row)
+        _append_export_row(ws, row)
 
 
 def handle_grouped_view_rows(view_rows, row_num_info, ws, email2nickname, unknown_user_set, unknown_cell_list, dtable_uuid,
