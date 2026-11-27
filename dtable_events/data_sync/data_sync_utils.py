@@ -527,7 +527,7 @@ def sync_emails(context, db_session):
 
     # check imap account
     try:
-        imap = login_imap(imap_host, email_user, email_password, port=imap_port)
+        imap = login_imap(imap_host, email_user, email_password, port=imap_port, timeout=30)
     except Exception as e:
         logger.warning('dtable_uuid: %s, data_sync_id: %s, imap_server: %s, email_user: %s, login error: %s',
                        dtable_uuid, data_sync_id, imap_host, email_user, e)
